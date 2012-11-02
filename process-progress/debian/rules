@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+
+DEB_CABAL_PACKAGE = process-progress
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/hlibrary.mk
+
+build/haskell-process-progress-utils:: build-ghc-stamp
+binary-fixup/haskell-process-progress-utils::
+	install -m 755 -s -D dist-ghc/build/tests/tests debian/haskell-process-progress-utils/usr/bin/tests || true
+
+# How to install an extra file into the documentation package
+#binary-fixup/libghc-process-progress-doc::
+#	echo "Some informative text" > debian/libghc-process-progress-doc/usr/share/doc/libghc-process-progress-doc/AnExtraDocFile

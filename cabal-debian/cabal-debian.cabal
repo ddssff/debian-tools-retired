@@ -1,0 +1,44 @@
+Name:           cabal-debian
+Version:        1.26
+License:        BSD3
+License-File:   debian/copyright
+Author:         David Fox <dsf@seereason.com>
+Category:       Debian, Distribution, System
+Maintainer:     David Fox <dsf@seereason.com>
+Homepage:       http://src.seereason.com/cabal-debian
+Build-Type:     Simple
+Synopsis:       Create a debianization for a cabal package
+Cabal-Version: >= 1.6
+Description:
+ Tool for creating debianizations of Haskell packages based on the .cabal
+ file.  If apt-file is installed it will use it to discover what is the
+ debian package name of a C library.
+
+Source-Repository head
+  type: darcs
+  location: http://src.seereason.com/cabal-debian
+
+Flag cabal19
+ Description: True if Cabal >= 1.9 is available
+
+Executable cabal-debian
+ Hs-Source-Dirs: src
+ Main-is: Main.hs
+ ghc-options: -threaded -Wall
+ Build-Depends: base < 5, bytestring, Cabal >= 1.6.0.1, containers, debian >= 3.65, directory, filepath, mtl, parsec >= 3, pretty, pretty-class, process, regex-tdfa, unix, Unixutils >= 1.50, utf8-string
+ Extensions:           ExistentialQuantification CPP
+ if flag(cabal19)
+   build-depends: Cabal >= 1.9
+   cpp-options: -DCABAL19
+ else
+   build-depends: Cabal >= 1.8
+   cpp-options: -DCABAL18
+ Other-Modules:
+   Bundled
+   Debianize
+   Dependencies
+   Interspersed
+   Options
+   PackageInfo
+   Relations
+   SubstVars

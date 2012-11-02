@@ -1,0 +1,77 @@
+Name:           debian-repo
+Version:        5.29
+License:        BSD3
+License-File:	debian/copyright
+Author:         David Fox
+Category:	System
+Maintainer:     david@seereason.com
+Homepage:       http://src.seereason.com/haskell-debian-repo
+Build-Type:	Simple
+Synopsis:       Modules for working with the Debian package system
+Description:
+  This library includes modules covering almost every aspect of the Debian
+  packaging system, including low level data types such as version numbers
+  and dependency relations, on up to the types necessary for computing and
+  installing build dependencies, building source and binary packages,
+  and inserting them into a repository.
+Cabal-version: >= 1.2.3
+Data-Files:
+        demos/Versions.hs debian/changelog
+        debian/compat debian/control debian/copyright
+        debian/rules
+
+flag local-debian
+  Description: Link directly to the source of the debian library
+  Default: False
+  Manual: True
+
+Library
+  ghc-options: -O2 -threaded -W
+
+  if flag(local-debian)
+    Hs-Source-Dirs: ., ../haskell-debian
+  else
+    Build-Depends: debian >= 3.65
+
+  Build-Depends:
+        base, bytestring, Cabal, containers, directory, Extra >= 1.43, filepath,
+        mtl, old-time, old-locale, network, parsec >= 3, pretty, pretty-class, process, process-extras, process-progress >= 0.4.5, pureMD5,
+        regex-compat, regex-tdfa, template-haskell, time, unix,
+        Unixutils >= 1.51, bzlib, zlib, HaXml, MIME, applicative-extras, utf8-string
+  Exposed-modules:
+        Debian.Repo,
+        Debian.Repo.AptImage,
+        Debian.Repo.Cache,
+        Debian.Repo.Changes,
+        Debian.Repo.Dependencies,
+        Debian.Repo.Insert,
+        Debian.Repo.LocalRepository,
+        Debian.Repo.Monad,
+        Debian.Repo.OSImage,
+        Debian.Repo.Package,
+        Debian.Repo.PackageIndex,
+        Debian.Repo.Release,
+        Debian.Repo.Repository,
+        Debian.Repo.Slice,
+        Debian.Repo.SourcesList,
+        Debian.Repo.SourceTree,
+        Debian.Repo.Types,
+        Debian.VersionPolicy,
+        Text.Format,
+        Tmp.File
+
+Executable debian-versions
+  Main-is: demos/Versions.hs
+  ghc-options: -O2 -threaded -W
+  if flag(local-debian)
+    Hs-Source-Dirs: ., ../haskell-debian
+  else
+    Build-Depends: debian >= 3.60
+
+Executable newdist
+  Main-is: Debian/NewDist/Main.hs
+  ghc-options: -O2 -threaded -W
+  if flag(local-debian)
+    Hs-Source-Dirs: ., ../haskell-debian
+  else
+    Build-Depends: debian >= 3.60

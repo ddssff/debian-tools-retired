@@ -1,0 +1,160 @@
+Source: haskell-debian-repo
+Priority: extra
+Section: haskell
+Maintainer: David Fox <dsf@seereason.com>
+Build-Depends: debhelper (>= 7.0),
+               haskell-devscripts (>= 0.8),
+               cdbs,
+               ghc,
+               ghc-prof,
+               libghc-cabal-dev | ghc,
+               libghc-cabal-prof | ghc-prof,
+               libghc-extra-dev (>= 1.43),
+               libghc-extra-prof (>= 1.43),
+               libghc-hunit-dev,
+               libghc-hunit-prof,
+               libghc-haxml-dev,
+               libghc-haxml-prof,
+               libghc-mime-dev,
+               libghc-mime-prof,
+               libghc-puremd5-dev,
+               libghc-puremd5-prof,
+               libghc-unixutils-dev (>= 1.51),
+               libghc-unixutils-prof (>= 1.51),
+               libghc-applicative-extras-dev,
+               libghc-applicative-extras-prof,
+               libghc-base-dev | ghc,
+               libghc-base-prof | ghc-prof,
+               libghc-bytestring-dev | ghc,
+               libghc-bytestring-prof | ghc-prof,
+               libghc-bzlib-dev,
+               libghc-bzlib-prof,
+               libghc-containers-dev | ghc,
+               libghc-containers-prof | ghc-prof,
+               libghc-debian-dev (>= 3.65),
+               libghc-debian-prof (>= 3.65),
+               libghc-directory-dev | ghc,
+               libghc-directory-prof | ghc-prof,
+               libghc-filepath-dev | ghc,
+               libghc-filepath-prof | ghc-prof,
+               libghc-mtl-dev,
+               libghc-mtl-prof,
+               libghc-network-dev,
+               libghc-network-prof,
+               libghc-old-locale-dev | ghc,
+               libghc-old-locale-prof | ghc-prof,
+               libghc-old-time-dev | ghc,
+               libghc-old-time-prof | ghc-prof,
+               libghc-parsec3-dev (>= 3),
+               libghc-parsec3-prof (>= 3),
+               libghc-pretty-class-dev,
+               libghc-pretty-class-prof,
+               libghc-pretty-dev | ghc,
+               libghc-pretty-prof | ghc-prof,
+               libghc-process-progress-dev (>= 0.4.5),
+               libghc-process-progress-prof (>= 0.4.5),
+               libghc-regex-compat-dev,
+               libghc-regex-compat-prof,
+               libghc-regex-tdfa-dev,
+               libghc-regex-tdfa-prof,
+               libghc-template-haskell-dev | ghc,
+               libghc-template-haskell-prof | ghc-prof,
+               libghc-time-dev | ghc,
+               libghc-time-prof | ghc-prof,
+               libghc-unix-dev | ghc,
+               libghc-unix-prof | ghc-prof,
+               libghc-zlib-dev,
+               libghc-zlib-prof
+Build-Depends-Indep: ghc-doc,
+                     libghc-cabal-doc | ghc-doc,
+                     libghc-extra-doc (>= 1.43),
+                     libghc-hunit-doc,
+                     libghc-haxml-doc,
+                     libghc-mime-doc,
+                     libghc-puremd5-doc,
+                     libghc-unixutils-doc (>= 1.51),
+                     libghc-applicative-extras-doc,
+                     libghc-base-doc | ghc-doc,
+                     libghc-bytestring-doc | ghc-doc,
+                     libghc-bzlib-doc,
+                     libghc-containers-doc | ghc-doc,
+                     libghc-debian-doc (>= 3.65),
+                     libghc-directory-doc | ghc-doc,
+                     libghc-filepath-doc | ghc-doc,
+                     libghc-mtl-doc,
+                     libghc-network-doc,
+                     libghc-old-locale-doc | ghc-doc,
+                     libghc-old-time-doc | ghc-doc,
+                     libghc-parsec3-doc (>= 3),
+                     libghc-pretty-doc | ghc-doc,
+                     libghc-pretty-class-doc,
+                     libghc-process-progress-doc (>= 0.4.5),
+                     libghc-regex-compat-doc,
+                     libghc-regex-tdfa-doc,
+                     libghc-template-haskell-doc | ghc-doc,
+                     libghc-time-doc | ghc-doc,
+                     libghc-unix-doc | ghc-doc,
+                     libghc-zlib-doc
+Standards-Version: 3.9.1
+Homepage: http://src.seereason.com/haskell-debian-repo
+
+Package: libghc-debian-repo-dev
+Architecture: any
+Section: libdevel
+Depends: ${haskell:Depends},
+         debootstrap
+Conflicts: build-env
+Replaces: build-env
+Description: Modules for working with the Debian package system
+  This library includes modules covering almost every aspect of the Debian
+  packaging system, including low level data types such as version numbers
+  and dependency relations, on up to the types necessary for computing and
+  installing build dependencies, building source and binary packages,
+  and inserting them into a repository.
+  .
+  Author: David Fox
+  .
+  This package contains the normal library files.
+
+Package: libghc-debian-repo-prof
+Architecture: any
+Section: libdevel
+Depends: ${haskell:Depends},
+         libghc-debian-repo-dev
+Description: Modules for working with the Debian package system
+  This library includes modules covering almost every aspect of the Debian
+  packaging system, including low level data types such as version numbers
+  and dependency relations, on up to the types necessary for computing and
+  installing build dependencies, building source and binary packages,
+  and inserting them into a repository.
+  .
+  Author: David Fox
+  .
+  This package contains the profiling library files.
+
+Package: libghc-debian-repo-doc
+Architecture: any
+Section: libdevel
+Depends: ${haskell:Depends},
+         libghc-haxml-doc
+Description: Modules for working with the Debian package system
+  This library includes modules covering almost every aspect of the Debian
+  packaging system, including low level data types such as version numbers
+  and dependency relations, on up to the types necessary for computing and
+  installing build dependencies, building source and binary packages,
+  and inserting them into a repository.
+  .
+  Author: David Fox
+  .
+  This package contains the documentation files.
+
+Package: newdist
+Replaces: autobuilder-newdist
+Conflicts: autobuilder-newdist
+Section: devel
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${haskell:Depends},
+         dpkg-dev
+Suggests: seereason-keyring
+Description: Debian pool manager

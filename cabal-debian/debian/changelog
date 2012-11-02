@@ -1,0 +1,220 @@
+haskell-cabal-debian (1.26-0+seereason1~precise2) precise-seereason; urgency=low
+
+  * Don't try to update the existing debianization, except for the
+    changelog where we retain entries that look older than the one
+    we generate.
+  * Use .install files instead of adding rules to debian/rules
+  * Add --depends and --conflicts options
+  * Darcs revision: Darcs "http://src.seereason.com/cabal-debian"
+
+ -- SeeReason Autobuilder <autobuilder@seereason.org>  Fri, 26 Oct 2012 13:40:48 -0700
+
+haskell-cabal-debian (1.26) unstable; urgency=low
+
+  * Don't try to update the existing debianization, except for the
+    changelog where we retain entries that look older than the one
+    we generate.
+  * Use .install files instead of adding rules to debian/rules
+  * Add --depends and --conflicts options
+
+ -- David Fox <dsf@seereason.com>  Thu, 25 Oct 2012 12:03:49 -0700
+
+haskell-cabal-debian (1.25) unstable; urgency=low
+
+  * If the --disable-haddock flag is given omit the doc package from the
+    control file.
+  * The tarball that was uploaded to Hackage as version 1.24 had a (buggy)
+    change which was not pushed to darcs.  This resolves that confusion.
+
+ -- David Fox <dsf@seereason.com>  Sat, 16 Jun 2012 14:42:12 -0700
+
+haskell-cabal-debian (1.24) unstable; urgency=low
+
+  * No wonder it doesn't build on hackage - none of the source
+    modules were shipped.
+
+ -- David Fox <dsf@seereason.com>  Thu, 14 Jun 2012 08:19:19 -0700
+
+haskell-cabal-debian (1.23) unstable; urgency=low
+
+  * Add a --quilt option to switch from native to quilt format.
+    Without this option the file debian/source/format will contain
+    '3.0 (native)', with it '3.0 (quilt)'.
+
+ -- David Fox <dsf@seereason.com>  Fri, 01 Jun 2012 05:53:36 -0700
+
+haskell-cabal-debian (1.22) unstable; urgency=low
+
+  * Bump version to make sure all changes are uploaded.
+
+ -- David Fox <dsf@seereason.com>  Wed, 23 May 2012 19:54:17 -0700
+
+haskell-cabal-debian (1.21) unstable; urgency=low
+
+  * fix conversion of wildcards into intersected ranges
+
+ -- David Fox <dsf@seereason.com>  Wed, 23 May 2012 19:51:34 -0700
+
+haskell-cabal-debian (1.20) unstable; urgency=low
+
+  * Fix generation of debian library dependencies from the Extra-Libraries
+    field of the cabal file.
+
+ -- David Fox <dsf@seereason.com>  Wed, 23 May 2012 19:50:39 -0700
+
+haskell-cabal-debian (1.19) unstable; urgency=low
+
+  * Handle cabal equals dependencies.
+
+ -- David Fox <dsf@seereason.com>  Tue, 20 Mar 2012 14:34:58 -0700
+
+haskell-cabal-debian (1.18) unstable; urgency=low
+
+  * High level of confidence this time.  Interesting new Interspersed
+    class, and an implementation of invertVersionRanges which should be
+    forwarded to the Cabal folks.
+  * Removes dependency on logic-classes
+
+ -- David Fox <dsf@seereason.com>  Tue, 20 Mar 2012 08:17:25 -0700
+
+haskell-cabal-debian (1.17) unstable; urgency=low
+
+  * Restore code to downcase cabal package name before using it as the
+    base of the debian package name.
+
+ -- David Fox <dsf@seereason.com>  Sun, 18 Mar 2012 15:32:04 -0700
+
+haskell-cabal-debian (1.16) unstable; urgency=low
+
+  * Remove code that implements a special case for the debian name of the
+    haskell-src-exts package.
+
+ -- David Fox <dsf@seereason.com>  Sun, 18 Mar 2012 14:11:21 -0700
+
+haskell-cabal-debian (1.15) unstable; urgency=low
+
+  * Yet another stab at fixing the code for converting cabal dependencies
+    to debian dependencies, with support for splitting version ranges of
+    cabal files among different debian packages.
+
+ -- David Fox <dsf@seereason.com>  Fri, 16 Mar 2012 17:59:28 -0700
+
+haskell-cabal-debian (1.14) unstable; urgency=low
+
+  * Don't try to strip data files
+  * Use permissions 644 for data files, not 755.
+
+ -- David Fox <dsf@seereason.com>  Wed, 07 Mar 2012 14:46:04 -0800
+
+haskell-cabal-debian (1.13) unstable; urgency=low
+
+  * Append the version number when constructing the directory for data
+    files.
+
+ -- David Fox <dsf@seereason.com>  Wed, 07 Mar 2012 08:56:39 -0800
+
+haskell-cabal-debian (1.12) unstable; urgency=low
+
+  * Include any files listed in the Data-Files field of the cabal file
+    in the utils package.
+
+ -- David Fox <dsf@seereason.com>  Tue, 06 Mar 2012 11:31:47 -0800
+
+haskell-cabal-debian (1.11) unstable; urgency=low
+
+  * Replace --epoch flag with --epoch-map, so we can specify epoch numbers
+    for both the package being built and for dependency packages.
+
+ -- David Fox <dsf@seereason.com>  Thu, 09 Feb 2012 07:01:19 -0800
+
+haskell-cabal-debian (1.10) unstable; urgency=low
+
+  * Add bundled package list for ghc 7.4.1.
+
+ -- David Fox <dsf@seereason.com>  Sat, 04 Feb 2012 14:44:33 -0800
+
+haskell-cabal-debian (1.9) unstable; urgency=low
+
+  * Add --dep-map flag to allow mapping of cabal package names to the base
+    of a debian package name.  This modifies the name to which the prefix
+    "lib" and the suffix "-dev" are added.
+  * Fix dependency generation bug introduced in 1.8.
+
+ -- David Fox <dsf@seereason.com>  Mon, 23 Jan 2012 14:13:05 -0800
+
+haskell-cabal-debian (1.8) unstable; urgency=low
+
+  * Add a --dev-dep flag to make one or more packages install dependencies
+    of the dev package.
+
+ -- David Fox <dsf@seereason.com>  Mon, 23 Jan 2012 05:00:46 -0800
+
+haskell-cabal-debian (1.7) unstable; urgency=low
+
+  * Add info about ghc 7.4.0 pre-release.
+
+ -- David Fox <dsf@seereason.com>  Wed, 11 Jan 2012 09:57:45 -0800
+
+haskell-cabal-debian (1.6) unstable; urgency=low
+
+  * Don't omit dependencies built into ghc, they should be satisfied by
+    the Provides in the compiler if they are not available in the
+    repository.  However, we do need to make ghc an alterantive to any
+    versioned dependencies that are bundled with the compiler, since the
+    built in dependencies are virtual packages and thus unversioned.
+
+ -- David Fox <dsf@seereason.com>  Wed, 07 Dec 2011 06:10:17 -0800
+
+haskell-cabal-debian (1.5) unstable; urgency=low
+
+  * Fix the generation of build dependency version ranges by using an
+    intermediate version range type.
+  * If the version range for the cabal file touches two different debian
+    package, don't try to write build dependencies that allow either one,
+    it can't really be done.  Just give the allowable versions of the
+    newer package (e.g. libghc-parsec3-dev rather than libghc-parsec2-dev.)
+
+ -- David Fox <dsf@seereason.com>  Sun, 04 Dec 2011 05:59:25 -0800
+
+haskell-cabal-debian (1.4) unstable; urgency=low
+
+  * Add a --revision <suffix> flag which appends a (perhaps empty) string
+    cabal version number to get the debian version number.  Without this
+    flag the string "-1~hackage1" is appended.
+  * Make it an error to specify a debian version via --deb-version that is
+    older than the current cabal version.
+
+ -- David Fox <dsf@seereason.com>  Sun, 20 Nov 2011 06:45:33 -0800
+
+haskell-cabal-debian (1.3) unstable; urgency=low
+
+  * Fix error message when compiler version is not in bundled package list.
+  * Add bundled package list for compiler 7.0.4 (same as 7.0.3.)
+
+ -- David Fox <dsf@seereason.com>  Sat, 08 Oct 2011 07:58:19 -0700
+
+haskell-cabal-debian (1.2) unstable; urgency=low
+
+  * When computing the debian name from a package's cabal name, if we
+    have no particular version number we are comparing to, use the name
+    from the version split that corresponds to newer version numbers.
+  * Add code to make the cabal package haskell-src-exts map to the debian
+    packages libghc-src-exts-dev etc.  Normally it would map to
+    libghc-haskell-src-exts-dev.
+
+ -- David Fox <dsf@seereason.com>  Thu, 06 Oct 2011 09:27:02 -0700
+
+haskell-cabal-debian (1.1) unstable; urgency=low
+
+  * Use propositional logic package to compute normal form for dependencies
+  * Make sure to correct format of cabal package synopsis before using as debian
+    package description.
+
+ -- David Fox <dsf@seereason.com>  Fri, 30 Sep 2011 06:16:34 -0700
+
+haskell-cabal-debian (1.0) unstable; urgency=low
+
+  * Debianization generated by cabal-debian
+
+ -- David Fox <dsf@seereason.com>  Sun, 18 Sep 2011 06:40:21 -0700
+

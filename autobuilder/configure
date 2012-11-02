@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# This script is run by cabal during "setup configure" to create the Version module.
+
+/bin/echo -e "module Debian.AutoBuilder.Version where\nversion :: String\nversion = \"`dpkg-parsechangelog | sed -n 's/^Version:[ \t]*//p'`\"" > Debian/AutoBuilder/Version.hs

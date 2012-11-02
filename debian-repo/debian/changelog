@@ -1,0 +1,320 @@
+haskell-debian-repo (5.29-0+seereason1~precise28) precise-seereason; urgency=low
+
+  * Ensure that changelog file descriptors get closed even though we
+    only read the first entry.
+  * Darcs revision: Darcs "http://src.seereason.com/haskell-debian-repo"
+
+ -- SeeReason Autobuilder <autobuilder@seereason.org>  Wed, 24 Oct 2012 15:21:57 -0700
+
+haskell-debian-repo (5.29) unstable; urgency=low
+
+  * Ensure that changelog file descriptors get closed even though we
+    only read the first entry.
+
+ -- David Fox <dsf@seereason.com>  Wed, 08 Aug 2012 09:33:14 -0700
+
+haskell-debian-repo (5.28) unstable; urgency=low
+
+  * newdist: create lock directory before calling withLock.
+
+ -- David Fox <dsf@seereason.com>  Wed, 11 Jul 2012 14:15:32 -0700
+
+haskell-debian-repo (5.27) unstable; urgency=low
+
+  * Use distinct types for debian binary and source package names,
+    rather than just String.
+
+ -- David Fox <dsf@seereason.com>  Thu, 15 Mar 2012 12:36:39 -0700
+
+haskell-debian-repo (5.26) unstable; urgency=low
+
+  * Make the signature of tryAB more general.
+  * Add tryJustAB
+
+ -- David Fox <dsf@seereason.com>  Wed, 07 Mar 2012 12:07:17 -0800
+
+haskell-debian-repo (5.25) unstable; urgency=low
+
+  * Read the new Fingerprint field from the .changes file instead of the old
+    Revision field.
+
+ -- David Fox <dsf@seereason.com>  Sun, 04 Mar 2012 19:16:32 -0800
+
+haskell-debian-repo (5.24) unstable; urgency=low
+
+  * Fix the regex for splitting a comma separated list so it handles newlines.
+
+ -- David Fox <dsf@seereason.com>  Sun, 04 Mar 2012 12:48:15 -0800
+
+haskell-debian-repo (5.23) unstable; urgency=low
+
+  * Add Debian.Repo.SourceTree.findOrigTarball.
+  * Add Debian.Repo.SourceTree.origTarballPath.
+
+ -- David Fox <dsf@seereason.com>  Tue, 28 Feb 2012 06:08:55 -0800
+
+haskell-debian-repo (5.22.1) unstable; urgency=low
+
+  * Add some Data and Typeable instances.
+
+ -- David Fox <dsf@seereason.com>  Thu, 12 Jan 2012 10:20:48 -0800
+
+haskell-debian-repo (5.22) unstable; urgency=low
+
+  * Have Debian.Repo.OSImage.updateLists throw an error when it fails.
+
+ -- David Fox <dsf@seereason.com>  Sat, 24 Sep 2011 06:55:31 -0700
+
+haskell-debian-repo (5.21) unstable; urgency=low
+
+  * Even faster version of deleteSourcePackages.
+
+ -- David Fox <dsf@seereason.com>  Wed, 14 Sep 2011 15:30:26 -0700
+
+haskell-debian-repo (5.20.2) unstable; urgency=low
+
+  * Rewrite Debian.Repo.Insert.deleteSourcePackages so it reads each index
+    once, deletes all the packages, and then writes the index.  Before it
+    would read and write the indexes once for each package.
+
+ -- David Fox <dsf@seereason.com>  Tue, 13 Sep 2011 15:07:59 -0700
+
+haskell-debian-repo (5.20.1) unstable; urgency=low
+
+  * Add -o=Dir::Etc::SourceParts= to aptOpts so we don't pull in the local
+    system's /etc/apt/sources.list.d files.
+
+ -- David Fox <dsf@seereason.com>  Wed, 13 Jul 2011 10:39:44 -0700
+
+haskell-debian-repo (5.20) unstable; urgency=low
+
+  * Make dpkg-dev a dependency of newdist.  Not sure if this is overkill,
+    but it certainly needs something pulled in by dpkg-dev, probably gpg
+    related.
+
+ -- David Fox <dsf@seereason.com>  Thu, 07 Apr 2011 14:27:28 -0700
+
+haskell-debian-repo (5.19) unstable; urgency=low
+
+  * Make sure /etc exists before we write resolv.conf into new OSImage.
+
+ -- David Fox <dsf@wave.cliffordbeshers.homedns.org>  Wed, 05 Jan 2011 12:13:21 -0800
+
+haskell-debian-repo (5.18) unstable; urgency=low
+
+  * Eliminate some unnecessary (I think) calls to updateLists.
+
+ -- David Fox <dsf@seereason.com>  Fri, 31 Dec 2010 11:12:36 -0800
+
+haskell-debian-repo (5.17) unstable; urgency=low
+
+  * Fine tune quietness settings.
+  * Remove Debian.Extra.CIO, replaced by System.Unix.Progress.
+  * Remove Debian.OldShell due to its use of Debian.Extra.CIO.
+
+ -- David Fox <dsf@seereason.com>  Wed, 29 Dec 2010 15:33:03 -0800
+
+haskell-debian-repo (5.16) unstable; urgency=low
+
+  * Moved shell progress reporting to haskell-unixutils.
+
+ -- David Fox <dsf@seereason.com>  Tue, 28 Dec 2010 21:29:57 -0800
+
+haskell-debian-repo (5.15) unstable; urgency=low
+
+  * New shell process progress reporting code.
+  * Copy /etc/resolv.conf into the OS image before each run to avoid
+    "Temporary failure resolving..." errors in some environments.
+
+ -- David Fox <dsf@seereason.com>  Wed, 22 Dec 2010 19:08:27 -0800
+
+haskell-debian-repo (5.14) unstable; urgency=low
+
+  * Set the default locale in newly created build environments.
+
+ -- David Fox <dsf@seereason.com>  Thu, 28 Oct 2010 10:29:35 -0700
+
+haskell-debian-repo (5.13) unstable; urgency=low
+
+  * Change the Origin and Label from Linspire to SeeReason.
+
+ -- David Fox <dsf@seereason.com>  Wed, 20 Oct 2010 09:15:20 -0700
+
+haskell-debian-repo (5.12) unstable; urgency=low
+
+  * Change default release origin and label.
+
+ -- David Fox <dsf@seereason.com>  Sun, 05 Sep 2010 06:40:31 -0700
+
+haskell-debian-repo (5.11) unstable; urgency=low
+
+  * Cleanups in error and exception handling.
+
+ -- David Fox <dsf@seereason.com>  Tue, 27 Jul 2010 16:00:29 -0700
+
+haskell-debian-repo (5.10) unstable; urgency=low
+
+  * Improve the algorithm used in testing dependency solutions a bit.
+
+ -- David Fox <dsf@seereason.com>  Sun, 30 May 2010 15:32:10 -0700
+
+haskell-debian-repo (5.9) unstable; urgency=low
+
+  * Change signature of buildEnv and prepareEnv, instead of three lists of
+    packages it now takes two which are passed to debootstrap: include and
+    exclude.
+  * Remove the omitBuildEssential flag from the buildEssential function.
+    It was marked obsolete.
+
+ -- David Fox <dsf@seereason.com>  Thu, 27 May 2010 08:47:20 -0700
+
+haskell-debian-repo (5.8) unstable; urgency=low
+
+  * Use debootstrap instead of build-env to create the build environment.
+
+ -- David Fox <dsf@seereason.com>  Wed, 26 May 2010 09:11:52 -0700
+
+haskell-debian-repo (5.7) unstable; urgency=low
+
+  * Remove the CIO typeclass altogether, instead of using MonadIO m
+    use IO directly.
+
+ -- David Fox <dsf@seereason.com>  Sun, 09 May 2010 13:02:03 -0700
+
+haskell-debian-repo (5.6.9) unstable; urgency=low
+
+  * Eliminate the funky terminal IO class and monad, it is a fail.
+
+ -- David Fox <dsf@seereason.com>  Sun, 09 May 2010 12:18:48 -0700
+
+haskell-debian-repo (5.6.8) unstable; urgency=low
+
+  * Changes for haskell-debian version 3.4.6.
+
+ -- David Fox <dsf@seereason.com>  Tue, 04 May 2010 12:45:22 -0700
+
+haskell-debian-repo (5.6.7) unstable; urgency=low
+
+  * Add a SourceControl type in Debian.Repo.Types, a field of that type to
+    the SourcePackage type, and set its value in
+    Debian.Repo.Package.toSourcePackage
+
+ -- David Fox <dsf@seereason.com>  Mon, 08 Mar 2010 12:02:29 -0800
+
+haskell-debian-repo (5.6.6) unstable; urgency=low
+
+  * Fix packaging so newdist binary gets installed
+  * Eliminate uses of OldException
+  * Hide mknod error output
+
+ -- David Fox <dsf@seereason.com>  Tue, 23 Feb 2010 22:08:25 -0800
+
+haskell-debian-repo (5.6.5) unstable; urgency=low
+
+  * Don't ever unset the locale variable LANG, it makes it impossible to
+    read some of the source files.  If the locales package is installed
+    in the build environment this change shouldn't cause a problem.
+
+ -- David Fox <dsf@seereason.com>  Mon, 08 Feb 2010 06:12:24 -0800
+
+haskell-debian-repo (5.6.4) unstable; urgency=low
+
+  * Don't mess up the order of the OR dependences - the first one should
+    be used if it can be satisfied, the next if it can't, and so on.
+
+ -- David Fox <dsf@seereason.com>  Sat, 06 Feb 2010 10:45:54 -0800
+
+haskell-debian-repo (5.6.3) unstable; urgency=low
+
+  * Catch exceptions raised by controlFromIndex in
+    Debian.Repo.Package.getPackages, so we can indicate what file it
+    failed on.  It controlFromIndex decompress which will throw errors if
+    the file is short.
+
+ -- David Fox <dsf@seereason.com>  Sat, 02 Jan 2010 12:52:24 -0800
+
+haskell-debian-repo (5.6.2) unstable; urgency=low
+
+  * In the Packages file, when there is a Source: field for a binary
+    package which indicates that the source package has a different
+    version number than the binary package, that version number has
+    its epoch number stripped off.  This version copies the epoch
+    number from the binary package into the source package version.
+  * Improve message reporting need for an arch-only build.
+
+ -- David Fox <dsf@seereason.com>  Tue, 24 Nov 2009 07:56:57 -0800
+
+haskell-debian-repo (5.6.1) unstable; urgency=low
+
+  * Improve reporting of errors in control files.
+
+ -- David Fox <dsf@seereason.com>  Sun, 22 Nov 2009 09:11:49 -0800
+
+haskell-debian-repo (5.6) unstable; urgency=low
+
+  * Used parsec 3
+
+ -- Jeremy Shaw <jeremy@seereason.com>  Tue, 28 Jul 2009 19:12:41 -0500
+
+haskell-debian-repo (5.5) unstable; urgency=low
+
+  * Modify the vendor tag parsing function to accept a list of possible
+    tags instead of a single one, in case we use more than one tag in the
+    repository.
+
+ -- David Fox <dsf@seereason.com>  Mon, 27 Jul 2009 10:45:36 -0700
+
+haskell-debian-repo (5.4) unstable; urgency=low
+
+  * Use OldException from base-4 instead of exception from base-3.
+  * Improve code to ignore dependencies that pertain to other
+    architectures, I think this may only clarify the reporting, not
+    actually change the functionality.
+  * VersionPolicy module moved here from haskell-debian.
+  * Escape the vendor tag when embedding it in a regular expression.
+    (This function needs improvements, currently it only escapes the
+    '+' character.)
+
+ -- David Fox <dsf@seereason.com>  Fri, 24 Jul 2009 10:54:09 -0700
+
+haskell-debian-repo (5.3) unstable; urgency=low
+
+  * Because of the darcs patch "When running in a changeroot..." (from
+    before this package was split out of haskell-debian-3), the process
+    output when running in a changeroot always goes directly to the
+    console, it can't be intercepted by the CIO module.  This change
+    removes the code that was causing that output appear a second
+    time after being saved in memory during the entire build.
+
+ -- David Fox <dsf@seereason.com>  Sat, 04 Apr 2009 08:03:31 -0700
+
+haskell-debian-repo (5.2) unstable; urgency=low
+
+  * Don't fail if Checksums-Sha1 and Checksums-Sha256 are missing from
+    the changes file, it just means an older dpkg-dev packages.
+
+ -- David Fox <dsf@seereason.com>  Sat, 04 Apr 2009 06:34:22 -0700
+
+haskell-debian-repo (5.1) unstable; urgency=low
+
+  * Add a "twice" parameter to Debian.Repo.SourceTree.buildDebs to control
+    whether we dpkg-buildpackage once or twice.  Some packages try to prevent
+    fully automated builds by doing configuration and failing during the
+    first run, and succeeding on the second.  Don't know why.
+  * Pull in support for SHA1 and SHA256 checksums in the .changes file.
+
+ -- David Fox <dsf@seereason.com>  Fri, 03 Apr 2009 13:06:02 -0700
+
+haskell-debian-repo (5.0) unstable; urgency=low
+
+  * When we run a process in a changeroot, make sure to force all
+    the process output and the exit code before we exit the changeroot
+    so we don't lose contact with the ssh agent before the process is
+    finished.  When that happens we lose the ability to communicate
+    with any remote host involved in the process and the process fails.
+  * Move newdist from autobuilder into this package
+  * Bump version number so this version of newdist trumps the ones
+    from the autobuilder package
+
+ -- David Fox <dsf@seereason.com>  Wed, 18 Feb 2009 08:52:03 -0800
+

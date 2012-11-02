@@ -1,0 +1,107 @@
+Name:           AutoBuilder
+Version:        6.34
+License:        BSD3
+Author:         David Fox
+Synopsis:       Build Debian source packages in suitable environments.
+Description:
+  The autobuilder program is now shipped as a haskell source file
+  which uses the autobuilder library.  To configure it make a copy of
+  @\/usr\/bin\/AutoBuilder.hs@ to somewhere such as @~\/AutoBuilder.hs@, edit
+  the parameters in that file, and then use the command 
+  @
+    sudo runhaskell ~\/AutoBuilder.hs
+  @
+  Documentation for the parameters is found in the
+  'ParamClass' type class in the "Debian.AutoBuilder.ParamClass"
+  module, and for the different build target types in the description
+  of "Debian.AutoBuilder.BuildTarget".
+Cabal-Version:  >= 1.2
+Build-type:     Simple
+
+flag local-debian-repo
+  Description: Link directly to the source of the debian-repo library
+  Default: False
+  Manual: True
+
+flag local-debian
+  Description: Link directly to the source of the debian library
+  Default: False
+  Manual: True
+
+Library
+
+  if flag(local-debian-repo)
+    if flag(local-debian)
+      Hs-Source-Dirs: ., ../haskell-debian, ../haskell-debian-repo
+    else
+      Build-Depends: debian >= 3.60
+      Hs-Source-Dirs: ., ../haskell-debian-repo
+  else
+    Build-Depends: debian-repo >= 5.24, debian >= 3.65
+
+  Build-Depends:
+        applicative-extras >= 0.1.8
+      , base
+      , bytestring
+      , bzlib
+      , Cabal
+      , containers
+      , directory
+      , Extra
+      , filepath
+      , happstack-util
+      , HaXml >= 1.22.5
+      , magic
+      , MIME >= 1.1
+      , mtl
+      , network
+      , old-locale
+      , old-time
+      , parsec
+      , pretty
+      , pretty-class
+      , process
+      , process-extras
+      , process-progress
+      , pureMD5
+      , regex-compat
+      , regex-posix
+      , regex-tdfa
+      , tar >= 0.4
+      , template-haskell
+      , time
+      , unix
+      , Unixutils >= 1.51
+      , xhtml
+      , zlib
+  GHC-Options: -O2 -threaded -Wall -Wwarn -fno-warn-missing-signatures -fno-warn-name-shadowing -fno-warn-type-defaults
+  Exposed-modules:
+    Debian.AutoBuilder.BuildTarget,
+    Debian.AutoBuilder.BuildTarget.Apt,
+    Debian.AutoBuilder.BuildTarget.Bzr,
+    Debian.AutoBuilder.BuildTarget.Cd,
+    Debian.AutoBuilder.BuildTarget.Darcs,
+    Debian.AutoBuilder.BuildTarget.DebDir,
+    Debian.AutoBuilder.BuildTarget.Debianize,
+    Debian.AutoBuilder.BuildTarget.Dir,
+    Debian.AutoBuilder.BuildTarget.Hackage,
+    Debian.AutoBuilder.BuildTarget.Hg,
+    Debian.AutoBuilder.BuildTarget.Patch,
+    Debian.AutoBuilder.BuildTarget.Proc,
+    Debian.AutoBuilder.BuildTarget.Quilt,
+    Debian.AutoBuilder.BuildTarget.SourceDeb,
+    Debian.AutoBuilder.BuildTarget.Svn,
+    Debian.AutoBuilder.BuildTarget.Tla,
+    Debian.AutoBuilder.BuildTarget.Twice,
+    Debian.AutoBuilder.BuildTarget.Uri,
+    Debian.AutoBuilder.Main,
+    Debian.AutoBuilder.Params,
+    Debian.AutoBuilder.Target,
+    Debian.AutoBuilder.Types.Buildable
+    Debian.AutoBuilder.Types.CacheRec
+    Debian.AutoBuilder.Types.Download
+    Debian.AutoBuilder.Types.Fingerprint
+    Debian.AutoBuilder.Types.Packages,
+    Debian.AutoBuilder.Types.ParamRec
+    Debian.AutoBuilder.Types.RetrieveMethodOld,
+    Debian.AutoBuilder.Version

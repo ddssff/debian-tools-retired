@@ -1,0 +1,103 @@
+Source: haskell-process-progress
+Priority: extra
+Section: haskell
+Maintainer: SeeReason Autobuilder <partners@seereason.com>
+Build-Depends: debhelper (>= 7.0)
+               , haskell-devscripts (>= 0.8)
+               , cdbs
+               , ghc
+               , ghc-prof
+               , libghc-hunit-dev
+               , libghc-hunit-prof
+               , libghc-base-dev (>= 4) | ghc
+               , libghc-base-dev (<< 5) | ghc
+               , libghc-base-prof (>= 4) | ghc-prof
+               , libghc-base-prof (<< 5) | ghc-prof
+               , libghc-bytestring-dev | ghc
+               , libghc-bytestring-prof | ghc-prof
+               , libghc-deepseq-dev | ghc
+               , libghc-deepseq-prof | ghc-prof
+               , libghc-mtl-dev
+               , libghc-mtl-prof
+               , libghc-process-dev | ghc
+               , libghc-process-prof | ghc-prof
+               , libghc-process-extras-dev (>= 0.4.6)
+               , libghc-process-extras-prof (>= 0.4.6)
+               , libghc-text-dev
+               , libghc-text-prof
+               , libghc-time-dev | ghc
+               , libghc-time-prof | ghc-prof
+               , libghc-unix-dev | ghc
+               , libghc-unix-prof | ghc-prof
+               , libghc-utf8-string-dev
+               , libghc-utf8-string-prof
+Build-Depends-Indep: ghc-doc
+                     , libghc-hunit-doc
+                     , libghc-base-doc (>= 4) | ghc-doc
+                     , libghc-base-doc (<< 5) | ghc-doc
+                     , libghc-bytestring-doc | ghc-doc
+                     , libghc-deepseq-doc | ghc-doc
+                     , libghc-mtl-doc
+                     , libghc-process-doc | ghc-doc
+                     , libghc-process-extras-doc (>= 0.4.6)
+                     , libghc-text-doc
+                     , libghc-time-doc | ghc-doc
+                     , libghc-unix-doc | ghc-doc
+                     , libghc-utf8-string-doc
+Standards-Version: 3.9.3
+Homepage: https://src.seereason.com/process-progress
+
+Package: libghc-process-progress-dev
+Architecture: any
+Depends: ${shlibs:Depends}
+         , ${haskell:Depends}
+         , ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
+Provides: ${haskell:Provides}
+Description: Run a process and do reportsing on its progress.
+ Function to run a process and wrappers to provide different
+ types of feedback while it executes.
+ .
+  Author: David Fox
+  Upstream-Maintainer: David Fox <dsf@seereason.com>
+ .
+ This package contains the normal library files.
+
+Package: libghc-process-progress-prof
+Architecture: any
+Depends: ${haskell:Depends}
+         , ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
+Provides: ${haskell:Provides}
+Description: Run a process and do reportsing on its progress.
+ Function to run a process and wrappers to provide different
+ types of feedback while it executes.
+ .
+  Author: David Fox
+  Upstream-Maintainer: David Fox <dsf@seereason.com>
+ .
+ This package contains the libraries compiled with profiling enabled.
+
+Package: libghc-process-progress-doc
+Architecture: all
+Section: doc
+Depends: ${haskell:Depends}
+         , ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
+Description: Run a process and do reportsing on its progress.
+ Function to run a process and wrappers to provide different
+ types of feedback while it executes.
+ .
+  Author: David Fox
+  Upstream-Maintainer: David Fox <dsf@seereason.com>
+ .
+ This package contains the documentation files.
+
+Package: haskell-process-progress-utils
+Architecture: any
+Section: misc
+Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}
+Description:  An executable built with the process-progress-0.4.5 library.
