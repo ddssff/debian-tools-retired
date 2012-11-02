@@ -5,12 +5,15 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 module System.Process.Read.Monad
     ( -- * Run processes with various types and amounts of feedback
-      runProcessQ
+      runProcessS
+    , runProcessQ
     , runProcessD
     , runProcessV
+    , runProcessSF
     , runProcessQF
     , runProcessDF
     , runProcessVF
+    , runProcessSE
     , runProcessQE
     , runProcessDE
     -- * Process feedback managed by the VERBOSITY environment variable
@@ -18,7 +21,7 @@ module System.Process.Read.Monad
     , runProcessF
     ) where
 
-import Control.Monad (when)
+import Control.Monad (when, unless)
 import Control.Monad.State (StateT(runStateT), get, put)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Prelude hiding (print)
@@ -83,12 +86,16 @@ runProcessM f cmd input =
          (out2 :: [P.Output c]) <- if cpd s > 0 then P.dots (fromIntegral (cpd s)) (\ n -> P.hPutStr stderr (replicate (fromIntegral n) '.')) out1 else return out1
          (out3 :: [P.Output c]) <- if echo s then doOutput (prefixes s) out2 else return out2
          (out5 :: [P.Output c]) <- (if failExit s then P.foldFailure (\ n -> error (showCommand cmd ++ " -> ExitFailure " ++ show n)) else return) out3
-         (out6 :: [P.Output c]) <- (if failEcho s then P.foldFailure (\ n -> doOutput (prefixes s) out5 >> return (P.Result (ExitFailure n))) else return) out5
-         (out7 :: [P.Output c]) <- (if trace s then  P.foldResult (\ ec -> hPutStrLn stderr ("<- " ++ showCommand cmd ++ ": " ++ show ec) >> return (P.Result ec)) else return) out6
+         (out6 :: [P.Output c]) <- (if trace s then  P.foldResult (\ ec -> hPutStrLn stderr ("<- " ++ showCommand cmd ++ ": " ++ show ec) >> return (P.Result ec)) else return) out5
+         (out7 :: [P.Output c]) <- (if failEcho s then P.foldFailure (\ n -> unless (trace s) (hPutStrLn stderr ("<- " ++ showCommand cmd ++ ": " ++ show (ExitFailure n))) >>
+                                                                             doOutput (prefixes s) out5 >> return (P.Result (ExitFailure n))) else return) out6
          return out7
 
 doOutput :: P.Chars a => Maybe (String, String) -> [P.Output a] -> IO [P.Output a]
 doOutput prefixes out = maybe (P.doOutput out) (\ (sout, serr) -> P.prefixed sout serr out) prefixes >> return out
+
+s :: MonadIO m => RunT c m ()
+s = echoCommand False
 
 c :: MonadIO m => RunT c m ()
 c = echoCommand True
@@ -106,6 +113,10 @@ e :: MonadIO m => RunT c m ()
 e = echoOnFailure True >> setPrefixes (Just (" 1> ", " 2> ")) >> exceptionOnFailure True >> echoOutput False
 
 -- | No output.
+runProcessS :: (P.NonBlocking c, MonadIO m) => (CreateProcess -> CreateProcess) -> CmdSpec -> c -> m [P.Output c]
+runProcessS modify cmd input = withRunState defaultRunState (s >> runProcessM modify cmd input)
+
+-- | Command line trace only.
 runProcessQ :: (P.NonBlocking c, MonadIO m) => (CreateProcess -> CreateProcess) -> CmdSpec -> c -> m [P.Output c]
 runProcessQ modify cmd input = withRunState defaultRunState (runProcessM modify cmd input)
 
@@ -120,6 +131,10 @@ runProcessV modify cmd input =
     withRunState defaultRunState (c >> v >> runProcessM modify cmd input)
 
 -- | Exception on failure
+runProcessSF :: (P.NonBlocking c, MonadIO m) => (CreateProcess -> CreateProcess) -> CmdSpec -> c -> m [P.Output c]
+runProcessSF modify cmd input =
+    withRunState defaultRunState (s >> f >> runProcessM modify cmd input)
+
 runProcessQF :: (P.NonBlocking c, MonadIO m) => (CreateProcess -> CreateProcess) -> CmdSpec -> c -> m [P.Output c]
 runProcessQF modify cmd input =
     withRunState defaultRunState (c >> f >> runProcessM modify cmd input)
@@ -133,6 +148,11 @@ runProcessDF modify cmd input =
 runProcessVF :: (P.NonBlocking c, MonadIO m) => (CreateProcess -> CreateProcess) -> CmdSpec -> c -> m [P.Output c]
 runProcessVF modify cmd input =
     withRunState defaultRunState (c >> v >> f >> runProcessM modify cmd input)
+
+-- | Exception and echo on failure
+runProcessSE :: (P.NonBlocking c, MonadIO m) => (CreateProcess -> CreateProcess) -> CmdSpec -> c -> m [P.Output c]
+runProcessSE modify cmd input =
+    withRunState defaultRunState (s >> e >> runProcessM modify cmd input)
 
 -- | Exception and echo on failure
 runProcessQE :: (P.NonBlocking c, MonadIO m) => (CreateProcess -> CreateProcess) -> CmdSpec -> c -> m [P.Output c]
@@ -155,8 +175,9 @@ runProcess :: (P.NonBlocking c, MonadIO m) => (CreateProcess -> CreateProcess) -
 runProcess modify cmd input = liftIO $ 
     verbosity >>= \ v ->
     case v of
-      _ | v <= 0 -> runProcessQ modify cmd input
-      1 -> runProcessD modify cmd input
+      _ | v <= 0 -> runProcessS modify cmd input
+      1 -> runProcessQ modify cmd input
+      2 -> runProcessD modify cmd input
       _ -> runProcessV modify cmd input
 
 -- | A version of 'runProcess' that throws an exception on failure.
@@ -164,7 +185,8 @@ runProcessF :: (P.NonBlocking c, MonadIO m) => (CreateProcess -> CreateProcess) 
 runProcessF modify cmd input = liftIO $
     verbosity >>= \ v ->
     case v of
-      _ | v <= 0 -> runProcessQF modify cmd input
+      _ | v < 0 -> runProcessSF modify cmd input
+      0 -> runProcessSE modify cmd input
       1 -> runProcessQE modify cmd input
       2 -> runProcessDE modify cmd input
       _ -> runProcessVF modify cmd input
