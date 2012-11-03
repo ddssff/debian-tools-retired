@@ -98,6 +98,7 @@ renderForDarcs :: URI -> String
 renderForDarcs uri =
     case (uriScheme uri, uriAuthority uri) of
       ("ssh:", Just auth) -> uriUserInfo auth ++ uriRegName auth ++ ":" ++ uriPath uri ++ uriQuery uri ++ uriFragment uri
+      ("file:", _) -> uriPath uri
       (_, _) -> show uri
 
 mustParseURI :: String -> URI
