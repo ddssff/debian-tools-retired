@@ -1,11 +1,12 @@
 {-# LANGUAGE PackageImports #-}
 module Debian.Repo.LocalRepository where
 
+import Control.Monad.Trans (liftIO)
 import qualified Debian.Control.ByteString as B
     ( Paragraph, ControlFunctions(parseControl), fieldValue )
 import qualified Debian.Control.String as S ( Control'(Control) )
 import Debian.Release (Section(..), ReleaseName, Arch(Binary), parseReleaseName, releaseName', sectionName')
-import Debian.Repo.Monad ( AptIO, insertRepository )
+import Debian.Repo.Monads.Apt ( AptIO, insertRepository )
 import Debian.Repo.Types
     ( ReleaseInfo(..),
       Repo(repoURI),
@@ -17,7 +18,6 @@ import Debian.Repo.Types
       compatibilityFile,
       libraryCompatibilityLevel)
 import Control.Applicative.Error ( Failing(Success, Failure) )
-import "mtl" Control.Monad.Trans ( MonadTrans(..), MonadIO(..) )
 import Control.Monad.State ( get, put )
 import Control.Monad ( filterM, when )
 import qualified Data.ByteString.Char8 as B ( ByteString, unpack )
@@ -78,7 +78,7 @@ prepareLocalRepository root layout =
                   ("incoming", 0o41755),
                   ("removed", 0o40750),
                   ("reject", 0o40750)]
-       layout' <- lift (liftIO (computeLayout (outsidePath root))) >>= (return . maybe layout Just)
+       layout' <- liftIO (computeLayout (outsidePath root)) >>= (return . maybe layout Just)
                   -- >>= return . maybe (maybe (error "No layout specified for new repository") id layout) id
        mapM_ (liftIO . initDir)
                  (case layout' of
@@ -109,7 +109,7 @@ readLocalRepo root layout =
       let aliasPairs = zip linkText links ++ map (\ dist -> (dist, dist)) dists
       let distGroups = groupBy fstEq . sort $ aliasPairs
       let aliases = map (checkAliases  . partition (uncurry (==))) distGroups
-      releaseInfo <- mapM (lift . getReleaseInfo) aliases
+      releaseInfo <- mapM (liftIO . getReleaseInfo) aliases
       let repo = LocalRepository { repoRoot = root
                                  , repoLayout = layout
                                  , repoReleaseInfoLocal = releaseInfo }

@@ -5,7 +5,7 @@ module Debian.AutoBuilder.BuildTarget
     ) where
 
 import Control.Exception (SomeException, try, throw)
-import Control.Monad.Trans (lift, liftIO)
+import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy as L
 import Data.List (intersperse)
 import qualified Debian.AutoBuilder.BuildTarget.Apt as Apt
@@ -31,7 +31,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Relation (SrcPkgName(..), PkgName(..))
 import Debian.Repo (OSImage, rootPath, rootDir, findSourceTree, copySourceTree, SourceTree(dir'), topdir)
-import Debian.Repo.Monad (AptIOT)
+import Debian.Repo.Monads.Apt (AptIOT)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
 import System.Process (CmdSpec(..))
@@ -56,7 +56,7 @@ retrieve buildOS cache target =
                             , T.buildWrapper = id
                             }
 
-      P.Darcs uri -> lift (Darcs.prepare cache target uri)
+      P.Darcs uri -> liftIO (Darcs.prepare cache target uri)
 
       P.DataFiles base files loc ->
           do base' <- retrieve buildOS cache (target {P.spec = base})
@@ -75,7 +75,7 @@ retrieve buildOS cache target =
           Debianize.prepare cache target
 
       P.Dir path ->
-          do tree <- lift (findSourceTree path)
+          do tree <- liftIO (findSourceTree path)
              return $ T.Download { T.package = target
                                  , T.getTop = topdir tree
                                  , T.logText =  "Built from local directory " ++ show (P.spec target)

@@ -41,13 +41,7 @@ import qualified Debian.Control.ByteString as B
 import Debian.Relation (BinPkgName(..), PkgName(..))
 import qualified Debian.Relation.ByteString as B
     ( ParseRelations(..), Relations )
-import Debian.Repo.Monad
-    ( AptIO,
-      lookupSourcePackages,
-      insertSourcePackages,
-      lookupBinaryPackages,
-      insertBinaryPackages,
-      readParagraphs )
+import Debian.Repo.Monads.Apt ( AptIO, lookupSourcePackages, insertSourcePackages, lookupBinaryPackages, insertBinaryPackages, readParagraphs )
 import Debian.Release (Arch(..), releaseName', sectionName')
 import Debian.Repo.Types
     ( AptCache(aptArch, rootDir),

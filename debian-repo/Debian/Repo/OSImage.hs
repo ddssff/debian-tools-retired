@@ -37,7 +37,7 @@ import Debian.Repo.Cache
       sourcesPath,
       sliceIndexes,
       buildArchOfRoot )
-import Debian.Repo.Monad ( AptIO, AptIOT )
+import Debian.Repo.Monads.Apt ( AptIO, AptIOT )
 import Debian.Repo.Package
     ( sourcePackagesOfIndex', binaryPackagesOfIndex' )
 import Debian.Relation ( ParseRelations(..), Relations )
@@ -201,7 +201,7 @@ prepareEnv cacheDir root distro repo flush ifSourcesChanged include exclude comp
                    , osLocalRepoMaster = repo
                    , osSourcePackages = []
                    , osBinaryPackages = [] }
-       update os >>= recreate arch os >>= lift . syncPool
+       update os >>= recreate arch os >>= liftIO . syncPool
     where
       update _ | flush = return (Left Flushed)
       update os = updateEnv os
@@ -222,8 +222,8 @@ prepareEnv cacheDir root distro repo flush ifSourcesChanged include exclude comp
              liftIO (replaceFile (sourcesPath os) (show . pretty . osBaseDistro $ os))
              liftIO (try (getEnv "LANG") :: IO (Either SomeException String)) >>= \ localeName ->
                  buildEnv cacheDir root distro arch repo include exclude components >>=
-                     lift . (localeGen (either (const "en_US.UTF-8") id localeName)) >>=
-                         lift . neuterEnv >>= lift . syncPool
+                     liftIO . (localeGen (either (const "en_US.UTF-8") id localeName)) >>=
+                         liftIO . neuterEnv >>= lift . syncPool
 
 -- |Prepare a minimal \/dev directory
 {-# WARNING prepareDevs "This function should check all the result codes" #-}
@@ -399,7 +399,7 @@ updateEnv os =
          Left x -> return $ Left x
          Right _ ->
              do liftIO $ prepareDevs (rootPath root)
-                os' <- lift $ syncPool os
+                os' <- liftIO $ syncPool os
                 liftIO $ updateLists os'
                 liftIO $ sshCopy (rootPath root)
                 source <- getSourcePackages os'

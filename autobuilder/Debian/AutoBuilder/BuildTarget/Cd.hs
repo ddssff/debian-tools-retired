@@ -5,7 +5,7 @@ module Debian.AutoBuilder.BuildTarget.Cd where
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Repo.Monad (AptIOT)
+import Debian.Repo.Monads.Apt (AptIOT)
 import System.FilePath ((</>))
 
 documentation = [ "cd:<relpath>:<target> - A target of this form modifies another target by"
@@ -14,7 +14,7 @@ documentation = [ "cd:<relpath>:<target> - A target of this form modifies anothe
 
 prepare :: P.CacheRec -> P.Packages -> FilePath -> Download -> AptIOT IO Download
 prepare _cache package subdir target =
-    do     
+    do
     return $ Download { package = package
                         , getTop = getTop target </> subdir
                         , logText = logText target ++ " (in subdirectory " ++ subdir ++ ")"
@@ -22,4 +22,4 @@ prepare _cache package subdir target =
                         , origTarball = Nothing
                         , cleanTarget = cleanTarget target
                         , buildWrapper = id
-                        } 
+                        }

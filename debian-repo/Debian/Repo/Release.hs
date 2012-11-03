@@ -8,8 +8,7 @@ module Debian.Repo.Release
     , mergeReleases
     ) where
 
-import Control.Monad.State
-    ( MonadTrans(..), MonadState(..), MonadIO(..), filterM, liftM )
+import Control.Monad.State (MonadState(..), MonadIO(..), filterM, liftM)
 import qualified Data.ByteString.Lazy.Char8 as L ( empty, readFile )
 import Data.Digest.Pure.MD5 (md5)
 import Data.List ( sortBy, groupBy, group, intercalate, nub, sort )
@@ -22,7 +21,7 @@ import qualified Debian.Control.String as S
       ControlFunctions(parseControlFromFile),
       fieldValue )
 import Debian.Release (Section, ReleaseName, Arch(..), archName, parseSection', releaseName', sectionName')
-import Debian.Repo.Monad ( AptIO, io, findRelease, putRelease )
+import Debian.Repo.Monads.Apt ( AptIO, io, findRelease, putRelease )
 import Debian.Repo.Types
     ( PackageIndex(packageIndexArch, packageIndexComponent,
                    packageIndexRelease),
@@ -70,7 +69,7 @@ prepareRelease repo dist aliases sections archList =
              -- vPutStrLn 0 ("packageIndexList: " ++ show (packageIndexList release))
              mapM (initIndex (outsidePath root)) (packageIndexList release)
              mapM (initAlias (outsidePath root) dist) aliases
-             lift (writeRelease release)
+             liftIO (writeRelease release)
 	     -- This ought to be identical to repo, but the layout should be
              -- something rather than Nothing.
              repo' <- prepareLocalRepository root (repoLayout repo)

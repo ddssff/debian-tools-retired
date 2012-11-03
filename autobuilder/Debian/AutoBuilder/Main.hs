@@ -11,7 +11,7 @@ import Control.Arrow (first)
 import Control.Applicative.Error (Failing(..), maybeRead)
 import Control.Exception(SomeException, try, catch, AsyncException(UserInterrupt), fromException)
 import Control.Monad(foldM, when, unless)
-import Control.Monad.State(MonadIO(..), MonadTrans(..), MonadState(get), runStateT)
+import Control.Monad.State(MonadIO(liftIO), MonadState(get), runStateT)
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import qualified Data.Map as Map
@@ -32,7 +32,7 @@ import Debian.Sources (SliceName(..))
 import Debian.Repo.AptImage(prepareAptEnv)
 import Debian.Repo.Cache(updateCacheSources)
 import Debian.Repo.Insert(deleteGarbage)
-import Debian.Repo.Monad (AptIOT, AptState, initState, getRepoMap, tryAB, tryJustAB)
+import Debian.Repo.Monads.Apt (AptIOT, AptState, initState, getRepoMap, tryAB, tryJustAB)
 import Debian.Repo.LocalRepository(prepareLocalRepository, flushLocalRepository)
 import Debian.Repo.OSImage(OSImage, buildEssential, prepareEnv, chrootEnv)
 import Debian.Repo.Release(prepareRelease)
@@ -104,7 +104,7 @@ doParameterSet (results, state) (params, packages) =
 runParameterSet :: C.CacheRec -> AptIOT IO (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet cache =
     do
-      lift doRequiredVersion
+      liftIO doRequiredVersion
       when (P.showParams params) (withModifiedVerbosity (const 1) (liftIO doShowParams))
       when (P.showSources params) (withModifiedVerbosity (const 1) (liftIO doShowSources))
       when (P.flushAll params) (liftIO doFlush)
@@ -143,7 +143,7 @@ runParameterSet cache =
       when (not $ null $ failures) (error $ intercalate "\n " $ "Some targets could not be retrieved:" : map show failures)
       buildResult <- buildTargets cache cleanOS globalBuildDeps localRepo poolOS targets
       -- If all targets succeed they may be uploaded to a remote repo
-      result <- tryAB (upload buildResult >>= lift . newDist) >>=
+      result <- tryAB (upload buildResult >>= liftIO . newDist) >>=
                 return . either (\ (e :: SomeException) -> Failure [show e]) id
       updateRepoCache
       return result

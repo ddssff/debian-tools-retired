@@ -12,7 +12,7 @@ module Debian.Repo.Insert
     ) where
 
 import Control.Monad ( filterM, foldM, when )
-import Control.Monad.Trans ( MonadTrans(..), MonadIO(..) )
+import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Char8 as B ( pack, unpack )
 import qualified Data.ByteString.Lazy.Char8 as L ( fromChunks, readFile )
 import Data.Digest.Pure.MD5 (md5)
@@ -50,7 +50,7 @@ import qualified Debian.Control.String as S
 import Debian.Relation (SrcPkgName(unSrcPkgName), PkgName(unPkgName))
 import Debian.Repo.Changes
     ( findChangesFiles, poolDir', name, path )
-import Debian.Repo.Monad ( AptIO )
+import Debian.Repo.Monads.Apt ( AptIO )
 import qualified Debian.Repo.Package as DRP
     ( sourceFilePaths,
       toBinaryPackage,
@@ -253,14 +253,14 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
     do live <- findLive repo >>= return . Set.fromList
        (_, releases', results) <- foldM (installFiles root) (live, releases, []) changeFileList
        let results' = reverse results
-       results'' <- lift $ updateIndexes root releases' results'
+       results'' <- liftIO $ updateIndexes root releases' results'
        -- The install is done, now we will try to clean up incoming.
        case elem Ok results'' of
          False ->
              return results''
          True ->
-             mapM_ (lift . uncurry (finish root (maybe Flat id layout))) (zip changeFileList results'') >>
-             mapM_ (lift . signRelease keyname) (catMaybes . map (findRelease releases) . nub . sort . map changeRelease $ changeFileList) >>
+             mapM_ (liftIO . uncurry (finish root (maybe Flat id layout))) (zip changeFileList results'') >>
+             mapM_ (liftIO . signRelease keyname) (catMaybes . map (findRelease releases) . nub . sort . map changeRelease $ changeFileList) >>
              return results''
     where
       -- Hard link the files of each package into the repository pool,
@@ -683,8 +683,8 @@ findLive :: LocalRepository -> AptIO [FilePath]
 findLive (LocalRepository _ Nothing _) = return []	-- Repository is empty
 findLive repo@(LocalRepository root (Just layout) _) =
     do releases <- findReleases repo
-       sourcePackages <- mapM (lift . DRP.releaseSourcePackages) releases >>= return . map (either (error . show) id) >>= return . concat
-       binaryPackages <- mapM (lift . DRP.releaseBinaryPackages) releases >>= return . map (either (error . show) id) >>= return . concat
+       sourcePackages <- mapM (liftIO . DRP.releaseSourcePackages) releases >>= return . map (either (error . show) id) >>= return . concat
+       binaryPackages <- mapM (liftIO . DRP.releaseBinaryPackages) releases >>= return . map (either (error . show) id) >>= return . concat
        let sourceFiles = map ((outsidePath root ++ "/") ++) . concat . map DRP.sourceFilePaths $ sourcePackages
        let binaryFiles =
                map ((outsidePath root ++ "/") ++) . map B.unpack . catMaybes $ map (B.fieldValue "Filename" . packageInfo) binaryPackages

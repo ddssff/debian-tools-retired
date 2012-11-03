@@ -143,7 +143,7 @@ main =
                    liftIO (createDirectoryIfMissing True (outsidePath (root flags)))
                    case findValues flags "Version" of
                      [] -> withLock lockPath (runFlags flags)
-                     _ -> lift (IO.putStrLn myVersion) >>
+                     _ -> liftIO (IO.putStrLn myVersion) >>
                           liftIO (exitWith ExitSuccess))
     where
       nameFirstSection (flags : more) = nameSection "Main" flags : more
@@ -168,7 +168,7 @@ runFlags flags =
        releases <- findReleases repo
        -- Get the Repository object, this will certainly be a singleton list.
        --let repos = nub $ map releaseRepo releases
-       lift (deletePackages releases flags keyname)
+       liftIO (deletePackages releases flags keyname)
        --vPutStrBl 1 IO.stderr $ "newdist " ++ show (root flags)
        --vPutStrBl 1 IO.stderr $ "signRepository=" ++ show signRepository
        --io $ exitWith ExitSuccess
@@ -176,11 +176,11 @@ runFlags flags =
        when install ((scanIncoming False keyname repo) >>= 
                      \ (ok, errors) -> (liftIO (sendEmails senderAddr emailAddrs (map (successEmail repo) ok)) >>
                                         liftIO (sendEmails senderAddr emailAddrs (map (\ (changes, error) -> failureEmail changes error) errors)) >>
-                                        lift (exitOnError (map snd errors))))
-       when expire  $ lift (deleteTrumped keyname releases) >> return ()
+                                        liftIO (exitOnError (map snd errors))))
+       when expire  $ liftIO (deleteTrumped keyname releases) >> return ()
        when cleanUp $ deleteGarbage repo >> return ()
        -- This flag says sign even if nothing changed
-       when signRepository $ lift (signReleases keyname releases)
+       when signRepository $ liftIO (signReleases keyname releases)
     where
 {-
       findReleaseByName :: [Release] -> ReleaseName -> Maybe Release

@@ -38,7 +38,7 @@ import Debian.Release
 import Debian.Sources
     ( SourceType(..),
       DebSource(..) )
-import Debian.Repo.Monad ( AptIO )
+import Debian.Repo.Monads.Apt ( AptIO )
 import Debian.Repo.Slice ( verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Types

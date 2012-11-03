@@ -11,8 +11,8 @@ module Debian.Repo.Repository
 
 import Control.Applicative.Error ( Failing(Success, Failure) )
 import Control.Exception ( ErrorCall(..), toException )
-import "mtl" Control.Monad.Trans ( MonadTrans(..), MonadIO(..) )
 import Control.Monad.State ( get, put )
+import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Char8 as B (concat, ByteString, unpack)
 --import qualified Data.ByteString.Lazy.Char8 as L (empty, toChunks)
@@ -42,8 +42,7 @@ import Debian.Repo.Changes
       path )
 import Debian.Repo.LocalRepository
     ( prepareLocalRepository, makeReleaseInfo )
-import Debian.Repo.Monad
-    ( AptIO, insertRepository, lookupRepository )
+import Debian.Repo.Monads.Apt ( AptIO, insertRepository, lookupRepository )
 import Debian.Repo.Types
     ( ReleaseInfo(releaseInfoArchitectures),
       PkgVersion(..),
@@ -292,7 +291,7 @@ uploadRemote repo uri =
       notUploaded uploaded changes = not . Set.member (Debian.Repo.Changes.key changes) $ uploaded
       --showReject (changes, tag) = Debian.Repo.Changes.name changes ++ ": " ++ tag
       dupload' (Failure x) = return (Failure x)
-      dupload' (Success c) = lift (dupload uri (outsidePath root) (Debian.Repo.Changes.path c))
+      dupload' (Success c) = liftIO (dupload uri (outsidePath root) (Debian.Repo.Changes.path c))
 
 validRevision' (Failure x) = return (Failure x)
 validRevision' (Success c) = validRevision c

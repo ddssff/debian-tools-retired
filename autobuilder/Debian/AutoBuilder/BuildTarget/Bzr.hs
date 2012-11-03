@@ -52,7 +52,7 @@ prepare cache package version = liftIO $
               Right _output -> mergeSource dir
             where
                 cmd   = "cd " ++ dir ++ " && ! `bzr status | grep -q 'modified:'`"
-        
+
         -- computes a diff between this archive and some other parent archive and tries to merge the changes
         mergeSource dir =
             runProcessF id (ShellCommand cmd) L.empty >>= \ b ->
@@ -63,7 +63,7 @@ prepare cache package version = liftIO $
                 cmd   = "cd " ++ dir ++ " && bzr merge"
                 -- style = (setStart (Just ("Merging local Bazaar source archive '" ++ dir ++ "' with parent archive")).
                 --          setError (Just (\ _ -> "bzr merge failed in '" ++ dir ++ "'")))
-        
+
         -- Bazaar is a distributed revision control system so you must commit to the local source
         -- tree after you merge from some other source tree
         commitSource dir =
@@ -72,7 +72,7 @@ prepare cache package version = liftIO $
                 cmd   = "cd " ++ dir ++ " && bzr commit -m 'Merged Upstream'"
                 -- style = (setStart (Just ("Commiting merge to local Bazaar source archive '" ++ dir ++ "'")) .
                 --     setError (Just (\ _ -> "bzr commit failed in '" ++ dir ++ "'")))
-        
+
         removeSource dir = liftIO $ removeRecursiveSafely dir
 
         createSource dir = do

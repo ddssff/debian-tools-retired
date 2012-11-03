@@ -17,7 +17,7 @@ module Debian.Repo.Slice
     ) where
 
 import Control.Exception ( throw )
-import "mtl" Control.Monad.Trans ( MonadTrans(..), MonadIO(..) )
+import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as L ( unpack )
 import Data.List ( nubBy )
 import Data.Maybe ( catMaybes )
@@ -35,7 +35,7 @@ import Debian.Sources
       SliceName(SliceName),
       DebSource(..) )
 import Debian.Repo.LocalRepository ( prepareLocalRepository )
-import Debian.Repo.Monad ( AptIOT )
+import Debian.Repo.Monads.Apt ( AptIOT )
 import Debian.Repo.Repository ( prepareRepository )
 import Debian.Repo.SourcesList
     ( parseSourceLine, parseSourcesList )
@@ -74,8 +74,8 @@ appendSliceLists lists =
 -- the repository.
 repoSources :: Maybe EnvRoot -> URI -> AptIOT IO SliceList
 repoSources chroot uri =
-    do dirs <- lift (uriSubdirs chroot (uri {uriPath = uriPath uri ++ "/dists/"}))
-       releaseFiles <- mapM (lift . readRelease uri) dirs >>= return . catMaybes
+    do dirs <- liftIO (uriSubdirs chroot (uri {uriPath = uriPath uri ++ "/dists/"}))
+       releaseFiles <- mapM (liftIO . readRelease uri) dirs >>= return . catMaybes
        let codenames = map (maybe Nothing (zap (flip elem dirs))) . map (fieldValue "Codename") $ releaseFiles
            sections = map (maybe Nothing (Just . map parseSection' . splitRegex (mkRegex "[ \t,]+")) . fieldValue "Components") $ releaseFiles
            result = concat $ map sources . nubBy (\ (a, _) (b, _) -> a == b) . zip codenames $ sections

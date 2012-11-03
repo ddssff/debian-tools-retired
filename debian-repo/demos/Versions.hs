@@ -5,7 +5,7 @@ import Control.Exception (throw)
 import Control.Monad.Trans
 import Data.Maybe
 import Debian.Release (Arch(Binary))
-import Debian.Repo.Monad
+import Debian.Repo.Monads.Apt
 import Debian.Repo.PackageIndex
 import Debian.Repo.Package
 import Debian.Repo.Release

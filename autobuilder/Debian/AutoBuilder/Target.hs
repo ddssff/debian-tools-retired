@@ -14,7 +14,7 @@ import Control.Arrow (second)
 import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
 import Control.Exception (SomeException, try, evaluate)
-import Control.Monad.RWS(MonadIO(..), MonadTrans(..), when)
+import Control.Monad.RWS(liftIO, when)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Either (partitionEithers)
@@ -49,13 +49,13 @@ import Debian.Repo.Cache (binaryPackages, buildArchOfEnv, sourcePackages, aptSou
 import Debian.Repo.Dependencies (simplifyRelations, solutions)
 import Debian.Repo.Changes (save, uploadLocal)
 import Debian.Repo.Insert (scanIncoming, showErrors)
-import Debian.Repo.Monad (tryAB)
+import Debian.Repo.Monads.Apt (tryAB)
 import Debian.Repo.OSImage (OSImage, updateLists)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.SourceTree (SourceTreeC(..), DebianSourceTreeC(..),
                                DebianBuildTree, addLogEntry, copyDebianBuildTree,
                                findChanges, findOneDebianBuildTree, SourcePackageStatus(..))
-import Debian.Repo.Monad (AptIOT)
+import Debian.Repo.Monads.Apt (AptIOT)
 import Debian.Repo.Types (SourcePackage(sourceParagraph, sourcePackageID),
                           AptCache(rootDir, aptBinaryPackages), EnvRoot(rootPath),
                           PackageID(packageVersion), LocalRepository, PkgVersion(..),
@@ -105,7 +105,7 @@ _formatVersions buildDeps =
 
 prepareTargets :: P.CacheRec -> OSImage -> Relations -> [Buildable] -> AptIOT IO [Target]
 prepareTargets cache cleanOS globalBuildDeps targetSpecs =
-    do results <- lift $ mapM (prepare (length targetSpecs)) (zip [1..] targetSpecs)
+    do results <- liftIO $ mapM (prepare (length targetSpecs)) (zip [1..] targetSpecs)
        let (failures, targets) = partitionEithers results
        let msg = "Could not prepare " ++ show (length failures) ++ " targets:\n" ++
                  concatMap (\ (n, e) -> printf "%4d. " n ++ show e ++ "\n") (zip [(1::Int)..] failures)
@@ -146,7 +146,7 @@ buildTargets cache cleanOS globalBuildDeps localRepo poolOS targetSpecs =
       failed <- buildLoop cache globalBuildDeps localRepo poolOS cleanOS targets
       return (localRepo, failed)
     where
-      -- targetList <- lift $ countAndPrepareTargets cache globalBuildDeps cleanOS targetSpecs
+      -- targetList <- liftIO $ countAndPrepareTargets cache globalBuildDeps cleanOS targetSpecs
       --buildAll cleanOS targetList globalBuildDeps
 
 -- Execute the target build loop until all the goals (or everything) is built
@@ -318,7 +318,7 @@ buildTarget ::
     AptIOT IO (Failing (Maybe LocalRepository))	-- The local repository after the upload (if it changed), or an error message
 buildTarget cache cleanOS globalBuildDeps repo poolOS target =
     do
-      _cleanOS' <- lift (quieter 2 $ syncPool cleanOS)
+      _cleanOS' <- liftIO (quieter 2 $ syncPool cleanOS)
       -- Get the control file from the clean source and compute the
       -- build dependencies
       let debianControl = targetControl target
@@ -365,7 +365,7 @@ buildTarget cache cleanOS globalBuildDeps repo poolOS target =
 buildPackage :: P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> ChangeLogEntry -> Target -> SourcePackageStatus -> LocalRepository -> AptIOT IO (Failing LocalRepository)
 buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog target status repo =
     checkDryRun >>
-    lift prepareImage >>=
+    liftIO prepareImage >>=
     failing (return . Failure) logEntry >>=
     failing (return . Failure) (quieter (-1) . build) >>=
     failing (return . Failure) find >>=
@@ -451,7 +451,7 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog ta
                 -- the md5sum of the .dsc file in the .changes file.
                 liftIO . setRevisionInfo newFingerprint
             -- Upload to the local apt repository
-            lift $ uploadLocal repo changesFile'
+            liftIO $ uploadLocal repo changesFile'
             -- The upload to the local repository is done even when
             -- the --dry-run flag is given.  Or it would be if we
             -- didn't exit when the first buildworthy target is found.

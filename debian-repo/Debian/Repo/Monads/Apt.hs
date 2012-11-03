@@ -1,9 +1,10 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, PackageImports #-}
+{-# LANGUAGE FlexibleInstances, GeneralizedNewtypeDeriving, PackageImports, TypeSynonymInstances #-}
 -- |AptIO is an instance of the RWS monad used to manage the global
 -- state and output style parameters of clients of the Apt library,
 -- such as the autobuilder.
-module Debian.Repo.Monad
-    ( AptIOT
+module Debian.Repo.Monads.Apt
+    ( MonadApt(..)
+    , AptIOT
     , AptIO
     -- * AptIO Monad
     , io
@@ -31,33 +32,18 @@ module Debian.Repo.Monad
     ) where
 
 import Control.Exception (Exception, tryJust)
-import qualified Debian.Control.ByteString as B
-    ( Paragraph,
-      Control'(Control),
-      ControlFunctions(parseControlFromHandle) )
+import Control.Monad.Reader (ReaderT)
+import Control.Monad.State (get, put)
+import qualified Debian.Control.ByteString as B ( Paragraph, Control'(Control), ControlFunctions(parseControlFromHandle) )
 import Debian.Release (ReleaseName)
 import Debian.Sources (SliceName)
-import Debian.Repo.Types
-    ( AptImage,
-      SourcePackage,
-      BinaryPackage,
-      Release,
-      Repo(repoURI),
-      Repository )
+import Debian.Repo.Types ( AptImage, SourcePackage, BinaryPackage, Release, Repo(repoURI), Repository )
 import Control.Exception ( try )
-import Control.Monad.State
-    ( MonadTrans(..),
-      MonadState(get),
-      MonadIO(..),
-      StateT(runStateT),
-      mapStateT )
-import qualified Data.Map as Map
-    ( insert, Map, empty, findWithDefault )
+import Control.Monad.State ( MonadTrans(..), MonadIO(..), StateT(runStateT), mapStateT )
+import qualified Data.Map as Map ( insert, Map, empty, findWithDefault )
 import Debian.URI ( URI )
-import qualified System.IO as IO
-    ( IOMode(ReadMode), hClose, openBinaryFile )
-import System.Posix.Files
-    ( FileStatus, deviceID, fileID, modificationTime )
+import qualified System.IO as IO ( IOMode(ReadMode), hClose, openBinaryFile )
+import System.Posix.Files ( FileStatus, deviceID, fileID, modificationTime )
 import System.Process.Progress (ePutStrLn)
 import Text.Printf ( printf )
 
@@ -194,3 +180,15 @@ countTasks tasks =
       countTask :: MonadIO m => Int -> (Int, (String, m a)) -> m a
       countTask count (index, (message, task)) =
           ePutStrLn (printf "[%2d of %2d] %s:" index count message) >> task
+
+class (MonadIO m, Functor m) => MonadApt m where
+    getApt :: m AptState
+    putApt :: AptState -> m ()
+
+instance (MonadIO m, Functor m) => MonadApt (AptIOT m) where
+    getApt = get
+    putApt = put
+
+instance MonadApt m => MonadApt (ReaderT s m) where
+    getApt = lift getApt
+    putApt = lift . putApt

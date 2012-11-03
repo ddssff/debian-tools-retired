@@ -20,8 +20,7 @@ import Debian.Repo.Cache
       updateCacheSources )
 import Debian.Repo.Package
     ( sourcePackagesOfIndex', binaryPackagesOfIndex' )
-import Debian.Repo.Monad
-    ( AptIO, AptIOT, io, lookupAptImage, insertAptImage )
+import Debian.Repo.Monads.Apt ( AptIO, AptIOT, io, lookupAptImage, insertAptImage )
 import Debian.Repo.Slice ( sourceSlices, binarySlices )
 import Debian.Repo.SourceTree
     ( DebianBuildTree(debTree'), DebianSourceTree(tree'), SourceTree(dir'), findDebianBuildTrees, entry )
