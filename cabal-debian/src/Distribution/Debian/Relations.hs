@@ -4,7 +4,7 @@
 
 -- | Support for generating Debianization from Cabal data.
 
-module Relations
+module Distribution.Debian.Relations
     ( allBuildDepends
     , buildDependencies
     , docDependencies
@@ -18,6 +18,7 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Data.Version (Version(Version))
 import qualified Debian.Relation as D
+import Distribution.Debian.Dependencies (PackageType(..), VersionSplits(..), dependencies, mkPkgName)
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Package (PackageName(..), Dependency(..))
 import Distribution.PackageDescription (PackageDescription(..), allBuildInfo, buildTools, pkgconfigDepends, extraLibs)
@@ -25,8 +26,6 @@ import Distribution.Version (anyVersion)
 import System.Exit (ExitCode(ExitSuccess))
 import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readProcessWithExitCode)
-
-import Dependencies (PackageType(..), VersionSplits(..), dependencies, mkPkgName)
 
 cabalDependencies :: Map.Map String [D.BinPkgName] -> PackageDescription -> [Dependency]
 cabalDependencies depMap pkgDesc = catMaybes $ map unboxDependency $ allBuildDepends depMap pkgDesc

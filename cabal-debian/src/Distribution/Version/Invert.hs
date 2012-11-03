@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
-module InvertVersionRange
+module Distribution.Version.Invert
     ( invertVersionRange
     , invertVersionIntervals
     ) where

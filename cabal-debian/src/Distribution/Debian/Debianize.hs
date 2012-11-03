@@ -4,7 +4,7 @@
 -- | Generate a package Debianization from Cabal data and command line
 -- options.
 
-module Debianize
+module Distribution.Debian.Debianize
     ( debianize
     ) where
 
@@ -24,6 +24,11 @@ import Debian.Changes (ChangeLogEntry(..), prettyEntry, parseLog)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Debian.Version.String
+import Distribution.Debian.Config (Flags(..), missingDependencies')
+import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName, debianUtilsPackageName, debianSourcePackageName,
+                                         debianDocPackageName, debianDevPackageName, debianProfPackageName)
+import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits)
+import Distribution.Debian.Utility
 import Distribution.Text (display)
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.License (License(..))
@@ -38,12 +43,6 @@ import System.IO (hPutStrLn, stderr)
 import System.Process (readProcessWithExitCode, showCommandForUser)
 import Text.PrettyPrint.HughesPJ
 import Text.PrettyPrint.Class (pretty)
-
-import Dependencies (PackageType(..), debianExtraPackageName, debianUtilsPackageName, debianSourcePackageName,
-                     debianDocPackageName, debianDevPackageName, debianProfPackageName)
-import Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits)
-import Options (Flags(..))
-import Utility
 
 type Debianization = Map.Map FilePath String
 
@@ -216,7 +215,7 @@ control flags compiler debianMaintainer pkgDesc =
       librarySpecs = maybe [] (const (develLibrarySpec ++ profileLibrarySpec ++ docLibrarySpec)) (library pkgDesc)
       develLibrarySpec = [librarySpec "any" Development debianDevPackageName']
       profileLibrarySpec = if debLibProf flags then [librarySpec "any" Profiling debianProfPackageName'] else []
-      docLibrarySpec = if rpmHaddock flags then [docSpecsParagraph] else []
+      docLibrarySpec = if haddock flags then [docSpecsParagraph] else []
 
       (controlSpecs, installFiles, rulesLines) = unzip3 $ execAndUtilSpecs flags pkgDesc debianDescription
 
@@ -226,8 +225,8 @@ control flags compiler debianMaintainer pkgDesc =
             Field ("Priority", " " ++ "extra"),
             Field ("Section", " " ++ "haskell"),
             Field ("Maintainer", " " ++ debianMaintainer),
-            Field ("Build-Depends", " " ++ showDeps' "Build-Depends:" (debianBuildDeps ++ map anyrel (buildDeps flags))),
-            Field ("Build-Depends-Indep", " " ++ showDeps' "Build-Depends-Indep:" debianBuildDepsIndep),
+            Field ("Build-Depends", " " ++ showDeps' "Build-Depends:" (filterMissing (missingDependencies' flags) (debianBuildDeps ++ map anyrel (buildDeps flags)))),
+            Field ("Build-Depends-Indep", " " ++ showDeps' "Build-Depends-Indep:" (filterMissing (missingDependencies' flags) debianBuildDepsIndep)),
             --Field ("Build-Depends-Indep", " " ++ buildDepsIndep),
             Field ("Standards-Version", " " ++ "3.9.3"),
             Field ("Homepage",
@@ -241,12 +240,12 @@ control flags compiler debianMaintainer pkgDesc =
           Paragraph
           [Field ("Package", " " ++ debianName pkgDesc),
            Field ("Architecture", " " ++ arch),
-           Field ("Depends", " " ++ showDeps' "Depends:" (
+           Field ("Depends", " " ++ showDeps' "Depends:" (filterMissing (missingDependencies' flags) (
                      (if typ == Development
                       then [anyrel "${shlibs:Depends}"] ++ map anyrel (extraDevDeps flags)
                       else []) ++
                      ([anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                      extraDeps (debianName pkgDesc) (binaryPackageDeps flags)))),
+                      extraDeps (debianName pkgDesc) (binaryPackageDeps flags))))),
            Field ("Recommends", " " ++ "${haskell:Recommends}"),
            Field ("Suggests", " " ++ "${haskell:Suggests}"),
            Field ("Provides", " " ++ "${haskell:Provides}"),
@@ -257,8 +256,9 @@ control flags compiler debianMaintainer pkgDesc =
           [Field ("Package", " " ++ debianDocPackageName' pkgDesc),
            Field ("Architecture", " " ++ "all"),
            Field ("Section", " " ++ "doc"),
-           Field ("Depends", " " ++ showDeps' "Depends:" ([anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                                                           extraDeps (debianDocPackageName' pkgDesc) (binaryPackageDeps flags))),
+           Field ("Depends", " " ++ showDeps' "Depends:" (filterMissing (missingDependencies' flags)
+                                                          ([anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
+                                                           extraDeps (debianDocPackageName' pkgDesc) (binaryPackageDeps flags)))),
            Field ("Recommends", " " ++ "${haskell:Recommends}"),
            Field ("Suggests", " " ++ "${haskell:Suggests}"),
            Field ("Description", " " ++ libraryDescription Documentation)]
@@ -307,9 +307,9 @@ execAndUtilSpecs flags pkgDesc debianDescription =
            ([Field ("Package", " " ++ p),
              Field ("Architecture", " " ++ "any"),
              Field ("Section", " " ++ "misc"),
-             Field ("Depends", " " ++ showDeps ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps p (binaryPackageDeps flags))),
+             Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps p (binaryPackageDeps flags)))),
              Field ("Description", " " ++ maybe debianDescription (const executableDescription) (library pkgDesc))] ++
-            conflicts (extraDeps p (binaryPackageConflicts flags))),
+            conflicts (filterMissing (missingDependencies' flags) (extraDeps p (binaryPackageConflicts flags)))),
            (p ++ ".install", "dist-ghc" </> "build" </> p </> p ++ " usr/bin\n"),
            ["build" </> p ++ ":: build-ghc-stamp"])
       executableDescription = " " ++ "An executable built from the " ++ display (package pkgDesc) ++ " package."
@@ -322,7 +322,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                   ([Field ("Package", " " ++ debianUtilsPackageName' pkgDesc),
                     Field ("Architecture", " " ++ "any"),
                     Field ("Section", " " ++ "misc"),
-                    Field ("Depends", " " ++ showDeps ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (debianUtilsPackageName' pkgDesc) (binaryPackageDeps flags))),
+                    Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (debianUtilsPackageName' pkgDesc) (binaryPackageDeps flags)))),
                     Field ("Description", " " ++ maybe debianDescription (const utilsDescription) (library pkgDesc))] ++
                    conflicts (extraDeps (debianUtilsPackageName' pkgDesc) (binaryPackageConflicts flags))),
                   (debianUtilsPackageName' pkgDesc ++ ".install",

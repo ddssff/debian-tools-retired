@@ -4,6 +4,11 @@ import Control.Exception (bracket)
 import Control.Monad (when)
 import Data.List
 import Data.Maybe
+import Distribution.Debian.Config (Flags(..), DebAction(..))
+import Distribution.Debian.Debianize (debianize)
+import Distribution.Debian.Options (getFlags)
+import Distribution.Debian.SubstVars (substvars)
+import Distribution.Debian.Utility (buildDebVersionMap)
 import Distribution.Simple.Compiler (CompilerFlavor(..), Compiler(..))
 import Distribution.Package (Package(..))
 import Distribution.PackageDescription (PackageDescription(..))
@@ -22,27 +27,22 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.Posix.Files (setFileCreationMask)
 
-import Debianize (debianize)
-import Options (getFlags, Flags(..), DebAction(..))
-import SubstVars (substvars)
-import Utility (buildDebVersionMap)
-
 main :: IO ()
 main = do
   flags <- getFlags
-  descPath <- defaultPackageDesc (rpmVerbosity flags)
-  genPkgDesc <- readPackageDescription (rpmVerbosity flags) descPath
-  case rpmCompiler flags of
+  descPath <- defaultPackageDesc (verbosity flags)
+  genPkgDesc <- readPackageDescription (verbosity flags) descPath
+  case compilerFlavor flags of
     GHC -> do
          (compiler, pkgDesc) <- simplePackageDescription genPkgDesc flags
-         let verbose = rpmVerbosity flags
+         let verbose = verbosity flags
          --lbi <- localBuildInfo pkgDesc flags
          debVersions <- buildDebVersionMap
          bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> do
                autoreconf verbose pkgDesc
                case debAction flags of
                  SubstVar name ->
-                     do substvars (depMap flags) pkgDesc compiler debVersions name
+                     do substvars flags pkgDesc compiler debVersions name
                  Debianize ->
                      debianize flags pkgDesc compiler (debOutputDir flags)
                  Usage ->
@@ -51,14 +51,14 @@ main = do
 
 simplePackageDescription :: GenericPackageDescription -> Flags -> IO (Compiler, PackageDescription)
 simplePackageDescription genPkgDesc flags = do
-    (compiler', _) <- {- fchroot (buildRoot flags) -} (configCompiler (Just (rpmCompiler flags)) Nothing Nothing
+    (compiler', _) <- {- fchroot (buildRoot flags) -} (configCompiler (Just (compilerFlavor flags)) Nothing Nothing
                                                                defaultProgramConfiguration
-                                                               (rpmVerbosity flags))
-    let compiler = case (rpmCompilerVersion flags, rpmCompiler flags) of
+                                                               (verbosity flags))
+    let compiler = case (compilerVersion flags, compilerFlavor flags) of
                      (Just v, ghc) -> compiler' {compilerId = CompilerId ghc v}
                      _ -> compiler'
     --installed <- installedPackages
-    case finalizePackageDescription (rpmConfigurationsFlags flags)
+    case finalizePackageDescription (configurationsFlags flags)
           (const True) (Platform buildArch buildOS) (compilerId compiler)
           {- (Nothing :: Maybe PackageIndex) -}
           [] genPkgDesc of

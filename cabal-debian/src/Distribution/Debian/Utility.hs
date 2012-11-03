@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
-module Utility
+module Distribution.Debian.Utility
     ( DebMap
     , buildDebVersionMap
     , (!)
@@ -14,6 +14,7 @@ module Utility
     , cond
     , debOfFile
     , readFile'
+    , filterMissing
     , showDeps
     , showDeps'
     ) where
@@ -128,6 +129,10 @@ readFile' path
     file <- openFile path ReadMode
     hSetBinaryMode file True
     hGetContents file
+
+filterMissing :: [D.BinPkgName] -> [[D.Relation]] -> [[D.Relation]]
+filterMissing missing rels =
+    filter (/= []) (map (filter (\ (D.Rel name _ _) -> not (elem name missing))) rels)
 
 showDeps :: [[D.Relation]] -> String
 showDeps xss = intercalate ", " (map (intercalate " | " . map (show . D.prettyRelation)) xss)

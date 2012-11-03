@@ -3,7 +3,7 @@
 
 -- | Support for generating Debianization from Cabal data.
 
-module SubstVars
+module Distribution.Debian.SubstVars
     ( substvars
     ) where
 
@@ -16,6 +16,10 @@ import Data.Maybe
 import qualified Data.Set as Set
 import Debian.Control
 import qualified Debian.Relation as D
+import Distribution.Debian.Config (Flags(depMap), missingDependencies')
+import Distribution.Debian.PackageInfo (PackageInfo(..), DebType, debName, debDeps)
+import Distribution.Debian.Relations (cabalDependencies)
+import Distribution.Debian.Utility
 import Distribution.Package (PackageName(..), Dependency(..))
 import Distribution.Simple.Compiler (CompilerFlavor(..), compilerFlavor, Compiler(..))
 import Distribution.Simple.Utils (die)
@@ -24,10 +28,6 @@ import Distribution.Text (display)
 import System.Directory (doesDirectoryExist, getDirectoryContents)
 import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
-
-import PackageInfo (PackageInfo(..), DebType, debName, debDeps)
-import Relations (cabalDependencies)
-import Utility
 
 -- |Each cabal package corresponds to a directory <name>-<version>,
 -- either in /usr/lib or in /usr/lib/haskell-packages/ghc/lib.
@@ -38,19 +38,19 @@ import Utility
 -- names, or examining the /var/lib/dpkg/info/\*.list files.  From
 -- these we can determine the source package name, and from that
 -- the documentation package name.
-substvars :: Map.Map String [D.BinPkgName]
+substvars :: Flags
           -> PackageDescription		-- ^info from the .cabal file
           -> Compiler   		-- ^compiler details
           -> DebMap
           -> DebType			-- ^The type of deb we want to write substvars for
           -> IO ()
-substvars depMap pkgDesc compiler debVersions debType =
+substvars flags pkgDesc compiler debVersions debType =
     libPaths compiler debVersions >>= return . Map.fromList . map (\ p -> (cabalName p, p)) >>= \ cabalPackages ->
     readFile "debian/control" >>= either (error . show) return . parseControl "debian/control" >>= \ control ->
-    substvars' depMap pkgDesc compiler debVersions debType cabalPackages control
+    substvars' flags pkgDesc compiler debVersions debType cabalPackages control
 
-substvars' :: Map.Map String [D.BinPkgName] -> PackageDescription -> Compiler -> DebMap -> DebType -> Map.Map String PackageInfo -> Control' String -> IO ()
-substvars' depMap pkgDesc _compiler _debVersions debType cabalPackages control =
+substvars' :: Flags -> PackageDescription -> Compiler -> DebMap -> DebType -> Map.Map String PackageInfo -> Control' String -> IO ()
+substvars' flags pkgDesc _compiler _debVersions debType cabalPackages control =
     case (missingBuildDeps, path) of
       -- There should already be a .substvars file produced by dh_haskell_prep,
       -- keep the relations listed there.  They will contain something like this:
@@ -83,14 +83,14 @@ substvars' depMap pkgDesc _compiler _debVersions debType cabalPackages control =
     where
       addDeps old =
           case partition (isPrefixOf "haskell:Depends=") (lines old) of
-            ([], other) -> unlines (("haskell:Depends=" ++ showDeps deps) : other)
+            ([], other) -> unlines (("haskell:Depends=" ++ showDeps (filterMissing (missingDependencies' flags) deps)) : other)
             (hdeps, more) ->
                 case deps of
                   [] -> unlines (hdeps ++ more)
-                  _ -> unlines (map (++ (", " ++ showDeps deps)) hdeps ++ more)
+                  _ -> unlines (map (++ (", " ++ showDeps (filterMissing (missingDependencies' flags) deps))) hdeps ++ more)
       path = fmap (\ (D.BinPkgName (D.PkgName x)) -> "debian/" ++ x ++ ".substvars") name
       name = debName control debType
-      deps = debDeps debType depMap cabalPackages pkgDesc control
+      deps = debDeps debType (depMap flags) cabalPackages pkgDesc control
       -- We must have build dependencies on the profiling and documentation packages
       -- of all the cabal packages.
       missingBuildDeps =
@@ -101,7 +101,7 @@ substvars' depMap pkgDesc _compiler _debVersions debType cabalPackages control =
                                      let prof = maybe (devDeb info) Just (profDeb info) in
                                      let doc = docDeb info in
                                      catMaybes [prof, doc]
-                                 Nothing -> []) (cabalDependencies depMap pkgDesc)) in
+                                 Nothing -> []) (cabalDependencies (depMap flags) pkgDesc)) in
           filter (not . (`elem` buildDepNames) . fst) requiredDebs
       buildDepNames :: [D.BinPkgName]
       buildDepNames = concat (map (map (\ (D.Rel s _ _) -> s)) buildDeps)

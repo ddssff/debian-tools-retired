@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, FunctionalDependencies, MultiParamTypeClasses, StandaloneDeriving, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -Wall -Werror #-}
-module Interspersed
+module Distribution.Debian.Interspersed
     ( Interspersed(..)
     ) where
 

@@ -1,23 +1,22 @@
 -- | Command line option processing for building (formerly RPM, now)
 -- Debian packages.
 
-module Options
+module Distribution.Debian.Options
     ( getFlags
     , parseArgs
-    , Flags(..)
-    , DebAction(..)
     ) where
 
 import Control.Monad (when)
 import Data.Char (toLower, isDigit, ord)
 import qualified Data.Map as Map
-import Data.Version (Version, parseVersion)
+import Data.Version (parseVersion)
 import Debian.Relation (PkgName(..), BinPkgName(..))
 import Distribution.Compiler (CompilerFlavor(..))
+import Distribution.Debian.Config (Flags(..), DebAction(Usage, Debianize, SubstVar), defaultFlags)
 import Distribution.ReadE (readEOrFail)
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
-import Distribution.Verbosity (Verbosity, flagToVerbosity, normal)
+import Distribution.Verbosity (flagToVerbosity)
 import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
                               usageInfo, getOpt')
 import System.Environment (getArgs, getProgName)
@@ -26,16 +25,14 @@ import System.IO (Handle, hPutStrLn, stderr, stdout)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.Regex.TDFA ((=~))
 
-import PackageInfo (DebType)
-
 getFlags :: IO Flags
 getFlags = getArgs >>= parseArgs
 
 parseArgs :: [String] -> IO Flags
 parseArgs args = do
      let (os, args', unknown, errs) = getOpt' RequireOrder options args
-         opts = foldl (flip ($)) emptyFlags os
-     when (rpmHelp opts || debAction opts == Usage) $ do
+         opts = foldl (flip ($)) defaultFlags os
+     when (help opts || debAction opts == Usage) $ do
        printHelp stdout
        exitWith ExitSuccess
      when (not (null errs)) $ do
@@ -52,120 +49,44 @@ parseArgs args = do
        exitWith (ExitFailure 1)
      return opts
 
--- | Why rpm?  This started as a program to generate RPM packages from cabal files.  Yep.
-data Flags = Flags
-    {
-      rpmPrefix :: FilePath
-    , rpmCompiler :: CompilerFlavor
-    , rpmCompilerVersion :: Maybe Version
-    , rpmConfigurationsFlags :: [(FlagName, Bool)]
-    , rpmHaddock :: Bool
-    , rpmHelp :: Bool
-    , debLibProf :: Bool
-    , rpmName :: Maybe String
-    , rpmOptimisation :: Bool
-    , rpmRelease :: Maybe String
-    , rpmSplitObjs :: Bool
-    , debOutputDir :: FilePath
-    , buildRoot :: FilePath
-    , rpmVerbosity :: Verbosity
-    , rpmVersion :: Maybe String
-    , debMaintainer :: Maybe String
-    , debAction :: DebAction
-    , buildDeps :: [String]
-    , extraDevDeps :: [String]
-    -- , debName :: Maybe String
-    , debVersion :: Maybe String
-    , depMap :: Map.Map String [BinPkgName]
-    , binaryPackageDeps :: [(String, String)]
-    , binaryPackageConflicts :: [(String, String)]
-    , epochMap :: Map.Map PackageName Int
-    , revision :: String
-    , execMap :: Map.Map String BinPkgName
-    , omitLTDeps :: Bool
-    , sourceFormat :: String
-    , compareOnly :: Bool
-    , executablePackages :: [String]
-    }
-    deriving (Eq, Show)
-
-data DebAction = Usage | Debianize | SubstVar DebType deriving (Eq, Show)
-
-emptyFlags :: Flags
-
-emptyFlags = Flags
-    {
-      rpmPrefix = "/usr/lib/haskell-packages/ghc6"
-    , rpmCompiler = GHC
-    , rpmCompilerVersion = Nothing
-    , rpmConfigurationsFlags = []
-    , rpmHaddock = True
-    , rpmHelp = False
-    , debLibProf = True
-    , rpmName = Nothing
-    , rpmOptimisation = True
-    , rpmRelease = Nothing
-    , rpmSplitObjs = True
-    , debOutputDir = "./debian"
-    , buildRoot = "/"
-    , rpmVerbosity = normal
-    , rpmVersion = Nothing
-    , debMaintainer = Nothing
-    , debAction = Usage
-    , buildDeps = []
-    , extraDevDeps = []
-    , depMap = Map.empty
-    , binaryPackageDeps = []
-    , binaryPackageConflicts = []
-    , epochMap = Map.empty
-    -- , debName = Nothing
-    , debVersion = Nothing
-    , revision = "-1~hackage1"
-    , execMap = Map.empty
-    , omitLTDeps = False
-    , sourceFormat = "3.0 (native)"
-    , compareOnly = False
-    , executablePackages = []
-    }
-
 options :: [OptDescr (Flags -> Flags)]
 
 options =
     [ Option "" ["executable"] (ReqArg (\ name x -> x { executablePackages = name : executablePackages x }) "NAME")
              "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
-      Option "" ["prefix"] (ReqArg (\ path x -> x { rpmPrefix = path }) "PATH")
-             "Pass this prefix if we need to configure the package",
-      Option "" ["ghc"] (NoArg (\x -> x { rpmCompiler = GHC }))
+      Option "" ["ghc"] (NoArg (\x -> x { compilerFlavor = GHC }))
              "Compile with GHC",
-      Option "" ["hugs"] (NoArg (\x -> x { rpmCompiler = Hugs }))
+      Option "" ["hugs"] (NoArg (\x -> x { compilerFlavor = Hugs }))
              "Compile with Hugs",
-      Option "" ["jhc"] (NoArg (\x -> x { rpmCompiler = JHC }))
+      Option "" ["jhc"] (NoArg (\x -> x { compilerFlavor = JHC }))
              "Compile with JHC",
-      Option "" ["nhc"] (NoArg (\x -> x { rpmCompiler = NHC }))
+      Option "" ["nhc"] (NoArg (\x -> x { compilerFlavor = NHC }))
              "Compile with NHC",
-      Option "h?" ["help"] (NoArg (\x -> x { rpmHelp = True }))
+      Option "h?" ["help"] (NoArg (\x -> x { help = True }))
              "Show this help text",
-      Option "" ["ghc-version"] (ReqArg (\ ver x -> x { rpmCompilerVersion = Just (last (map fst (readP_to_S parseVersion ver)))}) "VERSION")
+      Option "" ["ghc-version"] (ReqArg (\ ver x -> x { compilerVersion = Just (last (map fst (readP_to_S parseVersion ver)))}) "VERSION")
              "Version of GHC in build environment",
       Option "" ["name"] (ReqArg (\name x -> x { rpmName = Just name }) "NAME")
              "Override the default package name",
-      Option "" ["disable-haddock"] (NoArg (\x -> x { rpmHaddock = False }))
+      Option "" ["disable-haddock"] (NoArg (\x -> x { haddock = False }))
              "Don't generate API documentation.  Use this if build is crashing due to a haddock error.",
+      Option "" ["missing-dependency"] (ReqArg (\ name x -> x {missingDependencies = name : missingDependencies x}) "DEB")
+             "Mark a package missing, do not add it to any dependency lists in the debianization.",
       Option "" ["disable-library-profiling"] (NoArg (\x -> x { debLibProf = False }))
              "Don't generate profiling libraries",
       Option "" ["disable-optimization"] (NoArg (\x -> x { rpmOptimisation = False }))
              "Don't generate optimised code",
       Option "" ["disable-split-objs"] (NoArg (\x -> x { rpmSplitObjs = False }))
              "Don't split object files to save space",
-      Option "f" ["flags"] (ReqArg (\flags x -> x { rpmConfigurationsFlags = rpmConfigurationsFlags x ++ flagList flags }) "FLAGS")
+      Option "f" ["flags"] (ReqArg (\flags x -> x { configurationsFlags = configurationsFlags x ++ flagList flags }) "FLAGS")
              "Set given flags in Cabal conditionals",
       Option "" ["release"] (ReqArg (\rel x -> x { rpmRelease = Just rel }) "RELEASE")
              "Override the default package release",
       Option "" ["debdir"] (ReqArg (\path x -> x { debOutputDir = path }) "DEBDIR")
-             ("Override the default output directory (" ++ show (debOutputDir emptyFlags) ++ ")"),
+             ("Override the default output directory (" ++ show (debOutputDir defaultFlags) ++ ")"),
       Option "" ["root"] (ReqArg (\ path x -> x { buildRoot = path }) "BUILDROOT")
              "Use the compiler information in the given build environment.",
-      Option "v" ["verbose"] (ReqArg (\verb x -> x { rpmVerbosity = readEOrFail flagToVerbosity verb }) "n")
+      Option "v" ["verbose"] (ReqArg (\verb x -> x { verbosity = readEOrFail flagToVerbosity verb }) "n")
              "Change build verbosity",
       Option "" ["version"] (ReqArg (\vers x -> x { rpmVersion = Just vers }) "VERSION")
              "Override the default package version",

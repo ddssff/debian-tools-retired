@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses, StandaloneDeriving #-}
 {-# OPTIONS -Wall -Wwarn -fno-warn-name-shadowing -fno-warn-orphans #-}
-module Dependencies
+module Distribution.Debian.Dependencies
     ( PackageType(..)
     , VersionSplits(..)
     , dependencies
@@ -24,17 +24,16 @@ import Data.Version (showVersion)
 import Debian.Relation (Relations, Relation, BinPkgName(BinPkgName), PkgName(PkgName), VersionReq(..), SrcPkgName(..))
 import qualified Debian.Relation as D
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
+import Distribution.Debian.Bundled (ghcBuiltIn)
+import Distribution.Debian.Interspersed (Interspersed(..))
 import Distribution.Package (PackageName(PackageName))
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Version (Version(..), VersionRange(..), anyVersion, foldVersionRange', intersectVersionRanges, unionVersionRanges,
                              laterVersion, orLaterVersion, earlierVersion, orEarlierVersion, fromVersionIntervals, toVersionIntervals, withinVersion,
                              isNoVersion, asVersionIntervals)
-import InvertVersionRange (invertVersionRange)
+import Distribution.Version.Invert (invertVersionRange)
 import Text.PrettyPrint (text, hcat , (<>), empty)
 import Text.PrettyPrint.Class (Pretty(pretty))
-
-import Bundled (ghcBuiltIn)
-import Interspersed (Interspersed(..))
 
 data PackageType = Source | Development | Profiling | Documentation | Utilities | Extra deriving (Eq, Show)
 

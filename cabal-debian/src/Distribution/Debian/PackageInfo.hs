@@ -1,4 +1,4 @@
-module PackageInfo
+module Distribution.Debian.PackageInfo
     ( PackageInfo(..)
     , DebType
     , debName
@@ -11,10 +11,9 @@ import Data.Maybe (listToMaybe, catMaybes)
 import Debian.Control
 import qualified Debian.Relation as D
 import Debian.Version (DebianVersion)
+import Distribution.Debian.Relations (cabalDependencies)
 import Distribution.Package (PackageName(..), Dependency(..))
 import Distribution.PackageDescription (PackageDescription(..))
-
-import Relations (cabalDependencies)
 
 data PackageInfo = PackageInfo { libDir :: FilePath
                                , cabalName :: String

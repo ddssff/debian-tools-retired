@@ -2,7 +2,7 @@
 -- bundled with into this particular version of the given compiler.
 
 {-# LANGUAGE StandaloneDeriving #-}
-module Bundled
+module Distribution.Debian.Bundled
     ( ghcBuiltIn
     ) where
 
