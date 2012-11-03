@@ -1,0 +1,96 @@
+Source: autobuilder
+Priority: optional
+Maintainer: David Fox <david.fox@linspire.com>
+Build-Conflicts: libghc-monads-tf-dev
+Build-Depends: debhelper (>= 5.0),
+               haskell-devscripts,
+               ghc,
+               ghc-doc,
+               haddock,
+               hscolour,
+               ghc-prof,
+               libghc-mtl-prof,
+               libghc-mtl-doc,
+               libghc-network-prof,
+               libghc-network-doc,
+               libghc-parsec3-prof,
+               libghc-parsec3-doc,
+               libghc-pretty-class-prof,
+               libghc-pretty-class-doc,
+               libghc-process-progress-prof (>= 0.4.5),
+               libghc-process-progress-doc (>= 0.4.5),
+               libghc-regex-compat-prof,
+               libghc-regex-compat-doc,
+               libghc-regex-posix-prof,
+               libghc-regex-posix-doc,
+               libghc-xhtml-prof,
+               libghc-xhtml-doc,
+               libghc-unixutils-prof (>= 1.51),
+               libghc-unixutils-doc (>= 1.51),
+               libghc-debian-repo-prof (>= 5.24),
+               libghc-debian-repo-doc (>= 5.24),
+               libghc-debian-prof (>= 3.60),
+               libghc-debian-doc (>= 3.60),
+               libghc-zlib-prof,
+               libghc-zlib-doc,
+               libghc-bzlib-prof,
+               libghc-bzlib-doc,
+               libghc-tar-prof (>= 0.4),
+               libghc-tar-doc (>= 0.4),
+               libghc-cgi-prof,
+               libghc-cgi-doc,
+               libghc-haxml-dev (>= 1:1.22.5),
+               libghc-happstack-util-prof,
+               libghc-happstack-util-doc,
+               libghc-haxml-doc (>= 1:1.22.5),
+               libghc-mime-prof (>= 1.2),
+               libghc-mime-doc (>= 1.1),
+               libghc-magic-dev,
+               libmagic-dev,
+               libghc-magic-doc,
+               libghc-mime-prof,
+               libghc-mime-doc,
+               libgmp3c2,
+               libghc-mime-prof (>= 1.2),
+               libghc-applicative-extras-prof (>= 0.1.8),
+               libghc-applicative-extras-doc (>= 0.1.8)
+Standards-Version: 3.7.2.2
+Section: devel
+
+Package: libghc-autobuilder-dev
+Section: libdevel
+Architecture: any
+Depends: ${haskell:Depends}
+Description: A library version of the autobuilder
+ A Haskell library providing an autobuilder for Debian packages.
+ .
+ This package contains the libraries compiled for GHC 6.
+
+Package: libghc-autobuilder-doc
+Architecture: any
+Section: libdevel
+Depends: ${haskell:Depends}
+Description: Build Debian source packages in suitable environments
+  .
+  This package contains the documentation files.
+
+Package: autobuilder
+Section: devel
+Architecture: any
+Recommends: subversion
+Depends: ${shlibs:Depends},
+         ${haskell:Depends},
+         libghc-autobuilder-dev (= ${Source-Version}),
+         debootstrap,
+         rsync,
+         dupload,
+         darcs,
+         tla,
+         mercurial,
+	 subversion,
+         apt,
+         build-essential,
+         quilt,
+         curl,
+         cabal-debian (>= 1.20)
+Description: Build and upload debian packages in clean enviroments

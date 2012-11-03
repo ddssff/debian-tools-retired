@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/hlibrary.mk
+
+# Move the web client binary from the standard location /usr/bin to
+# /usr/lib/cgi-bin
+#binary-predeb/autobuilder-web-client::
+#	mkdir -p debian/autobuilder-web-client/usr/lib/cgi-bin
+#	install -D debian/autobuilder-web-client/usr/bin/autobuilder-web-client debian/autobuilder-web-client/usr/lib/cgi-bin/autobuilder-web-client
+#	rm -rf debian/autobuilder-web-client/usr/bin
+
+binary-fixup/autobuilder::
+	install -m 755 -D autobuilder debian/autobuilder/usr/bin/autobuilder
+	install -m 644 -D Example/autobuilder.hs debian/autobuilder/usr/lib/autobuilder/autobuilder.hs
+
+clean::
+	rm -f *.o *.hi */*.o */*.hi
