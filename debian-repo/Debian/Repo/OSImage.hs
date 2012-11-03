@@ -24,6 +24,7 @@ import Debian.Release ( ReleaseName(..), Arch, archName, parseReleaseName, parse
 import Debian.Sources ( SourceType(..), SliceName(sliceName), DebSource(DebSource, sourceDist, sourceUri) )
 import Debian.Repo.Cache ( SourcesChangedAction(SourcesChangedError), distDir, sourcesPath, sliceIndexes, buildArchOfRoot )
 import Debian.Repo.Monads.Apt (MonadApt)
+import Debian.Repo.Monads.Top (MonadTop(askTop))
 import Debian.Repo.Package ( sourcePackagesOfIndex', binaryPackagesOfIndex' )
 import Debian.Relation ( ParseRelations(..), Relations )
 import Debian.Repo.Slice ( sourceSlices, binarySlices, verifySourcesList )
@@ -146,9 +147,8 @@ instance Show UpdateError where
     show (Changed r p l1 l2) = intercalate " " ["Changed", show r, show p, show (pretty l1), show (pretty l2)]
 
 -- |Create or update an OS image in which packages can be built.
-prepareEnv :: MonadApt e m =>
-              FilePath
-           -> EnvRoot			-- ^ The location where image is to be built
+prepareEnv :: (MonadApt e m, MonadTop m) =>
+              EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list
            -> Maybe LocalRepository	-- ^ The associated local repository, where newly
 					-- built packages are stored.  This repository is
@@ -161,11 +161,11 @@ prepareEnv :: MonadApt e m =>
            -> [String]			-- ^ Packages to exclude
            -> [String]			-- ^ Components of the base repository
            -> m OSImage
-prepareEnv cacheDir root distro repo flush ifSourcesChanged include exclude components =
-
-    do ePutStrLn ("Preparing clean " ++ sliceName (sliceListName distro) ++ " build environment at " ++ rootPath root)
+prepareEnv root distro repo flush ifSourcesChanged include exclude components =
+    do top <- askTop
+       ePutStrLn ("Preparing clean " ++ sliceName (sliceListName distro) ++ " build environment at " ++ rootPath root)
        arch <- liftIO buildArchOfRoot
-       let os = OS { osGlobalCacheDir = cacheDir
+       let os = OS { osGlobalCacheDir = top
                    , osRoot = root
                    , osBaseDistro = sliceList distro
                    , osReleaseName = ReleaseName . sliceName . sliceListName $ distro
@@ -193,7 +193,7 @@ prepareEnv cacheDir root distro repo flush ifSourcesChanged include exclude comp
              -- ePutStrLn ("writeFile " ++ show (sourcesPath os) ++ " " ++ show (show . osBaseDistro $ os))
              liftIO (replaceFile (sourcesPath os) (show . pretty . osBaseDistro $ os))
              liftIO (try (getEnv "LANG") :: IO (Either SomeException String)) >>= \ localeName ->
-                 buildEnv cacheDir root distro arch repo include exclude components >>=
+                 buildEnv root distro arch repo include exclude components >>=
                      liftIO . (localeGen (either (const "en_US.UTF-8") id localeName)) >>=
                          liftIO . neuterEnv >>= liftIO . syncPool
 
@@ -300,9 +300,8 @@ pbuilderBuild cacheDir root distro arch repo extraEssential omitEssential extra 
 
 -- Create a new clean build environment in root.clean
 -- FIXME: create an ".incomplete" flag and remove it when build-env succeeds
-buildEnv :: MonadApt e m =>
-            FilePath
-         -> EnvRoot
+buildEnv :: (MonadApt e m, MonadTop m) =>
+            EnvRoot
          -> NamedSliceList
          -> Arch
          -> Maybe LocalRepository
@@ -310,9 +309,10 @@ buildEnv :: MonadApt e m =>
          -> [String]
          -> [String]
          -> m OSImage
-buildEnv cacheDir root distro arch repo include exclude components =
+buildEnv root distro arch repo include exclude components =
     quieter (-1) $
     do
+      top <- askTop
       ePutStr (unlines [ "Creating clean build environment (" ++ sliceName (sliceListName distro) ++ ")"
                        , "  root: " ++ show root
                        , "  baseDist: " ++ show baseDist
@@ -323,7 +323,7 @@ buildEnv cacheDir root distro arch repo include exclude components =
       -- then add them back in.
       runProcess id (ShellCommand cmd) L.empty >>= foldOutputsL codefn outfn errfn exnfn (return ())
       ePutStrLn "done."
-      let os = OS { osGlobalCacheDir = cacheDir
+      let os = OS { osGlobalCacheDir = top
                   , osRoot = root
                   , osBaseDistro = sliceList distro
                   , osReleaseName = ReleaseName . sliceName . sliceListName $ distro

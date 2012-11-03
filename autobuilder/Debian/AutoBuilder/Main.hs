@@ -35,6 +35,7 @@ import Debian.Repo.AptImage(prepareAptEnv)
 import Debian.Repo.Cache(updateCacheSources)
 import Debian.Repo.Insert(deleteGarbage)
 import Debian.Repo.Monads.Apt (MonadApt(getApt), runAptT, getRepoMap)
+import Debian.Repo.Monads.Top (MonadTop, runTopT)
 import Debian.Repo.LocalRepository(prepareLocalRepository, flushLocalRepository)
 import Debian.Repo.OSImage(OSImage, buildEssential, prepareEnv, chrootEnv)
 import Debian.Repo.Release(prepareRelease)
@@ -96,14 +97,14 @@ doParameterSet results (params, packages) =
         quieter (- (P.verbosity params))
           (do top <- liftIO $ P.computeTopDir params
               withLock (top ++ "/lockfile")
-                           (quieter 2 (P.buildCache params top packages) >>= runParameterSet))
+                (runTopT top (quieter 2 (P.buildCache params top packages) >>= runParameterSet)))
           `catchError` (\ e -> return (Failure [show e])) >>=
         (\ result -> return (result : results))
     where
       isFailure (Failure _) = True
       isFailure _ = False
 
-runParameterSet :: MonadApt e m => C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
+runParameterSet :: (MonadApt e m, MonadTop m) => C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet cache =
     do
       liftIO doRequiredVersion
@@ -114,8 +115,7 @@ runParameterSet cache =
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       localRepo <- prepareLocalRepo			-- Prepare the local repository for initial uploads
       cleanOS <-
-              prepareEnv top
-                         (P.cleanRoot cache)
+              prepareEnv (P.cleanRoot cache)
                          buildRelease
                          (Just localRepo)
                          (P.flushRoot params)
@@ -149,7 +149,6 @@ runParameterSet cache =
       updateRepoCache
       return result
     where
-      top = C.topDir cache
       params = C.params cache
       baseRelease =  either (error . show) id (P.findSlice cache (P.baseRelease params))
       buildRepoSources = C.buildRepoSources cache
