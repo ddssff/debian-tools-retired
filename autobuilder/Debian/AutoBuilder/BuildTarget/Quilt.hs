@@ -19,7 +19,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (ChangeLogEntry(..), prettyEntry, parseLog, parseEntry)
-import Debian.Repo (DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, findSourceTree, findOneDebianBuildTree, copySourceTree, AptIOT)
+import Debian.Repo (MonadApt, DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, findSourceTree, findOneDebianBuildTree, copySourceTree)
 import Debian.Version
 import Extra.Files (replaceFile)
 import "Extra" Extra.List ()
@@ -80,7 +80,7 @@ makeQuiltTree cache m base patch =
 failing f _ (Failure x) = f x
 failing _ s (Success x) = s x
 
-prepare :: P.CacheRec -> P.Packages -> T.Download -> T.Download -> AptIOT IO T.Download
+prepare :: MonadApt e m => P.CacheRec -> P.Packages -> T.Download -> T.Download -> m T.Download
 prepare cache package base patch = liftIO $
     (\ x -> qPutStrLn "Preparing quilt target" >> quieter 1 x) $
     makeQuiltTree cache (P.spec package) base patch >>= withUpstreamQuiltHidden make

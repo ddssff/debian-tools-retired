@@ -38,7 +38,7 @@ import Debian.Release
 import Debian.Sources
     ( SourceType(..),
       DebSource(..) )
-import Debian.Repo.Monads.Apt ( AptIO )
+import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Slice ( verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Types
@@ -251,7 +251,7 @@ data SourcesChangedAction =
 
 -- |Change the sources.list of an AptCache object, subject to the
 -- value of sourcesChangedAction.
-updateCacheSources :: (AptCache c) => SourcesChangedAction -> c -> AptIO c
+updateCacheSources :: (MonadApt e m, AptCache c) => SourcesChangedAction -> c -> m c
 updateCacheSources sourcesChangedAction distro =
     (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
     do

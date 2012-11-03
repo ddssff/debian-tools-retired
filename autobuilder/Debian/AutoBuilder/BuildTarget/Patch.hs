@@ -11,7 +11,8 @@ import Data.Digest.Pure.MD5 (md5)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Repo (OSImage, findSourceTree, copySourceTree, SourceTree(dir'), findDebianSourceTrees)
+import Debian.Repo (OSImage, findSourceTree, copySourceTree, SourceTree(dir'),
+                    findDebianSourceTrees, MonadApt)
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
@@ -41,10 +42,10 @@ instance Show Patch where
 documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
-prepare :: P.CacheRec -> P.Packages -> OSImage -> String -> T.Download -> IO T.Download
-prepare cache package _buildOS patch base =
+prepare :: MonadApt e m => P.CacheRec -> P.Packages -> OSImage -> String -> T.Download -> m T.Download
+prepare cache package _buildOS patch base = liftIO $
     do baseTree <- findSourceTree (T.getTop base)
-       liftIO (createDirectoryIfMissing True copyDir)
+       createDirectoryIfMissing True copyDir
        tree <- copySourceTree baseTree copyDir
        subDir <- findSource (P.spec package) copyDir
        (res, out, err) <- readModifiedProcessWithExitCode (\ p -> p {cwd = Just subDir}) (RawCommand cmd args) (B.pack patch)
@@ -94,7 +95,7 @@ instance BuildTarget Patch where
     buildWrapper _params buildOS _buildTree _status _target action = withProc buildOS action
     logText (Proc s) revision = logText s revision ++ " (with /proc mounted)"
 
-prepare :: P.CacheRec -> Tgt -> String -> AptIOT IO Patch
+prepare :: MonadApt e m => P.CacheRec -> Tgt -> String -> m Patch
 prepare cache base patch = return $ Patch base patch
 
 -- |Scan the flag list for Patch flag, and apply the patches

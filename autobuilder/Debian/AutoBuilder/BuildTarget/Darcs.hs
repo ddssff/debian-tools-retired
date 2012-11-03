@@ -2,7 +2,8 @@
 module Debian.AutoBuilder.BuildTarget.Darcs where
 
 import Control.Exception (try, SomeException)
-import Control.Monad
+import Control.Monad (when)
+import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
 import Data.List (nub, sort)
@@ -35,8 +36,8 @@ darcsRev tree m =
       cmd = "cd " ++ path ++ " && darcs changes --xml-output"
       path = topdir tree
 
-prepare :: P.CacheRec -> P.Packages -> String -> IO T.Download
-prepare cache package theUri =
+prepare :: MonadApt e m => P.CacheRec -> P.Packages -> String -> m T.Download
+prepare cache package theUri = liftIO $
     do
       when (P.flushSource (P.params cache)) (removeRecursiveSafely dir)
       exists <- doesDirectoryExist dir

@@ -35,7 +35,7 @@ import Debian.Sources
       SliceName(SliceName),
       DebSource(..) )
 import Debian.Repo.LocalRepository ( prepareLocalRepository )
-import Debian.Repo.Monads.Apt ( AptIOT )
+import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Repository ( prepareRepository )
 import Debian.Repo.SourcesList
     ( parseSourceLine, parseSourcesList )
@@ -72,7 +72,7 @@ appendSliceLists lists =
 -- set of sources that includes all of its releases.  This is used to
 -- ensure that a package we want to upload doesn't already exist in
 -- the repository.
-repoSources :: Maybe EnvRoot -> URI -> AptIOT IO SliceList
+repoSources :: MonadApt e m => Maybe EnvRoot -> URI -> m SliceList
 repoSources chroot uri =
     do dirs <- liftIO (uriSubdirs chroot (uri {uriPath = uriPath uri ++ "/dists/"}))
        releaseFiles <- mapM (liftIO . readRelease uri) dirs >>= return . catMaybes
@@ -111,7 +111,7 @@ readRelease uri name =
     where
       uri' = uri {uriPath = uriPath uri ++ "/dists/" ++ name ++ "/Release"}
 
-parseNamedSliceList :: (String, String) -> AptIOT IO (Maybe NamedSliceList)
+parseNamedSliceList :: MonadApt e m => (String, String) -> m (Maybe NamedSliceList)
 parseNamedSliceList (name, text) =
     (verifySourcesList Nothing . parseSourcesList) text >>=
     \ sources -> return . Just $ NamedSliceList { sliceListName = SliceName name, sliceList = sources }
@@ -119,20 +119,20 @@ parseNamedSliceList (name, text) =
 -- |Create ReleaseCache info from an entry in the config file, which
 -- includes a dist name and the lines of the sources.list file.
 -- This also creates the basic 
-parseNamedSliceList' :: (String, String) -> AptIOT IO NamedSliceList
+parseNamedSliceList' :: MonadApt e m => (String, String) -> m NamedSliceList
 parseNamedSliceList' (name, text) =
     do sources <- (verifySourcesList Nothing . parseSourcesList) text
        return $ NamedSliceList { sliceListName = SliceName name, sliceList = sources }
 
-verifySourcesList :: Maybe EnvRoot -> [DebSource] -> AptIOT IO SliceList
+verifySourcesList :: MonadApt e m => Maybe EnvRoot -> [DebSource] -> m SliceList
 verifySourcesList chroot list =
     mapM (verifyDebSource chroot) list >>=
     (\ list -> return $ SliceList { slices = list })
 
-verifySourceLine :: Maybe EnvRoot -> String -> AptIOT IO Slice
+verifySourceLine :: MonadApt e m => Maybe EnvRoot -> String -> m Slice
 verifySourceLine chroot str = verifyDebSource chroot (parseSourceLine str)
 
-verifyDebSource :: Maybe EnvRoot -> DebSource -> AptIOT IO Slice
+verifyDebSource :: MonadApt e m => Maybe EnvRoot -> DebSource -> m Slice
 verifyDebSource chroot line =
     do repo <- case uriScheme uri of
                  "file:" -> 

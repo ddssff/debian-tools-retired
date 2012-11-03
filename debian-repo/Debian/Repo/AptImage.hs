@@ -20,7 +20,7 @@ import Debian.Repo.Cache
       updateCacheSources )
 import Debian.Repo.Package
     ( sourcePackagesOfIndex', binaryPackagesOfIndex' )
-import Debian.Repo.Monads.Apt ( AptIO, AptIOT, io, lookupAptImage, insertAptImage )
+import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupAptImage, insertAptImage )
 import Debian.Repo.Slice ( sourceSlices, binarySlices )
 import Debian.Repo.SourceTree
     ( DebianBuildTree(debTree'), DebianSourceTree(tree'), SourceTree(dir'), findDebianBuildTrees, entry )
@@ -36,7 +36,6 @@ import Debian.Repo.Types
       EnvRoot(..) )
 import Debian.Relation ( PkgName(..), SrcPkgName(..) )
 import Debian.Version ( DebianVersion, prettyDebianVersion )
-import Control.Monad.State ( get, put )
 import Control.Monad.Trans ( liftIO )
 import qualified Data.ByteString.Lazy as L
 import Data.Function ( on )
@@ -67,34 +66,35 @@ instance Ord AptImage where
 instance Eq AptImage where
     a == b = compare a b == EQ
 
-prepareAptEnv :: FilePath		-- Put environment in a subdirectory of this
+prepareAptEnv :: MonadApt e m =>
+                 FilePath		-- Put environment in a subdirectory of this
               -> SourcesChangedAction	-- What to do if environment already exists and sources.list is different
               -> NamedSliceList		-- The sources.list
-              -> AptIO AptImage		-- The resulting environment
+              -> m AptImage		-- The resulting environment
 prepareAptEnv cacheDir sourcesChangedAction sources =
     (\ x -> qPutStrLn ("Preparing apt-get environment for " ++ show (sliceName (sliceListName sources))) >> quieter 2 x) $
-    get >>= return . lookupAptImage (sliceListName sources) >>=
+    getApt >>= return . lookupAptImage (sliceListName sources) >>=
     maybe (prepareAptEnv' cacheDir sourcesChangedAction sources) return
 
 -- |Create a skeletal enviroment sufficient to run apt-get.
 {-# NOINLINE prepareAptEnv' #-}
-prepareAptEnv' :: FilePath -> SourcesChangedAction -> NamedSliceList -> AptIOT IO AptImage
+prepareAptEnv' :: MonadApt e m => FilePath -> SourcesChangedAction -> NamedSliceList -> m AptImage
 prepareAptEnv' cacheDir sourcesChangedAction sources =
     do let root = rootPath (cacheRootDir cacheDir (ReleaseName (sliceName (sliceListName sources))))
        --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
-       io $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
-       io $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
-       io $ createDirectoryIfMissing True (root ++ "/var/cache/apt/archives/partial")
-       io $ createDirectoryIfMissing True (root ++ "/var/lib/dpkg")
-       io $ createDirectoryIfMissing True (root ++ "/etc/apt")
-       io $ writeFileIfMissing True (root ++ "/var/lib/dpkg/status") ""
-       io $ writeFileIfMissing True (root ++ "/var/lib/dpkg/diversions") ""
+       liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
+       liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
+       liftIO $ createDirectoryIfMissing True (root ++ "/var/cache/apt/archives/partial")
+       liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/dpkg")
+       liftIO $ createDirectoryIfMissing True (root ++ "/etc/apt")
+       liftIO $ writeFileIfMissing True (root ++ "/var/lib/dpkg/status") ""
+       liftIO $ writeFileIfMissing True (root ++ "/var/lib/dpkg/diversions") ""
        -- We need to create the local pool before updating so the
        -- sources.list will be valid.
        let sourceListText = show (pretty (sliceList sources))
        -- ePut ("writeFile " ++ (root ++ "/etc/apt/sources.list") ++ "\n" ++ sourceListText)
-       io $ replaceFile (root ++ "/etc/apt/sources.list") sourceListText
-       arch <- io $ buildArchOfRoot
+       liftIO $ replaceFile (root ++ "/etc/apt/sources.list") sourceListText
+       arch <- liftIO $ buildArchOfRoot
        let os = AptImage { aptGlobalCacheDir = cacheDir
                          , aptImageRoot = EnvRoot root
                          , aptImageArch = arch
@@ -103,14 +103,14 @@ prepareAptEnv' cacheDir sourcesChangedAction sources =
                          , aptImageSourcePackages = []
                          , aptImageBinaryPackages = [] }
        os' <- updateCacheSources sourcesChangedAction os >>= updateAptEnv
-       get >>= put . insertAptImage (sliceListName sources) os'
+       getApt >>= putApt . insertAptImage (sliceListName sources) os'
        return os'
 
 -- |Run apt-get update and then retrieve all the packages referenced
 -- by the sources.list.  The source packages are sorted so that
 -- packages with the same name are together with the newest first.
 {-# NOINLINE updateAptEnv #-}
-updateAptEnv :: AptImage -> AptIOT IO AptImage
+updateAptEnv :: MonadApt e m => AptImage -> m AptImage
 updateAptEnv os =
     liftIO (runProcessF id (ShellCommand cmd) L.empty) >>
     getSourcePackages os >>= return . sortBy cmp >>= \ sourcePackages ->
@@ -134,14 +134,14 @@ updateAptEnv os =
       ExitFailure n -> error $ cmd ++ " -> ExitFailure " ++ show n
 -}
 
-getSourcePackages :: AptImage -> AptIOT IO [SourcePackage]
-getSourcePackages os = 
+getSourcePackages :: MonadApt e m => AptImage -> m [SourcePackage]
+getSourcePackages os =
     mapM (sourcePackagesOfIndex' os) indexes >>= return . concat
     where
       indexes = concat . map (sliceIndexes os) . slices . sourceSlices . aptImageSliceList $ os
 
-getBinaryPackages :: AptImage -> AptIOT IO [BinaryPackage]
-getBinaryPackages os = 
+getBinaryPackages :: MonadApt e m => AptImage -> m [BinaryPackage]
+getBinaryPackages os =
     mapM (binaryPackagesOfIndex' os) indexes >>= return . concat
     where
       indexes = concat . map (sliceIndexes os) . slices . binarySlices . aptImageSliceList $ os

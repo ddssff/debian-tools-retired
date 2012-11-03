@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |Insert packages into a release, remove packages from a release.
 module Debian.Repo.Insert
     ( scanIncoming
@@ -50,7 +51,7 @@ import qualified Debian.Control.String as S
 import Debian.Relation (SrcPkgName(unSrcPkgName), PkgName(unPkgName))
 import Debian.Repo.Changes
     ( findChangesFiles, poolDir', name, path )
-import Debian.Repo.Monads.Apt ( AptIO )
+import Debian.Repo.Monads.Apt (MonadApt)
 import qualified Debian.Repo.Package as DRP
     ( sourceFilePaths,
       toBinaryPackage,
@@ -212,7 +213,7 @@ explainError other = show other
 
 -- | Find the .changes files in the incoming directory and try to 
 -- process each.
-scanIncoming :: Bool -> Maybe PGPKey -> LocalRepository -> AptIO ([ChangesFile], [(ChangesFile, InstallResult)])
+scanIncoming :: MonadApt e m => Bool -> Maybe PGPKey -> LocalRepository -> m ([ChangesFile], [(ChangesFile, InstallResult)])
 scanIncoming createSections keyname repo@(LocalRepository root _ _) =
     (\ x -> qPutStrLn ("Uploading packages to " ++ outsidePath root ++ "/incoming") >> quieter 2 x) $
     do releases <- findReleases repo
@@ -243,12 +244,13 @@ scanIncoming createSections keyname repo@(LocalRepository root _ _) =
 -- 4. updating the Packages and Sources files, and
 -- 5. moving the files from the incoming directory to the proper
 --    place in the package pool.
-installPackages :: Bool				-- ^ ok to create new releases and sections
+installPackages :: MonadApt e m =>
+                   Bool				-- ^ ok to create new releases and sections
                 -> Maybe PGPKey		-- ^ key to sign repository with
                 -> LocalRepository		-- ^ target repository
                 -> [Release]			-- ^ Releases in target repository
                 -> [ChangesFile]		-- ^ Package to be installed
-                -> AptIO [InstallResult]	-- ^ Outcome of each source package
+                -> m [InstallResult]	-- ^ Outcome of each source package
 installPackages createSections keyname repo@(LocalRepository root layout _) releases changeFileList =
     do live <- findLive repo >>= return . Set.fromList
        (_, releases', results) <- foldM (installFiles root) (live, releases, []) changeFileList
@@ -266,7 +268,7 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
       -- Hard link the files of each package into the repository pool,
       -- but don't unlink the files in incoming in case of subsequent
       -- failure.
-      installFiles :: EnvPath -> (Set.Set FilePath, [Release], [InstallResult]) -> ChangesFile -> AptIO (Set.Set FilePath, [Release], [InstallResult])
+      installFiles :: MonadApt e m => EnvPath -> (Set.Set FilePath, [Release], [InstallResult]) -> ChangesFile -> m (Set.Set FilePath, [Release], [InstallResult])
       installFiles root (live, releases, results) changes =
           findOrCreateRelease releases (changeRelease changes) >>=
           maybe (return (live, releases, Failed [NoSuchRelease (changeRelease changes)] : results)) installFiles'
@@ -446,7 +448,7 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
           where dst = case layout of
                         Flat -> outsidePath root </> Debian.Repo.Changes.name changes
                         Pool -> outsidePath root ++ "/installed/" ++ Debian.Repo.Changes.name changes
-      findOrCreateRelease :: [Release] -> ReleaseName -> AptIO (Maybe Release)
+      findOrCreateRelease :: MonadApt e m => [Release] -> ReleaseName -> m (Maybe Release)
       findOrCreateRelease releases name =
           case createSections of
             False -> return (findRelease releases name)
@@ -553,7 +555,7 @@ addPackagesToIndexes pairs =
                 let (indexMemberFns :: [BinaryPackageLocal -> Bool]) = map indexMemberFn oldPackageLists'
                 -- if none of the new packages are already in the index, add them
                 case concat (map (uncurry filter) (zip indexMemberFns newPackageLists)) of
-                  [] -> do mapM updateIndex (zip3 indexes oldPackageLists' newPackageLists)
+                  [] -> do mapM_ updateIndex (zip3 indexes oldPackageLists' newPackageLists)
                            return Ok
                   dupes -> return $ Failed [OtherProblem ("Duplicate packages: " ++ intercalate " " (map (show . prettyBinaryPackage) dupes))]
          (bad, _) -> return $ Failed (map (OtherProblem . show) bad)
@@ -598,6 +600,7 @@ deleteTrumped keyname releases =
       repos -> error ("Multiple repositories passed to deleteTrumped:\n  " ++
                       (intercalate "\n  " $ map show repos) ++ "\n")
     where
+      ifEmpty :: IO () -> [a] -> IO [a]
       ifEmpty action [] = do action; return []
       ifEmpty _ x = return x
 
@@ -632,7 +635,7 @@ findTrumped release =
 -- them to the removed directory.  The .changes files are treated
 -- specially: they don't appear in any index files, but the package
 -- they belong to can be constructed from their name.
-deleteGarbage :: LocalRepository -> AptIO LocalRepository
+deleteGarbage :: MonadApt e m => LocalRepository -> m LocalRepository
 deleteGarbage repo =
     case repoLayout repo of
       Just layout ->
@@ -679,7 +682,7 @@ deleteGarbage repo =
 
 -- | Return a list of all the files in a release which are
 -- 'live', in the sense that they appear in some index files.
-findLive :: LocalRepository -> AptIO [FilePath]
+findLive :: MonadApt e m => LocalRepository -> m [FilePath]
 findLive (LocalRepository _ Nothing _) = return []	-- Repository is empty
 findLive repo@(LocalRepository root (Just layout) _) =
     do releases <- findReleases repo

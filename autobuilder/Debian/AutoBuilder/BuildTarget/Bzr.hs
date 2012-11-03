@@ -23,7 +23,7 @@ import System.Directory
 documentation = [ "bzr:<revision> - A target of this form retrieves the a Bazaar archive with the"
                 , "given revision name." ]
 
-prepare :: P.CacheRec -> P.Packages -> String -> AptIOT IO Download
+prepare :: MonadApt e m => P.CacheRec -> P.Packages -> String -> m Download
 prepare cache package version = liftIO $
   do
     when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))

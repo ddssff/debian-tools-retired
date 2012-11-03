@@ -19,7 +19,7 @@ import System.Directory
 documentation = [ "tla:<revision> - A target of this form retrieves the a TLA archive with the"
                 , "given revision name." ]
 
-prepare :: P.CacheRec -> P.Packages -> String -> AptIOT IO T.Download
+prepare :: MonadApt e m => P.CacheRec -> P.Packages -> String -> m T.Download
 prepare cache package version = liftIO $
     do
       when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))

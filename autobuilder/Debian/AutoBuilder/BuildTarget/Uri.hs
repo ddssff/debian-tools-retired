@@ -35,7 +35,7 @@ documentation = [ "uri:<string>:<md5sum> - A target of this form retrieves the f
 -- | A URI that returns a tarball, with an optional md5sum which must
 -- match if given.  The purpose of the md5sum is to be able to block
 -- changes to the tarball on the remote host.
-prepare :: P.CacheRec -> P.Packages -> String -> String -> R.AptIOT IO T.Download
+prepare :: R.MonadApt e m => P.CacheRec -> P.Packages -> String -> String -> m T.Download
 prepare c package u s = liftIO $
     do (uri, sum, tree) <- checkTarget >>= downloadTarget >> validateTarget >>= unpackTarget
        return $ T.Download { T.package = package

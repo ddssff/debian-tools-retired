@@ -31,14 +31,14 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Relation (SrcPkgName(..), PkgName(..))
 import Debian.Repo (OSImage, rootPath, rootDir, findSourceTree, copySourceTree, SourceTree(dir'), topdir)
-import Debian.Repo.Monads.Apt (AptIOT)
+import Debian.Repo.Monads.Apt (MonadApt)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
 import System.Process (CmdSpec(..))
 import System.Process.Progress (runProcessF, qPutStrLn, quieter)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
-retrieve :: OSImage -> P.CacheRec -> P.Packages -> AptIOT IO Download
+retrieve :: MonadApt e m => OSImage -> P.CacheRec -> P.Packages -> m Download
 retrieve buildOS cache target =
     (\ x -> qPutStrLn (" " ++ show (P.spec target)) >> quieter 1 x) $
      case P.spec target of
@@ -56,7 +56,7 @@ retrieve buildOS cache target =
                             , T.buildWrapper = id
                             }
 
-      P.Darcs uri -> liftIO (Darcs.prepare cache target uri)
+      P.Darcs uri -> Darcs.prepare cache target uri
 
       P.DataFiles base files loc ->
           do base' <- retrieve buildOS cache (target {P.spec = base})
@@ -89,7 +89,7 @@ retrieve buildOS cache target =
       P.Hg string -> Hg.prepare cache target string
       P.Patch base patch ->
           retrieve buildOS cache (target {P.spec = base}) >>=
-          liftIO . Patch.prepare cache target buildOS patch
+          Patch.prepare cache target buildOS patch
 
       P.Proc spec' ->
           retrieve buildOS cache (target {P.spec = spec'}) >>= \ base ->

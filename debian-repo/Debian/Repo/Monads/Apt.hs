@@ -1,4 +1,6 @@
-{-# LANGUAGE FlexibleInstances, GeneralizedNewtypeDeriving, PackageImports, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses,
+             PackageImports, TypeSynonymInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |AptIO is an instance of the RWS monad used to manage the global
 -- state and output style parameters of clients of the Apt library,
 -- such as the autobuilder.
@@ -7,9 +9,8 @@ module Debian.Repo.Monads.Apt
     , AptIOT
     , AptIO
     -- * AptIO Monad
-    , io
-    , tio
     , runAptIO
+    , runAptT
     , tryAB
     , tryJustAB
     -- * State
@@ -32,6 +33,7 @@ module Debian.Repo.Monads.Apt
     ) where
 
 import Control.Exception (Exception, tryJust)
+import Control.Monad.Error (MonadError)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.State (get, put)
 import qualified Debian.Control.ByteString as B ( Paragraph, Control'(Control), ControlFunctions(parseControlFromHandle) )
@@ -75,17 +77,12 @@ data AptState
       , binaryPackageMap :: Map.Map FilePath (Maybe (FileStatus, [BinaryPackage]))
       }
 
--- |mark an action that should be run in the regular IO monad
-io :: IO a -> AptIO a
-io = liftIO
-
--- |mark an action that should be run in the terminal IO monad
-tio :: IO a -> AptIO a
-tio = lift
-
 -- |Perform an AptIO monad task in the IO monad.
 runAptIO :: AptIO a -> IO a
 runAptIO action = (runStateT action) initState >>= \ (a, _) -> return a
+
+runAptT :: Monad m => AptIOT m a -> m a
+runAptT action = (runStateT action) initState >>= return . fst
 
 -- |Implementation of try for the AptIO monad.  If the task throws
 -- an exception the initial state will be restored.
@@ -181,14 +178,14 @@ countTasks tasks =
       countTask count (index, (message, task)) =
           ePutStrLn (printf "[%2d of %2d] %s:" index count message) >> task
 
-class (MonadIO m, Functor m) => MonadApt m where
+class (MonadIO m, Functor m, Exception e, MonadError e m) => MonadApt e m where
     getApt :: m AptState
     putApt :: AptState -> m ()
 
-instance (MonadIO m, Functor m) => MonadApt (AptIOT m) where
+instance (MonadIO m, Functor m, Exception e, MonadError e m) => MonadApt e (AptIOT m) where
     getApt = get
     putApt = put
 
-instance MonadApt m => MonadApt (ReaderT s m) where
+instance MonadApt e m => MonadApt e (ReaderT s m) where
     getApt = lift getApt
     putApt = lift . putApt

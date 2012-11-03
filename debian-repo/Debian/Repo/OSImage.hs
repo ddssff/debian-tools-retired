@@ -11,11 +11,12 @@ module Debian.Repo.OSImage
     , restoreEnv
     , removeEnv
     , buildEssential
+    , withProc
     ) where
 
-import Control.Exception (evaluate)
-import "mtl" Control.Monad.Trans ( MonadTrans(..), MonadIO(..) )
+import Control.Exception (evaluate, bracket)
 import Control.Exception ( SomeException, try )
+import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy as L
 -- import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List ( intercalate )
@@ -37,7 +38,7 @@ import Debian.Repo.Cache
       sourcesPath,
       sliceIndexes,
       buildArchOfRoot )
-import Debian.Repo.Monads.Apt ( AptIO, AptIOT )
+import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Package
     ( sourcePackagesOfIndex', binaryPackagesOfIndex' )
 import Debian.Relation ( ParseRelations(..), Relations )
@@ -70,7 +71,7 @@ import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import qualified System.IO as IO ( stderr, hPutStrLn, hPutStr )
 import System.Posix.Files ( createLink )
-import System.Process (CmdSpec(ShellCommand, RawCommand))
+import System.Process (readProcess, CmdSpec(ShellCommand, RawCommand))
 import System.Process.Progress (ePutStr, ePutStrLn, Output(..), readProcessChunks, keepResult, doOutput,
                                 runProcess, runProcessF, timeTask, unpackOutputs, oneResult, quieter, foldOutputsL)
 import System.Unix.Chroot ( useEnv )
@@ -156,12 +157,12 @@ localSources os =
 repoCD :: EnvPath -> LocalRepository -> LocalRepository
 repoCD path repo = repo { repoRoot = path }
 
-getSourcePackages :: OSImage -> AptIOT IO [SourcePackage]
+getSourcePackages :: MonadApt e m => OSImage -> m [SourcePackage]
 getSourcePackages os =
     mapM (sourcePackagesOfIndex' os) indexes >>= return . concat
     where indexes = concat . map (sliceIndexes os) . slices . sourceSlices . aptSliceList $ os
 
-getBinaryPackages :: OSImage -> AptIOT IO [BinaryPackage]
+getBinaryPackages :: MonadApt e m => OSImage -> m [BinaryPackage]
 getBinaryPackages os =
     mapM (binaryPackagesOfIndex' os) indexes >>= return . concat
     where indexes = concat . map (sliceIndexes os) . slices . binarySlices . aptSliceList $ os
@@ -175,7 +176,8 @@ instance Show UpdateError where
     show (Changed r p l1 l2) = intercalate " " ["Changed", show r, show p, show (pretty l1), show (pretty l2)]
 
 -- |Create or update an OS image in which packages can be built.
-prepareEnv :: FilePath
+prepareEnv :: MonadApt e m =>
+              FilePath
            -> EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list
            -> Maybe LocalRepository	-- ^ The associated local repository, where newly
@@ -188,7 +190,7 @@ prepareEnv :: FilePath
            -> [String]			-- ^ Extra packages to include
            -> [String]			-- ^ Packages to exclude
            -> [String]			-- ^ Components of the base repository
-           -> AptIO OSImage
+           -> m OSImage
 prepareEnv cacheDir root distro repo flush ifSourcesChanged include exclude components =
 
     do ePutStrLn ("Preparing clean " ++ sliceName (sliceListName distro) ++ " build environment at " ++ rootPath root)
@@ -223,7 +225,7 @@ prepareEnv cacheDir root distro repo flush ifSourcesChanged include exclude comp
              liftIO (try (getEnv "LANG") :: IO (Either SomeException String)) >>= \ localeName ->
                  buildEnv cacheDir root distro arch repo include exclude components >>=
                      liftIO . (localeGen (either (const "en_US.UTF-8") id localeName)) >>=
-                         liftIO . neuterEnv >>= lift . syncPool
+                         liftIO . neuterEnv >>= liftIO . syncPool
 
 -- |Prepare a minimal \/dev directory
 {-# WARNING prepareDevs "This function should check all the result codes" #-}
@@ -247,7 +249,7 @@ prepareDevs root = do
                        False -> readProcessChunks id (ShellCommand cmd) L.empty >>= return . oneResult
                        True -> return ExitSuccess
 
-pbuilderBuild ::
+pbuilderBuild :: MonadApt e m =>
             FilePath
          -> EnvRoot
          -> NamedSliceList
@@ -256,7 +258,7 @@ pbuilderBuild ::
          -> [String]
          -> [String]
          -> [String]
-         -> AptIO OSImage
+         -> m OSImage
 pbuilderBuild cacheDir root distro arch repo extraEssential omitEssential extra =
       -- We can't create the environment if the sources.list has any
       -- file:// URIs because they can't yet be visible inside the
@@ -328,7 +330,8 @@ pbuilderBuild cacheDir root distro arch repo extraEssential omitEssential extra 
 
 -- Create a new clean build environment in root.clean
 -- FIXME: create an ".incomplete" flag and remove it when build-env succeeds
-buildEnv :: FilePath
+buildEnv :: MonadApt e m =>
+            FilePath
          -> EnvRoot
          -> NamedSliceList
          -> Arch
@@ -336,7 +339,7 @@ buildEnv :: FilePath
          -> [String]
          -> [String]
          -> [String]
-         -> AptIO OSImage
+         -> m OSImage
 buildEnv cacheDir root distro arch repo include exclude components =
     quieter (-1) $
     do
@@ -391,7 +394,7 @@ buildEnv cacheDir root distro arch repo include exclude components =
 
 -- |Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.
-updateEnv :: OSImage -> AptIOT IO (Either UpdateError OSImage)
+updateEnv :: MonadApt e m => OSImage -> m (Either UpdateError OSImage)
 updateEnv os =
     do liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc") >> readFile "/etc/resolv.conf" >>= writeFile (rootPath root ++ "/etc/resolv.conf")
        verified <- verifySources os
@@ -406,7 +409,7 @@ updateEnv os =
                 binary <- getBinaryPackages os'
                 return . Right $ os' {osSourcePackages = source, osBinaryPackages = binary}
     where
-      verifySources :: OSImage -> AptIOT IO (Either UpdateError OSImage)
+      verifySources :: MonadApt e m => OSImage -> m (Either UpdateError OSImage)
       verifySources os =
           do let computed = remoteOnly (aptSliceList os)
                  sourcesPath = rootPath root ++ "/etc/apt/sources.list"
@@ -625,12 +628,21 @@ syncPool os =
 
 updateLists :: OSImage -> IO NominalDiffTime
 updateLists os =
-    ePutStrLn ("Updating OSImage " ++ root) >>
-    timeTask (useEnv root forceList (runProcessF id (ShellCommand cmd) L.empty)) >>=
-    return . snd
+    withProc os $
+      ePutStrLn ("Updating OSImage " ++ root) >>
+      timeTask (useEnv root forceList (runProcessF id (ShellCommand cmd) L.empty)) >>=
+      return . snd
     where
        root = rootPath (osRoot os)
        cmd = "apt-get update && apt-get -y --force-yes dist-upgrade"
 
 stripDist :: FilePath -> FilePath
 stripDist path = maybe path (\ n -> drop (n + 7) path) (isSublistOf "/dists/" path)
+
+withProc :: OSImage -> IO a -> IO a
+withProc buildOS task =
+    bracket (createDirectoryIfMissing True dir >> readProcess "mount" ["--bind", "/proc", dir] "")
+            (\ _ -> readProcess "umount" [dir] "")
+            (\ _ -> task)
+    where
+      dir = rootPath (rootDir buildOS) ++ "/proc"

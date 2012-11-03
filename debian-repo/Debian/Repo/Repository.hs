@@ -11,7 +11,6 @@ module Debian.Repo.Repository
 
 import Control.Applicative.Error ( Failing(Success, Failure) )
 import Control.Exception ( ErrorCall(..), toException )
-import Control.Monad.State ( get, put )
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Char8 as B (concat, ByteString, unpack)
@@ -42,7 +41,7 @@ import Debian.Repo.Changes
       path )
 import Debian.Repo.LocalRepository
     ( prepareLocalRepository, makeReleaseInfo )
-import Debian.Repo.Monads.Apt ( AptIO, insertRepository, lookupRepository )
+import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository, lookupRepository )
 import Debian.Repo.Types
     ( ReleaseInfo(releaseInfoArchitectures),
       PkgVersion(..),
@@ -105,11 +104,11 @@ instance Eq UnverifiedRepo where
 
 -- | Prepare a repository, which may be remote or local depending on
 -- the URI.
-prepareRepository :: URI -> AptIO Repository
+prepareRepository :: MonadApt e m => URI -> m Repository
 prepareRepository uri =
-    do state <- get
+    do state <- getApt
        repo <- maybe newRepo return (lookupRepository uri state)
-       put (insertRepository uri repo state)
+       putApt (insertRepository uri repo state)
        return repo
     where
       newRepo =
@@ -120,7 +119,7 @@ prepareRepository uri =
                -- _ -> return . Repository . UnverifiedRepo $ uri
 
 {-# NOINLINE verifyRepository #-}
-verifyRepository :: Repository -> AptIO Repository
+verifyRepository :: MonadApt e m => Repository -> m Repository
 verifyRepository (UnverifiedRepo uri) =
     do --tio (vHPutStrBl IO.stderr 0 $ "Verifying repository " ++ show uri ++ "...")
        -- Use unsafeInterleaveIO to avoid querying the repository
@@ -196,7 +195,7 @@ getReleaseInfoRemote uri =
       uncurry3 f (a, b, c) =  f a b c
 
 -- |Make sure we can access the upload uri without typing a password.
-verifyUploadURI :: Bool -> URI -> AptIO ()
+verifyUploadURI :: MonadApt e m => Bool -> URI -> m ()
 verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ show uri) >> quieter 2 x) $
     case doExport of
       True -> export
@@ -221,7 +220,7 @@ verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ sh
                     "" -> Nothing
                     x -> error $ "Internal error 9: invalid port " ++ x in
           (uriUserInfo auth ++ uriRegName auth, port)
-      mkdir :: AptIO ()
+      mkdir :: MonadApt e m => m ()
       mkdir =
           case uriAuthority uri of
             Nothing -> error $ "Internal error 7"
@@ -238,18 +237,18 @@ verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ sh
 -- directory of a remote repository (using dupload.)
 uploadRemote :: LocalRepository		-- ^ Local repository holding the packages.
              -> URI			-- ^ URI of upload repository
-             -> AptIO [Failing ([Output L.ByteString], NominalDiffTime)]
+             -> IO [Failing ([Output L.ByteString], NominalDiffTime)]
 uploadRemote repo uri =
-    do uploaded <- liftIO (uploadFind (outsidePath root)) >>=
+    do uploaded <- uploadFind (outsidePath root) >>=
                    return . Set.fromList . map uploadKey . successes
        -- Find the changes files
-       changesFiles <- liftIO (findChangesFiles (outsidePath root))
+       changesFiles <- findChangesFiles (outsidePath root)
        -- Check that they have not yet been uploaded
        let changesFiles' = map (\ f -> if notUploaded uploaded f then Success f else Failure ["Already uploaded: " ++ show (prettyChangesFile f)]) changesFiles
        -- Create groups of common name and dist, and sort so latest version appears first.
        let changesFileGroups = map (sortBy compareVersions) . groupByNameAndDist $ changesFiles'
        let changesFiles'' = concatMap keepNewest changesFileGroups
-       changesFiles''' <- mapM (liftIO . validRevision') changesFiles''
+       changesFiles''' <- mapM validRevision' changesFiles''
        mapM dupload' changesFiles'''
     where
       keepNewest (Success newest : older) =

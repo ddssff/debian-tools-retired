@@ -36,7 +36,7 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: P.CacheRec -> P.Packages -> T.Download -> AptIOT IO T.Download
+prepare :: MonadApt e m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
 prepare cache package' cabal = liftIO $
     getDirectoryContents (T.getTop cabal) >>= return . filter (isSuffixOf ".cabal") >>= \ cabfiles ->
     case cabfiles of

@@ -13,7 +13,6 @@ module Debian.AutoBuilder.Params
     ) where
 
 import Control.Exception ( SomeException, try, evaluate )
-import Control.Monad.State ( get, put )
 import Control.Monad.Trans ( liftIO )
 import Data.List ( isSuffixOf )
 import Data.Maybe ( catMaybes, fromJust, fromMaybe )
@@ -24,7 +23,7 @@ import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Release ( ReleaseName(relName), releaseName' )
 import Debian.Sources ( SliceName(..) )
 import Debian.Repo ( EnvRoot(EnvRoot), NamedSliceList(..), parseSourcesList, verifySourcesList, repoSources )
-import Debian.Repo.Monads.Apt ( AptIOT, setRepoMap )
+import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), setRepoMap)
 import Debian.Repo.Types ( SliceList(..) )
 import Debian.URI ( parseURI )
 import System.Directory ( createDirectoryIfMissing, getPermissions, writable )
@@ -32,7 +31,7 @@ import System.Environment ( getEnv )
 import System.Process.Progress (qPutStrLn)
 
 -- |Create a Cache object from a parameter set.
-buildCache :: ParamRec -> FilePath -> Packages -> AptIOT IO CacheRec
+buildCache :: MonadApt e m => ParamRec -> FilePath -> Packages -> m CacheRec
 buildCache params top packages =
     do qPutStrLn ("Preparing autobuilder cache in " ++ top ++ "...")
        liftIO $ mapM_ (createDirectoryIfMissing True . ((top ++ "/") ++))
@@ -55,14 +54,14 @@ buildCache params top packages =
 -- CacheClass, and RunClass.
 -- instance (ParamClass p) => RunClass (p, Cache)
 
-loadRepoCache :: FilePath -> AptIOT IO ()
+loadRepoCache :: MonadApt e m => FilePath -> m ()
 loadRepoCache top =
     do qPutStrLn "Loading repo cache..."
-       state <- get
+       state <- getApt
        uris <- liftIO $ try (readFile (top ++ "/repoCache")) >>=
                try . evaluate . either (\ (_ :: SomeException) -> []) read >>=
                return . either (\ (_ :: SomeException) -> []) id
-       put (setRepoMap (fromList (map fixURI uris)) state)
+       putApt (setRepoMap (fromList (map fixURI uris)) state)
     where
       fixURI (s, x) = (fromJust (parseURI s), x)
 

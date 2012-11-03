@@ -41,7 +41,7 @@ import qualified Debian.Control.ByteString as B
 import Debian.Relation (BinPkgName(..), PkgName(..))
 import qualified Debian.Relation.ByteString as B
     ( ParseRelations(..), Relations )
-import Debian.Repo.Monads.Apt ( AptIO, lookupSourcePackages, insertSourcePackages, lookupBinaryPackages, insertBinaryPackages, readParagraphs )
+import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupSourcePackages, insertSourcePackages, lookupBinaryPackages, insertBinaryPackages, readParagraphs)
 import Debian.Release (Arch(..), releaseName', sectionName')
 import Debian.Repo.Types
     ( AptCache(aptArch, rootDir),
@@ -68,7 +68,6 @@ import Debian.Version ( parseDebianVersion, DebianVersion )
 import qualified Debian.Version as V
     ( buildDebianVersion, epoch, revision, version )
 import "mtl" Control.Monad.Trans ( MonadIO(..) )
-import Control.Monad.State ( get, put )
 import qualified Data.ByteString.Lazy.Char8 as L
     ( ByteString, fromChunks )
 import qualified Data.ByteString.Char8 as B
@@ -276,16 +275,16 @@ sourcePackagesOfIndex index =
       _ -> return (Right [])
 
 -- FIXME: assuming the index is part of the cache 
-sourcePackagesOfIndex' :: (AptCache a) => a -> PackageIndex -> AptIO [SourcePackage]
+sourcePackagesOfIndex' :: (AptCache a, MonadApt e m) => a -> PackageIndex -> m [SourcePackage]
 sourcePackagesOfIndex' cache index =
-    do state <- get
+    do state <- getApt
        let cached = lookupSourcePackages path state
        status <- liftIO $ getFileStatus path
        case cached of
          Just (status', packages) | status == status' -> return packages
          _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
                  let packages = map (toSourcePackage index) paragraphs 
-                 put (insertSourcePackages path (status, packages) state)
+                 putApt (insertSourcePackages path (status, packages) state)
                  return packages
     where
       path = rootPath (rootDir cache) ++ indexCacheFile cache index
@@ -350,16 +349,16 @@ indexPrefix index =
       _ -> a ++ "_" ++ b
 
 -- FIXME: assuming the index is part of the cache 
-binaryPackagesOfIndex' :: AptCache a => a -> PackageIndex -> AptIO [BinaryPackage]
+binaryPackagesOfIndex' :: (MonadApt e m, AptCache a) => a -> PackageIndex -> m [BinaryPackage]
 binaryPackagesOfIndex' cache index =
-    do state <- get
+    do state <- getApt
        let cached = lookupBinaryPackages path state
        status <- liftIO $ getFileStatus path
        case cached of
          Just (status', packages) | status == status' -> return packages
          _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
                  let packages = map (toBinaryPackage index) paragraphs 
-                 put (insertBinaryPackages path (status, packages) state)
+                 putApt (insertBinaryPackages path (status, packages) state)
                  return packages
     where
       path = rootPath (rootDir cache) ++ indexCacheFile cache index

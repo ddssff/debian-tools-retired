@@ -5,7 +5,7 @@ import Control.Exception (throw)
 import Control.Monad.Trans
 import Data.Maybe
 import Debian.Release (Arch(Binary))
-import Debian.Repo.Monads.Apt
+import Debian.Repo.Monads.Apt (MonadApt, runAptT)
 import Debian.Repo.PackageIndex
 import Debian.Repo.Package
 import Debian.Repo.Release
@@ -14,9 +14,9 @@ import Debian.Repo.Types
 import Debian.URI
 
 main :: IO ()
-main = runAptIO main'
+main = runAptT main'
 
-main' :: AptIOT IO ()
+main' :: MonadApt e m => m ()
 main' =
     do repo <- prepareRepository (fromJust (parseURI uri))
        releases <- mapM insertRelease (map (Release repo) (repoReleaseInfo repo))
@@ -28,10 +28,10 @@ main' =
       insert repo info = insertRelease repo 
 -}
 
-packageLists :: [PackageIndex] -> AptIOT IO [[BinaryPackage]]
+packageLists :: MonadApt e m => [PackageIndex] -> m [[BinaryPackage]]
 packageLists indexes = mapM packages indexes
 
-packages :: PackageIndex -> AptIOT IO [BinaryPackage]
+packages :: MonadApt e m => PackageIndex -> m [BinaryPackage]
 packages index = liftIO (binaryPackagesOfIndex index) >>= return . either throw id
 
 uri = "http://deb.seereason.com/ubuntu/"

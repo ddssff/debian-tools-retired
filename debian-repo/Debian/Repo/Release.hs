@@ -8,7 +8,7 @@ module Debian.Repo.Release
     , mergeReleases
     ) where
 
-import Control.Monad.State (MonadState(..), MonadIO(..), filterM, liftM)
+import Control.Monad.State (MonadIO(..), filterM, liftM)
 import qualified Data.ByteString.Lazy.Char8 as L ( empty, readFile )
 import Data.Digest.Pure.MD5 (md5)
 import Data.List ( sortBy, groupBy, group, intercalate, nub, sort )
@@ -21,7 +21,7 @@ import qualified Debian.Control.String as S
       ControlFunctions(parseControlFromFile),
       fieldValue )
 import Debian.Release (Section, ReleaseName, Arch(..), archName, parseSection', releaseName', sectionName')
-import Debian.Repo.Monads.Apt ( AptIO, io, findRelease, putRelease )
+import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), findRelease, putRelease )
 import Debian.Repo.Types
     ( PackageIndex(packageIndexArch, packageIndexComponent,
                    packageIndexRelease),
@@ -45,21 +45,22 @@ import System.FilePath ( (</>) )
 import System.Process.Progress (qPutStrLn)
 import Text.PrettyPrint.Class (pretty)
 
-lookupRelease :: Repository -> ReleaseName -> AptIO (Maybe Release)
-lookupRelease repo dist = get >>= return . findRelease repo dist
+lookupRelease :: MonadApt e m => Repository -> ReleaseName -> m (Maybe Release)
+lookupRelease repo dist = getApt >>= return . findRelease repo dist
 
-insertRelease :: Release -> AptIO Release
+insertRelease :: MonadApt e m => Release -> m Release
 insertRelease release =
-    get >>= put . putRelease repo dist release >> return release
+    getApt >>= putApt . putRelease repo dist release >> return release
     where dist = releaseInfoName (releaseInfo release)
           repo = releaseRepo release
 
 -- | Find or create a (local) release.
-prepareRelease :: LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> AptIO Release
+prepareRelease :: MonadApt e m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> m Release
 prepareRelease repo dist aliases sections archList =
     -- vPutStrLn 0 ("prepareRelease " ++ name ++ ": " ++ show repo ++ " sections " ++ show sections) >>
     lookupRelease (LocalRepo repo) dist >>= maybe prepare (const prepare) -- return -- JAS - otherwise --create-section does not do anything
     where
+      prepare :: MonadApt e m => m Release
       prepare =
           do -- FIXME: errors get discarded in the mapM calls here
 	     let release = Release (LocalRepo repo) (ReleaseInfo { releaseInfoName = dist
@@ -67,9 +68,9 @@ prepareRelease repo dist aliases sections archList =
                                                                  , releaseInfoComponents = sections
                                                                  , releaseInfoArchitectures = archList })
              -- vPutStrLn 0 ("packageIndexList: " ++ show (packageIndexList release))
-             mapM (initIndex (outsidePath root)) (packageIndexList release)
-             mapM (initAlias (outsidePath root) dist) aliases
-             liftIO (writeRelease release)
+             _ <- mapM (initIndex (outsidePath root)) (packageIndexList release)
+             mapM_ (initAlias (outsidePath root) dist) aliases
+             _ <- liftIO (writeRelease release)
 	     -- This ought to be identical to repo, but the layout should be
              -- something rather than Nothing.
              repo' <- prepareLocalRepository root (repoLayout repo)
@@ -78,19 +79,19 @@ prepareRelease repo dist aliases sections archList =
              insertRelease release'
       initIndex root index = initIndexFile (root </> packageIndexDir index) (packageIndexName index)
       initIndexFile dir name =
-          do io $ createDirectoryIfMissing True dir
-             io $ setFileMode dir 0o040755
+          do liftIO $ createDirectoryIfMissing True dir
+             liftIO $ setFileMode dir 0o040755
              ensureIndex (dir </> name)
       initAlias root dist alias = 
-          io $ EF.prepareSymbolicLink (releaseName' dist) (root ++ "/dists/" ++ releaseName' alias)
+          liftIO $ EF.prepareSymbolicLink (releaseName' dist) (root ++ "/dists/" ++ releaseName' alias)
       root = repoRoot repo
 
 -- | Make sure an index file exists.
-ensureIndex :: FilePath -> AptIO (Either [String] ())
+ensureIndex :: MonadApt e m => FilePath -> m (Either [String] ())
 ensureIndex path = 
-    do exists <- io $ doesFileExist path
+    do exists <- liftIO $ doesFileExist path
        case exists of
-         False -> io $ EF.writeAndZipFile path L.empty
+         False -> liftIO $ EF.writeAndZipFile path L.empty
          True -> return $ Right ()
 
 signReleases :: Maybe EG.PGPKey -> [Release] -> IO ()
@@ -186,16 +187,17 @@ mergeReleases releases =
       merge _ _ = error "Cannot merge releases from different repositories"
 
 -- | Find all the releases in a repository.
-findReleases :: LocalRepository -> AptIO [Release]
+findReleases :: MonadApt e m => LocalRepository -> m [Release]
 findReleases repo@(LocalRepository _ _ releases) = mapM (findLocalRelease repo) releases
 
-findLocalRelease :: LocalRepository -> ReleaseInfo -> AptIO (Release)
+findLocalRelease :: MonadApt e m => LocalRepository -> ReleaseInfo -> m Release
 findLocalRelease repo releaseInfo =
     lookupRelease (LocalRepo repo) dist >>= maybe readRelease return
     where
+      readRelease :: MonadApt e m => m Release
       readRelease =
           do let path = (outsidePath (repoRoot repo) ++ "/dists/" ++ releaseName' dist ++ "/Release")
-             info <- io $ S.parseControlFromFile path
+             info <- liftIO $ S.parseControlFromFile path
              case info of
                Right (S.Control (paragraph : _)) ->
                    case (S.fieldValue "Components" paragraph, S.fieldValue "Architectures" paragraph) of

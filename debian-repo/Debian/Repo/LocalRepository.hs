@@ -6,7 +6,7 @@ import qualified Debian.Control.ByteString as B
     ( Paragraph, ControlFunctions(parseControl), fieldValue )
 import qualified Debian.Control.String as S ( Control'(Control) )
 import Debian.Release (Section(..), ReleaseName, Arch(Binary), parseReleaseName, releaseName', sectionName')
-import Debian.Repo.Monads.Apt ( AptIO, insertRepository )
+import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository)
 import Debian.Repo.Types
     ( ReleaseInfo(..),
       Repo(repoURI),
@@ -18,7 +18,6 @@ import Debian.Repo.Types
       compatibilityFile,
       libraryCompatibilityLevel)
 import Control.Applicative.Error ( Failing(Success, Failure) )
-import Control.Monad.State ( get, put )
 import Control.Monad ( filterM, when )
 import qualified Data.ByteString.Char8 as B ( ByteString, unpack )
 import Data.List ( isPrefixOf, groupBy, partition, sort )
@@ -62,7 +61,7 @@ poolDir (LocalRepository _ _ _) _ _ = ""
 
 -- | Remove all the packages from the repository and then re-create
 -- the empty releases.
-flushLocalRepository :: LocalRepository -> AptIO LocalRepository
+flushLocalRepository :: MonadApt e m => LocalRepository -> m LocalRepository
 flushLocalRepository (LocalRepository path layout _) =
     do liftIO $ removeRecursiveSafely (outsidePath path)
        prepareLocalRepository path layout
@@ -70,7 +69,7 @@ flushLocalRepository (LocalRepository path layout _) =
 -- | Create or verify the existance of the directories which will hold
 -- a repository on the local machine.  Verify the index files for each of
 -- its existing releases.
-prepareLocalRepository :: EnvPath -> Maybe Layout -> AptIO LocalRepository
+prepareLocalRepository :: MonadApt e m => EnvPath -> Maybe Layout -> m LocalRepository
 prepareLocalRepository root layout =
     do mapM_ (liftIO . initDir)
                  [(".", 0o40755),
@@ -78,7 +77,7 @@ prepareLocalRepository root layout =
                   ("incoming", 0o41755),
                   ("removed", 0o40750),
                   ("reject", 0o40750)]
-       layout' <- liftIO (computeLayout (outsidePath root)) >>= (return . maybe layout Just)
+       layout' <- liftIO (computeLayout (outsidePath root)) >>= return . maybe layout Just
                   -- >>= return . maybe (maybe (error "No layout specified for new repository") id layout) id
        mapM_ (liftIO . initDir)
                  (case layout' of
@@ -98,10 +97,10 @@ prepareLocalRepository root layout =
       hasReleaseFile root name =
           doesFileExist (root ++ "/dists/" ++ name ++ "/Release") -}
 
-readLocalRepo :: EnvPath -> Maybe Layout -> AptIO LocalRepository
+readLocalRepo :: MonadApt e m => EnvPath -> Maybe Layout -> m LocalRepository
 readLocalRepo root layout =
     do
-      state <- get
+      state <- getApt
       names <- liftIO (getDirectoryContents distDir) >>=
                return . filter (\ x -> not . elem x $ [".", ".."])
       (links, dists) <- partitionM (liftIO . isSymLink . (distDir </>)) names
@@ -113,7 +112,7 @@ readLocalRepo root layout =
       let repo = LocalRepository { repoRoot = root
                                  , repoLayout = layout
                                  , repoReleaseInfoLocal = releaseInfo }
-      put (insertRepository (repoURI repo) (LocalRepo repo) state)
+      putApt (insertRepository (repoURI repo) (LocalRepo repo) state)
       return repo
     where
       fstEq (a, _) (b, _) = a == b

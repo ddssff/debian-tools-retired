@@ -38,7 +38,7 @@ documentation = [ "debianize:<name> or debianize:<name>=<version> - a target of 
                 , "(currently) retrieves source code from http://hackage.haskell.org and runs"
                 , "cabal-debian to create the debianization." ]
 
-prepare :: P.CacheRec -> P.Packages -> String -> AptIOT IO T.Download
+prepare :: MonadApt e m => P.CacheRec -> P.Packages -> String -> m T.Download
 prepare cache package name = liftIO $
     do (version' :: Version) <- maybe (getVersion (P.hackageServer (P.params cache)) name) (return . readVersion) versionString
        when (P.flushSource (P.params cache)) (removeRecursiveSafely (tarball cache name version'))
