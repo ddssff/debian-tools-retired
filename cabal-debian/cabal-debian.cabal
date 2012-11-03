@@ -35,6 +35,7 @@ Library
    Distribution.Debian.Dependencies
    Distribution.Debian.Interspersed
    Distribution.Debian.Options
+   Distribution.Debian.PackageDescription
    Distribution.Debian.PackageInfo
    Distribution.Debian.Relations
    Distribution.Debian.Server
