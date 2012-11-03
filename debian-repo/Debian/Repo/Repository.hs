@@ -14,51 +14,21 @@ import Control.Exception ( ErrorCall(..), toException )
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Char8 as B (concat, ByteString, unpack)
---import qualified Data.ByteString.Lazy.Char8 as L (empty, toChunks)
-import Data.List
-    ( sortBy, groupBy, intercalate, isSuffixOf )
+import Data.List ( sortBy, groupBy, intercalate, isSuffixOf )
 import Data.Maybe ( catMaybes, fromJust )
 import Data.Time ( NominalDiffTime )
 import qualified Data.Set as Set ( member, fromList )
-import Debian.Changes
-    ( ChangesFile(changeDir, changePackage, changeRelease, changeVersion), prettyChangesFile )
-import qualified Debian.Control.ByteString as B
-    ( Paragraph,
-      Control'(Control),
-      ControlFunctions(parseControl),
-      fieldValue )
-import qualified Debian.Control.String as S
-    ( Paragraph',
-      Control'(Control),
-      ControlFunctions(parseControlFromFile),
-      fieldValue )
+import Debian.Changes ( ChangesFile(changeDir, changePackage, changeRelease, changeVersion), prettyChangesFile )
+import qualified Debian.Control.ByteString as B ( Paragraph, Control'(Control), ControlFunctions(parseControl), fieldValue )
+import qualified Debian.Control.String as S ( Paragraph', Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
 import Debian.Relation (PkgName(..), BinPkgName(..))
 import Debian.Release (Arch(Binary), ReleaseName(..), parseReleaseName, releaseName')
-import Debian.Repo.Changes
-    ( findChangesFiles,
-      key,
-      -- name,
-      path )
-import Debian.Repo.LocalRepository
-    ( prepareLocalRepository, makeReleaseInfo )
+import Debian.Repo.Changes ( findChangesFiles, key, path )
+import Debian.Repo.LocalRepository ( prepareLocalRepository, makeReleaseInfo )
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository, lookupRepository )
-import Debian.Repo.Types
-    ( ReleaseInfo(releaseInfoArchitectures),
-      PkgVersion(..),
-      prettyPkgVersion,
-      Repo(repoReleaseInfo),
-      LocalRepository(repoRoot),
-      Repository(..),
-      EnvPath(EnvPath),
-      EnvRoot(EnvRoot),
-      outsidePath )
-import Debian.URI
-    ( URIAuth(uriPort, uriRegName, uriUserInfo),
-      uriToString',
-      URI(uriAuthority, uriScheme, uriPath),
-      dirFromURI,
-      fileFromURI,
-      parseURI )
+import Debian.Repo.Types ( ReleaseInfo(releaseInfoArchitectures), PkgVersion(..), prettyPkgVersion, Repo(repoReleaseInfo), LocalRepository(repoRoot),
+                           Repository(..), EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath )
+import Debian.URI ( URIAuth(uriPort, uriRegName, uriUserInfo), uriToString', URI(uriAuthority, uriScheme, uriPath), dirFromURI, fileFromURI, parseURI )
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Extra.Bool ( cond )
 --import Extra.Either ( rightOnly )

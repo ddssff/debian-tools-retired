@@ -32,18 +32,8 @@ import qualified Data.ByteString.Lazy.Char8 as L ( empty )
 import Data.List ( nubBy, sortBy, intercalate )
 import Data.Maybe ( fromJust )
 import Data.Time ( NominalDiffTime )
-import Debian.Changes
-    ( ChangeLogEntry(..),
-      parseLog,
-      ChangesFile(..),
-      prettyChangesFile,
-      prettyEntry )
-import Debian.Control.String
-    ( Field'(Comment),
-      Paragraph'(..),
-      Control'(Control),
-      ControlFunctions(parseControl),
-      Control )
+import Debian.Changes ( ChangeLogEntry(..), parseLog, ChangesFile(..), prettyChangesFile, prettyEntry )
+import Debian.Control.String ( Field'(Comment), Paragraph'(..), Control'(Control), ControlFunctions(parseControl), Control )
 import Debian.Relation (BinPkgName)
 import Debian.Repo.Changes ( findChangesFiles )
 import Debian.Repo.OSImage ( OSImage )
@@ -51,8 +41,7 @@ import Debian.Repo.Types ( AptCache(rootDir), EnvRoot(rootPath) )
 import qualified Debian.Version as V ( version )
 import Extra.Files ( replaceFile, getSubDirectories )
 import Extra.List ( dropPrefix )
-import System.Directory
-    ( createDirectoryIfMissing, doesDirectoryExist, doesFileExist )
+import System.Directory ( createDirectoryIfMissing, doesDirectoryExist, doesFileExist )
 import System.Environment ( getEnv )
 import System.Exit (ExitCode(ExitFailure))
 import System.IO (withFile, IOMode(ReadMode), hGetContents)

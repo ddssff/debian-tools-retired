@@ -21,33 +21,15 @@ import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as L ( unpack )
 import Data.List ( nubBy )
 import Data.Maybe ( catMaybes )
-import Debian.Control
-    ( Control'(Control),
-      ControlFunctions(parseControl),
-      fieldValue,
-      Paragraph )
-import Debian.Release
-    ( ReleaseName,
-      parseReleaseName,
-      parseSection')
-import Debian.Sources 
-    ( SourceType(..),
-      SliceName(SliceName),
-      DebSource(..) )
+import Debian.Control ( Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph )
+import Debian.Release ( ReleaseName, parseReleaseName, parseSection')
+import Debian.Sources  ( SourceType(..), SliceName(SliceName), DebSource(..) )
 import Debian.Repo.LocalRepository ( prepareLocalRepository )
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Repository ( prepareRepository )
-import Debian.Repo.SourcesList
-    ( parseSourceLine, parseSourcesList )
-import Debian.Repo.Types
-    ( NamedSliceList(..),
-      SliceList(..),
-      Slice(..),
-      Repository(LocalRepo),
-      EnvPath(EnvPath),
-      EnvRoot(..) )
-import Debian.URI
-    ( URI(uriScheme, uriPath), dirFromURI, fileFromURI )
+import Debian.Repo.SourcesList ( parseSourceLine, parseSourcesList )
+import Debian.Repo.Types ( NamedSliceList(..), SliceList(..), Slice(..), Repository(LocalRepo), EnvPath(EnvPath), EnvRoot(..) )
+import Debian.URI ( URI(uriScheme, uriPath), dirFromURI, fileFromURI )
 import Text.Regex ( mkRegex, splitRegex )
 
 sourceSlices :: SliceList -> SliceList

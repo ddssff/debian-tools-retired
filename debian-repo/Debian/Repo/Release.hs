@@ -14,33 +14,19 @@ import Data.Digest.Pure.MD5 (md5)
 import Data.List ( sortBy, groupBy, group, intercalate, nub, sort )
 import Data.Maybe ( catMaybes )
 import Data.Time ( getCurrentTime )
-import qualified Debian.Control.String as S
-    ( Field'(Field),
-      Paragraph'(..),
-      Control'(Control),
-      ControlFunctions(parseControlFromFile),
-      fieldValue )
+import qualified Debian.Control.String as S ( Field'(Field), Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
 import Debian.Release (Section, ReleaseName, Arch(..), archName, parseSection', releaseName', sectionName')
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), findRelease, putRelease )
-import Debian.Repo.Types
-    ( PackageIndex(packageIndexArch, packageIndexComponent,
-                   packageIndexRelease),
-      Release(..),
-      ReleaseInfo(..),
-      LocalRepository(LocalRepository, repoLayout, repoRoot),
-      Repository(LocalRepo),
-      outsidePath )
+import Debian.Repo.Types ( PackageIndex(packageIndexArch, packageIndexComponent, packageIndexRelease), Release(..), ReleaseInfo(..),
+                           LocalRepository(LocalRepository, repoLayout, repoRoot), Repository(LocalRepo), outsidePath )
 import Debian.Repo.LocalRepository ( prepareLocalRepository )
-import Debian.Repo.PackageIndex
-    ( packageIndexName, packageIndexDir, releaseDir, packageIndexList )
-import qualified Extra.Files as EF
-    ( maybeWriteFile, prepareSymbolicLink, writeAndZipFile )
+import Debian.Repo.PackageIndex ( packageIndexName, packageIndexDir, releaseDir, packageIndexList )
+import qualified Extra.Files as EF ( maybeWriteFile, prepareSymbolicLink, writeAndZipFile )
 import qualified Extra.GPGSign as EG ( PGPKey, pgpSignFiles, cd )
 import qualified Extra.Time as ET ( formatDebianDate )
 import System.Directory ( createDirectoryIfMissing, doesFileExist )
 import System.Posix.Files ( setFileMode )
-import qualified System.Posix.Files as F
-    ( fileSize, getFileStatus )
+import qualified System.Posix.Files as F ( fileSize, getFileStatus )
 import System.FilePath ( (</>) )
 import System.Process.Progress (qPutStrLn)
 import Text.PrettyPrint.Class (pretty)

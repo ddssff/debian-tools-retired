@@ -32,29 +32,11 @@ module Debian.Repo.Changes
 import "mtl" Control.Monad.Trans ( MonadIO(..) )
 import Data.List ( isSuffixOf )
 import Data.Maybe ( catMaybes )
-import Debian.Changes
-    ( ChangesFile(..),
-      ChangedFileSpec(..),
-      -- ChangeLogEntry(..),
-      changesFileName,
-      parseChanges,
-      -- parseEntry,
-      -- parseLog,
-      prettyChanges )
-import qualified Debian.Control.String as S
-    ( Paragraph'(..),
-      Control'(Control),
-      ControlFunctions(parseControlFromFile),
-      fieldValue,
-      modifyField,
-      Paragraph )
+import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName, parseChanges, prettyChanges )
+import qualified Debian.Control.String as S ( Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue, modifyField, Paragraph )
 import Debian.Release (SubSection(section), Arch(Binary), archName, parseReleaseName, parseSection)
 import Debian.Repo.LocalRepository ( poolDir )
-import Debian.Repo.Types
-    ( Release(releaseRepo),
-      LocalRepository(repoRoot),
-      Repository(LocalRepo),
-      outsidePath )
+import Debian.Repo.Types ( Release(releaseRepo), LocalRepository(repoRoot), Repository(LocalRepo), outsidePath )
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Extra.Files ( replaceFile )
 import System.FilePath ( splitFileName, (</>) )

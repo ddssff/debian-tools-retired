@@ -18,102 +18,36 @@ import qualified Data.ByteString.Char8 as B ( pack, unpack )
 import qualified Data.ByteString.Lazy.Char8 as L ( fromChunks, readFile )
 import Data.Digest.Pure.MD5 (md5)
 import Data.Either ( partitionEithers, rights )
-import Data.List
-    ( group,
-      sort,
-      intercalate,
-      sortBy,
-      groupBy,
-      isSuffixOf,
-      partition )
+import Data.List ( group, sort, intercalate, sortBy, groupBy, isSuffixOf, partition )
 import Data.Maybe ( catMaybes )
 import qualified Data.Set as Set
-import Debian.Changes
-    ( ChangesFile(..),
-      ChangedFileSpec(..),
-      changesFileName,
-      prettyChangesFile )
+import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName, prettyChangesFile )
 import Debian.Control ( formatControl )
-import qualified Debian.Control.ByteString as B
-    ( Field'(Field),
-      Paragraph,
-      Field,
-      Control'(Control),
-      ControlFunctions(parseControlFromHandle),
-      Control,
-      appendFields,
-      fieldValue,
-      modifyField,
-      raiseFields,
-      renameField )
-import qualified Debian.Control.String as S
-    ( Control'(Control), ControlFunctions(parseControlFromFile) )
+import qualified Debian.Control.ByteString as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(parseControlFromHandle), Control,
+                                                  appendFields, fieldValue, modifyField, raiseFields, renameField )
+import qualified Debian.Control.String as S ( Control'(Control), ControlFunctions(parseControlFromFile) )
 import Debian.Relation (SrcPkgName(unSrcPkgName), PkgName(unPkgName))
-import Debian.Repo.Changes
-    ( findChangesFiles, poolDir', name, path )
+import Debian.Repo.Changes ( findChangesFiles, poolDir', name, path )
 import Debian.Repo.Monads.Apt (MonadApt)
-import qualified Debian.Repo.Package as DRP
-    ( sourceFilePaths,
-      toBinaryPackage,
-      binaryPackageSourceID,
-      getPackages,
-      releaseSourcePackages,
-      releaseBinaryPackages,
-      putPackages )
-import Debian.Repo.PackageIndex
-    ( packageIndexPath, packageIndexList, sourceIndexList )
-import Debian.Repo.Release
-    ( prepareRelease, signRelease, findReleases )
+import qualified Debian.Repo.Package as DRP ( sourceFilePaths, toBinaryPackage, binaryPackageSourceID, getPackages, releaseSourcePackages, releaseBinaryPackages, putPackages )
+import Debian.Repo.PackageIndex ( packageIndexPath, packageIndexList, sourceIndexList )
+import Debian.Repo.Release ( prepareRelease, signRelease, findReleases )
 import Debian.Repo.Repository ( repoArchList )
-import Debian.Release (SubSection(section),
-                       Section(..),
-                       ReleaseName,
-                       Arch(..),
-                       archName,
-                       parseSection',
-                       releaseName',
-                       sectionName,
-                       sectionName')
-import Debian.Repo.Types
-    ( BinaryPackageLocal,
-      prettyBinaryPackage,
-      binaryPackageName,
-      PackageIDLocal,
-      SourcePackage(sourcePackageID),
-      sourcePackageName,
-      BinaryPackage(packageID, packageInfo),
-      PackageID(packageIndex, packageVersion),
-      prettyPackageID,
-      PackageIndexLocal,
-      PackageIndex(..),
-      PackageVersion(pkgVersion),
-      Release(..),
-      ReleaseInfo(releaseInfoAliases, releaseInfoComponents,
-                  releaseInfoName),
-      Layout(..),
-      LocalRepository(LocalRepository, repoLayout, repoRoot),
-      Repository(..),
-      EnvPath,
-      outsidePath,
-      releaseName,
-      releaseComponents,
-      releaseArchitectures )
+import Debian.Release (SubSection(section), Section(..), ReleaseName, Arch(..), archName, parseSection', releaseName', sectionName, sectionName')
+import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, binaryPackageName, PackageIDLocal, SourcePackage(sourcePackageID), sourcePackageName,
+                           BinaryPackage(packageID, packageInfo), PackageID(packageIndex, packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
+                           PackageVersion(pkgVersion), Release(..), ReleaseInfo(releaseInfoAliases, releaseInfoComponents, releaseInfoName),
+                           Layout(..), LocalRepository(LocalRepository, repoLayout, repoRoot), Repository(..), EnvPath, outsidePath,
+                           releaseName, releaseComponents, releaseArchitectures )
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Extra.GPGSign ( PGPKey )
 import Extra.Files ( writeAndZipFileWithBackup )
 import Extra.Misc ( listDiff )
 import System.FilePath ( splitFileName, (</>) )
-import System.Directory
-    ( createDirectoryIfMissing,
-      doesDirectoryExist,
-      doesFileExist,
-      getDirectoryContents,
-      removeFile,
-      renameFile )
+import System.Directory ( createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getDirectoryContents, removeFile, renameFile )
 import System.Exit ( ExitCode(..) )
 import System.IO ()
-import qualified System.Posix.Files as F
-    ( createLink, fileSize, getFileStatus )
+import qualified System.Posix.Files as F ( createLink, fileSize, getFileStatus )
 import System.Posix.Types ( FileOffset )
 import System.Process ( runInteractiveCommand, waitForProcess )
 import System.Process.Progress (quieter, qPutStr, qPutStrLn)

@@ -24,59 +24,27 @@ module Debian.Repo.Package
 import Control.Exception ( SomeException(..), try, ErrorCall(..) )
 import Data.Either ( partitionEithers )
 import Debian.Apt.Index ( Compression(..), controlFromIndex )
-import Debian.Control
-    ( Paragraph',
-      ControlFunctions(asString, stripWS),
-      fieldValue,
-      formatParagraph )
-import Debian.Repo.PackageIndex
-    ( packageIndexPath, sourceIndexList, binaryIndexList )
-import qualified Debian.Control.ByteString as B
-    ( Field'(Field),
-      Paragraph,
-      Field,
-      Control'(Control),
-      ControlFunctions(lookupP),
-      fieldValue )
+import Debian.Control ( Paragraph', ControlFunctions(asString, stripWS), fieldValue, formatParagraph )
+import Debian.Repo.PackageIndex ( packageIndexPath, sourceIndexList, binaryIndexList )
+import qualified Debian.Control.ByteString as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(lookupP), fieldValue )
 import Debian.Relation (BinPkgName(..), PkgName(..))
-import qualified Debian.Relation.ByteString as B
-    ( ParseRelations(..), Relations )
+import qualified Debian.Relation.ByteString as B ( ParseRelations(..), Relations )
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupSourcePackages, insertSourcePackages, lookupBinaryPackages, insertBinaryPackages, readParagraphs)
 import Debian.Release (Arch(..), releaseName', sectionName')
-import Debian.Repo.Types
-    ( AptCache(aptArch, rootDir),
-      BinaryPackageLocal,
-      SourceFileSpec(SourceFileSpec, sourceFileName),
-      SourceControl(..),
-      SourcePackage(..),
-      BinaryPackage(..),
-      PackageID(..),
-      makeSourcePackageID,
-      makeBinaryPackageID,
-      binaryPackageName,
-      PackageIndexLocal,
-      PackageIndex(..),
-      Release(releaseInfo, releaseRepo),
-      ReleaseInfo(releaseInfoName),
-      Repo(repoURI),
-      LocalRepository(repoRoot),
-      Repository(LocalRepo),
-      EnvRoot(rootPath),
-      outsidePath )
+import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..),
+                           BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..),
+                           Release(releaseInfo, releaseRepo), ReleaseInfo(releaseInfoName), Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo),
+                           EnvRoot(rootPath), outsidePath )
 import Debian.URI ( fileFromURIStrict )
 import Debian.Version ( parseDebianVersion, DebianVersion )
-import qualified Debian.Version as V
-    ( buildDebianVersion, epoch, revision, version )
+import qualified Debian.Version as V ( buildDebianVersion, epoch, revision, version )
 import "mtl" Control.Monad.Trans ( MonadIO(..) )
-import qualified Data.ByteString.Lazy.Char8 as L
-    ( ByteString, fromChunks )
-import qualified Data.ByteString.Char8 as B
-    ( concat, ByteString, pack, unpack )
+import qualified Data.ByteString.Lazy.Char8 as L ( ByteString, fromChunks )
+import qualified Data.ByteString.Char8 as B ( concat, ByteString, pack, unpack )
 import Data.List ( intersperse, intercalate, partition )
 import Data.Maybe ( catMaybes, fromMaybe )
 import qualified Extra.Files as EF ( writeAndZipFileWithBackup )
-import Network.URI
-    ( URI(..), URIAuth(..), escapeURIString, uriToString )
+import Network.URI ( URI(..), URIAuth(..), escapeURIString, uriToString )
 import System.FilePath ( (</>) )
 import System.IO.Unsafe ( unsafeInterleaveIO )
 import System.Posix ( getFileStatus )

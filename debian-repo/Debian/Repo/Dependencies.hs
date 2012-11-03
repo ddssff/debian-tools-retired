@@ -15,32 +15,14 @@ module Debian.Repo.Dependencies
 import Debian.Control ()
 import qualified Debian.Control.String as S ()
 import Debian.Release (Arch(Source, Binary))
-import Debian.Repo.Types
-    ( PackageVersion,
-      PkgVersion(PkgVersion),
-      prettyPkgVersion,
-      pkgName,
-      getName,
-      getVersion,
-      pkgVersion,
-      BinaryPackage,
-      binaryPackageName,
-      packageID,
-      pProvides,
-      packageVersion)
+import Debian.Repo.Types ( PackageVersion, PkgVersion(PkgVersion), prettyPkgVersion, pkgName, getName, getVersion, pkgVersion, BinaryPackage,
+                           binaryPackageName, packageID, pProvides, packageVersion)
 import Debian.Version ( DebianVersion )
 import Data.List ( sortBy, groupBy, intercalate, nub )
-import qualified Data.Map as Map
-    ( insert, lookup, Map, empty, findWithDefault, fromListWith )
+import qualified Data.Map as Map ( insert, lookup, Map, empty, findWithDefault, fromListWith )
 import Data.Maybe ( catMaybes )
 import qualified Data.Set as Set ( Set, union, singleton, toList )
-import Debian.Relation
-    ( ArchitectureReq(..),
-      BinPkgName,
-      Relation(..),
-      prettyRelation,
-      Relations,
-      VersionReq(..) )
+import Debian.Relation ( ArchitectureReq(..), BinPkgName, Relation(..), prettyRelation, Relations, VersionReq(..) )
 import Extra.List ( cartesianProduct )
 import Text.PrettyPrint (Doc, text)
 

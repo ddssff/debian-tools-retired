@@ -2,21 +2,11 @@
 module Debian.Repo.LocalRepository where
 
 import Control.Monad.Trans (liftIO)
-import qualified Debian.Control.ByteString as B
-    ( Paragraph, ControlFunctions(parseControl), fieldValue )
+import qualified Debian.Control.ByteString as B ( Paragraph, ControlFunctions(parseControl), fieldValue )
 import qualified Debian.Control.String as S ( Control'(Control) )
 import Debian.Release (Section(..), ReleaseName, Arch(Binary), parseReleaseName, releaseName', sectionName')
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository)
-import Debian.Repo.Types
-    ( ReleaseInfo(..),
-      Repo(repoURI),
-      Layout(..),
-      LocalRepository(..),
-      Repository(LocalRepo),
-      EnvPath,
-      outsidePath,
-      compatibilityFile,
-      libraryCompatibilityLevel)
+import Debian.Repo.Types ( ReleaseInfo(..), Repo(repoURI), Layout(..), LocalRepository(..), Repository(LocalRepo), EnvPath, outsidePath, compatibilityFile, libraryCompatibilityLevel)
 import Control.Applicative.Error ( Failing(Success, Failure) )
 import Control.Monad ( filterM, when )
 import qualified Data.ByteString.Char8 as B ( ByteString, unpack )
@@ -25,17 +15,8 @@ import Data.Maybe ( catMaybes )
 import Extra.Files ( maybeWriteFile )
 import Extra.List ( partitionM )
 import System.FilePath ( (</>) )
-import System.Directory
-    ( createDirectoryIfMissing,
-      doesDirectoryExist,
-      getDirectoryContents )
-import qualified System.Posix.Files as F
-    ( fileMode,
-      getFileStatus,
-      getSymbolicLinkStatus,
-      isSymbolicLink,
-      readSymbolicLink,
-      setFileMode )
+import System.Directory ( createDirectoryIfMissing, doesDirectoryExist, getDirectoryContents )
+import qualified System.Posix.Files as F ( fileMode, getFileStatus, getSymbolicLinkStatus, isSymbolicLink, readSymbolicLink, setFileMode )
 import System.Unix.Directory ( removeRecursiveSafely )
 import Text.Regex ( matchRegex, mkRegex, splitRegex )
 import qualified Tmp.File as F ( File(..), readFile )

@@ -18,55 +18,25 @@ import Control.Exception (evaluate, bracket)
 import Control.Exception ( SomeException, try )
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy as L
--- import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List ( intercalate )
---import Data.Set (empty)
 import Data.Time ( NominalDiffTime )
-import Debian.Release
-    ( ReleaseName(..),
-      Arch,
-      archName,
-      parseReleaseName,
-      parseSection' )
-import Debian.Sources
-    ( SourceType(..),
-      SliceName(sliceName),
-      DebSource(DebSource, sourceDist, sourceUri) )
-import Debian.Repo.Cache
-    ( SourcesChangedAction(SourcesChangedError),
-      distDir,
-      sourcesPath,
-      sliceIndexes,
-      buildArchOfRoot )
+import Debian.Release ( ReleaseName(..), Arch, archName, parseReleaseName, parseSection' )
+import Debian.Sources ( SourceType(..), SliceName(sliceName), DebSource(DebSource, sourceDist, sourceUri) )
+import Debian.Repo.Cache ( SourcesChangedAction(SourcesChangedError), distDir, sourcesPath, sliceIndexes, buildArchOfRoot )
 import Debian.Repo.Monads.Apt (MonadApt)
-import Debian.Repo.Package
-    ( sourcePackagesOfIndex', binaryPackagesOfIndex' )
+import Debian.Repo.Package ( sourcePackagesOfIndex', binaryPackagesOfIndex' )
 import Debian.Relation ( ParseRelations(..), Relations )
-import Debian.Repo.Slice
-    ( sourceSlices, binarySlices, verifySourcesList )
+import Debian.Repo.Slice ( sourceSlices, binarySlices, verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
-import Debian.Repo.Types
-    ( AptBuildCache(..),
-      AptCache(..),
-      SourcePackage,
-      BinaryPackage,
-      NamedSliceList(sliceList, sliceListName),
-      SliceList(..),
-      Slice(..),
-      Repo(repoURI),
-      LocalRepository(repoRoot),
-      Repository(LocalRepo),
-      EnvPath(EnvPath, envRoot),
-      EnvRoot(rootPath),
-      outsidePath )
+import Debian.Repo.Types ( AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage, NamedSliceList(sliceList, sliceListName), SliceList(..), Slice(..),
+                           Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo), EnvPath(EnvPath, envRoot), EnvRoot(rootPath), outsidePath )
 import Debian.URI ( uriToString', URI(uriScheme) )
 import Extra.Files ( replaceFile )
 import "Extra" Extra.List ( isSublistOf )
 import Extra.Misc ( sameInode, sameMd5sum )
 import Extra.SSH ( sshCopy )
 import System.FilePath ( (</>), splitFileName )
-import System.Directory
-    ( createDirectoryIfMissing, doesFileExist, removeFile, renameFile )
+import System.Directory ( createDirectoryIfMissing, doesFileExist, removeFile, renameFile )
 import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import qualified System.IO as IO ( stderr, hPutStrLn, hPutStr )

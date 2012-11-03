@@ -30,40 +30,18 @@ import Data.Data (Data)
 import Data.List ( sortBy, intercalate )
 import Data.Typeable (Typeable)
 import Debian.Relation (SrcPkgName(..), PkgName(..), BinPkgName)
-import Debian.Release
-    ( ReleaseName(relName),
-      Arch(..),
-      releaseName',
-      sectionName' )
-import Debian.Sources
-    ( SourceType(..),
-      DebSource(..) )
+import Debian.Release ( ReleaseName(relName), Arch(..), releaseName', sectionName' )
+import Debian.Sources ( SourceType(..), DebSource(..) )
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Slice ( verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
-import Debian.Repo.Types
-    ( AptCache(aptArch, aptBaseSliceList, aptBinaryPackages,
-               aptReleaseName, aptSourcePackages, globalCacheDir),
-      SourcePackage(sourcePackageID),
-      sourcePackageName,
-      BinaryPackage(packageID),
-      binaryPackageName,
-      PackageID(packageVersion),
-      PackageIndex(..),
-      SliceList(slices),
-      Slice(sliceRepo, sliceSource),
-      Release(..),
-      ReleaseInfo(releaseInfoName),
-      Repo(repoReleaseInfo),
-      EnvRoot(EnvRoot) )
-import Debian.URI
-    ( URIAuth(uriPort, uriRegName, uriUserInfo),
-      URI(uriAuthority, uriPath, uriScheme),
-      escapeURIString )
+import Debian.Repo.Types ( AptCache(aptArch, aptBaseSliceList, aptBinaryPackages, aptReleaseName, aptSourcePackages, globalCacheDir), SourcePackage(sourcePackageID),
+                           sourcePackageName, BinaryPackage(packageID), binaryPackageName, PackageID(packageVersion), PackageIndex(..), SliceList(slices),
+                           Slice(sliceRepo, sliceSource), Release(..), ReleaseInfo(releaseInfoName), Repo(repoReleaseInfo), EnvRoot(EnvRoot) )
+import Debian.URI ( URIAuth(uriPort, uriRegName, uriUserInfo), URI(uriAuthority, uriPath, uriScheme), escapeURIString )
 import System.Exit ( ExitCode(ExitSuccess) )
 import Extra.Files ( replaceFile )
-import System.Directory
-    ( createDirectoryIfMissing, doesFileExist, removeFile )
+import System.Directory ( createDirectoryIfMissing, doesFileExist, removeFile )
 import System.IO ( stdin, hGetLine )
 import System.Unix.Chroot ( useEnv )
 import System.Unix.Directory ( removeRecursiveSafely )
