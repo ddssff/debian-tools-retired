@@ -1,3 +1,9 @@
+haskell-debian-repo (5.32) unstable; urgency=low
+
+  * Bypass abandoned versions.
+
+ -- David Fox <dsf@seereason.com>  Sat, 03 Nov 2012 06:12:21 -0700
+
 haskell-debian-repo (5.29-0+seereason1~precise28) precise-seereason; urgency=low
 
   * Ensure that changelog file descriptors get closed even though we

@@ -1,13 +1,8 @@
-haskell-cabal-debian (1.26-0+seereason1~precise2) precise-seereason; urgency=low
+haskell-cabal-debian (2.0.8) unstable; urgency=low
 
-  * Don't try to update the existing debianization, except for the
-    changelog where we retain entries that look older than the one
-    we generate.
-  * Use .install files instead of adding rules to debian/rules
-  * Add --depends and --conflicts options
-  * Darcs revision: Darcs "http://src.seereason.com/cabal-debian"
+  * Bypass abandoned versions.
 
- -- SeeReason Autobuilder <autobuilder@seereason.org>  Fri, 26 Oct 2012 13:40:48 -0700
+ -- David Fox <dsf@seereason.com>  Sat, 03 Nov 2012 06:13:27 -0700
 
 haskell-cabal-debian (1.26) unstable; urgency=low
 
