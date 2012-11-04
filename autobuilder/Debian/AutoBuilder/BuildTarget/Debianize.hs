@@ -20,15 +20,15 @@ import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..) {-, PackageName(..)-})
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
-import System.Directory (getDirectoryContents)
+import System.Directory (getDirectoryContents, createDirectoryIfMissing)
 import System.Exit
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeFileName)
 import System.IO (hPutStrLn, stderr)
 import System.Process (CreateProcess(cwd), showCommandForUser)
 import System.Unix.Directory (removeRecursiveSafely)
 import System.Process (CmdSpec(RawCommand))
 import System.Process.Read (readModifiedProcessWithExitCode)
-import System.Process.Progress (qPutStrLn)
+import System.Process.Progress (qPutStrLn, runProcessVF)
 --import System.Unix.QIO (qPutStrLn)
 
 documentation :: [String]
@@ -36,25 +36,28 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: MonadApt e m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
-prepare cache package' cabal = liftIO $
-    getDirectoryContents (T.getTop cabal) >>= return . filter (isSuffixOf ".cabal") >>= \ cabfiles ->
-    case cabfiles of
-      [cabfile] ->
-          do desc <- readPackageDescription normal (T.getTop cabal </> cabfile)
-             -- let (PackageName name) = pkgName . package . packageDescription $ desc
-             let version = pkgVersion . package . packageDescription $ desc
-             removeRecursiveSafely (T.getTop cabal </> "debian")
-             -- tree <- findSourceTree (T.getTop cabal)
-             debianize cache (P.flags package') (T.getTop cabal)
-             return $ T.Download { T.package = package'
-                                 , T.getTop = T.getTop cabal
-                                 , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
-                                 , T.mVersion = Just version
-                                 , T.origTarball = T.origTarball cabal
-                                 , T.cleanTarget = \ top -> T.cleanTarget cabal top
-                                 , T.buildWrapper = id }
-      _ -> error $ "Download at " ++ T.getTop cabal ++ " missing or multiple cabal files"
+prepare :: MonadDeb e m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
+prepare cache package' cabal =
+    do dir <- sub ("debianize" </> takeFileName (T.getTop cabal))
+       liftIO $ createDirectoryIfMissing True dir
+       runProcessVF id (RawCommand "rsync" ["-aHxSpDt", "--delete", T.getTop cabal ++ "/", dir]) B.empty
+       cabfiles <- liftIO $ getDirectoryContents dir >>= return . filter (isSuffixOf ".cabal")
+       case cabfiles of
+         [cabfile] ->
+             do desc <- liftIO $ readPackageDescription normal (dir </> cabfile)
+                -- let (PackageName name) = pkgName . package . packageDescription $ desc
+                let version = pkgVersion . package . packageDescription $ desc
+                -- We want to see the original changelog, so don't remove this
+                -- removeRecursiveSafely (dir </> "debian")
+                liftIO $ debianize cache (P.flags package') dir
+                return $ T.Download { T.package = package'
+                                    , T.getTop = dir
+                                    , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
+                                    , T.mVersion = Just version
+                                    , T.origTarball = T.origTarball cabal
+                                    , T.cleanTarget = \ top -> T.cleanTarget cabal top
+                                    , T.buildWrapper = id }
+         _ -> error $ "Download at " ++ dir ++ ": missing or multiple cabal files"
 
 -- | Run cabal-debian on the given directory, creating a debian subdirectory.
 debianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
