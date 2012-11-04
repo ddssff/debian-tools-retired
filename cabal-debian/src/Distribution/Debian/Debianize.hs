@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, ScopedTypeVariables, TupleSections, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances, ScopedTypeVariables, StandaloneDeriving, TupleSections, TypeSynonymInstances #-}
 {-# OPTIONS -Wall -fno-warn-name-shadowing #-}
 
 -- | Generate a package Debianization from Cabal data and command line
@@ -12,13 +12,15 @@ module Distribution.Debian.Debianize
     ) where
 
 import Codec.Binary.UTF8.String (decodeString)
+import Control.Applicative ((<$>))
 import Control.Arrow (second)
-import Control.Exception (SomeException, catch)
-import Control.Monad (mplus, unless)
+import Control.Exception (SomeException, catch, try)
+import Control.Monad (mplus, when, unless)
 import Data.Either (partitionEithers)
 import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
+import qualified Data.Set as Set
 import Data.Version (showVersion)
 import Debian.Control
 import qualified Debian.Relation as D
@@ -50,7 +52,13 @@ import System.Process (readProcessWithExitCode, showCommandForUser)
 import Text.PrettyPrint.HughesPJ
 import Text.PrettyPrint.Class (pretty)
 
-type Debianization = Map.Map FilePath String
+data Debianization
+    = Debianization
+      { controlFile :: Control' String
+      , changeLog :: [ChangeLogEntry]
+      , otherFiles :: Map.Map FilePath String }
+
+deriving instance Ord (Field' String)
 
 -- | Call a function with a list of strings read from the value of
 -- $CABALDEBIAN.
@@ -102,7 +110,27 @@ autobuilderDebianize lbi flags =
 debianize :: Flags -> IO ()
 debianize flags =
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
-      new <- debianization flags pkgDesc compiler
+      old <- try readDebianization >>= return . either (\ (_ :: SomeException) -> Nothing) Just
+      new <- debianization flags pkgDesc compiler old
+      when (validate flags)
+          ( do versionsMatch <- catch (let oldVersion = logVersion (head (changeLog (fromJust old)))
+                                           newVersion = logVersion (head (changeLog new)) in
+                                       hPutStrLn stderr ("oldVersion: " ++ show (pretty oldVersion) ++ ", newVersion: " ++ show (pretty newVersion)) >>
+                                       return (oldVersion == newVersion))
+                                      (\ (_ :: SomeException) -> return False)
+               sourcesMatch <- catch (let oldSource = fromJust (lookupP "Source" (head (unControl (controlFile (fromJust old)))))
+                                          newSource = fromJust (lookupP "Source" (head (unControl (controlFile new)))) in
+                                      hPutStrLn stderr ("oldSource: " ++ show (pretty oldSource) ++ "\nnewSource: " ++ show (pretty newSource)) >>
+                                      return (oldSource == newSource))
+                                     (\ (_ :: SomeException) -> return False)
+               packagesMatch <- catch (let oldPackages = catMaybes (map (lookupP "Package") (tail (unControl (controlFile (fromJust old)))))
+                                           newPackages = catMaybes (map (lookupP "Package") (tail (unControl (controlFile new)))) in
+                                       hPutStrLn stderr ("oldPackages: " ++ show (pretty oldPackages) ++ "\nnewPackages: " ++ show (pretty newPackages)) >>
+                                       return (Set.fromList oldPackages == Set.fromList newPackages))
+                                      (\ (_ :: SomeException) -> return False)
+               when (not (versionsMatch && sourcesMatch && packagesMatch)) (describeDebianization new >>= \ text -> error $ "Debianization mismatch:\n" ++ text))
+      if dryRun flags then putStrLn "Debianization (dry run):" >> describeDebianization new >>= putStr else writeDebianization new
+{-
       mapM_ (uncurry doFile) . Map.toList $ new
       unless (dryRun flags) (getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True}))
     where
@@ -121,31 +149,69 @@ debianize flags =
               ExitSuccess -> putStr out
               ExitFailure 1 -> putStr out
               _ -> hPutStrLn stderr (showCommandForUser "diff" ["-r", "-u", path, "-"] ++ " < " ++ show text ++ " -> " ++ show code)
+-}
 
 debianization :: Flags		 -- ^ command line flags
               -> PackageDescription  -- ^ info from the .cabal file
               -> Compiler            -- ^ compiler details
+              -> Maybe Debianization
               -> IO Debianization
-debianization flags pkgDesc compiler =
+debianization flags pkgDesc compiler oldDeb =
     do date <- getCurrentLocalRFC822Time
        copyright <- readFile' (licenseFile pkgDesc) `catch` (\ (_ :: SomeException) -> return . showLicense . license $ pkgDesc)
        debianMaintainer <- getDebianMaintainer flags >>= maybe (error "Missing value for --maintainer") return
        oldChangelog <- readFile ("debian/changelog") `catch` (\ (_ :: SomeException) -> return "")
        let (errs, newLog) = updateChangelog flags debianMaintainer pkgDesc date oldChangelog
        mapM_ (hPutStrLn stderr) errs
-       let (controlFile, rulesLines) = control flags compiler debianMaintainer pkgDesc
-       return $ Map.fromList
-                  (controlFile ++
-                   [("changelog", newLog),
-                    ("rules", cdbsRules pkgDesc ++ unlines rulesLines),
-                    ("compat", "7\n"), -- should this be hardcoded, or automatically read from /var/lib/dpkg/status?
-                    ("copyright", copyright),
-                    ("source/format", sourceFormat flags ++ "\n"),
-                    ("watch", watch pkgname)] ++
-                   installFiles)
+       let (controlFile, installFiles, rulesLines) = control flags compiler debianMaintainer pkgDesc
+       return $ Debianization
+                  { controlFile = controlFile
+                  , changeLog = newLog
+                  , otherFiles =
+                      Map.fromList
+                          ([("debian/rules", cdbsRules pkgDesc ++ unlines rulesLines),
+                            ("debian/compat", "7\n"), -- should this be hardcoded, or automatically read from /var/lib/dpkg/status?
+                            ("debian/copyright", copyright),
+                            ("debian/source/format", sourceFormat flags ++ "\n"),
+                            ("debian/watch", watch pkgname)] ++
+                           installFiles) }
     where
         PackageName pkgname = pkgName . package $ pkgDesc
         installFiles = []
+
+readDebianization :: IO Debianization
+readDebianization = do
+  (_errs, oldLog) <- readFile "debian/changelog" >>= return . partitionEithers . parseLog
+  oldControl <- parseControlFromFile "debian/control" >>= either (error . show) return
+  return $ Debianization {controlFile = oldControl, changeLog = oldLog, otherFiles = Map.empty}
+
+describeDebianization :: Debianization -> IO String
+describeDebianization d =
+    concat <$> mapM (uncurry doFile) (debianizationFiles d)
+    where
+      doFile path text =
+          doesFileExist path >>= \ exists ->
+              if exists
+              then diffFile path text >>= return . maybe (path ++ ": Unchanged\n") (\ diff -> path ++ ": Modified\n" ++ indent " | " diff)
+              else return $ path ++ ": Created\n" ++ indent " | " text
+
+indent :: [Char] -> String -> String
+indent prefix text = unlines (map (prefix ++) (lines text))
+
+writeDebianization :: Debianization -> IO ()
+writeDebianization d =
+    mapM_ (uncurry doFile) (debianizationFiles d) >>
+    getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})
+    where
+      doFile path text =
+          createDirectoryIfMissing True (takeDirectory path) >>
+          replaceFile path text
+
+debianizationFiles :: Debianization -> [(FilePath, String)]
+debianizationFiles d =
+    ("debian/changelog", concat (map (show . prettyEntry) (changeLog d))) :
+    ("debian/control", show (pretty (controlFile d))) :
+    Map.toList (otherFiles d)
 
 watch :: String -> String
 watch pkgname =
@@ -250,10 +316,10 @@ debianExtraPackageName' pkgDesc =
 -- Binary paragraphs, each one representing a binary package to be
 -- produced.  If the package contains a library we usually want dev,
 -- prof, and doc packages.
-control :: Flags -> Compiler -> String -> PackageDescription -> ([(FilePath, String)], [String])
+control :: Flags -> Compiler -> String -> PackageDescription -> (Control' String, [(FilePath, String)], [String])
 control flags compiler debianMaintainer pkgDesc =
     -- trace ("allBuildDepends " ++ show flags ++ " -> " ++ show (allBuildDepends flags pkgDesc)) $
-    ([("control", show $ pretty $ Control {unControl = ([sourceSpec] ++ librarySpecs ++ controlSpecs)})] ++ installFiles, concat rulesLines)
+    (Control {unControl = ([sourceSpec] ++ librarySpecs ++ controlSpecs)}, installFiles, concat rulesLines)
     where
       librarySpecs = maybe [] (const (develLibrarySpec ++ profileLibrarySpec ++ docLibrarySpec)) (library pkgDesc)
       develLibrarySpec = [librarySpec "any" Development debianDevPackageName']
@@ -354,7 +420,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
              Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps p (binaryPackageDeps flags)))),
              Field ("Description", " " ++ maybe debianDescription (const executableDescription) (library pkgDesc))] ++
             conflicts (filterMissing (missingDependencies' flags) (extraDeps p (binaryPackageConflicts flags)))),
-           (show (D.prettyBinPkgName p) ++ ".install", "dist-ghc" </> "build" </> p' </> p' ++ " usr/bin\n"),
+           ("debian" </> show (D.prettyBinPkgName p) ++ ".install", "dist-ghc" </> "build" </> p' </> p' ++ " usr/bin\n"),
            ["build" </> p' ++ ":: build-ghc-stamp"])
       executableDescription = " " ++ "An executable built from the " ++ display (package pkgDesc) ++ " package."
       makeUtilsPackage =
@@ -373,7 +439,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                     Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps p (binaryPackageDeps flags)))),
                     Field ("Description", " " ++ maybe debianDescription (const utilsDescription) (library pkgDesc))] ++
                    conflicts (extraDeps p (binaryPackageConflicts flags))),
-                  (p' ++ ".install",
+                  ("debian" </> p' ++ ".install",
                    unlines (map (\ p -> "dist-ghc" </> "build" </> exeName p </> exeName p ++ " " ++ "usr/bin") bundledExecutables ++
                             map (\ file -> file ++ " " ++ takeDirectory ("usr/share" </> s' ++ "-" ++ show (prettyDebianVersion (debianVersionNumber pkgDesc)) </> file)) (dataFiles pkgDesc))),
                   ["build" </> p' ++ ":: build-ghc-stamp"])]
@@ -399,11 +465,10 @@ anyrel x = [D.Rel (D.BinPkgName (D.PkgName x)) Nothing Nothing]
 -- | This is the only file I am confident I can merge with an existing
 -- file, since the entries are dated and marked with well understood
 -- version numbers.
-updateChangelog :: Flags -> String -> PackageDescription -> String -> String -> ([String], String)
+updateChangelog :: Flags -> String -> PackageDescription -> String -> String -> ([String], [ChangeLogEntry])
 updateChangelog flags debianMaintainer pkgDesc date old =
-    (concat errs, newLog)
+    (concat errs, entries)
     where
-      newLog = concatMap (render . prettyEntry) $ entries
       entries = newEntry : dropWhile (\ entry -> logVersion entry >= logVersion newEntry) oldEntries
       (errs, oldEntries) = partitionEithers $ parseLog old
       newEntry = changelog flags debianMaintainer pkgDesc date
