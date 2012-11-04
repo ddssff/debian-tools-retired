@@ -80,6 +80,7 @@ debianize cache pflags dir =
       pflag (P.Revision s) = ["--revision", s]
       pflag (P.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]
       pflag P.NoDoc = ["--disable-haddock"]
+      pflag (P.CabalDebian ss) = ss
       pflag _ = []
 
       ver = P.ghcVersion (P.params cache)

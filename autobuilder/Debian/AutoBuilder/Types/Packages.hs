@@ -108,6 +108,8 @@ data PackageFlag
     -- ^ Omit the -doc section from the control file so that no
     -- documentation files are generated.  Used to work around haddock
     -- bugs.
+    | CabalDebian [String]
+    -- ^ Pass some arbitrary arguments to cabal-debian
     | MapDep String BinPkgName
     -- ^ Tell cabal-debian to map the first argument (a name that
     -- appears in Extra-Libraries field of the cabal file) to the
