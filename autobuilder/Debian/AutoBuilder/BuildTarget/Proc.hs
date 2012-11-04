@@ -13,7 +13,7 @@ documentation = [ "proc:<target> - A target of this form modifies another target
                 , "machine which might be different from the machine on which the package"
                 , "is ultimately installed." ]
 
-prepare :: MonadApt e m => P.CacheRec -> P.Packages -> OSImage -> T.Download -> m T.Download
+prepare :: MonadApt m => P.CacheRec -> P.Packages -> OSImage -> T.Download -> m T.Download
 prepare _cache package buildOS base =
     return $ T.Download {
                  T.package = package

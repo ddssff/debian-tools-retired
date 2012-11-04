@@ -7,9 +7,9 @@ module Debian.AutoBuilder.BuildTarget.Hackage
 
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Compression.GZip as Z
-import Control.Exception (throw)
+import Control.Exception (SomeException, throw)
 import Control.Monad (when)
-import Control.Monad.Error (catchError)
+import Control.Monad.CatchIO (catch)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.List (isPrefixOf, isSuffixOf, intercalate, nub, sort)
@@ -20,6 +20,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo hiding (getVersion)
+import Prelude hiding (catch)
 import System.Exit
 import System.Directory (doesFileExist, createDirectoryIfMissing, removeFile)
 import System.FilePath ((</>))
@@ -39,7 +40,7 @@ documentation = [ "debianize:<name> or debianize:<name>=<version> - a target of 
                 , "(currently) retrieves source code from http://hackage.haskell.org and runs"
                 , "cabal-debian to create the debianization." ]
 
-prepare :: (MonadDeb e m) => P.CacheRec -> P.Packages -> String -> m T.Download
+prepare :: (MonadDeb m) => P.CacheRec -> P.Packages -> String -> m T.Download
 prepare cache package name =
     do (version' :: Version) <- liftIO $ maybe (getVersion (P.hackageServer (P.params cache)) name) (return . readVersion) versionString
        tar <- tarball name version'
@@ -66,7 +67,7 @@ prepare cache package name =
 -- hackage temporary directory:
 -- > download \"/home/dsf/.autobuilder/hackage\" -> \"/home/dsf/.autobuilder/hackage/happstack-server-6.1.4.tar.gz\"
 -- After the download it tries to untar the file, and then it saves the compressed tarball.
-download :: (MonadDeb e m) => P.CacheRec -> String -> Version -> m ()
+download :: (MonadDeb m) => P.CacheRec -> String -> Version -> m ()
 download cache name version =
     (unpacked name version) >>=
     liftIO . removeRecursiveSafely >>
@@ -110,7 +111,7 @@ readVersion s =
 -- |Download and unpack the given package version to the autobuilder's
 -- hackage temporary directory.  After the download it validates the
 -- tarball text and saves the compressed tarball.
-downloadCached :: MonadDeb e m => String -> String -> Version -> m B.ByteString
+downloadCached :: MonadDeb m => String -> String -> Version -> m B.ByteString
 downloadCached server name version =
     do path <- tarball name version
        exists <- liftIO $ doesFileExist path
@@ -118,7 +119,7 @@ downloadCached server name version =
          True -> (liftIO (B.readFile path) >>=
                   return . validate >>=
                   maybe (download' server name version) return)
-                   `catchError` (\ e ->
+                   `catch` (\ (e :: SomeException) ->
                                      let msg = "Failure reading " ++ path ++ ": " ++ show e in
                                      liftIO (hPutStrLn stderr msg >>
                                              hPutStrLn stderr ("Removing " ++ path) >>
@@ -140,7 +141,7 @@ getVersion server name =
       url = packageURL server name
 
 -- |Unpack and save the files of a tarball.
-unpack :: MonadDeb e m => B.ByteString -> m ()
+unpack :: MonadDeb m => B.ByteString -> m ()
 unpack text = tmpDir >>= \ tmp -> liftIO $ Tar.unpack tmp (Tar.read (Z.decompress text))
 
 -- |Validate the text of a tarball file.
@@ -174,7 +175,7 @@ findVersion package (Document _ _ (Elem _name _attrs content) _) =
           else error $ "findVersion - not a tarball: " ++ show s
 
 -- |Download and save the tarball, return its contents.
-download' :: MonadDeb e m => String -> String -> Version -> m B.ByteString
+download' :: MonadDeb m => String -> String -> Version -> m B.ByteString
 download' server name version =
     do (res, out, err, _) <- liftIO (runProcess id (ShellCommand (downloadCommand server name version)) B.empty) >>= return . collectOutputs
        tmp <- tmpDir

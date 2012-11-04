@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, ScopedTypeVariables, TypeFamilies #-}
 {-# OPTIONS -Wall #-}
 -- |AutoBuilder - application to build Debian packages in a clean
 -- environment.  In the following list, each module's dependencies
@@ -10,9 +10,9 @@ module Debian.AutoBuilder.Main
 import Control.Arrow (first)
 import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..), maybeRead)
-import Control.Exception(SomeException, try, catch, AsyncException(UserInterrupt), fromException, toException)
+import Control.Exception(SomeException, try, AsyncException(UserInterrupt), fromException, toException)
 import Control.Monad(foldM, when, unless)
-import Control.Monad.Error (catchError, throwError)
+import Control.Monad.CatchIO (catch, throw)
 import Control.Monad.State(MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
@@ -90,7 +90,7 @@ main paramSets = do
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: MonadApt e m => [Failing ([Output L.ByteString], NominalDiffTime)] -> (P.ParamRec, P.Packages) -> m [Failing ([Output L.ByteString], NominalDiffTime)]
+doParameterSet :: MonadApt m => [Failing ([Output L.ByteString], NominalDiffTime)] -> (P.ParamRec, P.Packages) -> m [Failing ([Output L.ByteString], NominalDiffTime)]
 doParameterSet results (params, packages) =
     if any isFailure results
     then return results
@@ -99,13 +99,13 @@ doParameterSet results (params, packages) =
           (do top <- liftIO $ P.computeTopDir params
               withLock (top ++ "/lockfile")
                 (runTopT top (quieter 2 (P.buildCache params packages) >>= runParameterSet)))
-          `catchError` (\ e -> return (Failure [show e])) >>=
+          `catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
         (\ result -> return (result : results))
     where
       isFailure (Failure _) = True
       isFailure _ = False
 
-runParameterSet :: MonadDeb e m => C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
+runParameterSet :: MonadDeb m => C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet cache =
     do
       top <- askTop
@@ -148,7 +148,7 @@ runParameterSet cache =
       when (not $ null $ failures) (error $ intercalate "\n " $ "Some targets could not be retrieved:" : map show failures)
       buildResult <- buildTargets cache cleanOS globalBuildDeps localRepo poolOS targets
       -- If all targets succeed they may be uploaded to a remote repo
-      result <- (upload buildResult >>= liftIO . newDist) `catchError` (\ e -> return (Failure [show e]))
+      result <- (upload buildResult >>= liftIO . newDist) `catch` (\ (e :: SomeException) -> return (Failure [show e]))
       updateRepoCache
       return result
     where
@@ -204,7 +204,7 @@ runParameterSet cache =
                      True -> deleteGarbage repo'
                      False -> return repo'
                _ -> error "Expected local repo"
-      retrieveTargetList :: MonadDeb e m => OSImage -> m [Either e Download]
+      retrieveTargetList :: MonadDeb m => OSImage -> m [Either SomeException Download]
       retrieveTargetList cleanOS =
           do qPutStr ("\n" ++ showTargets allTargets ++ "\n")
              buildOS <- chrootEnv cleanOS <$> P.dirtyRoot cache
@@ -213,15 +213,15 @@ runParameterSet cache =
              countTasks' (map (\ (target :: P.Packages) ->
                                    (show (P.spec target),
                                     (Right <$> retrieve buildOS cache target)
-                                      `catchError` (\ (e :: e) ->
+                                      `catch` (\ (e :: SomeException) ->
                                                         case (fromException (toException e) :: Maybe AsyncException) of
-                                                          Just UserInterrupt -> throwError e -- break out of loop
+                                                          Just UserInterrupt -> throw e -- break out of loop
                                                           _ -> liftIO (IO.hPutStrLn IO.stderr ("Failure retrieving " ++ show (P.spec target) ++ ":\n " ++ show e)) >> return (Left e))))
 
                               (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
           where
             allTargets = C.packages cache
-      upload :: MonadApt e m => (LocalRepository, [Target]) -> m [Failing ([Output L.ByteString], NominalDiffTime)]
+      upload :: MonadApt m => (LocalRepository, [Target]) -> m [Failing ([Output L.ByteString], NominalDiffTime)]
       upload (repo, [])
           | P.doUpload params =
               case P.uploadURI params of
@@ -253,7 +253,7 @@ runParameterSet cache =
                              try (timeTask (runProcessF id (ShellCommand cmd) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                 _ -> error "Missing Upload-URI parameter"
           | True = return (Success ([], (fromInteger 0)))
-      updateRepoCache :: MonadDeb e m => m ()
+      updateRepoCache :: MonadDeb m => m ()
       updateRepoCache =
           do path <- sub "repoCache"
              live <- getApt >>= return . getRepoMap

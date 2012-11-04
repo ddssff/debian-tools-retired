@@ -31,22 +31,22 @@ import System.FilePath ( (</>) )
 import System.Process.Progress (qPutStrLn)
 import Text.PrettyPrint.Class (pretty)
 
-lookupRelease :: MonadApt e m => Repository -> ReleaseName -> m (Maybe Release)
+lookupRelease :: MonadApt m => Repository -> ReleaseName -> m (Maybe Release)
 lookupRelease repo dist = getApt >>= return . findRelease repo dist
 
-insertRelease :: MonadApt e m => Release -> m Release
+insertRelease :: MonadApt m => Release -> m Release
 insertRelease release =
     getApt >>= putApt . putRelease repo dist release >> return release
     where dist = releaseInfoName (releaseInfo release)
           repo = releaseRepo release
 
 -- | Find or create a (local) release.
-prepareRelease :: MonadApt e m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> m Release
+prepareRelease :: MonadApt m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> m Release
 prepareRelease repo dist aliases sections archList =
     -- vPutStrLn 0 ("prepareRelease " ++ name ++ ": " ++ show repo ++ " sections " ++ show sections) >>
     lookupRelease (LocalRepo repo) dist >>= maybe prepare (const prepare) -- return -- JAS - otherwise --create-section does not do anything
     where
-      prepare :: MonadApt e m => m Release
+      prepare :: MonadApt m => m Release
       prepare =
           do -- FIXME: errors get discarded in the mapM calls here
 	     let release = Release (LocalRepo repo) (ReleaseInfo { releaseInfoName = dist
@@ -73,7 +73,7 @@ prepareRelease repo dist aliases sections archList =
       root = repoRoot repo
 
 -- | Make sure an index file exists.
-ensureIndex :: MonadApt e m => FilePath -> m (Either [String] ())
+ensureIndex :: MonadApt m => FilePath -> m (Either [String] ())
 ensureIndex path = 
     do exists <- liftIO $ doesFileExist path
        case exists of
@@ -173,14 +173,14 @@ mergeReleases releases =
       merge _ _ = error "Cannot merge releases from different repositories"
 
 -- | Find all the releases in a repository.
-findReleases :: MonadApt e m => LocalRepository -> m [Release]
+findReleases :: MonadApt m => LocalRepository -> m [Release]
 findReleases repo@(LocalRepository _ _ releases) = mapM (findLocalRelease repo) releases
 
-findLocalRelease :: MonadApt e m => LocalRepository -> ReleaseInfo -> m Release
+findLocalRelease :: MonadApt m => LocalRepository -> ReleaseInfo -> m Release
 findLocalRelease repo releaseInfo =
     lookupRelease (LocalRepo repo) dist >>= maybe readRelease return
     where
-      readRelease :: MonadApt e m => m Release
+      readRelease :: MonadApt m => m Release
       readRelease =
           do let path = (outsidePath (repoRoot repo) ++ "/dists/" ++ releaseName' dist ++ "/Release")
              info <- liftIO $ S.parseControlFromFile path

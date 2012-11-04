@@ -42,7 +42,7 @@ poolDir (LocalRepository _ _ _) _ _ = ""
 
 -- | Remove all the packages from the repository and then re-create
 -- the empty releases.
-flushLocalRepository :: MonadApt e m => LocalRepository -> m LocalRepository
+flushLocalRepository :: MonadApt m => LocalRepository -> m LocalRepository
 flushLocalRepository (LocalRepository path layout _) =
     do liftIO $ removeRecursiveSafely (outsidePath path)
        prepareLocalRepository path layout
@@ -50,7 +50,7 @@ flushLocalRepository (LocalRepository path layout _) =
 -- | Create or verify the existance of the directories which will hold
 -- a repository on the local machine.  Verify the index files for each of
 -- its existing releases.
-prepareLocalRepository :: MonadApt e m => EnvPath -> Maybe Layout -> m LocalRepository
+prepareLocalRepository :: MonadApt m => EnvPath -> Maybe Layout -> m LocalRepository
 prepareLocalRepository root layout =
     do mapM_ (liftIO . initDir)
                  [(".", 0o40755),
@@ -78,7 +78,7 @@ prepareLocalRepository root layout =
       hasReleaseFile root name =
           doesFileExist (root ++ "/dists/" ++ name ++ "/Release") -}
 
-readLocalRepo :: MonadApt e m => EnvPath -> Maybe Layout -> m LocalRepository
+readLocalRepo :: MonadApt m => EnvPath -> Maybe Layout -> m LocalRepository
 readLocalRepo root layout =
     do
       state <- getApt

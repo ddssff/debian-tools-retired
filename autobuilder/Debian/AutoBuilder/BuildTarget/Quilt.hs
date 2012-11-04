@@ -46,7 +46,7 @@ getEntry (Patch x) = x
 
 quiltPatchesDir = "quilt-patches"
 
-makeQuiltTree :: MonadDeb e m => P.RetrieveMethod -> T.Download -> T.Download -> m (SourceTree, FilePath)
+makeQuiltTree :: MonadDeb m => P.RetrieveMethod -> T.Download -> T.Download -> m (SourceTree, FilePath)
 makeQuiltTree m base patch =
     do qPutStrLn $ "Quilt base: " ++ T.getTop base
        qPutStrLn $ "Quilt patch: " ++ T.getTop patch
@@ -78,7 +78,7 @@ makeQuiltTree m base patch =
 failing f _ (Failure x) = f x
 failing _ s (Success x) = s x
 
-prepare :: MonadDeb e m => P.Packages -> T.Download -> T.Download -> m T.Download
+prepare :: MonadDeb m => P.Packages -> T.Download -> T.Download -> m T.Download
 prepare package base patch =
     (\ x -> qPutStrLn "Preparing quilt target" >> quieter 1 x) $
     makeQuiltTree (P.spec package) base patch >>= liftIO . withUpstreamQuiltHidden make

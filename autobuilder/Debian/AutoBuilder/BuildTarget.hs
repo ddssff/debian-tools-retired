@@ -37,7 +37,7 @@ import System.Process (CmdSpec(..))
 import System.Process.Progress (runProcessF, qPutStrLn, quieter)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
-retrieve :: MonadDeb e m => OSImage -> P.CacheRec -> P.Packages -> m Download
+retrieve :: MonadDeb m => OSImage -> P.CacheRec -> P.Packages -> m Download
 retrieve buildOS cache target =
     (\ x -> qPutStrLn (" " ++ show (P.spec target)) >> quieter 1 x) $
      case P.spec target of

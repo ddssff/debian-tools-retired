@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses,
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses,
              PackageImports, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |AptIO is an instance of the RWS monad used to manage the global
@@ -32,8 +32,8 @@ module Debian.Repo.Monads.Apt
     , countTasks
     ) where
 
-import Control.Exception (Exception, tryJust)
-import Control.Monad.Error (MonadError)
+import Control.Exception (Exception, SomeException, tryJust)
+import Control.Monad.CatchIO (MonadCatchIO)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.State (get, put)
 import qualified Debian.Control.ByteString as B ( Paragraph, Control'(Control), ControlFunctions(parseControlFromHandle) )
@@ -44,6 +44,7 @@ import Control.Exception ( try )
 import Control.Monad.State ( MonadTrans(..), MonadIO(..), StateT(runStateT), mapStateT )
 import qualified Data.Map as Map ( insert, Map, empty, findWithDefault )
 import Debian.URI ( URI )
+import Prelude hiding (catch)
 import qualified System.IO as IO ( IOMode(ReadMode), hClose, openBinaryFile )
 import System.Posix.Files ( FileStatus, deviceID, fileID, modificationTime )
 import System.Process.Progress (ePutStrLn)
@@ -178,14 +179,14 @@ countTasks tasks =
       countTask count (index, (message, task)) =
           ePutStrLn (printf "[%2d of %2d] %s:" index count message) >> task
 
-class (MonadIO m, Functor m, Exception e, MonadError e m) => MonadApt e m where
+class (MonadIO m, Functor m, MonadCatchIO m) => MonadApt m where
     getApt :: m AptState
     putApt :: AptState -> m ()
 
-instance (MonadIO m, Functor m, Exception e, MonadError e m) => MonadApt e (AptIOT m) where
+instance (MonadIO m, Functor m, MonadCatchIO m) => MonadApt (AptIOT m) where
     getApt = get
     putApt = put
 
-instance MonadApt e m => MonadApt e (ReaderT s m) where
+instance MonadApt m => MonadApt (ReaderT s m) where
     getApt = lift getApt
     putApt = lift . putApt

@@ -229,7 +229,7 @@ data SourcesChangedAction =
 
 -- |Change the sources.list of an AptCache object, subject to the
 -- value of sourcesChangedAction.
-updateCacheSources :: (MonadApt e m, AptCache c) => SourcesChangedAction -> c -> m c
+updateCacheSources :: (MonadApt m, AptCache c) => SourcesChangedAction -> c -> m c
 updateCacheSources sourcesChangedAction distro =
     (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
     do

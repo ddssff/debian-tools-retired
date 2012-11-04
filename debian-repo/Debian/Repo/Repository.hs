@@ -74,7 +74,7 @@ instance Eq UnverifiedRepo where
 
 -- | Prepare a repository, which may be remote or local depending on
 -- the URI.
-prepareRepository :: MonadApt e m => URI -> m Repository
+prepareRepository :: MonadApt m => URI -> m Repository
 prepareRepository uri =
     do state <- getApt
        repo <- maybe newRepo return (lookupRepository uri state)
@@ -89,7 +89,7 @@ prepareRepository uri =
                -- _ -> return . Repository . UnverifiedRepo $ uri
 
 {-# NOINLINE verifyRepository #-}
-verifyRepository :: MonadApt e m => Repository -> m Repository
+verifyRepository :: MonadApt m => Repository -> m Repository
 verifyRepository (UnverifiedRepo uri) =
     do --tio (vHPutStrBl IO.stderr 0 $ "Verifying repository " ++ show uri ++ "...")
        -- Use unsafeInterleaveIO to avoid querying the repository
@@ -165,7 +165,7 @@ getReleaseInfoRemote uri =
       uncurry3 f (a, b, c) =  f a b c
 
 -- |Make sure we can access the upload uri without typing a password.
-verifyUploadURI :: MonadApt e m => Bool -> URI -> m ()
+verifyUploadURI :: MonadApt m => Bool -> URI -> m ()
 verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ show uri) >> quieter 2 x) $
     case doExport of
       True -> export
@@ -190,7 +190,7 @@ verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ sh
                     "" -> Nothing
                     x -> error $ "Internal error 9: invalid port " ++ x in
           (uriUserInfo auth ++ uriRegName auth, port)
-      mkdir :: MonadApt e m => m ()
+      mkdir :: MonadApt m => m ()
       mkdir =
           case uriAuthority uri of
             Nothing -> error $ "Internal error 7"

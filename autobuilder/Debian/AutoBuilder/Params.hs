@@ -32,7 +32,7 @@ import System.Environment ( getEnv )
 import System.Process.Progress (qPutStrLn)
 
 -- |Create a Cache object from a parameter set.
-buildCache :: (MonadApt e m, MonadTop m) => ParamRec -> Packages -> m CacheRec
+buildCache :: (MonadApt m, MonadTop m) => ParamRec -> Packages -> m CacheRec
 buildCache params packages =
     do top <- askTop
        qPutStrLn ("Preparing autobuilder cache in " ++ top ++ "...")
@@ -56,7 +56,7 @@ buildCache params packages =
 -- CacheClass, and RunClass.
 -- instance (ParamClass p) => RunClass (p, Cache)
 
-loadRepoCache :: (MonadApt e m, MonadTop m) => m ()
+loadRepoCache :: (MonadApt m, MonadTop m) => m ()
 loadRepoCache =
     do repoCache <- sub "repoCache"
        qPutStrLn "Loading repo cache..."

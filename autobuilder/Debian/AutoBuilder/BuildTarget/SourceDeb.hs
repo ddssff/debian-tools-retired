@@ -26,7 +26,7 @@ documentation = [ "sourcedeb:<target> - A target of this form unpacks the source
 
 -- |Given the BuildTarget for the base target, prepare a SourceDeb BuildTarget
 -- by unpacking the source deb.
-prepare :: MonadApt e m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
+prepare :: MonadApt m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
 prepare _cache package base =
     do dscFiles <- liftIO (getDirectoryContents top) >>= return . filter (isSuffixOf ".dsc")
        dscInfo <- mapM (\ name -> liftIO (readFile (top ++ "/" ++ name) >>= return . S.parseControl name)) dscFiles

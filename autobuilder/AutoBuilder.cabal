@@ -54,6 +54,7 @@ Library
       , magic
       , MIME >= 1.1
       , mtl
+      , MonadCatchIO-mtl
       , network
       , old-locale
       , old-time

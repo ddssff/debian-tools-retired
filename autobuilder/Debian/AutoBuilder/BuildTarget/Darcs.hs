@@ -36,7 +36,7 @@ darcsRev tree m =
       cmd = "cd " ++ path ++ " && darcs changes --xml-output"
       path = topdir tree
 
-prepare :: MonadDeb e m => P.CacheRec -> P.Packages -> String -> m T.Download
+prepare :: MonadDeb m => P.CacheRec -> P.Packages -> String -> m T.Download
 prepare cache package theUri =
     do
       base <- sub "darcs"

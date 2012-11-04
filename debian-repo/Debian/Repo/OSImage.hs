@@ -128,12 +128,12 @@ localSources os =
 repoCD :: EnvPath -> LocalRepository -> LocalRepository
 repoCD path repo = repo { repoRoot = path }
 
-getSourcePackages :: MonadApt e m => OSImage -> m [SourcePackage]
+getSourcePackages :: MonadApt m => OSImage -> m [SourcePackage]
 getSourcePackages os =
     mapM (sourcePackagesOfIndex' os) indexes >>= return . concat
     where indexes = concat . map (sliceIndexes os) . slices . sourceSlices . aptSliceList $ os
 
-getBinaryPackages :: MonadApt e m => OSImage -> m [BinaryPackage]
+getBinaryPackages :: MonadApt m => OSImage -> m [BinaryPackage]
 getBinaryPackages os =
     mapM (binaryPackagesOfIndex' os) indexes >>= return . concat
     where indexes = concat . map (sliceIndexes os) . slices . binarySlices . aptSliceList $ os
@@ -147,7 +147,7 @@ instance Show UpdateError where
     show (Changed r p l1 l2) = intercalate " " ["Changed", show r, show p, show (pretty l1), show (pretty l2)]
 
 -- |Create or update an OS image in which packages can be built.
-prepareEnv :: (MonadApt e m, MonadTop m) =>
+prepareEnv :: (MonadApt m, MonadTop m) =>
               EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list
            -> Maybe LocalRepository	-- ^ The associated local repository, where newly
@@ -219,7 +219,7 @@ prepareDevs root = do
                        False -> readProcessChunks id (ShellCommand cmd) L.empty >>= return . oneResult
                        True -> return ExitSuccess
 
-pbuilderBuild :: MonadApt e m =>
+pbuilderBuild :: MonadApt m =>
             FilePath
          -> EnvRoot
          -> NamedSliceList
@@ -300,7 +300,7 @@ pbuilderBuild cacheDir root distro arch repo extraEssential omitEssential extra 
 
 -- Create a new clean build environment in root.clean
 -- FIXME: create an ".incomplete" flag and remove it when build-env succeeds
-buildEnv :: (MonadApt e m, MonadTop m) =>
+buildEnv :: (MonadApt m, MonadTop m) =>
             EnvRoot
          -> NamedSliceList
          -> Arch
@@ -364,7 +364,7 @@ buildEnv root distro arch repo include exclude components =
 
 -- |Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.
-updateEnv :: MonadApt e m => OSImage -> m (Either UpdateError OSImage)
+updateEnv :: MonadApt m => OSImage -> m (Either UpdateError OSImage)
 updateEnv os =
     do liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc") >> readFile "/etc/resolv.conf" >>= writeFile (rootPath root ++ "/etc/resolv.conf")
        verified <- verifySources os
@@ -379,7 +379,7 @@ updateEnv os =
                 binary <- getBinaryPackages os'
                 return . Right $ os' {osSourcePackages = source, osBinaryPackages = binary}
     where
-      verifySources :: MonadApt e m => OSImage -> m (Either UpdateError OSImage)
+      verifySources :: MonadApt m => OSImage -> m (Either UpdateError OSImage)
       verifySources os =
           do let computed = remoteOnly (aptSliceList os)
                  sourcesPath = rootPath root ++ "/etc/apt/sources.list"

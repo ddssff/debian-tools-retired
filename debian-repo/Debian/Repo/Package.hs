@@ -243,7 +243,7 @@ sourcePackagesOfIndex index =
       _ -> return (Right [])
 
 -- FIXME: assuming the index is part of the cache 
-sourcePackagesOfIndex' :: (AptCache a, MonadApt e m) => a -> PackageIndex -> m [SourcePackage]
+sourcePackagesOfIndex' :: (AptCache a, MonadApt m) => a -> PackageIndex -> m [SourcePackage]
 sourcePackagesOfIndex' cache index =
     do state <- getApt
        let cached = lookupSourcePackages path state
@@ -303,7 +303,7 @@ indexPrefix index =
       maybeOfString s = Just s
       escape s = intercalate "_" (wordsBy (== '/') s)
       wordsBy :: Eq a => (a -> Bool) -> [a] -> [[a]]
-      wordsBy p s = 
+      wordsBy p s =
           case (break p s) of
             (s, []) -> [s]
             (h, t) -> h : wordsBy p (drop 1 t)
@@ -317,7 +317,7 @@ indexPrefix index =
       _ -> a ++ "_" ++ b
 
 -- FIXME: assuming the index is part of the cache 
-binaryPackagesOfIndex' :: (MonadApt e m, AptCache a) => a -> PackageIndex -> m [BinaryPackage]
+binaryPackagesOfIndex' :: (MonadApt m, AptCache a) => a -> PackageIndex -> m [BinaryPackage]
 binaryPackagesOfIndex' cache index =
     do state <- getApt
        let cached = lookupBinaryPackages path state
@@ -325,7 +325,7 @@ binaryPackagesOfIndex' cache index =
        case cached of
          Just (status', packages) | status == status' -> return packages
          _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
-                 let packages = map (toBinaryPackage index) paragraphs 
+                 let packages = map (toBinaryPackage index) paragraphs
                  putApt (insertBinaryPackages path (status, packages) state)
                  return packages
     where

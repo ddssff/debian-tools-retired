@@ -20,7 +20,7 @@ documentation = [ "apt:<distribution>:<packagename> - a target of this form look
                 , "the sources.list named <distribution> and retrieves the package with"
                 , "the given name from that distribution." ]
 
-prepare :: MonadDeb e m => P.CacheRec -> P.Packages -> String -> SrcPkgName -> m Download
+prepare :: MonadDeb m => P.CacheRec -> P.Packages -> String -> SrcPkgName -> m Download
 prepare cache target dist package =
     do top <- askTop
        os <- prepareAptEnv top (P.ifSourcesChanged (P.params cache)) distro

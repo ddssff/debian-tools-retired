@@ -12,7 +12,7 @@ documentation = [ "cd:<relpath>:<target> - A target of this form modifies anothe
                 , "changing directories into a subdirectory before doing the build.  It is"
                 , "used for repositories where the debian directory is in a subdirectory."]
 
-prepare :: MonadApt e m => P.CacheRec -> P.Packages -> FilePath -> Download -> m Download
+prepare :: MonadApt m => P.CacheRec -> P.Packages -> FilePath -> Download -> m Download
 prepare _cache package subdir target =
     do
     return $ Download { package = package

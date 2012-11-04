@@ -160,7 +160,7 @@ main =
       isUse (Use _) = True
       isUse _ = False
 
-runFlags :: MonadApt e m => [Flag] -> m ()
+runFlags :: MonadApt m => [Flag] -> m ()
 runFlags flags =
     do createReleases flags
        repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
@@ -248,7 +248,7 @@ createReleases flags =
                   _ -> error "Internal error 1"
             _ ->
                 error $ "Invalid argument to --create-section: " ++ arg
-      createSection :: MonadApt e m => LocalRepository -> Release -> Section -> m Release
+      createSection :: MonadApt m => LocalRepository -> Release -> Section -> m Release
       createSection repo release section =
           case filter ((==) section) (releaseComponents release) of
             [] -> prepareRelease repo (releaseName release) (releaseInfoAliases . releaseInfo $ release) 
@@ -269,7 +269,7 @@ layout flags =
       Just x -> error ("Unknown layout: " ++ x ++ "(use 'pool' or 'flat')")
       Nothing -> Pool
 
-createRelease :: MonadApt e m => LocalRepository -> [Arch] -> ReleaseName -> m Release
+createRelease :: MonadApt m => LocalRepository -> [Arch] -> ReleaseName -> m Release
 createRelease repo archList name =
     do releases <- findReleases repo
        case filter (\release -> elem name (releaseName release : (releaseInfoAliases . releaseInfo) release)) releases of
@@ -277,7 +277,7 @@ createRelease repo archList name =
          [release] -> return release
          _ -> error "Internal error 2"
 
-createAlias :: MonadApt e m => LocalRepository -> String -> m Release
+createAlias :: MonadApt m => LocalRepository -> String -> m Release
 createAlias repo arg =
     case break (== '=') arg of
       (relName, ('=' : alias)) ->

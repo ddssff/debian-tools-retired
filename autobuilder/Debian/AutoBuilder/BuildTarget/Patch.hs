@@ -42,7 +42,7 @@ instance Show Patch where
 documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
-prepare :: MonadDeb e m => P.Packages -> OSImage -> String -> T.Download -> m T.Download
+prepare :: MonadDeb m => P.Packages -> OSImage -> String -> T.Download -> m T.Download
 prepare package _buildOS patch base =
     do copyDir <- sub ("quilt" </> show (md5 (B.pack (show (P.spec package)))))
        baseTree <- liftIO $ findSourceTree (T.getTop base)
@@ -95,7 +95,7 @@ instance BuildTarget Patch where
     buildWrapper _params buildOS _buildTree _status _target action = withProc buildOS action
     logText (Proc s) revision = logText s revision ++ " (with /proc mounted)"
 
-prepare :: MonadApt e m => P.CacheRec -> Tgt -> String -> m Patch
+prepare :: MonadApt m => P.CacheRec -> Tgt -> String -> m Patch
 prepare cache base patch = return $ Patch base patch
 
 -- |Scan the flag list for Patch flag, and apply the patches

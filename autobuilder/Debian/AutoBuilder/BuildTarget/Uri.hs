@@ -8,8 +8,9 @@ module Debian.AutoBuilder.BuildTarget.Uri
     , sourceDir
     ) where
 
+import Control.Exception (SomeException)
 import Control.Monad
-import Control.Monad.Error (catchError)
+import Control.Monad.CatchIO (catch)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B (empty, readFile)
 import Data.Digest.Pure.MD5 (md5)
@@ -23,6 +24,7 @@ import Debian.Repo.Monads.Deb (MonadDeb)
 import Debian.Repo.Monads.Top (sub)
 import Debian.URI
 import Magic
+import Prelude hiding (catch)
 import System.FilePath (splitFileName, (</>))
 import System.Directory
 import System.Process (CmdSpec(..))
@@ -37,7 +39,7 @@ documentation = [ "uri:<string>:<md5sum> - A target of this form retrieves the f
 -- | A URI that returns a tarball, with an optional md5sum which must
 -- match if given.  The purpose of the md5sum is to be able to block
 -- changes to the tarball on the remote host.
-prepare :: R.MonadDeb e m => P.CacheRec -> P.Packages -> String -> String -> m T.Download
+prepare :: R.MonadDeb m => P.CacheRec -> P.Packages -> String -> String -> m T.Download
 prepare c package u s =
     do (uri, sum, tree) <- checkTarget >>= downloadTarget >> validateTarget >>= unpackTarget
        tar <- tarball (uriToString' uri) sum
@@ -49,7 +51,7 @@ prepare c package u s =
                            , T.cleanTarget = \ _ -> return ([], 0)
                            , T.buildWrapper = id }
     where
-      checkTarget :: MonadDeb e m => m Bool
+      checkTarget :: MonadDeb m => m Bool
       checkTarget =
           do tar <- tarball u s
              exists <- liftIO (doesFileExist tar)
@@ -57,12 +59,12 @@ prepare c package u s =
                True ->
                    (liftIO (B.readFile tar >>= return . show . md5) >>= \ realSum ->
                     if realSum == s then return True else error "checksum mismatch")
-                     `catchError` (\ _ -> liftIO (removeRecursiveSafely tar) >> return False)
+                     `catch` (\ (_ :: SomeException) -> liftIO (removeRecursiveSafely tar) >> return False)
                False -> return False
 
       -- See if the file is already available in the checksum directory
       -- Download the target into the tmp directory, compute its checksum, and see if it matches.
-      downloadTarget :: MonadDeb e m => Bool -> m ()
+      downloadTarget :: MonadDeb m => Bool -> m ()
       downloadTarget True = return ()
       downloadTarget False =
           do sum <- sumDir s
@@ -77,20 +79,20 @@ prepare c package u s =
              -- We should do something with the output
              return ()
       -- Make sure what we just downloaded has the correct checksum
-      validateTarget :: MonadDeb e m => m String
+      validateTarget :: MonadDeb m => m String
       validateTarget =
           (tarball u s) >>= \ tar ->
           (liftIO (B.readFile tar >>= return . show . md5) >>= \ realSum ->
            if realSum == s then return realSum else error ("Checksum mismatch for " ++ tar ++ ": expected " ++ s ++ ", saw " ++ realSum ++ "."))
-            `catchError` (\ e -> error ("Checksum failure for " ++ tar ++ ": " ++ show e))
-      unpackTarget :: MonadDeb e m => String -> m (URI, FilePath, R.SourceTree)
+            `catch` (\ (e :: SomeException) -> error ("Checksum failure for " ++ tar ++ ": " ++ show e))
+      unpackTarget :: MonadDeb m => String -> m (URI, FilePath, R.SourceTree)
       unpackTarget realSum =
           rmdir >> mkdir >> untar >>= read >>= search >>= verify
           where
-            rmdir = sourceDir s >>= \ src -> (liftIO (removeDirectoryRecursive src) `catchError` (\ _ -> return ()))
+            rmdir = sourceDir s >>= \ src -> (liftIO (removeDirectoryRecursive src) `catch` (\ (_ :: SomeException) -> return ()))
             -- Create the unpack directory
             mkdir = sourceDir s >>= \ src ->
-                    (liftIO (createDirectoryIfMissing True src) `catchError` (\ e -> error ("Could not create " ++ src ++ ": " ++ show e)))
+                    (liftIO (createDirectoryIfMissing True src) `catch` (\ (e :: SomeException) -> error ("Could not create " ++ src ++ ": " ++ show e)))
             untar =
                 do magic <- liftIO $ magicOpen []
                    liftIO $ magicLoadDefault magic
@@ -109,11 +111,11 @@ prepare c package u s =
             read (_output, _elapsed) = sourceDir s >>= \ src -> liftIO (getDir src)
             getDir dir = getDirectoryContents dir >>= return . filter (not . flip elem [".", ".."])
             search files = checkContents (filter (not . flip elem [".", ".."]) files)
-            checkContents :: MonadDeb e m => [FilePath] -> m R.SourceTree
+            checkContents :: MonadDeb m => [FilePath] -> m R.SourceTree
             checkContents [] = error ("Empty tarball? " ++ show (mustParseURI u))
             checkContents [subdir] =
                 sourceDir s >>= \ src ->
-                (liftIO (R.findSourceTree (src </> subdir))) `catchError` (\ _ -> liftIO (R.findSourceTree src))
+                (liftIO (R.findSourceTree (src </> subdir))) `catch` (\ (_ :: SomeException) -> liftIO (R.findSourceTree src))
             checkContents _ = sourceDir s >>= \ src -> liftIO (R.findSourceTree src)
             verify tree = return (mustParseURI u, realSum, tree)
 

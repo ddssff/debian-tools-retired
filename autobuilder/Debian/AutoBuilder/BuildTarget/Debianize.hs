@@ -25,7 +25,7 @@ import System.Exit
 import System.FilePath ((</>), takeFileName)
 import System.IO (hPutStrLn, stderr)
 import System.Process (CreateProcess(cwd), showCommandForUser)
-import System.Unix.Directory (removeRecursiveSafely)
+--import System.Unix.Directory (removeRecursiveSafely)
 import System.Process (CmdSpec(RawCommand))
 import System.Process.Read (readModifiedProcessWithExitCode)
 import System.Process.Progress (qPutStrLn, runProcessVF)
@@ -36,7 +36,7 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: MonadDeb e m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
+prepare :: MonadDeb m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
 prepare cache package' cabal =
     do dir <- sub ("debianize" </> takeFileName (T.getTop cabal))
        liftIO $ createDirectoryIfMissing True dir

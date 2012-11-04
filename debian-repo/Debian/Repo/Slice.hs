@@ -54,7 +54,7 @@ appendSliceLists lists =
 -- set of sources that includes all of its releases.  This is used to
 -- ensure that a package we want to upload doesn't already exist in
 -- the repository.
-repoSources :: MonadApt e m => Maybe EnvRoot -> URI -> m SliceList
+repoSources :: MonadApt m => Maybe EnvRoot -> URI -> m SliceList
 repoSources chroot uri =
     do dirs <- liftIO (uriSubdirs chroot (uri {uriPath = uriPath uri ++ "/dists/"}))
        releaseFiles <- mapM (liftIO . readRelease uri) dirs >>= return . catMaybes
@@ -93,7 +93,7 @@ readRelease uri name =
     where
       uri' = uri {uriPath = uriPath uri ++ "/dists/" ++ name ++ "/Release"}
 
-parseNamedSliceList :: MonadApt e m => (String, String) -> m (Maybe NamedSliceList)
+parseNamedSliceList :: MonadApt m => (String, String) -> m (Maybe NamedSliceList)
 parseNamedSliceList (name, text) =
     (verifySourcesList Nothing . parseSourcesList) text >>=
     \ sources -> return . Just $ NamedSliceList { sliceListName = SliceName name, sliceList = sources }
@@ -101,20 +101,20 @@ parseNamedSliceList (name, text) =
 -- |Create ReleaseCache info from an entry in the config file, which
 -- includes a dist name and the lines of the sources.list file.
 -- This also creates the basic 
-parseNamedSliceList' :: MonadApt e m => (String, String) -> m NamedSliceList
+parseNamedSliceList' :: MonadApt m => (String, String) -> m NamedSliceList
 parseNamedSliceList' (name, text) =
     do sources <- (verifySourcesList Nothing . parseSourcesList) text
        return $ NamedSliceList { sliceListName = SliceName name, sliceList = sources }
 
-verifySourcesList :: MonadApt e m => Maybe EnvRoot -> [DebSource] -> m SliceList
+verifySourcesList :: MonadApt m => Maybe EnvRoot -> [DebSource] -> m SliceList
 verifySourcesList chroot list =
     mapM (verifyDebSource chroot) list >>=
     (\ list -> return $ SliceList { slices = list })
 
-verifySourceLine :: MonadApt e m => Maybe EnvRoot -> String -> m Slice
+verifySourceLine :: MonadApt m => Maybe EnvRoot -> String -> m Slice
 verifySourceLine chroot str = verifyDebSource chroot (parseSourceLine str)
 
-verifyDebSource :: MonadApt e m => Maybe EnvRoot -> DebSource -> m Slice
+verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m Slice
 verifyDebSource chroot line =
     do repo <- case uriScheme uri of
                  "file:" -> 

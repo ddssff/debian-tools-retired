@@ -10,7 +10,7 @@ documentation = [ "twice:<target> - A target of this form modifies another targe
                 , "the first time.  For some reason, certain packages are designed"
                 , "to fail the first time to prevent fully automated builds."]
 
-prepare :: MonadApt e m => P.Packages -> T.Download -> m T.Download
+prepare :: MonadApt m => P.Packages -> T.Download -> m T.Download
 prepare package base =
     do return $ T.Download {
                     T.package = package

@@ -51,7 +51,7 @@ instance Ord AptImage where
 instance Eq AptImage where
     a == b = compare a b == EQ
 
-prepareAptEnv :: MonadApt e m =>
+prepareAptEnv :: MonadApt m =>
                  FilePath		-- Put environment in a subdirectory of this
               -> SourcesChangedAction	-- What to do if environment already exists and sources.list is different
               -> NamedSliceList		-- The sources.list
@@ -63,7 +63,7 @@ prepareAptEnv cacheDir sourcesChangedAction sources =
 
 -- |Create a skeletal enviroment sufficient to run apt-get.
 {-# NOINLINE prepareAptEnv' #-}
-prepareAptEnv' :: MonadApt e m => FilePath -> SourcesChangedAction -> NamedSliceList -> m AptImage
+prepareAptEnv' :: MonadApt m => FilePath -> SourcesChangedAction -> NamedSliceList -> m AptImage
 prepareAptEnv' cacheDir sourcesChangedAction sources =
     do let root = rootPath (cacheRootDir cacheDir (ReleaseName (sliceName (sliceListName sources))))
        --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
@@ -95,7 +95,7 @@ prepareAptEnv' cacheDir sourcesChangedAction sources =
 -- by the sources.list.  The source packages are sorted so that
 -- packages with the same name are together with the newest first.
 {-# NOINLINE updateAptEnv #-}
-updateAptEnv :: MonadApt e m => AptImage -> m AptImage
+updateAptEnv :: MonadApt m => AptImage -> m AptImage
 updateAptEnv os =
     liftIO (runProcessF id (ShellCommand cmd) L.empty) >>
     getSourcePackages os >>= return . sortBy cmp >>= \ sourcePackages ->
@@ -119,13 +119,13 @@ updateAptEnv os =
       ExitFailure n -> error $ cmd ++ " -> ExitFailure " ++ show n
 -}
 
-getSourcePackages :: MonadApt e m => AptImage -> m [SourcePackage]
+getSourcePackages :: MonadApt m => AptImage -> m [SourcePackage]
 getSourcePackages os =
     mapM (sourcePackagesOfIndex' os) indexes >>= return . concat
     where
       indexes = concat . map (sliceIndexes os) . slices . sourceSlices . aptImageSliceList $ os
 
-getBinaryPackages :: MonadApt e m => AptImage -> m [BinaryPackage]
+getBinaryPackages :: MonadApt m => AptImage -> m [BinaryPackage]
 getBinaryPackages os =
     mapM (binaryPackagesOfIndex' os) indexes >>= return . concat
     where

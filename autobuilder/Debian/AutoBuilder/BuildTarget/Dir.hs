@@ -11,7 +11,7 @@ import Debian.Repo
 -- for testing, and is also returned by the clean method when the
 -- source control information has been stripped out of some other type
 -- of BuildTarget.
-prepare :: MonadApt e m => P.CacheRec -> P.Packages -> FilePath -> m T.Download
+prepare :: MonadApt m => P.CacheRec -> P.Packages -> FilePath -> m T.Download
 prepare _cache package path =
     do tree <- liftIO (findSourceTree path)
        return $ T.Download { T.package = package

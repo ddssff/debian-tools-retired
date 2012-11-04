@@ -40,7 +40,7 @@ password userInfo =
     then []
     else ["--password",unEscapeString pw]
 
-prepare :: MonadDeb e m => P.CacheRec -> P.Packages -> String -> m T.Download
+prepare :: MonadDeb m => P.CacheRec -> P.Packages -> String -> m T.Download
 prepare cache package uri =
     do dir <- sub ("svn" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri') ++ (uriPath uri')))))
        when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))

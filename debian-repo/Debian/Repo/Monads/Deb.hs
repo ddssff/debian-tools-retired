@@ -11,13 +11,9 @@ import Control.Monad.Trans (MonadIO)
 import Debian.Repo.Monads.Apt (AptState, MonadApt, initState)
 import Debian.Repo.Monads.Top (MonadTop)
 
-class (MonadIO m, Functor m, MonadApt e m, MonadTop m) => MonadDeb e m where
+class (MonadIO m, Functor m, MonadApt m, MonadTop m) => MonadDeb m where
 
--- instance (Exception e, MonadError e m, MonadIO m, Functor m, MonadApt m, MonadTop m) => MonadDeb e m
-
--- instance (Exception e, MonadError e IO) => MonadDeb e (ReaderT FilePath (StateT AptState IO))
-
-instance MonadApt e m => MonadDeb e (ReaderT FilePath m)
+instance MonadApt m => MonadDeb (ReaderT FilePath m)
 
 -- | Run a known instance of MonadDeb.
 runDebT :: Monad m => FilePath -> ReaderT FilePath (StateT AptState m) a -> m a
