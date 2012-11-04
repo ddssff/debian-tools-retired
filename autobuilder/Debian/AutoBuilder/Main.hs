@@ -35,7 +35,8 @@ import Debian.Repo.AptImage(prepareAptEnv)
 import Debian.Repo.Cache(updateCacheSources)
 import Debian.Repo.Insert(deleteGarbage)
 import Debian.Repo.Monads.Apt (MonadApt(getApt), runAptT, getRepoMap)
-import Debian.Repo.Monads.Top (MonadTop, runTopT)
+import Debian.Repo.Monads.Deb (MonadDeb)
+import Debian.Repo.Monads.Top (MonadTop(askTop), sub, runTopT)
 import Debian.Repo.LocalRepository(prepareLocalRepository, flushLocalRepository)
 import Debian.Repo.OSImage(OSImage, buildEssential, prepareEnv, chrootEnv)
 import Debian.Repo.Release(prepareRelease)
@@ -97,25 +98,27 @@ doParameterSet results (params, packages) =
         quieter (- (P.verbosity params))
           (do top <- liftIO $ P.computeTopDir params
               withLock (top ++ "/lockfile")
-                (runTopT top (quieter 2 (P.buildCache params top packages) >>= runParameterSet)))
+                (runTopT top (quieter 2 (P.buildCache params packages) >>= runParameterSet)))
           `catchError` (\ e -> return (Failure [show e])) >>=
         (\ result -> return (result : results))
     where
       isFailure (Failure _) = True
       isFailure _ = False
 
-runParameterSet :: (MonadApt e m, MonadTop m) => C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
+runParameterSet :: MonadDeb e m => C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet cache =
     do
+      top <- askTop
       liftIO doRequiredVersion
       when (P.showParams params) (withModifiedVerbosity (const 1) (liftIO doShowParams))
       when (P.showSources params) (withModifiedVerbosity (const 1) (liftIO doShowSources))
-      when (P.flushAll params) (liftIO doFlush)
+      when (P.flushAll params) (liftIO $ doFlush top)
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       localRepo <- prepareLocalRepo			-- Prepare the local repository for initial uploads
+      root <- P.cleanRoot cache
       cleanOS <-
-              prepareEnv (P.cleanRoot cache)
+              prepareEnv root
                          buildRelease
                          (Just localRepo)
                          (P.flushRoot params)
@@ -140,7 +143,7 @@ runParameterSet cache =
       let poolSources = NamedSliceList { sliceListName = SliceName (sliceName (sliceListName buildRelease) ++ "-all")
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
       -- Build an apt-get environment which we can use to retrieve all the package lists
-      poolOS <-prepareAptEnv (C.topDir cache) (P.ifSourcesChanged params) poolSources
+      poolOS <-prepareAptEnv top (P.ifSourcesChanged params) poolSources
       (failures, targets) <- retrieveTargetList cleanOS >>= mapM (either (return . Left) (liftIO . try . asBuildable)) >>= return . partitionEithers
       when (not $ null $ failures) (error $ intercalate "\n " $ "Some targets could not be retrieved:" : map show failures)
       buildResult <- buildTargets cache cleanOS globalBuildDeps localRepo poolOS targets
@@ -177,18 +180,20 @@ runParameterSet cache =
                 do qPutStrLn $ (sliceName . sliceListName $ sources) ++ ":"
                    qPutStrLn . show . pretty . sliceList $ sources
                    exitWith ExitSuccess
-      doFlush =
+      doFlush top =
           do qPutStrLn "Flushing cache"
-             removeRecursiveSafely (C.topDir cache)
-             createDirectoryIfMissing True (C.topDir cache)
+             removeRecursiveSafely top
+             createDirectoryIfMissing True top
       checkPermissions =
           do isRoot <- liftIO $ checkSuperUser
              case isRoot of
                True -> return ()
                False -> do qPutStr "You must be superuser to run the autobuilder (to use chroot environments.)"
                            liftIO $ exitWith (ExitFailure 1)
-      prepareLocalRepo = (\ x -> qPutStrLn ("Preparing local repository " ++ P.localPoolDir cache) >> quieter 1 x) $
-          do let path = EnvPath (EnvRoot "") (P.localPoolDir cache)
+      prepareLocalRepo =
+          P.localPoolDir cache >>= \ dir ->
+          (\ x -> qPutStrLn ("Preparing local repository " ++ dir) >> quieter 1 x) $
+          do let path = EnvPath (EnvRoot "") dir
              repo <- prepareLocalRepository path (Just Flat) >>=
                      (if P.flushPool params then flushLocalRepository else return)
              qPutStrLn $ "Preparing release main in local repository at " ++ outsidePath path
@@ -199,9 +204,10 @@ runParameterSet cache =
                      True -> deleteGarbage repo'
                      False -> return repo'
                _ -> error "Expected local repo"
-      retrieveTargetList :: MonadApt e m => OSImage -> m [Either e Download]
+      retrieveTargetList :: MonadDeb e m => OSImage -> m [Either e Download]
       retrieveTargetList cleanOS =
           do qPutStr ("\n" ++ showTargets allTargets ++ "\n")
+             buildOS <- chrootEnv cleanOS <$> P.dirtyRoot cache
              when (P.report params) (ePutStrLn . doReport $ allTargets)
              qPutStrLn "Retrieving all source code:\n"
              countTasks' (map (\ (target :: P.Packages) ->
@@ -214,7 +220,6 @@ runParameterSet cache =
 
                               (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
           where
-            buildOS = chrootEnv cleanOS (P.dirtyRoot cache)
             allTargets = C.packages cache
       upload :: MonadApt e m => (LocalRepository, [Target]) -> m [Failing ([Output L.ByteString], NominalDiffTime)]
       upload (repo, [])
@@ -248,9 +253,9 @@ runParameterSet cache =
                              try (timeTask (runProcessF id (ShellCommand cmd) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                 _ -> error "Missing Upload-URI parameter"
           | True = return (Success ([], (fromInteger 0)))
-      updateRepoCache :: MonadApt e m => m ()
+      updateRepoCache :: MonadDeb e m => m ()
       updateRepoCache =
-          do let path = C.topDir cache  ++ "/repoCache"
+          do path <- sub "repoCache"
              live <- getApt >>= return . getRepoMap
              repoCache <- liftIO $ loadCache path
              let merged = show . map (\ (uri, x) -> (show uri, x)) . Map.toList $ Map.union live repoCache

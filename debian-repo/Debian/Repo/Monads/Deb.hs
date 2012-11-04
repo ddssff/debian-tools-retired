@@ -5,8 +5,6 @@ module Debian.Repo.Monads.Deb
     , runDebT
     ) where
 
-import Control.Exception (Exception)
-import Control.Monad.Error (MonadError)
 import Control.Monad.Reader (ReaderT, runReaderT)
 import Control.Monad.State (StateT(runStateT))
 import Control.Monad.Trans (MonadIO)
@@ -17,7 +15,9 @@ class (MonadIO m, Functor m, MonadApt e m, MonadTop m) => MonadDeb e m where
 
 -- instance (Exception e, MonadError e m, MonadIO m, Functor m, MonadApt m, MonadTop m) => MonadDeb e m
 
-instance (Exception e, MonadError e IO) => MonadDeb e (ReaderT FilePath (StateT AptState IO))
+-- instance (Exception e, MonadError e IO) => MonadDeb e (ReaderT FilePath (StateT AptState IO))
+
+instance MonadApt e m => MonadDeb e (ReaderT FilePath m)
 
 -- | Run a known instance of MonadDeb.
 runDebT :: Monad m => FilePath -> ReaderT FilePath (StateT AptState m) a -> m a

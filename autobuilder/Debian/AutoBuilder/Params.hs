@@ -24,6 +24,7 @@ import Debian.Release ( ReleaseName(relName), releaseName' )
 import Debian.Sources ( SliceName(..) )
 import Debian.Repo ( EnvRoot(EnvRoot), NamedSliceList(..), parseSourcesList, verifySourcesList, repoSources )
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), setRepoMap)
+import Debian.Repo.Monads.Top (MonadTop(askTop), sub)
 import Debian.Repo.Types ( SliceList(..) )
 import Debian.URI ( parseURI )
 import System.Directory ( createDirectoryIfMissing, getPermissions, writable )
@@ -31,16 +32,17 @@ import System.Environment ( getEnv )
 import System.Process.Progress (qPutStrLn)
 
 -- |Create a Cache object from a parameter set.
-buildCache :: MonadApt e m => ParamRec -> FilePath -> Packages -> m CacheRec
-buildCache params top packages =
-    do qPutStrLn ("Preparing autobuilder cache in " ++ top ++ "...")
-       liftIO $ mapM_ (createDirectoryIfMissing True . ((top ++ "/") ++))
+buildCache :: (MonadApt e m, MonadTop m) => ParamRec -> Packages -> m CacheRec
+buildCache params packages =
+    do top <- askTop
+       qPutStrLn ("Preparing autobuilder cache in " ++ top ++ "...")
+       mapM_ (\ name -> sub name >>= \ path -> liftIO (createDirectoryIfMissing True path))
                   [".", "darcs", "deb-dir", "dists", "hackage", "localpools", "quilt", "tmp"]
-       loadRepoCache top
+       loadRepoCache
        all <- mapM parseNamedSliceList (sources params)
        let uri = maybe (uploadURI params) Just (buildURI params)
        build <- maybe (return $ SliceList { slices = [] }) (repoSources Nothing) uri
-       return $ CacheRec {params = params, topDir = top, allSources = all, buildRepoSources = build, packages = packages}
+       return $ CacheRec {params = params, allSources = all, buildRepoSources = build, packages = packages}
     where
       parseNamedSliceList (name, text) = 
           do sources <- (verifySourcesList Nothing . parseSourcesList) text
@@ -54,11 +56,12 @@ buildCache params top packages =
 -- CacheClass, and RunClass.
 -- instance (ParamClass p) => RunClass (p, Cache)
 
-loadRepoCache :: MonadApt e m => FilePath -> m ()
-loadRepoCache top =
-    do qPutStrLn "Loading repo cache..."
+loadRepoCache :: (MonadApt e m, MonadTop m) => m ()
+loadRepoCache =
+    do repoCache <- sub "repoCache"
+       qPutStrLn "Loading repo cache..."
        state <- getApt
-       uris <- liftIO $ try (readFile (top ++ "/repoCache")) >>=
+       uris <- liftIO $ try (readFile repoCache) >>=
                try . evaluate . either (\ (_ :: SomeException) -> []) read >>=
                return . either (\ (_ :: SomeException) -> []) id
        putApt (setRepoMap (fromList (map fixURI uris)) state)
@@ -85,24 +88,26 @@ findSlice cache dist =
       [] -> Left ("No sources.list found for " ++ sliceName dist)
       xs -> Left ("Multiple sources.lists found for " ++ sliceName dist ++ "\n" ++ show (map (sliceName . sliceListName) xs))
 
-dirtyRootOfRelease :: CacheRec -> ReleaseName -> EnvRoot
+dirtyRootOfRelease :: MonadTop m => CacheRec -> ReleaseName -> m EnvRoot
 dirtyRootOfRelease cache distro =
-    EnvRoot $ topDir cache ++ "/dists/" ++ releaseName' distro ++ "/build-" ++ (show (strictness (params cache)))
+    askTop >>= \ top ->
+    return $ EnvRoot $ top ++ "/dists/" ++ releaseName' distro ++ "/build-" ++ (show (strictness (params cache)))
     --ReleaseCache.dirtyRoot distro (show (strictness params))
 
-cleanRootOfRelease :: CacheRec -> ReleaseName -> EnvRoot
+cleanRootOfRelease :: MonadTop m => CacheRec -> ReleaseName -> m EnvRoot
 cleanRootOfRelease cache distro =
-    EnvRoot $ topDir cache ++ "/dists/" ++ releaseName' distro ++ "/clean-" ++ (show (strictness (params cache)))
+    askTop >>= \ top ->
+    return $ EnvRoot $ top ++ "/dists/" ++ releaseName' distro ++ "/clean-" ++ (show (strictness (params cache)))
 
-dirtyRoot :: CacheRec -> EnvRoot
+dirtyRoot :: MonadTop m => CacheRec -> m EnvRoot
 dirtyRoot cache = dirtyRootOfRelease cache (buildRelease (params cache))
 
-cleanRoot :: CacheRec -> EnvRoot
+cleanRoot :: MonadTop m => CacheRec -> m EnvRoot
 cleanRoot cache = cleanRootOfRelease cache (buildRelease (params cache))
 
 -- |Location of the local repository for uploaded packages.
-localPoolDir :: CacheRec -> FilePath
-localPoolDir cache = topDir cache ++ "/localpools/" ++ releaseName' (buildRelease (params cache))
+localPoolDir :: MonadTop m => CacheRec -> m FilePath
+localPoolDir cache = askTop >>= \ top -> return $ top ++ "/localpools/" ++ releaseName' (buildRelease (params cache))
 
 -- | Packages uploaded to the build release will be compatible
 -- with packages in this release.

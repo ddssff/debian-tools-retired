@@ -8,7 +8,6 @@ import Control.Monad.Trans (liftIO)
 import Data.ByteString.Lazy.Char8 (empty, pack)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Version (showVersion)
-import qualified Debian.AutoBuilder.Types.CacheRec as P
 import Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)
@@ -16,6 +15,7 @@ import Debian.Version (version)
 import Prelude hiding (catch)
 import Debian.Repo
 import System.Directory
+import System.FilePath ((</>))
 import System.Process (CmdSpec(..))
 import System.Process.Progress (runProcessF)
 
@@ -23,12 +23,14 @@ documentation = [ "deb-dir:(<target>):(<target>) - A target of this form combine
                 , "where one points to an un-debianized source tree and the other contains"
                 , "a debian subdirectory." ]
 
-prepare :: MonadApt e m => P.CacheRec -> P.Packages -> T.Download -> T.Download -> m T.Download
-prepare cache package upstream debian = liftIO $
-    createDirectoryIfMissing True (P.topDir cache ++ "/deb-dir") >>
-    copyUpstream >>
-    copyDebian >>
-    findDebianSourceTree dest >>= \ tree ->
+prepare :: MonadDeb e m => P.Packages -> T.Download -> T.Download -> m T.Download
+prepare package upstream debian =
+    sub "deb-dir" >>= \ dir ->
+    sub ("deb-dir" </> show (md5 (pack (show (P.spec package))))) >>= \ dest ->
+    liftIO (createDirectoryIfMissing True dir) >>
+    copyUpstream dest >>
+    copyDebian dest >>
+    liftIO (findDebianSourceTree dest) >>= \ tree ->
     let tgt = T.Download {
                 T.package = package
               , T.getTop = topdir tree
@@ -49,10 +51,9 @@ prepare cache package upstream debian = liftIO $
             LT -> error $ show (P.spec package) ++ ": version in Debian changelog (" ++ version debianV ++ ") is too old for the upstream (" ++ showVersion upstreamV ++ ")"
             _ -> return tgt
     where
-      copyUpstream = runProcessF id (ShellCommand cmd1) empty
-      copyDebian = runProcessF id (ShellCommand cmd2) empty
+      copyUpstream dest = runProcessF id (ShellCommand (cmd1 dest)) empty
+      copyDebian dest = runProcessF id (ShellCommand (cmd2 dest)) empty
       upstreamDir = T.getTop upstream
       debianDir = T.getTop debian
-      dest = P.topDir cache ++ "/deb-dir/" ++ show (md5 (pack (show (P.spec package))))
-      cmd1 = ("set -x && rsync -aHxSpDt --delete '" ++ upstreamDir ++ "/' '" ++ dest ++ "'")
-      cmd2 = ("set -x && rsync -aHxSpDt --delete '" ++ debianDir ++ "/debian' '" ++ dest ++ "/'")
+      cmd1 dest = ("set -x && rsync -aHxSpDt --delete '" ++ upstreamDir ++ "/' '" ++ dest ++ "'")
+      cmd2 dest = ("set -x && rsync -aHxSpDt --delete '" ++ debianDir ++ "/debian' '" ++ dest ++ "/'")

@@ -12,7 +12,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo (OSImage, findSourceTree, copySourceTree, SourceTree(dir'),
-                    findDebianSourceTrees, MonadApt)
+                    findDebianSourceTrees, MonadDeb, sub)
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
@@ -42,13 +42,14 @@ instance Show Patch where
 documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
-prepare :: MonadApt e m => P.CacheRec -> P.Packages -> OSImage -> String -> T.Download -> m T.Download
-prepare cache package _buildOS patch base = liftIO $
-    do baseTree <- findSourceTree (T.getTop base)
-       createDirectoryIfMissing True copyDir
-       tree <- copySourceTree baseTree copyDir
-       subDir <- findSource (P.spec package) copyDir
-       (res, out, err) <- readModifiedProcessWithExitCode (\ p -> p {cwd = Just subDir}) (RawCommand cmd args) (B.pack patch)
+prepare :: MonadDeb e m => P.Packages -> OSImage -> String -> T.Download -> m T.Download
+prepare package _buildOS patch base =
+    do copyDir <- sub ("quilt" </> show (md5 (B.pack (show (P.spec package)))))
+       baseTree <- liftIO $ findSourceTree (T.getTop base)
+       liftIO $ createDirectoryIfMissing True copyDir
+       tree <- liftIO $ copySourceTree baseTree copyDir
+       subDir <- liftIO $ findSource (P.spec package) copyDir
+       (res, out, err) <- liftIO $ readModifiedProcessWithExitCode (\ p -> p {cwd = Just subDir}) (RawCommand cmd args) (B.pack patch)
        case res of
          ExitFailure _ -> error (showCommandForUser cmd args ++ " -> " ++ show res ++
                                  "\ncwd:" ++ subDir ++
@@ -68,7 +69,6 @@ prepare cache package _buildOS patch base = liftIO $
     where
       cmd = "/usr/bin/patch"
       args = ["-p1"]
-      copyDir = P.topDir cache ++ "/quilt/" ++ show (md5 (B.pack (show (P.spec package))))
 
 indent :: String -> String
 indent = unlines . map (" > " ++) . lines

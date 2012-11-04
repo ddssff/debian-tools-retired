@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, TypeFamilies #-}
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-type-defaults -fno-warn-missing-signatures -Werror #-}
 module Debian.AutoBuilder.BuildTarget.Hackage
     ( prepare
@@ -7,8 +7,9 @@ module Debian.AutoBuilder.BuildTarget.Hackage
 
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Compression.GZip as Z
-import Control.Exception (SomeException, try, throw)
+import Control.Exception (throw)
 import Control.Monad (when)
+import Control.Monad.Error (catchError)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.List (isPrefixOf, isSuffixOf, intercalate, nub, sort)
@@ -38,17 +39,19 @@ documentation = [ "debianize:<name> or debianize:<name>=<version> - a target of 
                 , "(currently) retrieves source code from http://hackage.haskell.org and runs"
                 , "cabal-debian to create the debianization." ]
 
-prepare :: MonadApt e m => P.CacheRec -> P.Packages -> String -> m T.Download
-prepare cache package name = liftIO $
-    do (version' :: Version) <- maybe (getVersion (P.hackageServer (P.params cache)) name) (return . readVersion) versionString
-       when (P.flushSource (P.params cache)) (removeRecursiveSafely (tarball cache name version'))
+prepare :: (MonadDeb e m) => P.CacheRec -> P.Packages -> String -> m T.Download
+prepare cache package name =
+    do (version' :: Version) <- liftIO $ maybe (getVersion (P.hackageServer (P.params cache)) name) (return . readVersion) versionString
+       tar <- tarball name version'
+       unp <- unpacked name version'
+       liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely tar)
        download cache name version'
-       tree <- findSourceTree (unpacked cache name version')
+       tree <- liftIO $ findSourceTree unp
        return $ T.Download { T.package = package
                            , T.getTop = topdir tree
                            , T.logText =  "Built from hackage, revision: " ++ show (P.spec package)
                            , T.mVersion = Just version'
-                           , T.origTarball = Just (tarball cache name version')
+                           , T.origTarball = Just tar
                            , T.cleanTarget = \ _ -> return ([], 0)
                            , T.buildWrapper = id }
     where
@@ -63,11 +66,12 @@ prepare cache package name = liftIO $
 -- hackage temporary directory:
 -- > download \"/home/dsf/.autobuilder/hackage\" -> \"/home/dsf/.autobuilder/hackage/happstack-server-6.1.4.tar.gz\"
 -- After the download it tries to untar the file, and then it saves the compressed tarball.
-download :: P.CacheRec -> String -> Version -> IO ()
+download :: (MonadDeb e m) => P.CacheRec -> String -> Version -> m ()
 download cache name version =
-    removeRecursiveSafely (unpacked cache name version) >>
-    downloadCached (P.hackageServer (P.params cache)) cache name version >>=
-    unpack cache
+    (unpacked name version) >>=
+    liftIO . removeRecursiveSafely >>
+    downloadCached (P.hackageServer (P.params cache)) name version >>=
+    unpack
 
 {-
 -- |Download and unpack the given package version to the autobuilder's
@@ -106,22 +110,21 @@ readVersion s =
 -- |Download and unpack the given package version to the autobuilder's
 -- hackage temporary directory.  After the download it validates the
 -- tarball text and saves the compressed tarball.
-downloadCached :: String -> P.CacheRec -> String -> Version -> IO B.ByteString
-downloadCached server cache name version =
-    do exists <- doesFileExist (tarball cache name version)
+downloadCached :: MonadDeb e m => String -> String -> Version -> m B.ByteString
+downloadCached server name version =
+    do path <- tarball name version
+       exists <- liftIO $ doesFileExist path
        case exists of
-         True -> let path = tarball cache name version in
-                 try (B.readFile path >>=
-                      return . validate >>=
-                      maybe (download' server cache name version) return) >>=
-                 either (\ (e :: SomeException) ->
-                             let msg = "Failure reading " ++ path ++ ": " ++ show e in
-                             hPutStrLn stderr msg >>
-                             hPutStrLn stderr ("Removing " ++ path) >>
-                             removeFile path >>
-                             download' server cache name version)
-                        return
-         False -> download' server cache name version
+         True -> (liftIO (B.readFile path) >>=
+                  return . validate >>=
+                  maybe (download' server name version) return)
+                   `catchError` (\ e ->
+                                     let msg = "Failure reading " ++ path ++ ": " ++ show e in
+                                     liftIO (hPutStrLn stderr msg >>
+                                             hPutStrLn stderr ("Removing " ++ path) >>
+                                             removeFile path) >>
+                                     download' server name version)
+         False -> download' server name version
 
 -- |Given a package name, get the newest version in hackage of the hackage package with that name:
 -- > getVersion \"binary\" -> \"0.5.0.2\"
@@ -137,8 +140,8 @@ getVersion server name =
       url = packageURL server name
 
 -- |Unpack and save the files of a tarball.
-unpack :: P.CacheRec -> B.ByteString -> IO ()
-unpack cache text = Tar.unpack (tmpDir cache) (Tar.read (Z.decompress text))
+unpack :: MonadDeb e m => B.ByteString -> m ()
+unpack text = tmpDir >>= \ tmp -> liftIO $ Tar.unpack tmp (Tar.read (Z.decompress text))
 
 -- |Validate the text of a tarball file.
 validate :: B.ByteString -> Maybe B.ByteString
@@ -171,18 +174,20 @@ findVersion package (Document _ _ (Elem _name _attrs content) _) =
           else error $ "findVersion - not a tarball: " ++ show s
 
 -- |Download and save the tarball, return its contents.
-download' :: String -> P.CacheRec -> String -> Version -> IO B.ByteString
-download' server cache name version =
-    do (res, out, err, _) <- runProcess id (ShellCommand (downloadCommand server name version)) B.empty >>= return . collectOutputs
+download' :: MonadDeb e m => String -> String -> Version -> m B.ByteString
+download' server name version =
+    do (res, out, err, _) <- liftIO (runProcess id (ShellCommand (downloadCommand server name version)) B.empty) >>= return . collectOutputs
+       tmp <- tmpDir
+       tar <- tarball name version
        -- (res, out, err) <- runProcessWith
        case res of
          (ExitSuccess : _) ->
-             do createDirectoryIfMissing True (tmpDir cache)
-                B.writeFile (tarball cache name version) out
+             do liftIO $ createDirectoryIfMissing True tmp
+                liftIO $ B.writeFile tar out
                 return out
          _ ->
              let msg = downloadCommand server name version ++ " ->\n" ++ show (err, res) in
-             hPutStrLn stderr msg >>
+             liftIO (hPutStrLn stderr msg) >>
              error msg
 
 -- |Hackage paths
@@ -193,11 +198,11 @@ versionURL server name version = "http://" ++ server ++ "/packages/archive/" ++ 
 downloadCommand :: String -> String -> Version -> String
 downloadCommand server name version = "curl -s '" ++ versionURL server name version ++ "'" {- ++ " > '" ++ destPath top name version ++ "'" -}
 
-unpacked :: P.CacheRec -> String -> Version -> FilePath
-unpacked cache name version = tmpDir cache </> name ++ "-" ++ showVersion version
+unpacked :: MonadTop m => String -> Version -> m FilePath
+unpacked name version = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ showVersion version
 
-tarball :: P.CacheRec -> String -> Version -> FilePath
-tarball cache name version  = tmpDir cache </> name ++ "-" ++ showVersion version ++ ".tar.gz"
+tarball :: MonadTop m => String -> Version -> m FilePath
+tarball name version  = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ showVersion version ++ ".tar.gz"
 
-tmpDir :: P.CacheRec -> FilePath
-tmpDir cache = P.topDir cache </> "hackage"
+tmpDir :: MonadTop m => m FilePath
+tmpDir = sub "hackage"

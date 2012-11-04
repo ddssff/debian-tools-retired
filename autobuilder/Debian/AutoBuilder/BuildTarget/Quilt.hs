@@ -4,9 +4,10 @@
 -- a build target with the patches applied to the source directory.
 module Debian.AutoBuilder.BuildTarget.Quilt where
 
+import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
-import Control.Exception (SomeException, try, throw)
 import Control.Monad (when)
+import Control.Monad.Error (catchError)
 import Control.Monad.Trans
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5 (md5)
@@ -16,15 +17,15 @@ import Data.Maybe
 import Data.Time
 import Data.Time.LocalTime ()
 import qualified Debian.AutoBuilder.Types.Download as T
-import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (ChangeLogEntry(..), prettyEntry, parseLog, parseEntry)
-import Debian.Repo (MonadApt, DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, findSourceTree, findOneDebianBuildTree, copySourceTree)
+import Debian.Repo (MonadDeb, DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub)
 import Debian.Version
 import Extra.Files (replaceFile)
 import "Extra" Extra.List ()
 import System.Directory (doesFileExist, createDirectoryIfMissing, doesDirectoryExist, renameDirectory)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
+import System.FilePath ((</>))
 import System.Process (CmdSpec(..))
 import System.Process.Progress (unpackOutputs, mergeToStderr, runProcessF, runProcess, qPutStrLn, quieter)
 import Text.Regex
@@ -45,45 +46,42 @@ getEntry (Patch x) = x
 
 quiltPatchesDir = "quilt-patches"
 
-makeQuiltTree :: P.CacheRec -> P.RetrieveMethod -> T.Download -> T.Download -> IO (SourceTree, FilePath)
-makeQuiltTree cache m base patch =
+makeQuiltTree :: MonadDeb e m => P.RetrieveMethod -> T.Download -> T.Download -> m (SourceTree, FilePath)
+makeQuiltTree m base patch =
     do qPutStrLn $ "Quilt base: " ++ T.getTop base
        qPutStrLn $ "Quilt patch: " ++ T.getTop patch
        -- This will be the top directory of the quilt target
-       let copyDir = P.topDir cache ++ "/quilt/" ++ show (md5 (L.pack (show m)))
-       liftIO (createDirectoryIfMissing True (P.topDir cache ++ "/quilt"))
-       baseTree <- try (findSourceTree (T.getTop base))
-       patchTree <- try (findSourceTree (T.getTop patch))
-       case (baseTree, patchTree) of
-         (Right baseTree, Right patchTree) ->
-             do copyTree <- copySourceTree baseTree copyDir
-                -- If this is already a DebianBuildTree we need to apply
-                -- the patch to the subdirectory containing the DebianSourceTree.
-                debTree <- findOneDebianBuildTree copyDir
-                -- Compute the directory where the patches will be applied
-                let quiltDir = maybe copyDir debdir debTree
-                qPutStrLn $ "copyDir: " ++ copyDir
-                qPutStrLn $ "quiltDir: " ++ quiltDir
-                let patchDir = topdir patchTree
-                -- Set up links to the quilt directory, and use quilt to get a
-                -- list of the unapplied patches.
-                let cmd1 = ("set -x && cd '" ++ quiltDir ++ "' && rm -f '" ++ quiltPatchesDir ++
-                            "' && ln -s '" ++ patchDir ++ "' '" ++ quiltPatchesDir ++ "'")
-                -- runTaskAndTest (linkStyle (commandTask cmd1))
-                _output <- runProcessF id (ShellCommand cmd1) L.empty
-                -- Now we need to have created a DebianSourceTree so
-                -- that there is a changelog for us to reconstruct.
-                return (copyTree, quiltDir)
-         (Left (e :: SomeException), _) -> throw e
-         (_, Left (e :: SomeException)) -> throw e
+       copyDir <- sub ("quilt" </> show (md5 (L.pack (show m))))
+       quilt <- sub "quilt"
+       liftIO (createDirectoryIfMissing True quilt)
+       baseTree <- liftIO $ findSourceTree (T.getTop base)
+       patchTree <- liftIO $ findSourceTree (T.getTop patch)
+       copyTree <- liftIO $ copySourceTree baseTree copyDir
+       -- If this is already a DebianBuildTree we need to apply
+       -- the patch to the subdirectory containing the DebianSourceTree.
+       debTree <- liftIO $ findOneDebianBuildTree copyDir
+       -- Compute the directory where the patches will be applied
+       let quiltDir = maybe copyDir debdir debTree
+       qPutStrLn $ "copyDir: " ++ copyDir
+       qPutStrLn $ "quiltDir: " ++ quiltDir
+       let patchDir = topdir patchTree
+       -- Set up links to the quilt directory, and use quilt to get a
+       -- list of the unapplied patches.
+       let cmd1 = ("set -x && cd '" ++ quiltDir ++ "' && rm -f '" ++ quiltPatchesDir ++
+                   "' && ln -s '" ++ patchDir ++ "' '" ++ quiltPatchesDir ++ "'")
+       -- runTaskAndTest (linkStyle (commandTask cmd1))
+       _output <- runProcessF id (ShellCommand cmd1) L.empty
+       -- Now we need to have created a DebianSourceTree so
+       -- that there is a changelog for us to reconstruct.
+       return (copyTree, quiltDir)
 
 failing f _ (Failure x) = f x
 failing _ s (Success x) = s x
 
-prepare :: MonadApt e m => P.CacheRec -> P.Packages -> T.Download -> T.Download -> m T.Download
-prepare cache package base patch = liftIO $
+prepare :: MonadDeb e m => P.Packages -> T.Download -> T.Download -> m T.Download
+prepare package base patch =
     (\ x -> qPutStrLn "Preparing quilt target" >> quieter 1 x) $
-    makeQuiltTree cache (P.spec package) base patch >>= withUpstreamQuiltHidden make
+    makeQuiltTree (P.spec package) base patch >>= liftIO . withUpstreamQuiltHidden make
     where
       withUpstreamQuiltHidden make (quiltTree, quiltDir) =
           hide >> make (quiltTree, quiltDir) >>= unhide
@@ -154,17 +152,13 @@ prepare cache package base patch = liftIO $
 
 mergeChangelogs' :: FilePath -> FilePath -> IO (Either String ())
 mergeChangelogs' basePath patchPath =
-    do patchText <- liftIO (try (readFile patchPath))
-       baseText <- liftIO (try (readFile basePath))
-       case (patchText, baseText) of
-         (Right patchText, Right baseText) ->
-             do -- vEPutStrBl 1 $ "Merging changelogs: " ++ baseText ++ "\npatch:\n\n" ++ patchText
-                either (return . Left) replace (mergeChangelogs baseText patchText)
-         (Left (e :: SomeException), _) -> return $ Left (show e)
-         (_, Left (e :: SomeException)) -> return $ Left (show e)
-    where
-      replace newText = liftIO (try (replaceFile basePath $! newText)) >>=
-                        return. either (\ (e :: SomeException) -> Left . show $ e) Right
+    (do patchText <- liftIO (readFile patchPath)
+        baseText <- liftIO (readFile basePath)
+        -- vEPutStrBl 1 $ "Merging changelogs: " ++ baseText ++ "\npatch:\n\n" ++ patchText
+        either (return . Left)
+               (\ newText -> liftIO $ Right <$> (replaceFile basePath $! newText))
+               (mergeChangelogs baseText patchText))
+      `catchError` (\ e -> return (Left (show e)))
 
 partitionFailing :: [Failing a] -> ([[String]], [a])
 partitionFailing [] = ([], [])

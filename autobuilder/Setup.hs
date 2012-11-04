@@ -11,5 +11,5 @@ main = defaultMainWithHooks simpleUserHooks {
        }
 
 runTestScript =
-    system "runhaskell -isrc Test/Test.hs" >>= \ code ->
+    system "runhaskell -isrc:../debian-repo Test/Test.hs" >>= \ code ->
     if code == ExitSuccess then return () else error "Test Failure"

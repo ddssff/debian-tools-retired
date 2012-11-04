@@ -36,13 +36,15 @@ darcsRev tree m =
       cmd = "cd " ++ path ++ " && darcs changes --xml-output"
       path = topdir tree
 
-prepare :: MonadApt e m => P.CacheRec -> P.Packages -> String -> m T.Download
-prepare cache package theUri = liftIO $
+prepare :: MonadDeb e m => P.CacheRec -> P.Packages -> String -> m T.Download
+prepare cache package theUri =
     do
-      when (P.flushSource (P.params cache)) (removeRecursiveSafely dir)
-      exists <- doesDirectoryExist dir
-      tree <- if exists then verifySource dir else createSource dir
-      _output <- fixLink
+      base <- sub "darcs"
+      let dir = base ++ "/" ++ sum
+      liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely dir)
+      exists <- liftIO $ doesDirectoryExist dir
+      tree <- liftIO $ if exists then verifySource dir else createSource dir
+      _output <- liftIO $ fixLink base
       return $ T.Download { T.package = package
                           , T.getTop = topdir tree
                           , T.logText =  "Darcs revision: " ++ show (P.spec package)
@@ -79,12 +81,11 @@ prepare cache package theUri = liftIO $
           where
             cmd = unwords $ ["darcs", "get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", "'" ++ tag ++ "'"]) theTag ++ [dir]
       -- Maybe we should include the "darcs:" in the string we checksum?
-      fixLink = let link = base ++ "/" ++ name
-                    cmd = "rm -rf " ++ link ++ " && ln -s " ++ sum ++ " " ++ link in
-                runProcessF id (ShellCommand cmd) B.empty
-      base = P.topDir cache ++ "/darcs"
+      fixLink base =
+          let link = base ++ "/" ++ name
+              cmd = "rm -rf " ++ link ++ " && ln -s " ++ sum ++ " " ++ link in
+          runProcessF id (ShellCommand cmd) B.empty
       name = snd . splitFileName $ (uriPath theUri')
-      dir = base ++ "/" ++ sum
       sum = show (md5 (B.pack uriAndTag))
       uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag
       theTag = case nub (sort (catMaybes (map (\ flag -> case flag of

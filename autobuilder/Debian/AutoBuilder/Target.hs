@@ -43,6 +43,7 @@ import Debian.Relation (BinPkgName(..), SrcPkgName(..), PkgName(..), prettyRelat
 import Debian.Relation.ByteString(Relations, Relation(..))
 import Debian.Release (Arch, releaseName')
 import Debian.Repo.Monads.Apt (MonadApt)
+import Debian.Repo.Monads.Top (MonadTop)
 import Debian.Repo.SourceTree (buildDebs)
 import Debian.Sources (SliceName(..))
 import Debian.Repo (chrootEnv, syncEnv, syncPool, updateEnv, withProc)
@@ -135,7 +136,7 @@ partitionFailing xs =
 -- | Build a set of targets.  When a target build is successful it
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
-buildTargets :: (MonadApt e m, AptCache t) => P.CacheRec -> OSImage -> Relations -> LocalRepository -> t -> [Buildable] -> m (LocalRepository, [Target])
+buildTargets :: (MonadApt e m, MonadTop m, AptCache t) => P.CacheRec -> OSImage -> Relations -> LocalRepository -> t -> [Buildable] -> m (LocalRepository, [Target])
 buildTargets _ _ _ localRepo _ [] = return (localRepo, [])
 buildTargets cache cleanOS globalBuildDeps localRepo poolOS targetSpecs =
     do
@@ -150,12 +151,12 @@ buildTargets cache cleanOS globalBuildDeps localRepo poolOS targetSpecs =
 
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
-buildLoop :: (MonadApt e m, AptCache t) => P.CacheRec -> Relations -> LocalRepository -> t -> OSImage -> [Target] -> m [Target]
+buildLoop :: (MonadApt e m, MonadTop m, AptCache t) => P.CacheRec -> Relations -> LocalRepository -> t -> OSImage -> [Target] -> m [Target]
 buildLoop cache globalBuildDeps localRepo poolOS cleanOS' targets =
     Set.toList <$> loop cleanOS' (Set.fromList targets) Set.empty
     where
       -- This loop computes the ready targets and builds one.
-      loop :: MonadApt e m => OSImage -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
+      loop :: (MonadApt e m, MonadTop m) => OSImage -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
       loop _ unbuilt failed | Set.null unbuilt = return failed
       loop cleanOS' unbuilt failed =
           ePutStrLn "Computing ready targets..." >>
@@ -165,7 +166,7 @@ buildLoop cache globalBuildDeps localRepo poolOS cleanOS' targets =
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
                           loop2 cleanOS' (Set.difference unbuilt ready) failed triples
       -- Out of ready targets, re-do the dependency computation
-      loop2 :: MonadApt e m =>
+      loop2 :: (MonadApt e m, MonadTop m) =>
                OSImage
             -> Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
             -> Set.Set Target -- failed: Targets which either failed to build or were blocked by a target that failed to build
@@ -308,7 +309,7 @@ showTargets targets =
 
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
-    (MonadApt e m, AptCache t) =>
+    (MonadApt e m, MonadTop m, AptCache t) =>
     P.CacheRec ->			-- configuration info
     OSImage ->				-- cleanOS
     Relations ->			-- The build-essential relations
@@ -362,25 +363,27 @@ buildTarget cache cleanOS globalBuildDeps repo poolOS target =
                              return . failing Failure (Success . Just)
 
 -- | Build a package and upload it to the local repository.
-buildPackage :: MonadApt e m => P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> ChangeLogEntry -> Target -> SourcePackageStatus -> LocalRepository -> m (Failing LocalRepository)
+buildPackage :: (MonadApt e m, MonadTop m) =>
+                P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> ChangeLogEntry -> Target -> SourcePackageStatus -> LocalRepository -> m (Failing LocalRepository)
 buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog target status repo =
     checkDryRun >>
-    liftIO prepareImage >>=
+    P.dirtyRoot cache >>= return . Debian.Repo.chrootEnv cleanOS >>= \ buildOS ->
+    liftIO (prepareImage buildOS) >>=
     failing (return . Failure) logEntry >>=
-    failing (return . Failure) (quieter (-1) . build) >>=
+    failing (return . Failure) (quieter (-1) . build buildOS) >>=
     failing (return . Failure) find >>=
     failing (return . Failure) upload
     where
       checkDryRun = when (P.dryRun (P.params cache))
                       (do qPutStrLn "Not proceeding due to -n option."
                           liftIO (exitWith ExitSuccess))
-      prepareImage = prepareBuildImage cache cleanOS newFingerprint buildOS target
+      prepareImage buildOS = prepareBuildImage cache cleanOS newFingerprint buildOS target
       logEntry buildTree =
           case P.noClean (P.params cache) of
             False -> liftIO $ maybeAddLogEntry buildTree newVersion >> return (Success buildTree)
             True -> return (Success buildTree)
-      build :: MonadApt e m => DebianBuildTree -> m (Failing (DebianBuildTree, NominalDiffTime))
-      build buildTree =
+      build :: OSImage -> MonadApt e m => DebianBuildTree -> m (Failing (DebianBuildTree, NominalDiffTime))
+      build buildOS buildTree =
           do -- The --commit flag does not appear until dpkg-dev-1.16.1,
              -- so we need to check this version number.  We also
              -- don't want to leave the patches subdirectory here
@@ -460,7 +463,6 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog ta
               -- Update lists to reflect the availability of the package we just built
               [] -> liftIO (updateLists cleanOS) >> return (Success repo)
               _ -> return (Failure ["Local upload failed:\n " ++ showErrors (map snd errors)])
-      buildOS = Debian.Repo.chrootEnv cleanOS (P.dirtyRoot cache)
 
 -- |Prepare the build image by copying the clean image, installing
 -- dependencies, and copying the clean source tree.  For a lax build

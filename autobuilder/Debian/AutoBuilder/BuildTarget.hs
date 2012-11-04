@@ -30,15 +30,14 @@ import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Relation (SrcPkgName(..), PkgName(..))
-import Debian.Repo (OSImage, rootPath, rootDir, findSourceTree, copySourceTree, SourceTree(dir'), topdir)
-import Debian.Repo.Monads.Apt (MonadApt)
+import Debian.Repo (OSImage, rootPath, rootDir, findSourceTree, copySourceTree, SourceTree(dir'), topdir, MonadDeb)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
 import System.Process (CmdSpec(..))
 import System.Process.Progress (runProcessF, qPutStrLn, quieter)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
-retrieve :: MonadApt e m => OSImage -> P.CacheRec -> P.Packages -> m Download
+retrieve :: MonadDeb e m => OSImage -> P.CacheRec -> P.Packages -> m Download
 retrieve buildOS cache target =
     (\ x -> qPutStrLn (" " ++ show (P.spec target)) >> quieter 1 x) $
      case P.spec target of
@@ -69,7 +68,7 @@ retrieve buildOS cache target =
       P.DebDir upstream debian ->
           do upstream' <- retrieve buildOS cache (target {P.spec = upstream})
              debian' <- retrieve buildOS cache (target {P.spec = debian})
-             DebDir.prepare cache target upstream' debian'
+             DebDir.prepare target upstream' debian'
       P.Debianize package ->
           retrieve buildOS cache (target {P.spec = package}) >>=
           Debianize.prepare cache target
@@ -89,7 +88,7 @@ retrieve buildOS cache target =
       P.Hg string -> Hg.prepare cache target string
       P.Patch base patch ->
           retrieve buildOS cache (target {P.spec = base}) >>=
-          Patch.prepare cache target buildOS patch
+          Patch.prepare target buildOS patch
 
       P.Proc spec' ->
           retrieve buildOS cache (target {P.spec = spec'}) >>= \ base ->
@@ -105,7 +104,7 @@ retrieve buildOS cache target =
       P.Quilt base patches ->
           do base' <- retrieve buildOS cache (target {P.spec = base})
              patches' <- retrieve buildOS cache (target {P.spec = patches})
-             Quilt.prepare cache target base' patches'
+             Quilt.prepare target base' patches'
       P.SourceDeb spec' ->
           retrieve buildOS cache (target {P.spec = spec'}) >>=
           SourceDeb.prepare cache target

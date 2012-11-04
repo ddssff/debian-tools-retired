@@ -12,7 +12,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo
 import System.Directory
-import System.FilePath (splitFileName)
+import System.FilePath (splitFileName, (</>))
 import System.Process (CmdSpec(..))
 import System.Process.Progress (timeTask, runProcessF)
 import System.Unix.Directory
@@ -20,12 +20,13 @@ import System.Unix.Directory
 documentation = [ "hg:<string> - A target of this form target obtains the source"
                 , "code by running the Mercurial command 'hg clone <string>'." ]
 
-prepare :: MonadApt e m => P.CacheRec -> P.Packages -> String -> m T.Download
-prepare cache package archive = liftIO $
+prepare :: MonadDeb e m => P.CacheRec -> P.Packages -> String -> m T.Download
+prepare cache package archive =
     do
+      dir <- sub ("hg" </> archive)
       when (P.flushSource (P.params cache)) (liftIO $ removeRecursiveSafely dir)
       exists <- liftIO $ doesDirectoryExist dir
-      tree <- if exists then verifySource dir else createSource dir
+      tree <- liftIO $ if exists then verifySource dir else createSource dir
       return $ T.Download { T.package = package
                           , T.getTop = topdir tree
                           , T.logText =  "Hg revision: " ++ show (P.spec package)
@@ -54,6 +55,3 @@ prepare cache package archive = liftIO $
           liftIO (createDirectoryIfMissing True parent) >>
           runProcessF id (ShellCommand ("hg clone " ++ archive ++ " " ++ dir)) empty >>
           findSourceTree dir
-
-      dir = P.topDir cache ++ "/hg/" ++ archive
-

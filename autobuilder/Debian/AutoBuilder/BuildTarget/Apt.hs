@@ -20,9 +20,10 @@ documentation = [ "apt:<distribution>:<packagename> - a target of this form look
                 , "the sources.list named <distribution> and retrieves the package with"
                 , "the given name from that distribution." ]
 
-prepare :: MonadApt e m => P.CacheRec -> P.Packages -> String -> SrcPkgName -> m Download
+prepare :: MonadDeb e m => P.CacheRec -> P.Packages -> String -> SrcPkgName -> m Download
 prepare cache target dist package =
-    do os <- prepareAptEnv (P.topDir cache) (P.ifSourcesChanged (P.params cache)) distro
+    do top <- askTop
+       os <- prepareAptEnv top (P.ifSourcesChanged (P.params cache)) distro
        when (P.flushSource (P.params cache)) (liftIO . removeRecursiveSafely $ aptDir os package)
        tree <- liftIO $ Debian.Repo.aptGetSource (aptDir os package) os package version'
        return $ Download {
@@ -42,7 +43,7 @@ prepare cache target dist package =
                    [] -> Nothing
                    [v] -> Just v
                    vs -> error ("Conflicting pin versions for apt-get: " ++ show (map prettyDebianVersion vs))
-      findRelease distros dist = 
+      findRelease distros dist =
           case filter ((== dist) . sliceListName) distros of
             [a] -> Just a
             [] -> Nothing

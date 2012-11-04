@@ -9,7 +9,7 @@ import Debian.Repo.Types ( SliceList, NamedSliceList )
 data CacheRec
     = CacheRec
     { params :: ParamRec
-    , topDir :: FilePath
+    -- , topDir :: FilePath -- Use MonadTop
     , allSources :: [NamedSliceList]
     , buildRepoSources :: SliceList
     , packages :: Packages
