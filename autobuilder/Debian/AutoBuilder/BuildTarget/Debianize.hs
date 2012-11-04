@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -Werror #-}
+{-# OPTIONS_GHC -Wall -fno-warn-name-shadowing #-}
 -- |The intent is that this target debianize any cabal target, but currently
 -- it combines debianization with the hackage target.
 module Debian.AutoBuilder.BuildTarget.Debianize

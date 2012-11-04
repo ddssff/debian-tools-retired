@@ -6,6 +6,9 @@
 
 module Distribution.Debian.Debianize
     ( debianize
+    , autobuilderDebianize
+    , withEnvironmentArgs
+    , withEnvironmentFlags
     ) where
 
 import Codec.Binary.UTF8.String (decodeString)
@@ -27,6 +30,7 @@ import Debian.Version.String
 import Distribution.Debian.Config (Flags(..), missingDependencies')
 import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName, debianUtilsPackageName, debianSourcePackageName,
                                          debianDocPackageName, debianDevPackageName, debianProfPackageName)
+import Distribution.Debian.Options (compileArgs)
 import Distribution.Debian.PackageDescription (withSimplePackageDescription)
 import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits)
 import Distribution.Debian.Utility
@@ -35,6 +39,7 @@ import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.License (License(..))
 import Distribution.Package (PackageIdentifier(..), PackageName(..))
 import Distribution.PackageDescription (PackageDescription(..), exeName, Executable)
+import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
 import Prelude hiding (catch)
 import System.Directory
 import System.Environment
@@ -47,6 +52,53 @@ import Text.PrettyPrint.Class (pretty)
 
 type Debianization = Map.Map FilePath String
 
+-- | Call a function with a list of strings read from the value of
+-- $CABALDEBIAN.
+withEnvironmentArgs :: ([String] -> IO a) -> IO a
+withEnvironmentArgs f =
+  (getEnv "CABALDEBIAN" >>= return . read) `catch` handle >>= f
+  where
+    handle :: IOError -> IO [String]
+    handle _ = return []
+
+-- | Read the value of $CABALDEBIAN as a list of command line
+-- arguments, construct a ('Flags' -> 'Flags') function from them, and
+-- compose it with a function that takes a 'Flags' record.
+withEnvironmentFlags :: Flags -> (Flags -> IO a) -> IO a
+withEnvironmentFlags flags0 f =
+  (getEnv "CABALDEBIAN" >>= return . compileArgs . read) `catch` handle >>= \ ff ->
+  let flags = ff flags0 in
+  f flags
+  where
+    handle :: IOError -> IO (Flags -> Flags)
+    handle _ = return id
+
+-- | This function can be called from the postConf of a package's
+-- Setup.hs file.  It parses the CABALDEBIAN environment variable and
+-- applies the arguments it finds to the flags argument to produce a
+-- new flags value.  This is then used to do the debianization.
+autobuilderDebianize :: LocalBuildInfo -> Flags -> IO ()
+autobuilderDebianize lbi flags =
+  withEnvironmentFlags flags $ \ flags' ->
+  case buildDir lbi of
+    -- The autobuilder calls setup with --builddir=debian, so
+    -- this case actually does the debianization.
+    "debian/build" -> debianize flags'
+    -- During dpkg-buildpackage Setup is run by haskell-devscripts,
+    -- but we don't want to change things at that time or the build
+    -- will fail.  So this just makes sure things are already properly
+    -- debianized.
+    "dist-ghc/build" -> debianize (flags' {validate = True})
+    -- This is what gets called when you run Setup configure by hand.
+    -- It just prints the changes debianization would make.
+    _ -> debianize (flags' {dryRun = True})
+
+-- | Generate a debianization for the cabal package in the current
+-- directory using information from the .cabal file and from the
+-- options in Flags.  This ignores any existing debianization except
+-- for the debian/changelog file.  A new entry changelog is generated,
+-- and any entries already there that look older than the new one are
+-- preserved.
 debianize :: Flags -> IO ()
 debianize flags =
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
