@@ -22,18 +22,17 @@ import Distribution.Debian.Dependencies (PackageType(..), VersionSplits(..), dep
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Package (PackageName(..), Dependency(..))
 import Distribution.PackageDescription (PackageDescription(..), allBuildInfo, buildTools, pkgconfigDepends, extraLibs)
-import Distribution.Version (anyVersion)
 import System.Exit (ExitCode(ExitSuccess))
 import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readProcessWithExitCode)
 
 cabalDependencies :: Map.Map String [D.BinPkgName] -> PackageDescription -> [Dependency]
-cabalDependencies depMap pkgDesc = catMaybes $ map unboxDependency $ allBuildDepends depMap pkgDesc
+cabalDependencies extraLibMap pkgDesc = catMaybes $ map unboxDependency $ allBuildDepends extraLibMap pkgDesc
 
 -- |Debian packages don't have per binary package build dependencies,
 -- so we just gather them all up here.
 allBuildDepends :: Map.Map String [D.BinPkgName] -> PackageDescription -> [Dependency_]
-allBuildDepends depMap pkgDesc =
+allBuildDepends extraLibMap pkgDesc =
     nub $ map BuildDepends (buildDepends pkgDesc) ++
           concat (map (map BuildTools . buildTools) (allBuildInfo pkgDesc) ++
                   map
@@ -42,23 +41,26 @@ allBuildDepends depMap pkgDesc =
                   map (map ExtraLibs . (fixDeps . extraLibs)) (allBuildInfo pkgDesc))
     where
       fixDeps :: [String] -> [D.BinPkgName]
-      fixDeps xs = concatMap (\ cab -> fromMaybe [D.BinPkgName (D.PkgName ("lib" ++ cab ++ "-dev"))] (Map.lookup cab depMap)) xs
+      fixDeps xs = concatMap (\ cab -> fromMaybe [D.BinPkgName (D.PkgName ("lib" ++ cab ++ "-dev"))] (Map.lookup cab extraLibMap)) xs
 
 -- The build dependencies for a package include the profiling
 -- libraries and the documentation packages, used for creating cross
 -- references.
 buildDependencies :: Map.Map PackageName Int -> Map.Map String D.BinPkgName -> Compiler -> Dependency_ -> D.Relations
 buildDependencies epochMap _ compiler (BuildDepends (Dependency name ranges)) =
-    dependencies epochMap compiler versionSplits Development (Right name) ranges ++
-    dependencies epochMap compiler versionSplits Profiling (Right name) ranges
-buildDependencies epochMap execMap compiler dep@(ExtraLibs _) =
-    concat (map (\ x -> dependencies epochMap compiler versionSplits Extra (Left x) anyVersion) $ adapt execMap dep)
-buildDependencies epochMap execMap compiler dep =
+    dependencies epochMap compiler versionSplits Development name ranges ++
+    dependencies epochMap compiler versionSplits Profiling name ranges
+buildDependencies _epochMap execMap _compiler dep@(ExtraLibs _) =
+    concat (map dependency $ adapt execMap dep)
+buildDependencies _epochMap execMap _compiler dep =
     case unboxDependency dep of
-      Just (Dependency _name ranges) ->
-          concat (map (\ x -> dependencies epochMap compiler versionSplits Extra (Left x) ranges) $ adapt execMap dep)
+      Just (Dependency _name _ranges) ->
+          concat (map dependency $ adapt execMap dep)
       Nothing ->
           []
+
+dependency :: D.BinPkgName -> D.Relations
+dependency name = [[D.Rel name Nothing Nothing]]
 
 adapt :: Map.Map String D.BinPkgName -> Dependency_ -> [D.BinPkgName]
 adapt execMap (PkgConfigDepends (Dependency (PackageName pkg) _)) =
@@ -66,10 +68,6 @@ adapt execMap (PkgConfigDepends (Dependency (PackageName pkg) _)) =
 adapt execMap (BuildTools (Dependency (PackageName pkg) _)) =
     maybe (aptFile pkg) (: []) (Map.lookup pkg execMap)
 adapt _flags (ExtraLibs x) = [x]
-{-
-    maybe (error ("No mapping from library " ++ x ++ " to debian binary package name"))
-              (map (\ s -> PackageName ("lib" ++ s ++ "-dev"))) (Map.lookup x (depMap flags))
--}
 adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [D.BinPkgName (D.PkgName pkg)]
 
 -- |There are two reasons this may not work, or may work
@@ -92,7 +90,7 @@ aptFile pkg =
 -- to all the cross references.
 docDependencies :: Map.Map PackageName Int -> Compiler -> Dependency_ -> D.Relations
 docDependencies epochMap compiler (BuildDepends (Dependency name ranges)) =
-    dependencies epochMap compiler versionSplits Documentation (Right name) ranges
+    dependencies epochMap compiler versionSplits Documentation name ranges
 docDependencies _ _ _ = []
 
 data Dependency_

@@ -2,8 +2,10 @@
 -- Debian packages.
 
 module Distribution.Debian.Options
-    ( getFlags
+    ( withFlags
+    , getFlags
     , parseArgs
+    , compileArgs
     ) where
 
 import Control.Monad (when)
@@ -21,38 +23,36 @@ import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
                               usageInfo, getOpt')
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitWith, ExitCode (..))
-import System.IO (Handle, hPutStrLn, stderr, stdout)
+import System.IO (Handle, hPutStrLn, stdout)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.Regex.TDFA ((=~))
 
 getFlags :: IO Flags
 getFlags = getArgs >>= parseArgs
 
+withFlags :: (Flags -> IO a) -> IO a
+withFlags action = getFlags >>= action
+
+compileArgs :: [String] -> Flags -> Flags
+compileArgs args flags =
+  case getOpt' RequireOrder options args of
+    (os, [], [], []) -> foldl (flip ($)) flags os
+    (_, non, unk, errs) -> error ("Errors: " ++ show errs ++
+                                  ", Unrecognized: " ++ show unk ++
+                                  ", Non-Options: " ++ show non)
+
 parseArgs :: [String] -> IO Flags
 parseArgs args = do
-     let (os, args', unknown, errs) = getOpt' RequireOrder options args
-         opts = foldl (flip ($)) defaultFlags os
      when (help opts || debAction opts == Usage) $ do
        printHelp stdout
        exitWith ExitSuccess
-     when (not (null errs)) $ do
-       hPutStrLn stderr "Errors:"
-       mapM_ (hPutStrLn stderr) errs
-       exitWith (ExitFailure 1)
-     when (not (null unknown)) $ do
-       hPutStrLn stderr "Unrecognised options:"
-       mapM_ (hPutStrLn stderr) unknown
-       exitWith (ExitFailure 1)
-     when (not (null args')) $ do
-       hPutStrLn stderr "Unrecognised arguments:"
-       mapM_ (hPutStrLn stderr) args'
-       exitWith (ExitFailure 1)
      return opts
+    where opts = compileArgs args defaultFlags
 
 options :: [OptDescr (Flags -> Flags)]
 
 options =
-    [ Option "" ["executable"] (ReqArg (\ name x -> x { executablePackages = name : executablePackages x }) "NAME")
+    [ Option "" ["executable"] (ReqArg (\ name x -> x { executablePackages = b name : executablePackages x }) "NAME")
              "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
       Option "" ["ghc"] (NoArg (\x -> x { compilerFlavor = GHC }))
              "Compile with GHC",
@@ -66,30 +66,16 @@ options =
              "Show this help text",
       Option "" ["ghc-version"] (ReqArg (\ ver x -> x { compilerVersion = Just (last (map fst (readP_to_S parseVersion ver)))}) "VERSION")
              "Version of GHC in build environment",
-      Option "" ["name"] (ReqArg (\name x -> x { rpmName = Just name }) "NAME")
-             "Override the default package name",
       Option "" ["disable-haddock"] (NoArg (\x -> x { haddock = False }))
              "Don't generate API documentation.  Use this if build is crashing due to a haddock error.",
       Option "" ["missing-dependency"] (ReqArg (\ name x -> x {missingDependencies = name : missingDependencies x}) "DEB")
              "Mark a package missing, do not add it to any dependency lists in the debianization.",
       Option "" ["disable-library-profiling"] (NoArg (\x -> x { debLibProf = False }))
              "Don't generate profiling libraries",
-      Option "" ["disable-optimization"] (NoArg (\x -> x { rpmOptimisation = False }))
-             "Don't generate optimised code",
-      Option "" ["disable-split-objs"] (NoArg (\x -> x { rpmSplitObjs = False }))
-             "Don't split object files to save space",
       Option "f" ["flags"] (ReqArg (\flags x -> x { configurationsFlags = configurationsFlags x ++ flagList flags }) "FLAGS")
              "Set given flags in Cabal conditionals",
-      Option "" ["release"] (ReqArg (\rel x -> x { rpmRelease = Just rel }) "RELEASE")
-             "Override the default package release",
-      Option "" ["debdir"] (ReqArg (\path x -> x { debOutputDir = path }) "DEBDIR")
-             ("Override the default output directory (" ++ show (debOutputDir defaultFlags) ++ ")"),
-      Option "" ["root"] (ReqArg (\ path x -> x { buildRoot = path }) "BUILDROOT")
-             "Use the compiler information in the given build environment.",
       Option "v" ["verbose"] (ReqArg (\verb x -> x { verbosity = readEOrFail flagToVerbosity verb }) "n")
              "Change build verbosity",
-      Option "" ["version"] (ReqArg (\vers x -> x { rpmVersion = Just vers }) "VERSION")
-             "Override the default package version",
       Option "" ["maintainer"] (ReqArg (\maint x -> x { debMaintainer = Just maint }) "Maintainer Name <email addr>")
              "Override the Maintainer name and email in $DEBEMAIL/$EMAIL/$DEBFULLNAME/$FULLNAME",
       Option "" ["debianize"] (NoArg (\x -> x {debAction = Debianize}))
@@ -102,12 +88,10 @@ options =
              "Generalized --dev-dep - specify pairs A:B of debian binary package names, each A gets a Depends: B",
       Option "" ["conflicts"] (ReqArg (\ arg x -> x {binaryPackageConflicts = parseDeps arg ++ binaryPackageConflicts x}) "deb:deb,deb:deb,...")
              "Specify pairs A:B of debian binary package names, each A gets a Conflicts: B.  Note that B can have debian style version relations",
-      Option "" ["map-dep"] (ReqArg (\ pair x -> x {depMap = case break (== '=') pair of
-                                                               (cab, (_ : deb)) -> Map.insertWith (++) cab [BinPkgName (PkgName deb)] (depMap x)
-                                                               (_, "") -> error "usage: --dep-map CABALNAME=DEBIANNAME"}) "CABALNAME=DEBIANNAME")
+      Option "" ["map-dep"] (ReqArg (\ pair x -> x {extraLibMap = case break (== '=') pair of
+                                                                    (cab, (_ : deb)) -> Map.insertWith (++) cab [b deb] (extraLibMap x)
+                                                                    (_, "") -> error "usage: --dep-map CABALNAME=DEBIANNAME"}) "CABALNAME=DEBIANNAME")
              "Specify a mapping from the name appearing in the Extra-Library field of the cabal file to a debian binary package name, e.g. --dep-map cryptopp=libcrypto-dev",
-      -- Option "" ["deb-name"] (ReqArg (\ name x -> x {debName = Just name}) "NAME")
-      --        "Specify the base name of the debian package, the part between 'libghc-' and '-dev'.  Normally this is the downcased cabal name.",
       Option "" ["deb-version"] (ReqArg (\ version x -> x {debVersion = Just version}) "VERSION")
              "Specify the version number for the debian package.  This will pin the version and should be considered dangerous.",
       Option "" ["revision"] (ReqArg (\ rev x -> x {revision = rev}) "REVISION")
@@ -122,18 +106,18 @@ options =
              (unlines ["Write out the list of dependencies required for the dev, prof or doc package depending",
                        "on the argument.  This value can be added to the appropriate substvars file."]),
       Option "" ["exec-map"] (ReqArg (\ s x -> x {execMap = case break (== '=') s of
-                                                              (cab, (_ : deb)) -> Map.insert cab (BinPkgName (PkgName deb)) (execMap x)
+                                                              (cab, (_ : deb)) -> Map.insert cab (b deb) (execMap x)
                                                               _ -> error "usage: --exec-map CABALNAME=DEBNAME"}) "EXECNAME=DEBIANNAME")
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
       Option "" ["omit-lt-deps"] (NoArg (\x -> x { omitLTDeps = True }))
              "Don't generate the << dependency when we see a cabal equals dependency.",
       Option "" ["quilt"] (NoArg (\ x -> x {sourceFormat = "3.0 (quilt)"}))
              "The package has an upstream tarball, write '3.0 (quilt)' into source/format.",
-      Option "n" ["dry-run", "compare"] (NoArg (\ x -> x {compareOnly = True}))
+      Option "n" ["dry-run", "compare"] (NoArg (\ x -> x {dryRun = True}))
              "Just compare the existing debianization to the one we would generate."
     ]
 
-parseDeps :: String -> [(String, String)]
+parseDeps :: String -> [(BinPkgName, BinPkgName)]
 parseDeps arg =
     map pair (split arg)
     where
@@ -144,7 +128,7 @@ parseDeps arg =
             _ -> error $ "Invalid dependency: " ++ show s
       pair s =
           case s =~ "^[ \t:]*([^ \t:]+)[ \t]*:[ \t]*(.+)[ \t]*" :: (String, String, String, [String]) of
-            (_, _, _, [a, b]) -> (a, b)
+            (_, _, _, [x, y]) -> (b x, b y)
             _ -> error $ "Invalid dependency: " ++ show s
 
 -- Lifted from Distribution.Simple.Setup, since it's not exported.
@@ -159,3 +143,6 @@ printHelp h = do
     progName <- getProgName
     let info = "Usage: " ++ progName ++ " [FLAGS]\n"
     hPutStrLn h (usageInfo info options)
+
+b :: String -> BinPkgName
+b = BinPkgName . PkgName

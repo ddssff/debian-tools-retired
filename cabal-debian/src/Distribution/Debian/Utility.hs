@@ -9,6 +9,7 @@ module Distribution.Debian.Utility
     , strictReadF
     , replaceFile
     , modifyFile
+    , diffFile
     , removeIfExists
     , dpkgFileMap
     , cond
@@ -34,9 +35,11 @@ import qualified Debian.Relation as D
 import Distribution.Package (PackageName(..))
 import Prelude hiding (catch)
 import System.Directory (doesFileExist, doesDirectoryExist, removeFile, renameFile, removeDirectory, getDirectoryContents)
+import System.Exit(ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>), dropExtension)
 import System.IO (IOMode (ReadMode), hGetContents, withFile, openFile, hSetBinaryMode, hGetContents)
 import System.IO.Error (isDoesNotExistError)
+import System.Process (readProcessWithExitCode, showCommandForUser)
 
 type DebMap = Map.Map D.BinPkgName (Maybe DebianVersion)
 
@@ -85,6 +88,17 @@ modifyFile path f =
                   (\ () -> readFile back >>= f >>= maybe (return ()) (writeFile path))
     where
       back = path ++ "~"
+
+diffFile :: FilePath -> String -> IO (Maybe String)
+diffFile path text =
+    readProcessWithExitCode cmd args text >>= \ (code, out, _err) ->
+    case code of
+      ExitSuccess -> return Nothing
+      ExitFailure 1 -> return (Just out)
+      _ -> error (showCommandForUser cmd args {- ++ " < " ++ show text -} ++ " -> " ++ show code)
+    where
+      cmd = "diff"
+      args = ["-ruw", path, "-"]
 
 removeFileIfExists :: FilePath -> IO ()
 removeFileIfExists x = doesFileExist x >>= (`when` (removeFile x))

@@ -27,6 +27,7 @@ import Debian.Version.String
 import Distribution.Debian.Config (Flags(..), missingDependencies')
 import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName, debianUtilsPackageName, debianSourcePackageName,
                                          debianDocPackageName, debianDevPackageName, debianProfPackageName)
+import Distribution.Debian.PackageDescription (withSimplePackageDescription)
 import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits)
 import Distribution.Debian.Utility
 import Distribution.Text (display)
@@ -46,16 +47,38 @@ import Text.PrettyPrint.Class (pretty)
 
 type Debianization = Map.Map FilePath String
 
+debianize :: Flags -> IO ()
+debianize flags =
+    withSimplePackageDescription flags $ \ pkgDesc compiler -> do
+      new <- debianization flags pkgDesc compiler
+      mapM_ (uncurry doFile) . Map.toList $ new
+      unless (dryRun flags) (getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True}))
+    where
+        doFile path text =
+            let path' = "debian" </> path in
+            if dryRun flags
+            then doesFileExist path' >>= \ exists ->
+                 if exists
+                 then diff path' text
+                 else putStrLn ("New file: " ++ path') >> diff "/dev/null" text
+            else createDirectoryIfMissing True (takeDirectory path') >>
+                 replaceFile path' text
+        diff path text =
+            readProcessWithExitCode "diff" ["-ruw", path, "-"] text >>= \ (code, out, _err) ->
+            case code of
+              ExitSuccess -> putStr out
+              ExitFailure 1 -> putStr out
+              _ -> hPutStrLn stderr (showCommandForUser "diff" ["-r", "-u", path, "-"] ++ " < " ++ show text ++ " -> " ++ show code)
+
 debianization :: Flags		 -- ^ command line flags
               -> PackageDescription  -- ^ info from the .cabal file
               -> Compiler            -- ^ compiler details
-              -> FilePath            -- ^ directory in which to create files
               -> IO Debianization
-debianization flags pkgDesc compiler debian =
+debianization flags pkgDesc compiler =
     do date <- getCurrentLocalRFC822Time
        copyright <- readFile' (licenseFile pkgDesc) `catch` (\ (_ :: SomeException) -> return . showLicense . license $ pkgDesc)
        debianMaintainer <- getDebianMaintainer flags >>= maybe (error "Missing value for --maintainer") return
-       oldChangelog <- readFile (debian </> "changelog") `catch` (\ (_ :: SomeException) -> return "")
+       oldChangelog <- readFile ("debian/changelog") `catch` (\ (_ :: SomeException) -> return "")
        let (errs, newLog) = updateChangelog flags debianMaintainer pkgDesc date oldChangelog
        mapM_ (hPutStrLn stderr) errs
        let (controlFile, rulesLines) = control flags compiler debianMaintainer pkgDesc
@@ -71,32 +94,6 @@ debianization flags pkgDesc compiler debian =
     where
         PackageName pkgname = pkgName . package $ pkgDesc
         installFiles = []
-
-debianize :: Flags		 -- ^ command line flags
-          -> PackageDescription  -- ^ info from the .cabal file
-          -> Compiler            -- ^ compiler details
-          -> FilePath            -- ^ directory in which to create files
-          -> IO ()
-debianize flags pkgDesc compiler debian =
-    debianization flags pkgDesc compiler debian >>=
-    mapM_ (uncurry doFile) . Map.toList >>
-    unless (compareOnly flags) (getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True}))
-    where
-        doFile path text =
-            let path' = debian </> path in
-            if compareOnly flags
-            then doesFileExist path' >>= \ exists ->
-                 if exists
-                 then diff path' text
-                 else putStrLn ("New file: " ++ path') >> diff "/dev/null" text
-            else createDirectoryIfMissing True (takeDirectory path') >>
-                 replaceFile path' text
-        diff path text =
-            readProcessWithExitCode "diff" ["-ruw", path, "-"] text >>= \ (code, out, _err) ->
-            case code of
-              ExitSuccess -> putStr out
-              ExitFailure 1 -> putStr out
-              _ -> hPutStrLn stderr (showCommandForUser "diff" ["-r", "-u", path, "-"] ++ " < " ++ show text ++ " -> " ++ show code)
 
 watch :: String -> String
 watch pkgname =
@@ -149,7 +146,7 @@ cdbsRules pkgDesc =
           ["#!/usr/bin/make -f",
            "",
            -- This is marked obsolete by cdbs.  That is all.
-           "DEB_CABAL_PACKAGE = " ++ debianExtraPackageName' pkgDesc,
+           "DEB_CABAL_PACKAGE = " ++ show (D.prettyBinPkgName (debianExtraPackageName' pkgDesc)),
            "",
            "include /usr/share/cdbs/1/rules/debhelper.mk",
            "include /usr/share/cdbs/1/class/hlibrary.mk",
@@ -167,39 +164,33 @@ cdbsRules pkgDesc =
       --exeDeb e = debianExtraPackageName (PackageName (exeName e)) Nothing
 
 -- | Functions that apply the mapping from cabal names to debian names based on version numbers.
-debianSourcePackageName' :: PackageDescription -> String
+debianSourcePackageName' :: PackageDescription -> D.SrcPkgName
 debianSourcePackageName' pkgDesc =
-    show . D.prettySrcPkgName $
          debianSourcePackageName versionSplits (pkgName . package $ pkgDesc)
                                      (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion (package pkgDesc))))))
 
-debianUtilsPackageName' :: PackageDescription -> String
+debianUtilsPackageName' :: PackageDescription -> D.BinPkgName
 debianUtilsPackageName' pkgDesc =
-    show . D.prettyBinPkgName $
          debianUtilsPackageName versionSplits (pkgName (package pkgDesc))
                                     (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion (package pkgDesc))))))
 
-debianDocPackageName' :: PackageDescription -> String
+debianDocPackageName' :: PackageDescription -> D.BinPkgName
 debianDocPackageName' pkgDesc =
-    show . D.prettyBinPkgName $
          debianDocPackageName versionSplits (pkgName (package pkgDesc))
                                   (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion (package pkgDesc))))))
 
-debianDevPackageName' :: PackageDescription -> String
+debianDevPackageName' :: PackageDescription -> D.BinPkgName
 debianDevPackageName' pkgDesc =
-    show . D.prettyBinPkgName $
          debianDevPackageName versionSplits (pkgName (package pkgDesc))
                                   (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion (package pkgDesc))))))
 
-debianProfPackageName' :: PackageDescription -> String
+debianProfPackageName' :: PackageDescription -> D.BinPkgName
 debianProfPackageName' pkgDesc =
-    show . D.prettyBinPkgName $
          debianProfPackageName versionSplits (pkgName (package pkgDesc))
                                    (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion (package pkgDesc))))))
 
-debianExtraPackageName' :: PackageDescription -> String
+debianExtraPackageName' :: PackageDescription -> D.BinPkgName
 debianExtraPackageName' pkgDesc =
-    show . D.prettyBinPkgName $ 
          debianExtraPackageName versionSplits (pkgName (package pkgDesc))
                                     (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion (package pkgDesc))))))
 
@@ -221,7 +212,7 @@ control flags compiler debianMaintainer pkgDesc =
 
       sourceSpec =
           Paragraph
-          ([Field ("Source", " " ++ debianSourcePackageName' pkgDesc),
+          ([Field ("Source", " " ++ show (D.prettySrcPkgName (debianSourcePackageName' pkgDesc))),
             Field ("Priority", " " ++ "extra"),
             Field ("Section", " " ++ "haskell"),
             Field ("Maintainer", " " ++ debianMaintainer),
@@ -238,7 +229,7 @@ control flags compiler debianMaintainer pkgDesc =
 
       librarySpec arch typ debianName =
           Paragraph
-          [Field ("Package", " " ++ debianName pkgDesc),
+          [Field ("Package", " " ++ show (D.prettyBinPkgName (debianName pkgDesc))),
            Field ("Architecture", " " ++ arch),
            Field ("Depends", " " ++ showDeps' "Depends:" (filterMissing (missingDependencies' flags) (
                      (if typ == Development
@@ -253,7 +244,7 @@ control flags compiler debianMaintainer pkgDesc =
 
       docSpecsParagraph =
           Paragraph
-          [Field ("Package", " " ++ debianDocPackageName' pkgDesc),
+          [Field ("Package", " " ++ show (D.prettyBinPkgName (debianDocPackageName' pkgDesc))),
            Field ("Architecture", " " ++ "all"),
            Field ("Section", " " ++ "doc"),
            Field ("Depends", " " ++ showDeps' "Depends:" (filterMissing (missingDependencies' flags)
@@ -273,12 +264,12 @@ control flags compiler debianMaintainer pkgDesc =
            anyrel "cdbs",
            anyrel "ghc"] ++
           (if debLibProf flags then [anyrel "ghc-prof"] else []) ++
-          (concat . map (buildDependencies (epochMap flags) (execMap flags) compiler) . allBuildDepends (depMap flags) $ pkgDesc)
+          (concat . map (buildDependencies (epochMap flags) (execMap flags) compiler) . allBuildDepends (extraLibMap flags) $ pkgDesc)
       debianBuildDepsIndep :: D.Relations
       debianBuildDepsIndep =
           nub $
           [anyrel "ghc-doc"] ++
-          (concat . map (docDependencies (epochMap flags) compiler) . allBuildDepends (depMap flags) $ pkgDesc)
+          (concat . map (docDependencies (epochMap flags) compiler) . allBuildDepends (extraLibMap flags) $ pkgDesc)
       debianDescription =
           (unwords . words . synopsis $ pkgDesc) ++
           case description pkgDesc of
@@ -303,46 +294,51 @@ execAndUtilSpecs flags pkgDesc debianDescription =
     map makeExecutablePackage (executablePackages flags) ++ makeUtilsPackage
     where
       makeExecutablePackage p =
+          let p' = show (D.prettyBinPkgName p) in
           (Paragraph
-           ([Field ("Package", " " ++ p),
+           ([Field ("Package", " " ++ p'),
              Field ("Architecture", " " ++ "any"),
              Field ("Section", " " ++ "misc"),
              Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps p (binaryPackageDeps flags)))),
              Field ("Description", " " ++ maybe debianDescription (const executableDescription) (library pkgDesc))] ++
             conflicts (filterMissing (missingDependencies' flags) (extraDeps p (binaryPackageConflicts flags)))),
-           (p ++ ".install", "dist-ghc" </> "build" </> p </> p ++ " usr/bin\n"),
-           ["build" </> p ++ ":: build-ghc-stamp"])
+           (show (D.prettyBinPkgName p) ++ ".install", "dist-ghc" </> "build" </> p' </> p' ++ " usr/bin\n"),
+           ["build" </> p' ++ ":: build-ghc-stamp"])
       executableDescription = " " ++ "An executable built from the " ++ display (package pkgDesc) ++ " package."
       makeUtilsPackage =
           case (bundledExecutables, dataFiles pkgDesc) of
             ([], []) ->
                 []
             _ ->
+                let p = debianUtilsPackageName' pkgDesc
+                    p' = show (D.prettyBinPkgName p)
+                    s = debianSourcePackageName' pkgDesc
+                    s' = show (D.prettySrcPkgName s) in
                 [(Paragraph
-                  ([Field ("Package", " " ++ debianUtilsPackageName' pkgDesc),
+                  ([Field ("Package", " " ++ p'),
                     Field ("Architecture", " " ++ "any"),
                     Field ("Section", " " ++ "misc"),
-                    Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (debianUtilsPackageName' pkgDesc) (binaryPackageDeps flags)))),
+                    Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps p (binaryPackageDeps flags)))),
                     Field ("Description", " " ++ maybe debianDescription (const utilsDescription) (library pkgDesc))] ++
-                   conflicts (extraDeps (debianUtilsPackageName' pkgDesc) (binaryPackageConflicts flags))),
-                  (debianUtilsPackageName' pkgDesc ++ ".install",
+                   conflicts (extraDeps p (binaryPackageConflicts flags))),
+                  (p' ++ ".install",
                    unlines (map (\ p -> "dist-ghc" </> "build" </> exeName p </> exeName p ++ " " ++ "usr/bin") bundledExecutables ++
-                            map (\ file -> file ++ " " ++ takeDirectory ("usr/share" </> debianSourcePackageName' pkgDesc ++ "-" ++ show (prettyDebianVersion (debianVersionNumber pkgDesc)) </> file)) (dataFiles pkgDesc))),
-                  ["build" </> debianUtilsPackageName' pkgDesc ++ ":: build-ghc-stamp"])]
+                            map (\ file -> file ++ " " ++ takeDirectory ("usr/share" </> s' ++ "-" ++ show (prettyDebianVersion (debianVersionNumber pkgDesc)) </> file)) (dataFiles pkgDesc))),
+                  ["build" </> p' ++ ":: build-ghc-stamp"])]
       utilsDescription = " " ++ "Utility files associated with the " ++ display (package pkgDesc) ++ " package."
-      bundledExecutables = filter (\ p -> not (elem (exeName p) (executablePackages flags))) (executables pkgDesc)
+      bundledExecutables = filter (\ p -> not (elem (D.BinPkgName (D.PkgName (exeName p))) (executablePackages flags))) (executables pkgDesc)
 
 conflicts :: [[D.Relation]] -> [Field' String]
 conflicts [] = []
 conflicts [[]] = [] -- I don't think this happens
 conflicts rels = [Field ("Conflicts", " " ++ showDeps rels)]
 
-extraDeps :: String -> [(String, String)] -> [[D.Relation]]
+extraDeps :: D.BinPkgName -> [(D.BinPkgName, D.BinPkgName)] -> [[D.Relation]]
 extraDeps p deps =
     case filter ((== p) . fst) deps of
       [] -> []
       pairs -> map (mkDep . snd) pairs
-    where mkDep name = [D.Rel (D.BinPkgName (D.PkgName name)) Nothing Nothing]
+    where mkDep name = [D.Rel name Nothing Nothing]
 
 
 anyrel :: String -> [D.Relation]
@@ -362,7 +358,7 @@ updateChangelog flags debianMaintainer pkgDesc date old =
 
 changelog :: Flags -> String -> PackageDescription -> String -> ChangeLogEntry
 changelog flags debianMaintainer pkgDesc date =
-    Entry { logPackage = debianSourcePackageName' pkgDesc
+    Entry { logPackage = show (D.prettySrcPkgName (debianSourcePackageName' pkgDesc))
           , logVersion = updateOriginal f $ debianVersionNumber pkgDesc
           , logDists = [parseReleaseName "unstable"]
           , logUrgency = "low"

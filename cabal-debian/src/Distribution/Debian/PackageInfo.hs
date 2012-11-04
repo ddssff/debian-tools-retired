@@ -22,7 +22,7 @@ data PackageInfo = PackageInfo { libDir :: FilePath
                                , profDeb :: Maybe (D.BinPkgName, DebianVersion)
                                , docDeb :: Maybe (D.BinPkgName, DebianVersion) }
 
-data DebType = Dev | Prof | Doc | ProductionServer | StagingServer | DevelopmentServer deriving (Eq, Read, Show)
+data DebType = Dev | Prof | Doc deriving (Eq, Read, Show)
 
 debName :: Control' String -> DebType -> Maybe D.BinPkgName
 debName control debType =
@@ -36,21 +36,21 @@ debName control debType =
 -- Make a list of the debian devel packages corresponding to cabal packages
 -- which are build dependencies
 debDeps :: DebType -> Map.Map String [D.BinPkgName] -> Map.Map String PackageInfo -> PackageDescription -> Control' String -> D.Relations
-debDeps debType depMap cabalPackages pkgDesc control =
+debDeps debType extraLibMap cabalPackages pkgDesc control =
     case debType of
       Dev ->
           catMaybes (map (\ (Dependency (PackageName name) _) ->
                           case Map.lookup name cabalPackages :: Maybe PackageInfo of
                             Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (devDeb p)
-                            Nothing -> Nothing) (cabalDependencies depMap pkgDesc))
+                            Nothing -> Nothing) (cabalDependencies extraLibMap pkgDesc))
       Prof ->
           maybe [] (\ name -> [[D.Rel name Nothing Nothing]]) (debName control Dev) ++
           catMaybes (map (\ (Dependency (PackageName name) _) ->
                           case Map.lookup name cabalPackages :: Maybe PackageInfo of
                             Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (profDeb p)
-                            Nothing -> Nothing) (cabalDependencies depMap pkgDesc))
+                            Nothing -> Nothing) (cabalDependencies extraLibMap pkgDesc))
       Doc ->
           catMaybes (map (\ (Dependency (PackageName name) _) ->
                               case Map.lookup name cabalPackages :: Maybe PackageInfo of
                                 Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (docDeb p)
-                                Nothing -> Nothing) (cabalDependencies depMap pkgDesc))
+                                Nothing -> Nothing) (cabalDependencies extraLibMap pkgDesc))

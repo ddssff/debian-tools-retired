@@ -16,10 +16,12 @@ import Data.Maybe
 import qualified Data.Set as Set
 import Debian.Control
 import qualified Debian.Relation as D
-import Distribution.Debian.Config (Flags(depMap), missingDependencies')
+import Distribution.Debian.Config (Flags(dryRun, extraLibMap), missingDependencies')
+import Distribution.Debian.PackageDescription (withSimplePackageDescription)
 import Distribution.Debian.PackageInfo (PackageInfo(..), DebType, debName, debDeps)
 import Distribution.Debian.Relations (cabalDependencies)
-import Distribution.Debian.Utility
+import Distribution.Debian.Utility (buildDebVersionMap, DebMap, showDeps, filterMissing,
+                                    dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
 import Distribution.Package (PackageName(..), Dependency(..))
 import Distribution.Simple.Compiler (CompilerFlavor(..), compilerFlavor, Compiler(..))
 import Distribution.Simple.Utils (die)
@@ -27,27 +29,26 @@ import Distribution.PackageDescription (PackageDescription(..))
 import Distribution.Text (display)
 import System.Directory (doesDirectoryExist, getDirectoryContents)
 import System.FilePath ((</>))
-import System.IO (hPutStrLn, stderr)
 
--- |Each cabal package corresponds to a directory <name>-<version>,
--- either in /usr/lib or in /usr/lib/haskell-packages/ghc/lib.
--- In that directory is a compiler subdirectory such as ghc-6.8.2.
--- In the ghc subdirectory is one or two library files of the form
+-- | Expand the contents of the .substvars file for a library package.
+-- Each cabal package corresponds to a directory <name>-<version>,
+-- either in /usr/lib or in /usr/lib/haskell-packages/ghc/lib.  In
+-- that directory is a compiler subdirectory such as ghc-6.8.2.  In
+-- the ghc subdirectory is one or two library files of the form
 -- libHS<name>-<version>.a and libHS<name>-<version>_p.a.  We can
 -- determine the debian package names by running dpkg -S on these
 -- names, or examining the /var/lib/dpkg/info/\*.list files.  From
--- these we can determine the source package name, and from that
--- the documentation package name.
+-- these we can determine the source package name, and from that the
+-- documentation package name.
 substvars :: Flags
-          -> PackageDescription		-- ^info from the .cabal file
-          -> Compiler   		-- ^compiler details
-          -> DebMap
-          -> DebType			-- ^The type of deb we want to write substvars for
+          -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> IO ()
-substvars flags pkgDesc compiler debVersions debType =
-    libPaths compiler debVersions >>= return . Map.fromList . map (\ p -> (cabalName p, p)) >>= \ cabalPackages ->
-    readFile "debian/control" >>= either (error . show) return . parseControl "debian/control" >>= \ control ->
-    substvars' flags pkgDesc compiler debVersions debType cabalPackages control
+substvars flags debType =
+    withSimplePackageDescription flags $ \ pkgDesc compiler -> do
+      debVersions <- buildDebVersionMap
+      cabalPackages <- libPaths compiler debVersions >>= return . Map.fromList . map (\ p -> (cabalName p, p))
+      control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
+      substvars' flags pkgDesc compiler debVersions debType cabalPackages control
 
 substvars' :: Flags -> PackageDescription -> Compiler -> DebMap -> DebType -> Map.Map String PackageInfo -> Control' String -> IO ()
 substvars' flags pkgDesc _compiler _debVersions debType cabalPackages control =
@@ -61,20 +62,10 @@ substvars' flags pkgDesc _compiler _debVersions debType cabalPackages control =
       -- haskell-cabal-debian-doc.substvars:
       --    haskell:Depends=ghc-doc, haddock (>= 2.1.0), haddock (<< 2.1.0-999)
       ([], Just path') ->
-          do modifyFile path'
-               (\ old -> do
-                  let new = addDeps old
-                  case new /= old of
-                    True -> hPutStrLn stderr ("cabal-debian - Updated " ++ show path' ++ ":\n " ++ old ++ "\n   ->\n " ++ new) >> return (Just new)
-                    False -> hPutStrLn stderr ("cabal-debian - No updates found for " ++ show path') >> return Nothing)
-{-
-          do old <- try (readFile path') >>= return . either (\ (_ :: SomeException) -> "") id
-             let new = addDeps old
-             hPutStrLn stderr (if new /= old
-                               then ("cabal-debian - Updated " ++ show path' ++ ":\n " ++ old ++ "\n   ->\n " ++ new)
-                               else ("cabal-debian - No updates found for " ++ show path'))
-             maybe (return ()) (\ _x -> replaceFile path' new) name
--}
+          readFile path' >>= \ old ->
+          let new = addDeps old in
+          diffFile path' new >>= maybe (putStrLn ("cabal-debian substvars: No updates found for " ++ show path'))
+                                       (\ diff -> if dryRun flags then putStr diff else replaceFile path' new)
       ([], Nothing) -> return ()
       (missing, _) ->
           die ("These debian packages need to be added to the build dependency list so the required cabal packages are available:\n  " ++ intercalate "\n  " (map (show . D.prettyBinPkgName . fst) missing) ++
@@ -90,7 +81,7 @@ substvars' flags pkgDesc _compiler _debVersions debType cabalPackages control =
                   _ -> unlines (map (++ (", " ++ showDeps (filterMissing (missingDependencies' flags) deps))) hdeps ++ more)
       path = fmap (\ (D.BinPkgName (D.PkgName x)) -> "debian/" ++ x ++ ".substvars") name
       name = debName control debType
-      deps = debDeps debType (depMap flags) cabalPackages pkgDesc control
+      deps = debDeps debType (extraLibMap flags) cabalPackages pkgDesc control
       -- We must have build dependencies on the profiling and documentation packages
       -- of all the cabal packages.
       missingBuildDeps =
@@ -101,7 +92,7 @@ substvars' flags pkgDesc _compiler _debVersions debType cabalPackages control =
                                      let prof = maybe (devDeb info) Just (profDeb info) in
                                      let doc = docDeb info in
                                      catMaybes [prof, doc]
-                                 Nothing -> []) (cabalDependencies (depMap flags) pkgDesc)) in
+                                 Nothing -> []) (cabalDependencies (extraLibMap flags) pkgDesc)) in
           filter (not . (`elem` buildDepNames) . fst) requiredDebs
       buildDepNames :: [D.BinPkgName]
       buildDepNames = concat (map (map (\ (D.Rel s _ _) -> s)) buildDeps)

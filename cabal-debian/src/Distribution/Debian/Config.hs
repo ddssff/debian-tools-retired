@@ -10,14 +10,14 @@ module Distribution.Debian.Config
 
 import qualified Data.Map as Map
 import Data.Version (Version)
-import Debian.Relation (BinPkgName(..), PkgName(..))
+import Debian.Relation (PkgName(..), BinPkgName(..))
 import Distribution.Compiler (CompilerFlavor(..))
 import Distribution.Debian.PackageInfo (DebType)
+import Distribution.Debian.Server (Executable(..))
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
 import Distribution.Verbosity (Verbosity, normal)
 
--- | Why rpm?  This started as a program to generate RPM packages from cabal files.  Yep.
 data Flags = Flags
     {
       compilerFlavor :: CompilerFlavor
@@ -36,40 +36,68 @@ data Flags = Flags
     , debLibProf :: Bool
     -- ^ Don't generate profiling libraries.  May be needed to work
     -- around a compiler bug.
-    , rpmName :: Maybe String
-    , rpmOptimisation :: Bool
-    , rpmRelease :: Maybe String
-    , rpmSplitObjs :: Bool
-    , debOutputDir :: FilePath
-    , buildRoot :: FilePath
     , verbosity :: Verbosity
     -- ^ Run with progress messages at the given level of verboseness.
-    , rpmVersion :: Maybe String
     , debAction :: DebAction
+    -- ^ What to do - Usage, Debianize or Substvar
     , buildDeps :: [String]
+    -- ^ Add a debian binary package to the debianization's list of build dependencies.
     , extraDevDeps :: [String]
-    -- , debName :: Maybe String
-    , debVersion :: Maybe String
-    , depMap :: Map.Map String [BinPkgName]
-    , binaryPackageDeps :: [(String, String)]
-    , binaryPackageConflicts :: [(String, String)]
+    -- ^ Add a debian binary package to the list of dependencies of
+    -- the dev library in this debianization.  This means it will be
+    -- pulled in by packages that depend on the dev library.
+    , binaryPackageDeps :: [(BinPkgName, BinPkgName)]
+    -- ^ An entry (a, b) says that debian package a should have a
+    -- dependency on b, e.g. ("cabal-debian", "apt-file") says that
+    -- cabal-debian program needs apt-file to be installed.
+    , extraLibMap :: Map.Map String [BinPkgName]
+    -- ^ Specify which debian binary packages corresponds to the
+    -- packages specified in the cabal file Extra-Library field,
+    -- e.g. Map.insert "cryptopp" "libcrypto-dev"
+    , binaryPackageConflicts :: [(BinPkgName, BinPkgName)]
     , epochMap :: Map.Map PackageName Int
+    -- ^ Specify epoch numbers for the debian package generated from a
+    -- cabal package.
+    , debVersion :: Maybe String
+    -- ^ Specify the exact debian version of the resulting package, including epoch
     , revision :: String
+    -- ^ Specify the revision string to use when converting the cabal version to debian
     , execMap :: Map.Map String BinPkgName
+    -- ^ Specify a mapping from the name appearing in the Build-Tool
+    -- field of the cabal file to a debian binary package name,
+    -- e.g. Map.insert "trhsx" "haskell-hsx-utils"
     , omitLTDeps :: Bool
+    -- ^ Don't generate the << dependency when we see a cabal equals dependency.
     , sourceFormat :: String
-    , compareOnly :: Bool
-    , executablePackages :: [String]
+    -- ^ The string to write into the debian/source/format file, default
+    -- '3.0 (quilt)'.
+    , dryRun :: Bool
+    -- ^ Don't write any files or create any directories, just explain
+    -- what would have been done.
+    , validate :: Bool
+    -- ^ Fail if the debianization already present doesn't match the
+    -- one we are going to generate closely enough that it is safe to
+    -- debianize during the run of dpkg-buildpackage, when Setup
+    -- configure is run.  Specifically, the version number in the top
+    -- changelog entry must match, and the sets of package names in
+    -- the control file must match.
+    , executablePackages :: [BinPkgName]
+    -- ^ List of executable debian binary packages to create.
     , debMaintainer :: Maybe String
+    -- ^ Value for the maintainer field in the control file.  Note
+    -- that the cabal maintainer field can have multiple addresses,
+    -- but debian only one.  If this is not explicitly set, it is
+    -- obtained from the cabal file, and if it is not there from the
+    -- environment.  As a last result, there is a hard coded string
+    -- in here somewhere.
     }
     deriving (Eq, Show)
 
 data DebAction = Usage | Debianize | SubstVar DebType deriving (Eq, Show)
 
 defaultFlags :: Flags
-
-defaultFlags = Flags
-    {
+defaultFlags =
+    Flags {
       compilerFlavor = GHC
     , compilerVersion = Nothing
     , configurationsFlags = []
@@ -77,28 +105,21 @@ defaultFlags = Flags
     , missingDependencies = []
     , help = False
     , debLibProf = True
-    , rpmName = Nothing
-    , rpmOptimisation = True
-    , rpmRelease = Nothing
-    , rpmSplitObjs = True
-    , debOutputDir = "./debian"
-    , buildRoot = "/"
     , verbosity = normal
-    , rpmVersion = Nothing
     , debAction = Usage
     , buildDeps = []
     , extraDevDeps = []
-    , depMap = Map.empty
+    , extraLibMap = Map.empty
     , binaryPackageDeps = []
     , binaryPackageConflicts = []
     , epochMap = Map.empty
-    -- , debName = Nothing
     , debVersion = Nothing
     , revision = "-1~hackage1"
     , execMap = Map.empty
     , omitLTDeps = False
     , sourceFormat = "3.0 (native)"
-    , compareOnly = False
+    , dryRun = False
+    , validate = False
     , executablePackages = []
     , debMaintainer = Nothing
     }
