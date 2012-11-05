@@ -40,7 +40,7 @@ import Distribution.Text (display)
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.License (License(..))
 import Distribution.Package (PackageIdentifier(..), PackageName(..))
-import Distribution.PackageDescription (PackageDescription(..), exeName, Executable)
+import Distribution.PackageDescription (PackageDescription(..), BuildInfo(buildable), Executable(exeName, buildInfo))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
 import Prelude hiding (catch)
 import System.Directory
