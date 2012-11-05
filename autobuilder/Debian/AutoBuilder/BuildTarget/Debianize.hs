@@ -7,6 +7,7 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
+import Control.Exception (bracket)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.List (isSuffixOf)
@@ -16,11 +17,13 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Relation (PkgName(unPkgName), BinPkgName(unBinPkgName))
 import Debian.Repo hiding (getVersion, pkgName, pkgVersion)
+import qualified Distribution.Debian as Cabal
+import qualified Distribution.Debian.Options as Cabal
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..) {-, PackageName(..)-})
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
-import System.Directory (getDirectoryContents, createDirectoryIfMissing)
+import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.Exit
 import System.FilePath ((</>), takeFileName)
 import System.IO (hPutStrLn, stderr)
@@ -59,21 +62,27 @@ prepare cache package' cabal =
                                     , T.buildWrapper = id }
          _ -> error $ "Download at " ++ dir ++ ": missing or multiple cabal files"
 
+withCurrentDirectory :: FilePath -> IO a -> IO a
+withCurrentDirectory new action = bracket getCurrentDirectory setCurrentDirectory (\ _ -> action)
+
 -- | Run cabal-debian on the given directory, creating a debian subdirectory.
 debianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
 debianize cache pflags dir =
-    do qPutStrLn ("debianizing " ++ dir)
-       let pflags' = if any isMaintainerFlag pflags then pflags else P.Maintainer "Unknown Maintainer <unknown@debian.org>" : pflags
-           args = (["--debianize"] ++
-                   maybe [] (\ x -> ["--ghc-version", x]) ver ++
-                   -- concatMap cflag cflags ++
-                   concatMap pflag pflags')
-       (code, out, err) <- run "cabal-debian" args (\ p -> p {cwd = Just dir}) B.empty
-       case code of
-         ExitFailure _ -> error (showCommandForUser "cabal-debian" args ++ "(in " ++ show dir ++ ") -> " ++ show code ++
-                                 "\nStdout:\n" ++ indent " 1> " out ++ "\nStderr:\n" ++ indent " 2> " err)
-         ExitSuccess -> return ()
+    withCurrentDirectory dir $
+      do qPutStrLn ("debianizing " ++ dir)
+         Cabal.debianize flags
+{-       (code, out, err) <- run "cabal-debian" args (\ p -> p {cwd = Just dir}) B.empty
+         case code of
+           ExitFailure _ -> error (showCommandForUser "cabal-debian" args ++ "(in " ++ show dir ++ ") -> " ++ show code ++
+                                   "\nStdout:\n" ++ indent " 1> " out ++ "\nStderr:\n" ++ indent " 2> " err)
+           ExitSuccess -> return () -}
     where
+      flags = Cabal.compileArgs args Cabal.defaultFlags
+      args = (["--debianize"] ++
+              maybe [] (\ x -> ["--ghc-version", x]) ver ++
+              -- concatMap cflag cflags ++
+              concatMap pflag pflags')
+      pflags' = if any isMaintainerFlag pflags then pflags else P.Maintainer "Unknown Maintainer <unknown@debian.org>" : pflags
       indent pre s = unlines $ map (pre ++) $ lines $ B.unpack $ s
       pflag (P.Maintainer s) = ["--maintainer", s]
       pflag (P.ExtraDep s) = ["--build-dep", s]

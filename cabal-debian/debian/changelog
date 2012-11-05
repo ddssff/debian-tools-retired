@@ -1,3 +1,9 @@
+haskell-cabal-debian (2.0.9) unstable; urgency=low
+
+  * Add a Library section, export all the modules.
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 Nov 2012 06:41:25 -0800
+
 haskell-cabal-debian (2.0.8) unstable; urgency=low
 
   * Bypass abandoned versions.

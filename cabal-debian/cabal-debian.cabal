@@ -1,5 +1,5 @@
 Name:           cabal-debian
-Version:        2.0.8
+Version:        2.0.9
 License:        BSD3
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>
@@ -25,7 +25,6 @@ Library
    base < 5, bytestring, Cabal >= 1.6.0.1, containers, debian >= 3.65, directory, filepath, mtl, parsec >= 3, pretty, pretty-class, process, regex-tdfa, unix, Unixutils >= 1.50, utf8-string
  Exposed-Modules:
    Distribution.Debian
- Other-Modules:
    Distribution.Debian.Bundled
    Distribution.Debian.Config
    Distribution.Debian.Debianize
