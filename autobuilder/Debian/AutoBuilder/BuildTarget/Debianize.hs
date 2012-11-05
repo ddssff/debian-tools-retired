@@ -24,10 +24,10 @@ import Distribution.Package (PackageIdentifier(..) {-, PackageName(..)-})
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
-import System.Exit
+import System.Environment (getEnvironment)
 import System.FilePath ((</>), takeFileName)
 import System.IO (hPutStrLn, stderr)
-import System.Process (CreateProcess(cwd), showCommandForUser)
+import System.Process (showCommandForUser)
 --import System.Unix.Directory (removeRecursiveSafely)
 import System.Process (CmdSpec(RawCommand))
 import System.Process.Read (readModifiedProcessWithExitCode)
@@ -70,20 +70,12 @@ debianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
 debianize cache pflags dir =
     withCurrentDirectory dir $
       do qPutStrLn ("debianizing " ++ dir)
-         Cabal.debianize flags
-{-       (code, out, err) <- run "cabal-debian" args (\ p -> p {cwd = Just dir}) B.empty
-         case code of
-           ExitFailure _ -> error (showCommandForUser "cabal-debian" args ++ "(in " ++ show dir ++ ") -> " ++ show code ++
-                                   "\nStdout:\n" ++ indent " 1> " out ++ "\nStderr:\n" ++ indent " 2> " err)
-           ExitSuccess -> return () -}
+         Cabal.debianize (compilePackageFlags cache pflags) D.defaultFlags
+
+compilePackageFlags :: P.CacheRec -> [P.PackageFLag] -> Cabal.Flags -> Cabal.Flags
+compilePackageFlags cache pflags cflags =
+    Cabal.compileArgs (maybe [] (\ x -> ["--ghc-version", x]) ver ++ concatMap pflag pflags) cflags
     where
-      flags = Cabal.compileArgs args Cabal.defaultFlags
-      args = (["--debianize"] ++
-              maybe [] (\ x -> ["--ghc-version", x]) ver ++
-              -- concatMap cflag cflags ++
-              concatMap pflag pflags')
-      pflags' = if any isMaintainerFlag pflags then pflags else P.Maintainer "Unknown Maintainer <unknown@debian.org>" : pflags
-      indent pre s = unlines $ map (pre ++) $ lines $ B.unpack $ s
       pflag (P.Maintainer s) = ["--maintainer", s]
       pflag (P.ExtraDep s) = ["--build-dep", s]
       pflag (P.ExtraDevDep s) = ["--dev-dep", s]
@@ -96,9 +88,3 @@ debianize cache pflags dir =
       pflag _ = []
 
       ver = P.ghcVersion (P.params cache)
-      isMaintainerFlag (P.Maintainer _) = True
-      isMaintainerFlag _ = False
-
-      run cmd args cwd input =
-          hPutStrLn stderr ("-> " ++ showCommandForUser cmd args ++ " (in " ++ show dir ++ ")") >>
-          readModifiedProcessWithExitCode cwd (RawCommand cmd args) input

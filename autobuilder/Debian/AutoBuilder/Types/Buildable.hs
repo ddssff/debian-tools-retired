@@ -183,7 +183,7 @@ prepareBuild _cache os target =
              findDebianBuildTree dest newdir
 
       copyOrigTarball dest name ver src =
-          hPutStrLn stderr ("forceLink " ++ src ++ " " ++ dest ++ "/" ++ name ++ "-" ++ ver ++ ".orig.tar" ++ takeExtension src) >>
+          qPutStrLn ("forceLink " ++ src ++ " " ++ dest ++ "/" ++ name ++ "-" ++ ver ++ ".orig.tar" ++ takeExtension src) >>
           forceLink src (dest ++ "/" ++ name ++ "_" ++ ver ++ ".orig.tar" ++ takeExtension src)
 
 -- |calls 'createSymbolicLink' but will remove the target and retry if
