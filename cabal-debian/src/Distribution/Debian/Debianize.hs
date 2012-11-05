@@ -112,6 +112,15 @@ debianize flags =
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
       old <- try readDebianization >>= return . either (\ (_ :: SomeException) -> Nothing) Just
       new <- debianization flags pkgDesc compiler old
+      -- It is imperitive that during the time that dpkg-buildpackage
+      -- runs the version number in the changelog and the source and
+      -- package names in the control file do not change, or the bulid
+      -- will fail.  To ensure this set the validate flag.  This means
+      -- you probably need to run debianize before starting
+      -- dpkg-buildpackage.  However, it is still good to be able to
+      -- put the debianize parameters in the Setup file, rather than
+      -- storing them apart from the package in the autobuilder
+      -- configuration.
       when (validate flags)
           ( do versionsMatch <- catch (let oldVersion = logVersion (head (changeLog (fromJust old)))
                                            newVersion = logVersion (head (changeLog new)) in
@@ -130,26 +139,12 @@ debianize flags =
                                       (\ (_ :: SomeException) -> return False)
                when (not (versionsMatch && sourcesMatch && packagesMatch)) (describeDebianization new >>= \ text -> error $ "Debianization mismatch:\n" ++ text))
       if dryRun flags then putStrLn "Debianization (dry run):" >> describeDebianization new >>= putStr else writeDebianization new
-{-
-      mapM_ (uncurry doFile) . Map.toList $ new
-      unless (dryRun flags) (getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True}))
-    where
-        doFile path text =
-            let path' = "debian" </> path in
-            if dryRun flags
-            then doesFileExist path' >>= \ exists ->
-                 if exists
-                 then diff path' text
-                 else putStrLn ("New file: " ++ path') >> diff "/dev/null" text
-            else createDirectoryIfMissing True (takeDirectory path') >>
-                 replaceFile path' text
-        diff path text =
-            readProcessWithExitCode "diff" ["-ruw", path, "-"] text >>= \ (code, out, _err) ->
-            case code of
-              ExitSuccess -> putStr out
-              ExitFailure 1 -> putStr out
-              _ -> hPutStrLn stderr (showCommandForUser "diff" ["-r", "-u", path, "-"] ++ " < " ++ show text ++ " -> " ++ show code)
--}
+
+readDebianization :: IO Debianization
+readDebianization = do
+  (_errs, oldLog) <- readFile "debian/changelog" >>= return . partitionEithers . parseLog
+  oldControl <- parseControlFromFile "debian/control" >>= either (error . show) return
+  return $ Debianization {controlFile = oldControl, changeLog = oldLog, otherFiles = Map.empty}
 
 debianization :: Flags		 -- ^ command line flags
               -> PackageDescription  -- ^ info from the .cabal file
@@ -159,11 +154,9 @@ debianization :: Flags		 -- ^ command line flags
 debianization flags pkgDesc compiler oldDeb =
     do date <- getCurrentLocalRFC822Time
        copyright <- readFile' (licenseFile pkgDesc) `catch` (\ (_ :: SomeException) -> return . showLicense . license $ pkgDesc)
-       debianMaintainer <- getDebianMaintainer flags >>= maybe (error "Missing value for --maintainer") return
-       oldChangelog <- readFile ("debian/changelog") `catch` (\ (_ :: SomeException) -> return "")
-       let (errs, newLog) = updateChangelog flags debianMaintainer pkgDesc date oldChangelog
-       mapM_ (hPutStrLn stderr) errs
-       let (controlFile, installFiles, rulesLines) = control flags compiler debianMaintainer pkgDesc
+       maint <- getMaintainer flags pkgDesc >>= maybe (error "Missing value for --maintainer") return
+       let newLog = updateChangelog flags maint pkgDesc date (maybe [] changeLog oldDeb)
+       let (controlFile, installFiles, rulesLines) = control flags compiler maint pkgDesc
        return $ Debianization
                   { controlFile = controlFile
                   , changeLog = newLog
@@ -179,11 +172,34 @@ debianization flags pkgDesc compiler oldDeb =
         PackageName pkgname = pkgName . package $ pkgDesc
         installFiles = []
 
-readDebianization :: IO Debianization
-readDebianization = do
-  (_errs, oldLog) <- readFile "debian/changelog" >>= return . partitionEithers . parseLog
-  oldControl <- parseControlFromFile "debian/control" >>= either (error . show) return
-  return $ Debianization {controlFile = oldControl, changeLog = oldLog, otherFiles = Map.empty}
+-- | This is the only file I am confident I can merge with an existing
+-- file, since the entries are dated and marked with well understood
+-- version numbers.
+updateChangelog :: Flags -> String -> PackageDescription -> String -> [ChangeLogEntry] -> [ChangeLogEntry]
+updateChangelog flags debianMaintainer pkgDesc date oldEntries =
+    entries = newEntry : dropWhile (\ entry -> logVersion entry >= logVersion newEntry) oldEntries
+    where
+      newEntry = changelog flags debianMaintainer pkgDesc date
+
+changelog :: Flags -> String -> PackageDescription -> String -> ChangeLogEntry
+changelog flags debianMaintainer pkgDesc date =
+    Entry { logPackage = show (D.prettySrcPkgName (debianSourcePackageName' pkgDesc))
+          , logVersion = updateOriginal f $ debianVersionNumber pkgDesc
+          , logDists = [parseReleaseName "unstable"]
+          , logUrgency = "low"
+          , logComments = "  * Debianization generated by cabal-debian\n\n"
+          , logWho = debianMaintainer
+          , logDate = date }
+    where
+      f s = maybe (g s) (\ d -> if older d s then error ("Version from --deb-version (" ++ show d ++ ") is older than hackage version (" ++ show s ++ "), maybe you need to unpin this package?") else d) (debVersion flags)
+      g s = maybe "" (\ n -> show n ++ ":") (Map.lookup (pkgName (package pkgDesc)) (epochMap flags)) ++ s ++ revision flags
+      older debv cabv = parseDebianVersion debv < parseDebianVersion cabv
+
+updateOriginal :: (String -> String) -> DebianVersion -> DebianVersion
+updateOriginal f v = parseDebianVersion . f . show . prettyDebianVersion $ v
+
+debianVersionNumber :: PackageDescription -> DebianVersion
+debianVersionNumber pkgDesc = parseDebianVersion . showVersion . pkgVersion . package $ pkgDesc
 
 describeDebianization :: Debianization -> IO String
 describeDebianization d =
@@ -219,6 +235,15 @@ watch pkgname =
     "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
     " \\\n    ([\\d\\.]*\\d)/\n"
 
+getMaintainer :: Flags -> PackageDescription -> IO (Maybe String)
+getMaintainer flags pkgDesc =
+    return $ maybe cabalMaintainer Just (debMaintainer flags)
+    where
+      cabalMaintainer =
+          case maintainer pkgDesc of
+            "" -> Nothing
+            maint -> Just $ takeWhile (\ c -> c /= ',' && c /= '\n') maint
+
 {-
 Create a debian maintainer field from the environment variables:
 
@@ -244,18 +269,12 @@ now. Here is what the man page for dch has to say:
  DEBEMAIL and DEBFULLNAME when using this script.
 
 -}
-getDebianMaintainer :: Flags -> IO (Maybe String)
-getDebianMaintainer flags =
-    case debMaintainer flags of
-      Nothing -> envMaintainer
-      maint -> return maint
-    where
-      envMaintainer :: IO (Maybe String)
-      envMaintainer =
-          do env <- map (second decodeString) `fmap` getEnvironment
-             return $ do fullname <- lookup "DEBFULLNAME" env `mplus` lookup "NAME" env
-                         email    <- lookup "DEBEMAIL" env `mplus` lookup "EMAIL" env
-                         return (fullname ++ " <" ++ email ++ ">")
+getDebianMaintainer :: IO (Maybe String)
+getDebianMaintainer =
+    do env <- map (second decodeString) `fmap` getEnvironment
+       return $ do fullname <- lookup "DEBFULLNAME" env `mplus` lookup "NAME" env
+                   email    <- lookup "DEBEMAIL" env `mplus` lookup "EMAIL" env
+                   return (fullname ++ " <" ++ email ++ ">")
 
 -- | Generate the debian/rules file.
 cdbsRules :: PackageDescription -> String
@@ -317,7 +336,7 @@ debianExtraPackageName' pkgDesc =
 -- produced.  If the package contains a library we usually want dev,
 -- prof, and doc packages.
 control :: Flags -> Compiler -> String -> PackageDescription -> (Control' String, [(FilePath, String)], [String])
-control flags compiler debianMaintainer pkgDesc =
+control flags compiler maint pkgDesc =
     -- trace ("allBuildDepends " ++ show flags ++ " -> " ++ show (allBuildDepends flags pkgDesc)) $
     (Control {unControl = ([sourceSpec] ++ librarySpecs ++ controlSpecs)}, installFiles, concat rulesLines)
     where
@@ -331,9 +350,11 @@ control flags compiler debianMaintainer pkgDesc =
       sourceSpec =
           Paragraph
           ([Field ("Source", " " ++ show (D.prettySrcPkgName (debianSourcePackageName' pkgDesc))),
-            Field ("Priority", " " ++ "extra"),
+            -- See http://www.debian.org/doc/debian-policy/ch-archive.html#s-priorities
+            Field ("Priority", " " ++ "optional"),
+            -- See http://www.debian.org/doc/debian-policy/ch-archive.html#s-subsections
             Field ("Section", " " ++ "haskell"),
-            Field ("Maintainer", " " ++ debianMaintainer),
+            Field ("Maintainer", " " ++ maint),
             Field ("Build-Depends", " " ++ showDeps' "Build-Depends:" (filterMissing (missingDependencies' flags) (debianBuildDeps ++ map anyrel (buildDeps flags)))),
             Field ("Build-Depends-Indep", " " ++ showDeps' "Build-Depends-Indep:" (filterMissing (missingDependencies' flags) debianBuildDepsIndep)),
             --Field ("Build-Depends-Indep", " " ++ buildDepsIndep),
@@ -461,37 +482,6 @@ extraDeps p deps =
 
 anyrel :: String -> [D.Relation]
 anyrel x = [D.Rel (D.BinPkgName (D.PkgName x)) Nothing Nothing]
-
--- | This is the only file I am confident I can merge with an existing
--- file, since the entries are dated and marked with well understood
--- version numbers.
-updateChangelog :: Flags -> String -> PackageDescription -> String -> String -> ([String], [ChangeLogEntry])
-updateChangelog flags debianMaintainer pkgDesc date old =
-    (concat errs, entries)
-    where
-      entries = newEntry : dropWhile (\ entry -> logVersion entry >= logVersion newEntry) oldEntries
-      (errs, oldEntries) = partitionEithers $ parseLog old
-      newEntry = changelog flags debianMaintainer pkgDesc date
-
-changelog :: Flags -> String -> PackageDescription -> String -> ChangeLogEntry
-changelog flags debianMaintainer pkgDesc date =
-    Entry { logPackage = show (D.prettySrcPkgName (debianSourcePackageName' pkgDesc))
-          , logVersion = updateOriginal f $ debianVersionNumber pkgDesc
-          , logDists = [parseReleaseName "unstable"]
-          , logUrgency = "low"
-          , logComments = "  * Debianization generated by cabal-debian\n\n"
-          , logWho = debianMaintainer
-          , logDate = date }
-    where
-      f s = maybe (g s) (\ d -> if older d s then error ("Version from --deb-version (" ++ show d ++ ") is older than hackage version (" ++ show s ++ "), maybe you need to unpin this package?") else d) (debVersion flags)
-      g s = maybe "" (\ n -> show n ++ ":") (Map.lookup (pkgName (package pkgDesc)) (epochMap flags)) ++ s ++ revision flags
-      older debv cabv = parseDebianVersion debv < parseDebianVersion cabv
-
-updateOriginal :: (String -> String) -> DebianVersion -> DebianVersion
-updateOriginal f v = parseDebianVersion . f . show . prettyDebianVersion $ v
-
-debianVersionNumber :: PackageDescription -> DebianVersion
-debianVersionNumber pkgDesc = parseDebianVersion . showVersion . pkgVersion . package $ pkgDesc
 
 -- generated with:
 -- apt-cache show ghc \
