@@ -466,7 +466,8 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                             map (\ file -> file ++ " " ++ takeDirectory ("usr/share" </> s' ++ "-" ++ show (prettyDebianVersion (debianVersionNumber pkgDesc)) </> file)) (dataFiles pkgDesc))),
                   ["build" </> p' ++ ":: build-ghc-stamp"])]
       utilsDescription = " " ++ "Utility files associated with the " ++ display (package pkgDesc) ++ " package."
-      bundledExecutables = filter (\ p -> not (elem (D.BinPkgName (D.PkgName (exeName p))) (executablePackages flags))) (executables pkgDesc)
+      bundledExecutables = filter (\ p -> not (elem (D.BinPkgName (D.PkgName (exeName p))) (executablePackages flags)))
+                                  (filter (buildable . buildInfo) (executables pkgDesc))
 
 conflicts :: [[D.Relation]] -> [Field' String]
 conflicts [] = []
