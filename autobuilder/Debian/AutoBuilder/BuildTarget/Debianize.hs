@@ -7,7 +7,8 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
-import Control.Exception (bracket)
+import Control.Applicative ((<$>))
+import Control.Exception (bracket, catch)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.List (isSuffixOf)
@@ -23,15 +24,14 @@ import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..) {-, PackageName(..)-})
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
-import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
+import Prelude hiding (catch)
+import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, removeFile, doesFileExist)
 import System.Environment (getEnvironment)
 import System.FilePath ((</>), takeFileName)
-import System.IO (hPutStrLn, stderr)
-import System.Process (showCommandForUser)
+import System.Process (CreateProcess(env))
 --import System.Unix.Directory (removeRecursiveSafely)
 import System.Process (CmdSpec(RawCommand))
-import System.Process.Read (readModifiedProcessWithExitCode)
-import System.Process.Progress (qPutStrLn, runProcessVF)
+import System.Process.Progress (qPutStrLn, runProcessVF, runProcess)
 --import System.Unix.QIO (qPutStrLn)
 
 documentation :: [String]
@@ -43,7 +43,7 @@ prepare :: MonadDeb m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
 prepare cache package' cabal =
     do dir <- sub ("debianize" </> takeFileName (T.getTop cabal))
        liftIO $ createDirectoryIfMissing True dir
-       runProcessVF id (RawCommand "rsync" ["-aHxSpDt", "--delete", T.getTop cabal ++ "/", dir]) B.empty
+       _ <- runProcessVF id (RawCommand "rsync" ["-aHxSpDt", "--delete", T.getTop cabal ++ "/", dir]) B.empty
        cabfiles <- liftIO $ getDirectoryContents dir >>= return . filter (isSuffixOf ".cabal")
        case cabfiles of
          [cabfile] ->
@@ -68,13 +68,32 @@ withCurrentDirectory new action = bracket (getCurrentDirectory >>= \ old -> setC
 -- | Run cabal-debian on the given directory, creating a debian subdirectory.
 debianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
 debianize cache pflags dir =
-    withCurrentDirectory dir $
-      do qPutStrLn ("debianizing " ++ dir)
-         Cabal.debianize (compilePackageFlags cache pflags) D.defaultFlags
+    withCurrentDirectory dir $ qPutStrLn ("debianizing " ++ dir) >> runSetupConfigure >>= callDebianize
+    where
+      -- Try running Setup configure --builddir=debian to see if there
+      -- is code in the Setup file to create a debianization.
+      runSetupConfigure :: IO Bool
+      runSetupConfigure =
+          do removeFile "debian/compat" `catch` (\ (_ :: IOError) -> return ())
+             -- Stash the flags from the package's autobuilder
+             -- configuration in CABALDEBIAN, they may get picked up
+             -- by the code in Setup.hs
+             oldEnv <- filter (not . (== "CABALDEBIAN") . fst) <$> getEnvironment
+             let newEnv = ("CABALDEBIAN", show (collectPackageFlags cache pflags)) : oldEnv
+             _ <- runProcess (\ p -> p {env = Just newEnv}) (RawCommand "runhaskell" ["Setup", "configure", "--builddir=debian"]) B.empty
+             doesFileExist "debian/compat" `catch` (\ (_ :: IOError) -> return False)
+      -- Running Setup configure didn't produce a debianization, call
+      -- the debianize function instead.
+      callDebianize True = Cabal.debianize (compilePackageFlags cache pflags Cabal.defaultFlags)
+      callDebianize False = return ()
 
-compilePackageFlags :: P.CacheRec -> [P.PackageFLag] -> Cabal.Flags -> Cabal.Flags
+compilePackageFlags :: P.CacheRec -> [P.PackageFlag] -> Cabal.Flags -> Cabal.Flags
 compilePackageFlags cache pflags cflags =
-    Cabal.compileArgs (maybe [] (\ x -> ["--ghc-version", x]) ver ++ concatMap pflag pflags) cflags
+    Cabal.compileArgs (collectPackageFlags cache pflags) cflags
+
+collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> [String]
+collectPackageFlags cache pflags =
+    maybe [] (\ x -> ["--ghc-version", x]) ver ++ concatMap pflag pflags
     where
       pflag (P.Maintainer s) = ["--maintainer", s]
       pflag (P.ExtraDep s) = ["--build-dep", s]

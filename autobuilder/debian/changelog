@@ -1,3 +1,12 @@
+autobuilder (6.40) unstable; urgency=low
+
+  * When debianizing, try running Setup configure --builddir=debian,
+    if that doesn't work then we call the debianize function.  This
+    lets the user provide custom debianization code in the haskell
+    package's Setup file.
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 Nov 2012 09:52:00 -0800
+
 autobuilder (6.39) unstable; urgency=low
 
   * Bypass abandoned versions.

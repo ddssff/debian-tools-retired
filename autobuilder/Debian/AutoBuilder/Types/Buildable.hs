@@ -40,7 +40,6 @@ import qualified Debian.Version
 import Prelude hiding (catch)
 import System.Directory(renameDirectory)
 import System.FilePath (takeExtension, (</>))
-import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isAlreadyExistsError)
 import System.Posix.Files (createLink, removeLink)
 import System.Process.Progress (quieter, qPutStrLn {-, ePutStrLn-})
