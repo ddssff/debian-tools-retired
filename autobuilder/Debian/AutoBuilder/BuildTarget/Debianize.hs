@@ -63,7 +63,7 @@ prepare cache package' cabal =
          _ -> error $ "Download at " ++ dir ++ ": missing or multiple cabal files"
 
 withCurrentDirectory :: FilePath -> IO a -> IO a
-withCurrentDirectory new action = bracket getCurrentDirectory setCurrentDirectory (\ _ -> action)
+withCurrentDirectory new action = bracket (getCurrentDirectory >>= \ old -> setCurrentDirectory new >> return old) setCurrentDirectory (\ _ -> action)
 
 -- | Run cabal-debian on the given directory, creating a debian subdirectory.
 debianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
