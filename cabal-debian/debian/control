@@ -59,6 +59,58 @@ Build-Depends-Indep: ghc-doc
 Standards-Version: 3.9.3
 Homepage: http://src.seereason.com/cabal-debian
 
+Package: libghc-cabal-debian-dev
+Architecture: any
+Depends: ${shlibs:Depends}
+         , ${haskell:Depends}
+         , ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
+Provides: ${haskell:Provides}
+Description: Create a debianization for a cabal package
+ Tool for creating debianizations of Haskell packages based on the .cabal
+ file.  If apt-file is installed it will use it to discover what is the
+ debian package name of a C library.
+ .
+  Author: David Fox <dsf@seereason.com>
+  Upstream-Maintainer: David Fox <dsf@seereason.com>
+ .
+ This package contains the normal library files.
+
+Package: libghc-cabal-debian-prof
+Architecture: any
+Depends: ${haskell:Depends}
+         , ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
+Provides: ${haskell:Provides}
+Description: Create a debianization for a cabal package
+ Tool for creating debianizations of Haskell packages based on the .cabal
+ file.  If apt-file is installed it will use it to discover what is the
+ debian package name of a C library.
+ .
+  Author: David Fox <dsf@seereason.com>
+  Upstream-Maintainer: David Fox <dsf@seereason.com>
+ .
+ This package contains the libraries compiled with profiling enabled.
+
+Package: libghc-cabal-debian-doc
+Architecture: all
+Section: doc
+Depends: ${haskell:Depends}
+         , ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
+Description: Create a debianization for a cabal package
+ Tool for creating debianizations of Haskell packages based on the .cabal
+ file.  If apt-file is installed it will use it to discover what is the
+ debian package name of a C library.
+ .
+  Author: David Fox <dsf@seereason.com>
+  Upstream-Maintainer: David Fox <dsf@seereason.com>
+ .
+ This package contains the documentation files.
+
 Package: cabal-debian
 Architecture: any
 Section: misc
