@@ -444,7 +444,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
             conflicts (filterMissing (missingDependencies' flags) (extraDeps (D.BinPkgName (D.PkgName (execName p))) (binaryPackageConflicts flags)))),
            ("debian" </> execName p ++ ".install", "dist-ghc" </> "build" </> execName p </> execName p ++ " usr/bin\n"),
            ["build" </> execName p ++ ":: build-ghc-stamp"])
-      executableDescription = " " ++ "An executable built from the " ++ display (package pkgDesc) ++ " package."
+      executableDescription = " " ++ "An executable built from the " ++ display (pkgName (package pkgDesc)) ++ " package."
       makeUtilsPackage =
           case (bundledExecutables, dataFiles pkgDesc) of
             ([], []) ->
