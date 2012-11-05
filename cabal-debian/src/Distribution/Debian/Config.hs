@@ -81,7 +81,7 @@ data Flags = Flags
     -- configure is run.  Specifically, the version number in the top
     -- changelog entry must match, and the sets of package names in
     -- the control file must match.
-    , executablePackages :: [BinPkgName]
+    , executablePackages :: [Executable]
     -- ^ List of executable debian binary packages to create.
     , debMaintainer :: Maybe String
     -- ^ Value for the maintainer field in the control file.  Note

@@ -15,7 +15,7 @@ import Codec.Binary.UTF8.String (decodeString)
 import Control.Applicative ((<$>))
 import Control.Arrow (second)
 import Control.Exception (SomeException, catch, try)
-import Control.Monad (mplus, when, unless)
+import Control.Monad (mplus, when)
 import Data.Either (partitionEithers)
 import Data.List
 import qualified Data.Map as Map
@@ -35,6 +35,7 @@ import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName
 import Distribution.Debian.Options (compileArgs)
 import Distribution.Debian.PackageDescription (withSimplePackageDescription)
 import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits)
+import Distribution.Debian.Server (Executable(..))
 import Distribution.Debian.Utility
 import Distribution.Text (display)
 import Distribution.Simple.Compiler (Compiler(..))
@@ -45,11 +46,8 @@ import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
 import Prelude hiding (catch)
 import System.Directory
 import System.Environment
-import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory)
 import System.IO (hPutStrLn, stderr)
-import System.Process (readProcessWithExitCode, showCommandForUser)
-import Text.PrettyPrint.HughesPJ
 import Text.PrettyPrint.Class (pretty)
 
 data Debianization
@@ -170,7 +168,6 @@ debianization flags pkgDesc compiler oldDeb =
                            installFiles) }
     where
         PackageName pkgname = pkgName . package $ pkgDesc
-        installFiles = []
 
 -- | This is the only file I am confident I can merge with an existing
 -- file, since the entries are dated and marked with well understood
@@ -238,7 +235,11 @@ watch pkgname =
 
 getMaintainer :: Flags -> PackageDescription -> IO (Maybe String)
 getMaintainer flags pkgDesc =
-    return $ maybe cabalMaintainer Just (debMaintainer flags)
+    do debianMaintainer <- getDebianMaintainer
+       return $ case (debMaintainer flags, cabalMaintainer, debianMaintainer) of
+                  (Just x, _, _) -> Just x
+                  (_, Just x, _) -> Just x
+                  (_, _, x) -> x
     where
       cabalMaintainer =
           case maintainer pkgDesc of
@@ -434,16 +435,15 @@ execAndUtilSpecs flags pkgDesc debianDescription =
     map makeExecutablePackage (executablePackages flags) ++ makeUtilsPackage
     where
       makeExecutablePackage p =
-          let p' = show (D.prettyBinPkgName p) in
           (Paragraph
-           ([Field ("Package", " " ++ p'),
+           ([Field ("Package", " " ++ execName p),
              Field ("Architecture", " " ++ "any"),
              Field ("Section", " " ++ "misc"),
-             Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps p (binaryPackageDeps flags)))),
+             Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (D.BinPkgName (D.PkgName (execName p))) (binaryPackageDeps flags)))),
              Field ("Description", " " ++ maybe debianDescription (const executableDescription) (library pkgDesc))] ++
-            conflicts (filterMissing (missingDependencies' flags) (extraDeps p (binaryPackageConflicts flags)))),
-           ("debian" </> show (D.prettyBinPkgName p) ++ ".install", "dist-ghc" </> "build" </> p' </> p' ++ " usr/bin\n"),
-           ["build" </> p' ++ ":: build-ghc-stamp"])
+            conflicts (filterMissing (missingDependencies' flags) (extraDeps (D.BinPkgName (D.PkgName (execName p))) (binaryPackageConflicts flags)))),
+           ("debian" </> execName p ++ ".install", "dist-ghc" </> "build" </> execName p </> execName p ++ " usr/bin\n"),
+           ["build" </> execName p ++ ":: build-ghc-stamp"])
       executableDescription = " " ++ "An executable built from the " ++ display (package pkgDesc) ++ " package."
       makeUtilsPackage =
           case (bundledExecutables, dataFiles pkgDesc) of
@@ -466,7 +466,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                             map (\ file -> file ++ " " ++ takeDirectory ("usr/share" </> s' ++ "-" ++ show (prettyDebianVersion (debianVersionNumber pkgDesc)) </> file)) (dataFiles pkgDesc))),
                   ["build" </> p' ++ ":: build-ghc-stamp"])]
       utilsDescription = " " ++ "Utility files associated with the " ++ display (package pkgDesc) ++ " package."
-      bundledExecutables = filter (\ p -> not (elem (D.BinPkgName (D.PkgName (exeName p))) (executablePackages flags)))
+      bundledExecutables = filter (\ p -> not (elem (exeName p) (map execName (executablePackages flags))))
                                   (filter (buildable . buildInfo) (executables pkgDesc))
 
 conflicts :: [[D.Relation]] -> [Field' String]

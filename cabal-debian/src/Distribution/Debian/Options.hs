@@ -15,6 +15,7 @@ import Data.Version (parseVersion)
 import Debian.Relation (PkgName(..), BinPkgName(..))
 import Distribution.Compiler (CompilerFlavor(..))
 import Distribution.Debian.Config (Flags(..), DebAction(Usage, Debianize, SubstVar), defaultFlags)
+import Distribution.Debian.Server (Executable(..))
 import Distribution.ReadE (readEOrFail)
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
@@ -23,6 +24,7 @@ import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
                               usageInfo, getOpt')
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitWith, ExitCode (..))
+import System.FilePath (takeFileName)
 import System.IO (Handle, hPutStrLn, stdout)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.Regex.TDFA ((=~))
@@ -52,7 +54,9 @@ parseArgs args = do
 options :: [OptDescr (Flags -> Flags)]
 
 options =
-    [ Option "" ["executable"] (ReqArg (\ name x -> x { executablePackages = b name : executablePackages x }) "NAME")
+    [ Option "" ["executable"] (ReqArg (\ name x -> x { executablePackages = Executable name Nothing : executablePackages x }) "NAME")
+             "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
+      Option "" ["script"] (ReqArg (\ path x -> x { executablePackages = Script {execName = takeFileName path, scriptPath = path} : executablePackages x }) "NAME")
              "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
       Option "" ["ghc"] (NoArg (\x -> x { compilerFlavor = GHC }))
              "Compile with GHC",
