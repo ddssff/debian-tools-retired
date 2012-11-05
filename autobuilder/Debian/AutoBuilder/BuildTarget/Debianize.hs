@@ -9,7 +9,6 @@ module Debian.AutoBuilder.BuildTarget.Debianize
 
 import Control.Applicative ((<$>))
 import Control.Exception (bracket, catch)
-import Control.Monad (unless)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.List (isSuffixOf)
@@ -31,7 +30,7 @@ import System.Environment (getEnvironment)
 import System.FilePath ((</>), takeFileName)
 import System.Process (CreateProcess(env))
 import System.Process (CmdSpec(RawCommand))
-import System.Process.Progress (runProcessVF, runProcess, verbosity)
+import System.Process.Progress (qPutStrLn, runProcessVF, runProcess, verbosity)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
@@ -69,7 +68,8 @@ debianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
 debianize cache pflags dir =
     do args <- collectPackageFlags cache pflags
        let flags = Cabal.compileArgs args Cabal.defaultFlags
-       withCurrentDirectory dir $ runSetupConfigure args >>= \ done -> unless done (Cabal.debianize flags)
+       withCurrentDirectory dir $ runSetupConfigure args >>= \ done ->
+                                  if done then qPutStrLn "Setup configure succeeded in creating a debianization!" else Cabal.debianize flags
          -- Running Setup configure didn't produce a debianization, call
          -- the debianize function instead.
 
