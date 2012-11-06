@@ -109,7 +109,8 @@ debianize :: Flags -> IO ()
 debianize flags =
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
       old <- try readDebianization >>= return . either (\ (_ :: SomeException) -> Nothing) Just
-      new <- debianization flags pkgDesc compiler old
+      let flags' = flags {buildDeps = buildDeps flags ++ if selfDepend flags then ["libghc-cabal-debian-dev"] else []}
+      new <- debianization flags' pkgDesc compiler old
       -- It is imperitive that during the time that dpkg-buildpackage
       -- runs the version number in the changelog and the source and
       -- package names in the control file do not change, or the bulid
@@ -119,7 +120,7 @@ debianize flags =
       -- put the debianize parameters in the Setup file, rather than
       -- storing them apart from the package in the autobuilder
       -- configuration.
-      when (validate flags)
+      when (validate flags')
           ( do versionsMatch <- catch (let oldVersion = logVersion (head (changeLog (fromJust old)))
                                            newVersion = logVersion (head (changeLog new)) in
                                        hPutStrLn stderr ("oldVersion: " ++ show (pretty oldVersion) ++ ", newVersion: " ++ show (pretty newVersion)) >>
@@ -136,7 +137,7 @@ debianize flags =
                                        return (Set.fromList oldPackages == Set.fromList newPackages))
                                       (\ (_ :: SomeException) -> return False)
                when (not (versionsMatch && sourcesMatch && packagesMatch)) (describeDebianization new >>= \ text -> error $ "Debianization mismatch:\n" ++ text))
-      if dryRun flags then putStrLn "Debianization (dry run):" >> describeDebianization new >>= putStr else writeDebianization new
+      if dryRun flags' then putStrLn "Debianization (dry run):" >> describeDebianization new >>= putStr else writeDebianization new
 
 readDebianization :: IO Debianization
 readDebianization = do
