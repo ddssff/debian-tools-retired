@@ -39,7 +39,7 @@ import System.Process.Progress (runProcessF, qPutStrLn, quieter)
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
 retrieve :: MonadDeb m => OSImage -> P.CacheRec -> P.Packages -> m Download
 retrieve buildOS cache target =
-    (\ x -> qPutStrLn (" " ++ show (P.spec target)) >> quieter 1 x) $
+    (\ x -> qPutStrLn (" " ++ show (P.spec target)) >> x) $
      case P.spec target of
       P.Apt dist package -> Apt.prepare cache target dist (SrcPkgName (PkgName package))
       P.Bzr string -> Bzr.prepare cache target string

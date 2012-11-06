@@ -57,7 +57,7 @@ import System.Exit(ExitCode(..), exitWith)
 import qualified System.IO as IO
 import System.IO.Error(isDoesNotExistError)
 import System.Process (CmdSpec(..))
-import System.Process.Progress (Output, timeTask, runProcessF, withModifiedVerbosity, quieter, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
+import System.Process.Progress (Output, timeTask, runProcessF, withModifiedVerbosity, quieter, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
 import Text.PrettyPrint.Class (pretty)
@@ -95,7 +95,7 @@ doParameterSet results (params, packages) =
     if any isFailure results
     then return results
     else
-        quieter (- (P.verbosity params))
+        noisier (P.verbosity params)
           (do top <- liftIO $ P.computeTopDir params
               withLock (top ++ "/lockfile")
                 (runTopT top (quieter 2 (P.buildCache params packages) >>= runParameterSet)))
