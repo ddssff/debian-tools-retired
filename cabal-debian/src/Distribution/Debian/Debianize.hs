@@ -454,7 +454,9 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                 let p = debianUtilsPackageName' pkgDesc
                     p' = show (D.prettyBinPkgName p)
                     s = debianSourcePackageName' pkgDesc
-                    s' = show (D.prettySrcPkgName s) in
+                    s' = show (D.prettySrcPkgName s)
+                    c = package pkgDesc
+                    c' = display c in
                 [(Paragraph
                   ([Field ("Package", " " ++ p'),
                     Field ("Architecture", " " ++ "any"),
@@ -464,7 +466,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                    conflicts (extraDeps p (binaryPackageConflicts flags))),
                   ("debian" </> p' ++ ".install",
                    unlines (map (\ p -> "dist-ghc" </> "build" </> exeName p </> exeName p ++ " " ++ "usr/bin") bundledExecutables ++
-                            map (\ file -> file ++ " " ++ takeDirectory ("usr/share" </> s' ++ "-" ++ show (prettyDebianVersion (debianVersionNumber pkgDesc)) </> file)) (dataFiles pkgDesc))),
+                            map (\ file -> file ++ " " ++ takeDirectory ("usr/share" </> c' </> file)) (dataFiles pkgDesc))),
                   ["build" </> p' ++ ":: build-ghc-stamp"])]
       utilsDescription = " " ++ "Utility files associated with the " ++ display (package pkgDesc) ++ " package."
       bundledExecutables = filter (\ p -> not (elem (exeName p) (map execName (executablePackages flags))))
