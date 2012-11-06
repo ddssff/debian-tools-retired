@@ -130,6 +130,8 @@ data PackageFlag
     -- for the given cabal package
     | DarcsTag String
     -- ^ When doing a darcs get pass this string to darcs via the --tag flag.
+    | GitBranch String
+    -- ^ When doing a 'git clone' pass this string to darcs via the --branch flag.
     deriving (Show, Eq, Ord)
 
 relaxInfo :: [PackageFlag] -> [String]

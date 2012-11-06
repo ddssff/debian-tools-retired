@@ -86,6 +86,7 @@ Library
     Debian.AutoBuilder.BuildTarget.DebDir,
     Debian.AutoBuilder.BuildTarget.Debianize,
     Debian.AutoBuilder.BuildTarget.Dir,
+    Debian.AutoBuilder.BuildTarget.Git,
     Debian.AutoBuilder.BuildTarget.Hackage,
     Debian.AutoBuilder.BuildTarget.Hg,
     Debian.AutoBuilder.BuildTarget.Patch,
