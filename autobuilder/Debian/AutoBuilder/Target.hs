@@ -402,8 +402,12 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog ta
                                              exists <- doesFileExist (path' </> "debian/patches/autobuilder.diff")
                                              when (not exists) (removeDirectory (path' </> "debian/patches"))) -}
                              )
+             -- If newVersion is set, pass a parameter to cabal-debian
+             -- to set the exact version number.
+             let ver = maybe [] (\ v -> [("CABALDEBIAN", Just (show ["--deb-version", show (prettyDebianVersion v)]))]) newVersion
+             let env = ver ++ P.setEnv (P.params cache)
              result <- liftIO $ try (T.buildWrapper (download (tgt target))
-                                     (buildDebs (P.noClean (P.params cache)) False (P.setEnv (P.params cache)) buildOS buildTree status))
+                                     (buildDebs (P.noClean (P.params cache)) False env buildOS buildTree status))
              case result of
                Left (e :: SomeException) -> return (Failure [show e])
                Right elapsed -> return (Success (buildTree, elapsed))
