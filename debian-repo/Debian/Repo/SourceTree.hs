@@ -145,10 +145,10 @@ buildDebs noClean _twice setEnv buildOS buildTree status =
       let run cmd = timeTask . useEnv root forceList . noisier 3 $ runProcessF (\ p -> p {env = Just (modEnv (("LOGNAME", Just "root") : setEnv) env0),
                                                                                           cwd = dropPrefix root path}) cmd L.empty
       _ <- run (RawCommand "chmod" ["ugo+x", "debian/rules"])
-      let buildCmd = RawCommand "dpkg-buildpackge" (concat [["-sa"],
-                                                            case status of Indep _ -> ["-B"]; _ -> [],
-                                                            if noSecretKey then ["-us", "-uc"] else [],
-                                                            if noClean then ["-nc"] else []])
+      let buildCmd = RawCommand "dpkg-buildpackage" (concat [["-sa"],
+                                                             case status of Indep _ -> ["-B"]; _ -> [],
+                                                             if noSecretKey then ["-us", "-uc"] else [],
+                                                             if noClean then ["-nc"] else []])
       (result, elapsed) <- run buildCmd
       case keepResult result of
         (ExitFailure n : _) -> fail $ "*** FAILURE: " ++ showCmd buildCmd ++ " -> " ++ show n
