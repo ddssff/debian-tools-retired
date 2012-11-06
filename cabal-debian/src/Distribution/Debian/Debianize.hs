@@ -35,7 +35,7 @@ import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName
 import Distribution.Debian.Options (compileArgs)
 import Distribution.Debian.PackageDescription (withSimplePackageDescription)
 import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits)
-import Distribution.Debian.Server (Executable(..))
+import Distribution.Debian.Server (serverFiles, Executable(..))
 import Distribution.Debian.Utility
 import Distribution.Text (display)
 import Distribution.Simple.Compiler (Compiler(..))
@@ -154,7 +154,7 @@ debianization flags pkgDesc compiler oldDeb =
        copyright <- readFile' (licenseFile pkgDesc) `catch` (\ (_ :: SomeException) -> return . showLicense . license $ pkgDesc)
        maint <- getMaintainer flags pkgDesc >>= maybe (error "Missing value for --maintainer") return
        let newLog = updateChangelog flags maint pkgDesc date (maybe [] changeLog oldDeb)
-       let (controlFile, installFiles, rulesLines) = control flags compiler maint pkgDesc
+       let (controlFile, execFiles, rulesLines) = control flags compiler maint pkgDesc
        return $ Debianization
                   { controlFile = controlFile
                   , changeLog = newLog
@@ -165,7 +165,8 @@ debianization flags pkgDesc compiler oldDeb =
                             ("debian/copyright", copyright),
                             ("debian/source/format", sourceFormat flags ++ "\n"),
                             ("debian/watch", watch pkgname)] ++
-                           installFiles) }
+                           execFiles ++
+                           concatMap serverFiles (executablePackages flags)) }
     where
         PackageName pkgname = pkgName . package $ pkgDesc
 

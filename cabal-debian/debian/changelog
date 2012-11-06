@@ -1,3 +1,9 @@
+haskell-cabal-debian (2.1.2) unstable; urgency=low
+
+  * Output the server support files.
+
+ -- David Fox <dsf@seereason.com>  Tue, 06 Nov 2012 06:37:18 -0800
+
 haskell-cabal-debian (2.1.1) unstable; urgency=low
 
   * Restore code that checks for version number match when validating
