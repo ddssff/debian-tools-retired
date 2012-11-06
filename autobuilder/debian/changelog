@@ -1,3 +1,9 @@
+autobuilder (6.41) unstable; urgency=low
+
+  * Send CABALDEBIAN=["--deb-version", versionnumber] to cabal-debian
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 Nov 2012 17:43:34 -0800
+
 autobuilder (6.40) unstable; urgency=low
 
   * When debianizing, try running Setup configure --builddir=debian,

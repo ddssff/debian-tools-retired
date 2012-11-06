@@ -1,3 +1,9 @@
+haskell-debian-repo (5.33) unstable; urgency=low
+
+  * Improve the type of the type of the environment variable parameter to buildDebs
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 Nov 2012 17:40:44 -0800
+
 haskell-debian-repo (5.32) unstable; urgency=low
 
   * Bypass abandoned versions.

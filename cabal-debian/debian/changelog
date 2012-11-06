@@ -1,3 +1,11 @@
+haskell-cabal-debian (2.1.1) unstable; urgency=low
+
+  * Restore code that checks for version number match when validating
+    a debianization.  The autobuilder can now pass the version number
+    to cabal-debian, so it should match.
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 Nov 2012 17:42:32 -0800
+
 haskell-cabal-debian (2.1.0) unstable; urgency=low
 
   * Enable processing of Script, Server and WebSite executables.
