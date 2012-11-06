@@ -1,3 +1,9 @@
+haskell-debian-repo (5.34) unstable; urgency=low
+
+  * Add Debian.Repo.Sync (rsync)
+
+ -- David Fox <dsf@seereason.com>  Tue, 06 Nov 2012 05:42:01 -0800
+
 haskell-debian-repo (5.33) unstable; urgency=low
 
   * Improve the type of the type of the environment variable parameter to buildDebs

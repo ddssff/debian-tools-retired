@@ -19,6 +19,7 @@ module Debian.Repo
     , module Debian.Repo.Slice
     , module Debian.Repo.SourcesList
     , module Debian.Repo.SourceTree
+    , module Debian.Repo.Sync
     , module Debian.Repo.Types
     ) where
 
@@ -39,4 +40,5 @@ import Debian.Repo.Repository
 import Debian.Repo.Slice
 import Debian.Repo.SourcesList
 import Debian.Repo.SourceTree
+import Debian.Repo.Sync
 import Debian.Repo.Types

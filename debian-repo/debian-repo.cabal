@@ -1,5 +1,5 @@
 Name:           debian-repo
-Version:        5.33
+Version:        5.34
 License:        BSD3
 License-File:	debian/copyright
 Author:         David Fox
@@ -57,6 +57,7 @@ Library
         Debian.Repo.Slice,
         Debian.Repo.SourcesList,
         Debian.Repo.SourceTree,
+        Debian.Repo.Sync,
         Debian.Repo.Types,
         Debian.VersionPolicy,
         Text.Format,

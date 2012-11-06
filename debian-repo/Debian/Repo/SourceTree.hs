@@ -36,6 +36,7 @@ import Debian.Control.String ( Field'(Comment), Paragraph'(..), Control'(Control
 import Debian.Relation (BinPkgName)
 import Debian.Repo.Changes ( findChangesFiles )
 import Debian.Repo.OSImage ( OSImage )
+import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types ( AptCache(rootDir), EnvRoot(rootPath) )
 import qualified Debian.Version as V ( version )
 import Extra.Files ( replaceFile, getSubDirectories )
@@ -173,11 +174,7 @@ forceList output = evaluate (length output) >> return output
 -- |Make a copy of a source tree in a directory.
 copySourceTree :: (SourceTreeC t) => t -> FilePath -> IO SourceTree
 copySourceTree tree dest =
-    createDirectoryIfMissing True dest >> runProcessF id (ShellCommand command) L.empty >> return (SourceTree dest)
-    where
-      command = "rsync -aHxSpDt --delete '" ++ topdir tree ++ "/' '" ++ dest ++ "'"
-
-
+    createDirectoryIfMissing True dest >> rsync [] (topdir tree) dest >> return (SourceTree dest)
 
 copyDebianSourceTree :: (DebianSourceTreeC t) => t -> FilePath -> IO DebianSourceTree
 copyDebianSourceTree src dest =

@@ -29,6 +29,7 @@ import Debian.Repo.Package ( sourcePackagesOfIndex', binaryPackagesOfIndex' )
 import Debian.Relation ( ParseRelations(..), Relations )
 import Debian.Repo.Slice ( sourceSlices, binarySlices, verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
+import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types ( AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage, NamedSliceList(sliceList, sliceListName), SliceList(..), Slice(..),
                            Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo), EnvPath(EnvPath, envRoot), EnvRoot(rootPath), outsidePath )
 import Debian.URI ( uriToString', URI(uriScheme) )
@@ -42,8 +43,8 @@ import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import qualified System.IO as IO ( stderr, hPutStrLn, hPutStr )
 import System.Posix.Files ( createLink )
-import System.Process (readProcess, CmdSpec(ShellCommand, RawCommand))
-import System.Process.Progress (ePutStr, ePutStrLn, Output(..), readProcessChunks, keepResult, doOutput,
+import System.Process (readProcess, CmdSpec(ShellCommand))
+import System.Process.Progress (ePutStr, ePutStrLn, readProcessChunks, doOutput,
                                 runProcess, runProcessF, timeTask, unpackOutputs, oneResult, quieter, foldOutputsL)
 import System.Unix.Chroot ( useEnv )
 import System.Unix.Directory (removeRecursiveSafely)
@@ -407,7 +408,7 @@ chrootEnv os dst = os {osRoot=dst}
 -- subdir is appended.  There must have been a reason at one point.
 syncEnv :: OSImage -> OSImage -> IO OSImage
 syncEnv src dst =
-    mkdir >> umount >> sync >> return dst
+    mkdir >> umount >> rsync ["--exclude=/work/build/*"] (rootPath (osRoot src)) (rootPath (osRoot dst)) >> return dst
     where
       mkdir = createDirectoryIfMissing True (rootPath (osRoot dst) ++ "/work")
       umount =
@@ -417,10 +418,6 @@ syncEnv src dst =
              case filter (\ (_, (code, _, _)) -> code /= ExitSuccess) (srcResult ++ dstResult) of
                [] -> return ()
                failed -> fail $ "umount failure(s): " ++ show failed
-      sync :: IO [Output L.ByteString]
-      sync = {- return empty >>= e 0 >>= f 0 >>= o 0 >>= x 0 >>= -} readProcessChunks id (RawCommand cmd args) L.empty >>= doOutput
-      cmd = "rsync"
-      args = ["-aHxSpDt", "--exclude=/work/build/*", "--delete", rootPath (osRoot src) ++ "/", rootPath (osRoot dst) ]
 
 localeGen :: String -> OSImage -> IO OSImage
 localeGen locale os =
@@ -584,16 +581,15 @@ syncPool os =
       Just repo ->
           ePutStrLn ("Syncing local pool from " ++ outsidePath (repoRoot repo) ++ " -> " ++ rootPath root) >>
           try (createDirectoryIfMissing True (rootPath root ++ "/work")) >>=
-          either (\ (e :: SomeException) -> return . Left . show $ e) (const (rsync repo)) >>=
+          either (\ (e :: SomeException) -> return . Left . show $ e) (const (rsync' repo)) >>=
           -- either (return . Left) (const (updateLists os)) >>=
           either (error . show) (const (return os))
     where
-      rsync repo =
-          runProcess id (ShellCommand (cmd repo)) L.empty >>= return . keepResult >>= \ result ->
-          case result of
-            (ExitFailure n : _) -> return (Left $ "*** FAILURE syncing local pool: " ++ cmd repo ++ " -> " ++ show n)
-            _ -> return (Right ())
-      cmd repo = "rsync -aHxSpDt --delete '" ++ outsidePath (repoRoot repo) ++ "/' '" ++ rootPath root ++ "/work/localpool'"
+      rsync' repo =
+          do result <- rsync [] (outsidePath (repoRoot repo)) (rootPath root ++ "/work/localpool")
+             case result of
+               ExitFailure n -> return (Left $ "*** FAILURE syncing local pool from " ++ outsidePath (repoRoot repo) ++ ": " ++ show n)
+               _ -> return (Right ())
       root = osRoot os
 
 updateLists :: OSImage -> IO NominalDiffTime

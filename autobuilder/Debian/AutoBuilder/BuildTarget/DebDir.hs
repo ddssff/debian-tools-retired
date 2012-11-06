@@ -28,8 +28,8 @@ prepare package upstream debian =
     sub "deb-dir" >>= \ dir ->
     sub ("deb-dir" </> show (md5 (pack (show (P.spec package))))) >>= \ dest ->
     liftIO (createDirectoryIfMissing True dir) >>
-    copyUpstream dest >>
-    copyDebian dest >>
+    rsync [] (T.getTop upstream) dest >>
+    rsync [] (T.getTop debian </> "debian") dest >>
     liftIO (findDebianSourceTree dest) >>= \ tree ->
     let tgt = T.Download {
                 T.package = package
@@ -50,10 +50,3 @@ prepare package upstream debian =
             -- when a new upstream appears.  We should just modify the changelog directly.
             LT -> error $ show (P.spec package) ++ ": version in Debian changelog (" ++ version debianV ++ ") is too old for the upstream (" ++ showVersion upstreamV ++ ")"
             _ -> return tgt
-    where
-      copyUpstream dest = runProcessF id (ShellCommand (cmd1 dest)) empty
-      copyDebian dest = runProcessF id (ShellCommand (cmd2 dest)) empty
-      upstreamDir = T.getTop upstream
-      debianDir = T.getTop debian
-      cmd1 dest = ("set -x && rsync -aHxSpDt --delete '" ++ upstreamDir ++ "/' '" ++ dest ++ "'")
-      cmd2 dest = ("set -x && rsync -aHxSpDt --delete '" ++ debianDir ++ "/debian' '" ++ dest ++ "/'")

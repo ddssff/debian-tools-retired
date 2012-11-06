@@ -18,6 +18,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Relation (PkgName(unPkgName), BinPkgName(unBinPkgName))
 import Debian.Repo hiding (getVersion, pkgName, pkgVersion)
+import Debian.Repo.Sync (rsync)
 import qualified Distribution.Debian as Cabal
 import qualified Distribution.Debian.Options as Cabal
 import Distribution.Verbosity (normal)
@@ -30,7 +31,7 @@ import System.Environment (getEnvironment)
 import System.FilePath ((</>), takeFileName)
 import System.Process (CreateProcess(env))
 import System.Process (CmdSpec(RawCommand))
-import System.Process.Progress (qPutStrLn, runProcessVF, runProcess, verbosity)
+import System.Process.Progress (qPutStrLn, runProcess, verbosity)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
@@ -41,7 +42,7 @@ prepare :: MonadDeb m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
 prepare cache package' cabal =
     do dir <- sub ("debianize" </> takeFileName (T.getTop cabal))
        liftIO $ createDirectoryIfMissing True dir
-       _ <- runProcessVF id (RawCommand "rsync" ["-aHxSpDt", "--delete", T.getTop cabal ++ "/", dir]) B.empty
+       _ <- rsync [] (T.getTop cabal) dir
        cabfiles <- liftIO $ getDirectoryContents dir >>= return . filter (isSuffixOf ".cabal")
        case cabfiles of
          [cabfile] ->
