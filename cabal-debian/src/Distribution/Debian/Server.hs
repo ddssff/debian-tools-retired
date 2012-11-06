@@ -17,7 +17,7 @@ module Distribution.Debian.Server
        , serverAccessLog
        ) where
 
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, fromMaybe)
 import System.FilePath ((</>))
 import System.Process (showCommandForUser)
 
@@ -26,8 +26,6 @@ type File = (FilePath, String)
 -- | Return a list of files to add to the debianization to manage the
 -- server or web site.
 serverFiles :: Executable -> [File]
-serverFiles exec@(Script {}) =
-    [debianFiles exec]
 serverFiles exec@(Executable {}) =
     [debianFiles exec] ++
     maybe []
@@ -49,11 +47,12 @@ needsInit :: Server -> Bool
 needsInit _ = True
 
 data Executable
-    = Script {execName :: String, scriptPath :: FilePath}
-      -- ^ Relative path to some executable to be installed
-    | Executable {execName :: String, execServer :: Maybe Server}
-      -- ^ The name of an Executable section of the cabal file
-      deriving (Eq, Show)
+    = Executable
+      { execName :: String -- ^ The name of the executable file
+      , sourceDir :: Maybe FilePath -- ^ where to find it, default is dist/build/<execName>/<execName>
+      , destDir :: Maybe FilePath -- ^ where to put it, default is usr/bin/<execName>
+      , execServer :: Maybe Server -- ^ Information about servers - hostname, port, start and stop info, etc.
+      } deriving (Eq, Show)
 
 -- | Information about the web site we are packaging.
 data Server
@@ -134,11 +133,9 @@ debianDirs e server@(Server {..}) =
    else [])
 
 debianFiles :: Executable -> File
-debianFiles e@(Script {}) =
-    ("debian" </> execName e ++ ".install", scriptPath e ++ " " ++ "usr/bin")
 debianFiles e@(Executable {}) =
     ("debian" </> execName e ++ ".install",
-     unlines (serverBinaryInstall ++ maybe [] (\ server -> logrotate server ++ apacheSiteInstall server) (execServer e)))
+     unlines (binaryInstall : maybe [] (\ server -> logrotate server ++ apacheSiteInstall server) (execServer e)))
     where
       logrotate server =
           if needsInit server
@@ -146,8 +143,8 @@ debianFiles e@(Executable {}) =
           else []
       apacheSiteInstall server =
           maybe [] (\ x -> ["dist-ghc/apachesite" </> apacheSiteName x ++ " etc/apache2/sites-available"]) (site server)
-      serverBinaryInstall =
-          ["dist-ghc" </> "build" </> execName e </> execName e ++ " " ++ " usr/bin"]
+      binaryInstall =
+          fromMaybe ("dist-ghc" </> "build" </> execName e </> execName e) (sourceDir e) ++ " " ++ fromMaybe "usr/bin" (destDir e)
 
 debianLinks :: Executable -> Server -> File
 debianLinks e (Server {..}) =
