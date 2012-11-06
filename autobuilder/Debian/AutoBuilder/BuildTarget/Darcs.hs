@@ -1,5 +1,8 @@
 {-# LANGUAGE Rank2Types, ScopedTypeVariables #-}
-module Debian.AutoBuilder.BuildTarget.Darcs where
+module Debian.AutoBuilder.BuildTarget.Darcs
+    ( documentation
+    , prepare
+    ) where
 
 import Control.Exception (try, SomeException)
 import Control.Monad (when)
