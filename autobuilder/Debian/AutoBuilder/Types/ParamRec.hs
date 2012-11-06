@@ -103,7 +103,7 @@ data ParamRec =
     -- generally means the sources.list is incorrect.  However, this
     -- flag can be necessary if a package gets withdrawn from the build
     -- or base release.
-    , setEnv :: [String]
+    , setEnv :: [(String, Maybe String)]
     -- ^ Set one or more environment variables during the build, e.g. [_$_]
     -- @setEnv = ["DEBIAN_KERNEL_JOBS=5"]@.
     , dryRun :: Bool

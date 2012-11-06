@@ -30,7 +30,6 @@ import Control.Monad (foldM)
 import Control.Monad.Trans ( MonadIO(..) )
 import qualified Data.ByteString.Lazy.Char8 as L ( empty )
 import Data.List ( nubBy, sortBy, intercalate )
-import Data.Maybe ( fromJust )
 import Data.Time ( NominalDiffTime )
 import Debian.Changes ( ChangeLogEntry(..), parseLog, ChangesFile(..), prettyChangesFile, prettyEntry )
 import Debian.Control.String ( Field'(Comment), Paragraph'(..), Control'(Control), ControlFunctions(parseControl), Control )
@@ -45,8 +44,9 @@ import System.Directory ( createDirectoryIfMissing, doesDirectoryExist, doesFile
 import System.Environment ( getEnv )
 import System.Exit (ExitCode(ExitFailure))
 import System.IO (withFile, IOMode(ReadMode), hGetContents)
-import System.Process (CmdSpec(..))
-import System.Process.Progress (runProcess, runProcessF, timeTask, quieter, keepResult)
+import System.Environment (getEnvironment)
+import System.Process (CreateProcess(cwd, env), CmdSpec(..), showCommandForUser)
+import System.Process.Progress (runProcess, runProcessF, timeTask, noisier, keepResult)
 import System.Unix.Chroot ( useEnv )
 
 -- |Any directory containing source code.
@@ -135,33 +135,37 @@ explainSourcePackageStatus (Indep missing) = "Some or all architecture-dependent
 explainSourcePackageStatus None = "This version of the package is not present."
 
 -- | Run dpkg-buildpackage in a source tree.
-buildDebs :: (DebianBuildTreeC t) => Bool -> Bool -> [String] -> OSImage -> t -> SourcePackageStatus -> IO NominalDiffTime
-buildDebs noClean twice setEnv buildOS buildTree status =
+buildDebs :: (DebianBuildTreeC t) => Bool -> Bool -> [(String, Maybe String)] -> OSImage -> t -> SourcePackageStatus -> IO NominalDiffTime
+buildDebs noClean _twice setEnv buildOS buildTree status =
     do
       noSecretKey <- getEnv "HOME" >>= return . (++ "/.gnupg") >>= doesDirectoryExist >>= return . not
+      env0 <- getEnvironment
       -- Set LOGNAME so dpkg-buildpackage doesn't die when it fails to
       -- get the original user's login information
-      let buildcmd =
-              "dpkg-buildpackage -sa "
-              ++ (case status of Indep _ -> " -B "; _ -> "")
-                     ++ (if noSecretKey then " -us -uc" else "")
-                            ++ (if noClean then " -nc" else "")
-      let fullcmd = ("export LOGNAME=root; " ++
-                     concat (map (\ x -> "export " ++ x ++ "; ") setEnv) ++
-                     "cd '" ++ fromJust (dropPrefix root path) ++ "' && " ++
-                     "chmod ugo+x debian/rules && " ++
-                     if  twice
-                     -- Try to build twice, some packages do configuration the first
-                     -- time 'so that it is NEVER run during an automated build.' :-/
-                     then "{ " ++ buildcmd ++ " || " ++ buildcmd ++ " ; } "
-                     else buildcmd)
-      (result, elapsed) <- timeTask . useEnv root forceList $ quieter (-3) $ runProcessF id (ShellCommand fullcmd) L.empty
+      let run cmd = timeTask . useEnv root forceList . noisier 3 $ runProcessF (\ p -> p {env = Just (modEnv (("LOGNAME", Just "root") : setEnv) env0),
+                                                                                          cwd = dropPrefix root path}) cmd L.empty
+      _ <- run (RawCommand "chmod" ["ugo+x", "debian/rules"])
+      let buildCmd = RawCommand "dpkg-buildpackge" (concat [["-sa"],
+                                                            case status of Indep _ -> ["-B"]; _ -> [],
+                                                            if noSecretKey then ["-us", "-uc"] else [],
+                                                            if noClean then ["-nc"] else []])
+      (result, elapsed) <- run buildCmd
       case keepResult result of
-        (ExitFailure n : _) -> fail $ "*** FAILURE: " ++ fullcmd ++ " -> " ++ show n
+        (ExitFailure n : _) -> fail $ "*** FAILURE: " ++ showCmd buildCmd ++ " -> " ++ show n
         _ -> return elapsed
     where
       path = debdir buildTree
       root = rootPath (rootDir buildOS)
+      showCmd (RawCommand cmd args) = showCommandForUser cmd args
+      showCmd (ShellCommand cmd) = cmd
+
+modEnv :: [(String, Maybe String)] -> [(String, String)] -> [(String, String)]
+modEnv [] env0 = env0
+modEnv pairs env0 = foldl modEnv1 env0 pairs
+-- foldM :: Monad m => (a -> b -> m a) -> a -> [b] -> m a
+
+modEnv1 :: [(String, String)] -> (String, Maybe String) -> [(String, String)]
+modEnv1 env0 (name, mvalue) = maybe [] (\ v -> [(name, v)]) mvalue ++ filter ((/= name) . fst) env0
 
 forceList :: [a] -> IO [a]
 forceList output = evaluate (length output) >> return output

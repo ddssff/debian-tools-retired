@@ -32,7 +32,7 @@ module Debian.Repo.Monads.Apt
     , countTasks
     ) where
 
-import Control.Exception (Exception, SomeException, tryJust)
+import Control.Exception (Exception, tryJust)
 import Control.Monad.CatchIO (MonadCatchIO)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.State (get, put)
