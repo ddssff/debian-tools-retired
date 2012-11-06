@@ -120,11 +120,11 @@ debianize flags =
       -- storing them apart from the package in the autobuilder
       -- configuration.
       when (validate flags)
-          ( do {- versionsMatch <- catch (let oldVersion = logVersion (head (changeLog (fromJust old)))
+          ( do versionsMatch <- catch (let oldVersion = logVersion (head (changeLog (fromJust old)))
                                            newVersion = logVersion (head (changeLog new)) in
                                        hPutStrLn stderr ("oldVersion: " ++ show (pretty oldVersion) ++ ", newVersion: " ++ show (pretty newVersion)) >>
                                        return (oldVersion == newVersion))
-                                      (\ (_ :: SomeException) -> return False) -}
+                                      (\ (_ :: SomeException) -> return False)
                sourcesMatch <- catch (let oldSource = fromJust (lookupP "Source" (head (unControl (controlFile (fromJust old)))))
                                           newSource = fromJust (lookupP "Source" (head (unControl (controlFile new)))) in
                                       hPutStrLn stderr ("oldSource: " ++ show (pretty oldSource) ++ "\nnewSource: " ++ show (pretty newSource)) >>
@@ -135,7 +135,7 @@ debianize flags =
                                        hPutStrLn stderr ("oldPackages: " ++ show (pretty oldPackages) ++ "\nnewPackages: " ++ show (pretty newPackages)) >>
                                        return (Set.fromList oldPackages == Set.fromList newPackages))
                                       (\ (_ :: SomeException) -> return False)
-               when (not ({- versionsMatch && -} sourcesMatch && packagesMatch)) (describeDebianization new >>= \ text -> error $ "Debianization mismatch:\n" ++ text))
+               when (not (versionsMatch && sourcesMatch && packagesMatch)) (describeDebianization new >>= \ text -> error $ "Debianization mismatch:\n" ++ text))
       if dryRun flags then putStrLn "Debianization (dry run):" >> describeDebianization new >>= putStr else writeDebianization new
 
 readDebianization :: IO Debianization
