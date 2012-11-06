@@ -1,3 +1,9 @@
+haskell-cabal-debian (2.1.3) unstable; urgency=low
+
+  * Don't append a slash to the base-uri.
+
+ -- David Fox <dsf@seereason.com>  Tue, 06 Nov 2012 07:07:57 -0800
+
 haskell-cabal-debian (2.1.2) unstable; urgency=low
 
   * Output the server support files.

@@ -192,7 +192,7 @@ debianInit e spec@(Server{..}) =
     startOptions = ["--start", "-b", "--quiet", "--make-pidfile", "-d", databaseDirectory e, "--exec", "/usr/bin" </> execName e]
     stopOptions = ["--stop", "--quiet", "--retry", retry, "--oknodo"]
     serverOptions = baseURI ++ ["--http-port", show port] ++ flags
-    baseURI = ["--base-uri", "http://" ++ maybe (hostname ++ ":" ++ show port) domain site ++ "/"]
+    baseURI = ["--base-uri", "http://" ++ maybe (hostname ++ ":" ++ show port) domain site]
 
 -- | An apache site configuration file.  This is installed via a line
 -- in debianFiles.
