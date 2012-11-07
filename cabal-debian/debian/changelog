@@ -10,6 +10,8 @@ haskell-cabal-debian (2.1.3) unstable; urgency=low
   * Don't append a slash to the base-uri.
   * Construct the name of the data directory in /usr/share from the cabal
     package name rather than the debian source package name.
+  * Add a --self-depend flag to include a build dependency on this library
+    in all generated debianizations.
 
  -- David Fox <dsf@seereason.com>  Tue, 06 Nov 2012 07:07:57 -0800
 
