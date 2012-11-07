@@ -5,6 +5,7 @@
 -- 'substvar'.
 module Distribution.Debian
     ( debianize
+    , autobuilderDebianize
     , substvars
     , Flags(..)
     , DebAction(..)
@@ -13,7 +14,7 @@ module Distribution.Debian
     , module Distribution.Debian.Server
     ) where
 
-import Distribution.Debian.Debianize (debianize)
+import Distribution.Debian.Debianize (debianize, autobuilderDebianize)
 import Distribution.Debian.Config (Flags(..), DebAction(..), defaultFlags)
 import Distribution.Debian.PackageInfo (DebType)
 import Distribution.Debian.Server
