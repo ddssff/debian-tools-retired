@@ -24,7 +24,7 @@ import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
                               usageInfo, getOpt')
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitWith, ExitCode (..))
-import System.FilePath (takeFileName, splitFileName)
+import System.FilePath (splitFileName)
 import System.IO (Handle, hPutStrLn, stdout)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.Regex.TDFA ((=~))

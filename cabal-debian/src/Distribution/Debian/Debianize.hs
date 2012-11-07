@@ -286,7 +286,11 @@ cdbsRules pkgDesc =
     unlines $
           ["#!/usr/bin/make -f",
            "",
-           -- This is marked obsolete by cdbs.  That is all.
+           -- This is marked obsolete by cdbs.  However, it needs to
+           -- be a string that would work between "libghc-" and
+           -- "-dev", so no underscores and no capital letters.  In
+           -- hlibrary.mk there is a python expression that looks like
+           -- it would do this for us.
            "DEB_CABAL_PACKAGE = " ++ show (D.prettyBinPkgName (debianExtraPackageName' pkgDesc)),
            "",
            "include /usr/share/cdbs/1/rules/debhelper.mk",

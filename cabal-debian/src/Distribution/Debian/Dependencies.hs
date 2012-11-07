@@ -179,6 +179,9 @@ instance Pretty a => Pretty [a] where
 instance (Pretty a, Pretty b) => Pretty (a, b) where
     pretty (a, b) = text "(" <> pretty a <> text ", " <> pretty b <> text ")"
 
+instance Pretty SrcPkgName where
+    pretty (SrcPkgName x) = pretty x
+
 instance Pretty D.BinPkgName where
     pretty (D.BinPkgName p) = text "deb:" <> (pretty p)
 
