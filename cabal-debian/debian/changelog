@@ -1,3 +1,10 @@
+haskell-cabal-debian (2.2.0) unstable; urgency=low
+
+  * Append a trailing slash to the --base-uri argument passed to the
+    server.  This is required by Web.Routes.Site.runSite.
+
+ -- David Fox <dsf@seereason.com>  Thu, 08 Nov 2012 04:40:08 -0800
+
 haskell-cabal-debian (2.1.4) unstable; urgency=low
 
   * Merge the Executable and Script constructors of the Executable type
