@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, ScopedTypeVariables #-}
+{-# LANGUAGE PackageImports, ScopedTypeVariables, ScopedTypeVariables #-}
 {-# OPTIONS -Werror -fwarn-missing-signatures #-}
 -- |This dependency solver determines which binary packages to install 
 -- in order to satisfy a set of dependency relations.  It uses a brute
@@ -23,7 +23,7 @@ import qualified Data.Map as Map ( insert, lookup, Map, empty, findWithDefault, 
 import Data.Maybe ( catMaybes )
 import qualified Data.Set as Set ( Set, union, singleton, toList )
 import Debian.Relation ( ArchitectureReq(..), BinPkgName, Relation(..), prettyRelation, Relations, VersionReq(..) )
-import Extra.List ( cartesianProduct )
+import "Extra" Extra.List ( cartesianProduct )
 import Text.PrettyPrint (Doc, text)
 
 type Excuse = String

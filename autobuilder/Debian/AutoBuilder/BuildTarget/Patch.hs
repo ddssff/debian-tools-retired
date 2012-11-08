@@ -8,7 +8,7 @@ import Control.Exception (SomeException, try)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
-import qualified Debian.AutoBuilder.Types.CacheRec as P
+--import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo (OSImage, findSourceTree, copySourceTree, SourceTree(dir'),

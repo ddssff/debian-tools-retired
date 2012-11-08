@@ -17,7 +17,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Relation (PkgName(unPkgName), BinPkgName(unBinPkgName))
-import Debian.Repo hiding (getVersion, pkgName, pkgVersion)
+import Debian.Repo (MonadDeb, sub)
 import Debian.Repo.Sync (rsync)
 import qualified Distribution.Debian as Cabal
 import qualified Distribution.Debian.Options as Cabal

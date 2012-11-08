@@ -25,6 +25,7 @@ import Data.List(intersperse, intercalate, intersect, isSuffixOf,
 import Data.Maybe(catMaybes, fromJust, isNothing, listToMaybe)
 import qualified Data.Set as Set
 import Data.Time(NominalDiffTime)
+import Debian.AutoBuilder.Env (buildEnv)
 import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Types.Buildable (Buildable(..), Target(tgt, cleanSource, targetDepends), targetName, prepareTarget, targetRelaxed, targetControl, relaxDepends, failing, debianSourcePackageName)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
@@ -368,7 +369,7 @@ buildPackage :: (MonadApt m, MonadTop m) =>
                 P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> ChangeLogEntry -> Target -> SourcePackageStatus -> LocalRepository -> m (Failing LocalRepository)
 buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog target status repo =
     checkDryRun >>
-    P.dirtyRoot cache >>= return . Debian.Repo.chrootEnv cleanOS >>= \ buildOS ->
+    buildEnv (P.buildRelease (P.params cache)) >>= return . Debian.Repo.chrootEnv cleanOS >>= \ buildOS ->
     liftIO (prepareImage buildOS) >>=
     failing (return . Failure) logEntry >>=
     failing (return . Failure) (quieter (-1) . build buildOS) >>=

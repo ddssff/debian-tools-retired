@@ -21,6 +21,7 @@ import Data.List(intercalate)
 import Data.Maybe(catMaybes, fromMaybe)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildTarget (retrieve)
+import Debian.AutoBuilder.Env (cleanEnv, dependEnv, buildEnv)
 import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Target(buildTargets, showTargets)
 import Debian.AutoBuilder.Types.Buildable (Target, targetName, asBuildable)
@@ -42,7 +43,8 @@ import Debian.Repo.OSImage(OSImage, buildEssential, prepareEnv, chrootEnv)
 import Debian.Repo.Release(prepareRelease)
 import Debian.Repo.Repository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Slice(appendSliceLists, inexactPathSlices, releaseSlices, repoSources)
-import Debian.Repo.Types(EnvRoot(EnvRoot), EnvPath(..),
+import Debian.Repo.Sync (rsync)
+import Debian.Repo.Types(EnvRoot(EnvRoot, rootPath), EnvPath(..),
                          Layout(Flat), Release(releaseRepo),
                          NamedSliceList(..), Repository(LocalRepo),
                          LocalRepository(LocalRepository), outsidePath)
@@ -116,20 +118,32 @@ runParameterSet cache =
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       localRepo <- prepareLocalRepo			-- Prepare the local repository for initial uploads
-      root <- P.cleanRoot cache
-      cleanOS <-
-              prepareEnv root
-                         buildRelease
-                         (Just localRepo)
-                         (P.flushRoot params)
-                         (P.ifSourcesChanged params)
-                         (P.includePackages params)
-                         (P.excludePackages params)
-                         (P.components params)
-      _ <- updateCacheSources (P.ifSourcesChanged params) cleanOS
+      dependRoot <- dependEnv (P.buildRelease (C.params cache))
+      dependOS <-
+          case P.flushDepends params of
+            True -> do cleanRoot <- cleanEnv (P.buildRelease (C.params cache))
+                       os <- prepareEnv cleanRoot
+                                        buildRelease
+                                        (Just localRepo)
+                                        (P.flushRoot params)
+                                        (P.ifSourcesChanged params)
+                                        (P.includePackages params)
+                                        (P.excludePackages params)
+                                        (P.components params)
+                       _ <- rsync ["-x"] (rootPath cleanRoot) (rootPath dependRoot)
+                       return os
+            False -> prepareEnv dependRoot
+                                buildRelease
+                                (Just localRepo)
+                                (P.flushRoot params)
+                                (P.ifSourcesChanged params)
+                                (P.includePackages params)
+                                (P.excludePackages params)
+                                (P.components params)
+      _ <- updateCacheSources (P.ifSourcesChanged params) dependOS
       -- Compute the essential and build essential packages, they will all
       -- be implicit build dependencies.
-      globalBuildDeps <- liftIO $ buildEssential cleanOS
+      globalBuildDeps <- liftIO $ buildEssential dependOS
       -- Get a list of all sources for the local repository.
       localSources <- (\ x -> qPutStrLn "Getting local sources" >> quieter 1 x) $
           case localRepo of
@@ -144,9 +158,9 @@ runParameterSet cache =
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
       -- Build an apt-get environment which we can use to retrieve all the package lists
       poolOS <-prepareAptEnv top (P.ifSourcesChanged params) poolSources
-      (failures, targets) <- retrieveTargetList cleanOS >>= mapM (either (return . Left) (liftIO . try . asBuildable)) >>= return . partitionEithers
+      (failures, targets) <- retrieveTargetList dependOS >>= mapM (either (return . Left) (liftIO . try . asBuildable)) >>= return . partitionEithers
       when (not $ null $ failures) (error $ intercalate "\n " $ "Some targets could not be retrieved:" : map show failures)
-      buildResult <- buildTargets cache cleanOS globalBuildDeps localRepo poolOS targets
+      buildResult <- buildTargets cache dependOS globalBuildDeps localRepo poolOS targets
       -- If all targets succeed they may be uploaded to a remote repo
       result <- (upload buildResult >>= liftIO . newDist) `catch` (\ (e :: SomeException) -> return (Failure [show e]))
       updateRepoCache
@@ -205,9 +219,9 @@ runParameterSet cache =
                      False -> return repo'
                _ -> error "Expected local repo"
       retrieveTargetList :: MonadDeb m => OSImage -> m [Either SomeException Download]
-      retrieveTargetList cleanOS =
+      retrieveTargetList dependOS =
           do qPutStr ("\n" ++ showTargets allTargets ++ "\n")
-             buildOS <- chrootEnv cleanOS <$> P.dirtyRoot cache
+             buildOS <- chrootEnv dependOS <$> buildEnv (P.buildRelease (C.params cache))
              when (P.report params) (ePutStrLn . doReport $ allTargets)
              qPutStrLn "Retrieving all source code:\n"
              countTasks' (map (\ (target :: P.Packages) ->

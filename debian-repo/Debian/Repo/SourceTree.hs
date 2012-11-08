@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PackageImports, ScopedTypeVariables #-}
 module Debian.Repo.SourceTree 
     ( -- * Source Tree
       SourceTreeC(..)
@@ -40,7 +40,7 @@ import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types ( AptCache(rootDir), EnvRoot(rootPath) )
 import qualified Debian.Version as V ( version )
 import Extra.Files ( replaceFile, getSubDirectories )
-import Extra.List ( dropPrefix )
+import "Extra" Extra.List ( dropPrefix )
 import System.Directory ( createDirectoryIfMissing, doesDirectoryExist, doesFileExist )
 import System.Environment ( getEnv )
 import System.Exit (ExitCode(ExitFailure))

@@ -3,9 +3,6 @@ module Debian.AutoBuilder.Params
     ( computeTopDir
     , buildCache
     , findSlice
-    , cleanRootOfRelease
-    , dirtyRoot
-    , cleanRoot
     , localPoolDir
     , baseRelease
     , isDevelopmentRelease
@@ -17,12 +14,13 @@ import Control.Monad.Trans ( liftIO )
 import Data.List ( isSuffixOf )
 import Data.Maybe ( catMaybes, fromJust, fromMaybe )
 import Data.Map ( fromList )
+import Debian.AutoBuilder.Env ()
 import Debian.AutoBuilder.Types.CacheRec (CacheRec(..))
 import Debian.AutoBuilder.Types.Packages (Packages)
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Release ( ReleaseName(relName), releaseName' )
 import Debian.Sources ( SliceName(..) )
-import Debian.Repo ( EnvRoot(EnvRoot), NamedSliceList(..), parseSourcesList, verifySourcesList, repoSources )
+import Debian.Repo (NamedSliceList(..), parseSourcesList, verifySourcesList, repoSources)
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), setRepoMap)
 import Debian.Repo.Monads.Top (MonadTop(askTop), sub)
 import Debian.Repo.Types ( SliceList(..) )
@@ -87,23 +85,6 @@ findSlice cache dist =
       [x] -> Right x
       [] -> Left ("No sources.list found for " ++ sliceName dist)
       xs -> Left ("Multiple sources.lists found for " ++ sliceName dist ++ "\n" ++ show (map (sliceName . sliceListName) xs))
-
-dirtyRootOfRelease :: MonadTop m => CacheRec -> ReleaseName -> m EnvRoot
-dirtyRootOfRelease cache distro =
-    askTop >>= \ top ->
-    return $ EnvRoot $ top ++ "/dists/" ++ releaseName' distro ++ "/build-" ++ (show (strictness (params cache)))
-    --ReleaseCache.dirtyRoot distro (show (strictness params))
-
-cleanRootOfRelease :: MonadTop m => CacheRec -> ReleaseName -> m EnvRoot
-cleanRootOfRelease cache distro =
-    askTop >>= \ top ->
-    return $ EnvRoot $ top ++ "/dists/" ++ releaseName' distro ++ "/clean-" ++ (show (strictness (params cache)))
-
-dirtyRoot :: MonadTop m => CacheRec -> m EnvRoot
-dirtyRoot cache = dirtyRootOfRelease cache (buildRelease (params cache))
-
-cleanRoot :: MonadTop m => CacheRec -> m EnvRoot
-cleanRoot cache = cleanRootOfRelease cache (buildRelease (params cache))
 
 -- |Location of the local repository for uploaded packages.
 localPoolDir :: MonadTop m => CacheRec -> m FilePath

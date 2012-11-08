@@ -5,7 +5,7 @@ module Debian.AutoBuilder.BuildTarget.DebDir
     ) where
 
 import Control.Monad.Trans (liftIO)
-import Data.ByteString.Lazy.Char8 (empty, pack)
+import Data.ByteString.Lazy.Char8 (pack)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Version (showVersion)
 import Debian.AutoBuilder.Types.Download as T
@@ -16,8 +16,6 @@ import Prelude hiding (catch)
 import Debian.Repo
 import System.Directory
 import System.FilePath ((</>))
-import System.Process (CmdSpec(..))
-import System.Process.Progress (runProcessF)
 
 documentation = [ "deb-dir:(<target>):(<target>) - A target of this form combines two targets,"
                 , "where one points to an un-debianized source tree and the other contains"

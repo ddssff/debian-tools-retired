@@ -97,6 +97,7 @@ Library
     Debian.AutoBuilder.BuildTarget.Tla,
     Debian.AutoBuilder.BuildTarget.Twice,
     Debian.AutoBuilder.BuildTarget.Uri,
+    Debian.AutoBuilder.Env,
     Debian.AutoBuilder.Main,
     Debian.AutoBuilder.Params,
     Debian.AutoBuilder.Target,

@@ -121,6 +121,8 @@ data ParamRec =
     -- ^ Remove and re-create the entire autobuilder working directory (topDir.)
     , flushSource :: Bool
     -- ^ Discard and re-download all source code before building.
+    , flushDepends :: Bool
+    -- ^ Discard all build dependencies by copying the build environment.
     , flushRoot :: Bool
     -- ^ Discard and recreate the clean build environment.
     , verbosity :: Int
@@ -242,20 +244,10 @@ data ParamRec =
     -- -- ^ Who should get emails of autobuilder progress messages.
   }
 
--- Lax: dependencies are installed into clean, clean synced to build for each target
--- Moderate: dependencies are installed into build, clean synced to build only at beginning of run
--- Strict: dependencies are installed into build, clean synced to build for each target
--- (Note that in the past eight years I've only ever used Moderate.  Who knows if the others work?)
 data Strictness
-    = Lax |		-- Let build dependencies accumulate
-      Moderate |	-- Install only required build dependencies
-      Strict		-- Create a new build environment for each package
-      deriving Eq
-
-instance Show Strictness where
-    show Lax = "Lax"
-    show Moderate = "Moderate"
-    show Strict = "Strict"
+    = Lax |		-- Let build dependencies accumulate (default)
+      Strict 		-- Start each target with a clean build environment
+      deriving (Eq, Show)
 
 -- |Information about what targets to build are temporarily held in a
 -- value of this type.  Once all the command line arguments have been
@@ -291,6 +283,7 @@ prettyPrint x =
             , "oldVendorTags=" ++ take 120 (show (oldVendorTags x))
             , "extraReleaseTag=" ++ take 120 (show (extraReleaseTag x))
             , "flushSource=" ++ take 120 (show (flushSource x))
+            , "flushDepends=" ++ take 120 (show (flushDepends x))
             , "forceBuild=" ++ take 120 (show (forceBuild x))
             , "buildTrumped=" ++ take 120 (show (buildTrumped x))
             , "allowBuildDependencyRegressions=" ++ take 120 (show (allowBuildDependencyRegressions x))
