@@ -1,3 +1,15 @@
+autobuilder (6.42) unstable; urgency=low
+
+  * Remove the Moderate constructor from the Strictness type, now
+    we only have Lax and Strict.
+  * Strict operation removes all build dependencies from the environment
+    before building each package
+  * The Lax mode is now the default, a --strict argument is added
+  * A --flush-depends argument is added which flushes all build
+    dependencies before starting the build.
+
+ -- David Fox <dsf@seereason.com>  Thu, 08 Nov 2012 04:45:57 -0800
+
 autobuilder (6.41) unstable; urgency=low
 
   * Send CABALDEBIAN=["--deb-version", versionnumber] to cabal-debian
