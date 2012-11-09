@@ -27,7 +27,6 @@ Library
    Distribution.Debian
    Distribution.Debian.Bundled
    Distribution.Debian.Config
-   Distribution.Debian.Control
    Distribution.Debian.Debianize
    Distribution.Debian.DebHelper
    Distribution.Debian.Dependencies

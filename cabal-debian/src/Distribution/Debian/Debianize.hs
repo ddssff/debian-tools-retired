@@ -25,17 +25,18 @@ import Data.Version (showVersion)
 import Debian.Control
 import qualified Debian.Relation as D
 import Debian.Release (parseReleaseName)
-import Debian.Changes (ChangeLogEntry(..), prettyEntry, parseLog)
+import Debian.Changes (ChangeLogEntry(..), parseLog)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Debian.Version.String
 import Distribution.Debian.Config (Flags(..), missingDependencies')
+import Distribution.Debian.DebHelper (DebAtom(..), controlFile, changeLog, toFiles)
 import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName, debianUtilsPackageName, debianSourcePackageName,
                                          debianDocPackageName, debianDevPackageName, debianProfPackageName)
 import Distribution.Debian.Options (compileArgs)
 import Distribution.Debian.PackageDescription (withSimplePackageDescription)
 import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits)
-import Distribution.Debian.Server (serverFiles, Executable(..))
+import Distribution.Debian.Server (execAtoms, Executable(..))
 import Distribution.Debian.Utility
 import Distribution.Text (display)
 import Distribution.Simple.Compiler (Compiler(..))
@@ -50,11 +51,7 @@ import System.FilePath ((</>), takeDirectory)
 import System.IO (hPutStrLn, stderr)
 import Text.PrettyPrint.Class (pretty)
 
-data Debianization
-    = Debianization
-      { controlFile :: Control' String
-      , changeLog :: [ChangeLogEntry]
-      , otherFiles :: Map.Map FilePath String }
+type Debianization = [DebAtom]
 
 deriving instance Ord (Field' String)
 
@@ -143,7 +140,7 @@ readDebianization :: IO Debianization
 readDebianization = do
   (_errs, oldLog) <- readFile "debian/changelog" >>= return . partitionEithers . parseLog
   oldControl <- parseControlFromFile "debian/control" >>= either (error . show) return
-  return $ Debianization {controlFile = oldControl, changeLog = oldLog, otherFiles = Map.empty}
+  return $ [DebControl oldControl, DebChangelog oldLog]
 
 debianization :: Flags		 -- ^ command line flags
               -> PackageDescription  -- ^ info from the .cabal file
@@ -155,19 +152,13 @@ debianization flags pkgDesc compiler oldDeb =
        copyright <- readFile' (licenseFile pkgDesc) `catch` (\ (_ :: SomeException) -> return . showLicense . license $ pkgDesc)
        maint <- getMaintainer flags pkgDesc >>= maybe (error "Missing value for --maintainer") return
        let newLog = updateChangelog flags maint pkgDesc date (maybe [] changeLog oldDeb)
-       let (controlFile, execFiles, rulesLines) = control flags compiler maint pkgDesc
-       return $ Debianization
-                  { controlFile = controlFile
-                  , changeLog = newLog
-                  , otherFiles =
-                      Map.fromList
-                          ([("debian/rules", cdbsRules pkgDesc ++ unlines rulesLines),
-                            ("debian/compat", "7\n"), -- should this be hardcoded, or automatically read from /var/lib/dpkg/status?
-                            ("debian/copyright", copyright),
-                            ("debian/source/format", sourceFormat flags ++ "\n"),
-                            ("debian/watch", watch pkgname)] ++
-                           execFiles ++
-                           concatMap serverFiles (executablePackages flags)) }
+       let controlAtoms = control flags compiler maint pkgDesc
+       return $ controlAtoms ++ [ cdbsRules pkgDesc,
+                                  DebChangelog newLog,
+                                  DebCompat 7, -- should this be hardcoded, or automatically read from /var/lib/dpkg/status?
+                                  DebCopyright copyright,
+                                  DebSourceFormat (sourceFormat flags ++ "\n"),
+                                  watch pkgname ] ++ concatMap execAtoms (executablePackages flags)
     where
         PackageName pkgname = pkgName . package $ pkgDesc
 
@@ -225,12 +216,11 @@ writeDebianization d =
 
 debianizationFiles :: Debianization -> [(FilePath, String)]
 debianizationFiles d =
-    ("debian/changelog", concat (map (show . prettyEntry) (changeLog d))) :
-    ("debian/control", show (pretty (controlFile d))) :
-    Map.toList (otherFiles d)
+    toFiles d
 
-watch :: String -> String
+watch :: String -> DebAtom
 watch pkgname =
+    DebWatch $
     "version=3\nopts=\"downloadurlmangle=s|archive/([\\w\\d_-]+)/([\\d\\.]+)/|archive/$1/$2/$1-$2.tar.gz|,\\\nfilenamemangle=s|(.*)/$|" ++ pkgname ++
     "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
     " \\\n    ([\\d\\.]*\\d)/\n"
@@ -281,9 +271,9 @@ getDebianMaintainer =
                    return (fullname ++ " <" ++ email ++ ">")
 
 -- | Generate the debian/rules file.
-cdbsRules :: PackageDescription -> String
+cdbsRules :: PackageDescription -> DebAtom
 cdbsRules pkgDesc =
-    unlines $
+    DebRulesHead $ unlines $
           ["#!/usr/bin/make -f",
            "",
            -- This is marked obsolete by cdbs.  However, it needs to
@@ -295,17 +285,16 @@ cdbsRules pkgDesc =
            "",
            "include /usr/share/cdbs/1/rules/debhelper.mk",
            "include /usr/share/cdbs/1/class/hlibrary.mk",
-          "",
-           "# How to install an extra file into the documentation package",
+{-         "# How to install an extra file into the documentation package",
            "#binary-fixup/" ++ (show . D.prettyBinPkgName $ docDeb) ++ "::",
-           "#\techo \"Some informative text\" > debian/" ++ (show . D.prettyBinPkgName $ docDeb) ++ "/usr/share/doc/" ++ (show . D.prettyBinPkgName $ docDeb) ++ "/AnExtraDocFile",
-          ""]
-    where
-      p = pkgName . package $ pkgDesc
-      v = pkgVersion . package $ pkgDesc
-      libDir = unPackageName p ++ "-" ++ showVersion v
-      docDeb = debianDocPackageName versionSplits (pkgName (package pkgDesc)) (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion (package pkgDesc))))))
-      utilsDeb = debianUtilsPackageName versionSplits (pkgName (package pkgDesc)) (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion (package pkgDesc))))))
+           "#\techo \"Some informative text\" > debian/" ++ (show . D.prettyBinPkgName $ docDeb) ++ "/usr/share/doc/" ++ (show . D.prettyBinPkgName $ docDeb) ++ "/AnExtraDocFile", -}
+          "" ]
+    -- where
+      -- p = pkgName . package $ pkgDesc
+      -- v = pkgVersion . package $ pkgDesc
+      -- libDir = unPackageName p ++ "-" ++ showVersion v
+      -- docDeb = debianDocPackageName versionSplits (pkgName (package pkgDesc)) (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion (package pkgDesc))))))
+      -- utilsDeb = debianUtilsPackageName versionSplits (pkgName (package pkgDesc)) (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion (package pkgDesc))))))
       --exeDeb e = debianExtraPackageName (PackageName (exeName e)) Nothing
 
 -- | Functions that apply the mapping from cabal names to debian names based on version numbers.
@@ -343,17 +332,17 @@ debianExtraPackageName' pkgDesc =
 -- Binary paragraphs, each one representing a binary package to be
 -- produced.  If the package contains a library we usually want dev,
 -- prof, and doc packages.
-control :: Flags -> Compiler -> String -> PackageDescription -> (Control' String, [(FilePath, String)], [String])
+control :: Flags -> Compiler -> String -> PackageDescription -> [DebAtom] -- (Control' String, [(FilePath, String)], [String])
 control flags compiler maint pkgDesc =
     -- trace ("allBuildDepends " ++ show flags ++ " -> " ++ show (allBuildDepends flags pkgDesc)) $
-    (Control {unControl = ([sourceSpec] ++ librarySpecs ++ controlSpecs)}, installFiles, concat rulesLines)
+    (DebControl (Control {unControl = ([sourceSpec] ++ librarySpecs ++ controlSpecs)}) : concat atoms)
     where
       librarySpecs = maybe [] (const (develLibrarySpec ++ profileLibrarySpec ++ docLibrarySpec)) (library pkgDesc)
       develLibrarySpec = [librarySpec "any" Development debianDevPackageName']
       profileLibrarySpec = if debLibProf flags then [librarySpec "any" Profiling debianProfPackageName'] else []
       docLibrarySpec = if haddock flags then [docSpecsParagraph] else []
 
-      (controlSpecs, installFiles, rulesLines) = unzip3 $ execAndUtilSpecs flags pkgDesc debianDescription
+      (controlSpecs, atoms) = unzip $ execAndUtilSpecs flags pkgDesc debianDescription
 
       sourceSpec =
           Paragraph
@@ -436,7 +425,7 @@ control flags compiler maint pkgDesc =
       list :: b -> ([a] -> b) -> [a] -> b
       list d f l = case l of [] -> d; _ -> f l
 
-execAndUtilSpecs :: Flags -> PackageDescription -> String -> [(Paragraph' String, (FilePath, String), [String])]
+execAndUtilSpecs :: Flags -> PackageDescription -> String -> [(Paragraph' String, [DebAtom])] -- [(Paragraph' String, (FilePath, String), [String])]
 execAndUtilSpecs flags pkgDesc debianDescription =
     map makeExecutablePackage (executablePackages flags) ++ makeUtilsPackage
     where
@@ -447,9 +436,10 @@ execAndUtilSpecs flags pkgDesc debianDescription =
              Field ("Section", " " ++ "misc"),
              Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (D.BinPkgName (D.PkgName (execName p))) (binaryPackageDeps flags)))),
              Field ("Description", " " ++ maybe debianDescription (const executableDescription) (library pkgDesc))] ++
-            conflicts (filterMissing (missingDependencies' flags) (extraDeps (D.BinPkgName (D.PkgName (execName p))) (binaryPackageConflicts flags)))),
-           ("debian" </> execName p ++ ".install", "dist-ghc" </> "build" </> execName p </> execName p ++ " usr/bin\n"),
-           ["build" </> execName p ++ ":: build-ghc-stamp"])
+            conflicts (filterMissing (missingDependencies' flags) (extraDeps (b p) (binaryPackageConflicts flags)))),
+           [DHInstall (b p) ("dist-ghc" </> "build" </> execName p </> execName p) ("usr/bin"),
+            DebRules ("build" </> execName p ++ ":: build-ghc-stamp")])
+      b p = D.BinPkgName (D.PkgName (execName p))
       executableDescription = " " ++ "An executable built from the " ++ display (pkgName (package pkgDesc)) ++ " package."
       makeUtilsPackage =
           case (bundledExecutables, dataFiles pkgDesc) of
@@ -458,8 +448,8 @@ execAndUtilSpecs flags pkgDesc debianDescription =
             _ ->
                 let p = debianUtilsPackageName' pkgDesc
                     p' = show (D.prettyBinPkgName p)
-                    s = debianSourcePackageName' pkgDesc
-                    s' = show (D.prettySrcPkgName s)
+                    -- s = debianSourcePackageName' pkgDesc
+                    -- s' = show (D.prettySrcPkgName s)
                     c = package pkgDesc
                     c' = display c in
                 [(Paragraph
@@ -469,10 +459,10 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                     Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps p (binaryPackageDeps flags)))),
                     Field ("Description", " " ++ maybe debianDescription (const utilsDescription) (library pkgDesc))] ++
                    conflicts (extraDeps p (binaryPackageConflicts flags))),
-                  ("debian" </> p' ++ ".install",
-                   unlines (map (\ p -> "dist-ghc" </> "build" </> exeName p </> exeName p ++ " " ++ "usr/bin") bundledExecutables ++
-                            map (\ file -> file ++ " " ++ takeDirectory ("usr/share" </> c' </> file)) (dataFiles pkgDesc))),
-                  ["build" </> p' ++ ":: build-ghc-stamp"])]
+                  (map (\ e -> DHInstall p ("dist-ghc" </> "build" </> exeName e </> exeName e) "usr/bin") bundledExecutables ++
+                   map (\ f -> DHInstall p f (takeDirectory ("usr/share" </> c' </> f))) (dataFiles pkgDesc) ++
+                   [DebRules ("build" </> p' ++ ":: build-ghc-stamp")])
+                 )]
       utilsDescription = " " ++ "Utility files associated with the " ++ display (package pkgDesc) ++ " package."
       bundledExecutables = filter (\ p -> not (elem (exeName p) (map execName (executablePackages flags))))
                                   (filter (buildable . buildInfo) (executables pkgDesc))

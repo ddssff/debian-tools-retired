@@ -1,31 +1,209 @@
 -- | Preliminary.
 module Distribution.Debian.DebHelper
-    ( DebFile(..)
-    , DebHelper(..)
+    ( DebAtom(..)
+    , changeLog
+    , controlFile
+    , toFiles
     ) where
 
-import Debian.Relation (BinPkgName)
+import qualified Data.Map as Map
+import Data.Maybe (mapMaybe)
+import Debian.Changes (ChangeLogEntry(..), prettyEntry)
+import Debian.Control
+import Debian.Relation (BinPkgName(BinPkgName), PkgName(PkgName))
+import Prelude hiding (catch, init)
+import System.FilePath ((</>))
+import Text.PrettyPrint (text)
+import Text.PrettyPrint.Class (Pretty(pretty))
 
-data DebFile
-    = DebCompat Int
-    | DebCopyright String
-    | DebSourceFormat String
-    | DebWatch String
-    | DH BinPkgName DebHelper
-    -- ^ Associate a debhelper value with a binary packge
+instance Pretty BinPkgName where
+    pretty (BinPkgName x) = pretty x
 
--- | A small selection of debhelper file types - this should be
--- expanded.
-data DebHelper
-    = DHInstall [(FilePath, FilePath)] -- ^ Install files from the build into the binary package
-    | DHInstallDirs [FilePath]         -- ^ Create directories int he binary package
-    | DHInstallInit String             -- ^ Install an /etc/init.d file for the binary package
-    | DHInstallLogrotate String        -- ^ Install a logrotate for the binary package
-    | DHLink [(FilePath, FilePath)]    -- ^ Create a symbolic link in the binary package
-    | DHPostInst String                -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
-    | DHPostRm String                  -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
-    | DHPreInst String                 -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
-    | DHPreRm String                   -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
+instance Pretty PkgName where
+    pretty (PkgName x) = text x
+
+-- | The smallest pieces of debhelper information.
+data DebAtom
+    = DebControl (Control' String)                -- ^ Write the control file (required)
+    | DebChangelog [ChangeLogEntry]               -- ^ Write the changelog (required)
+    | DebRulesHead String                         -- ^ The beginning of debian/rules
+    | DebRules String                             -- ^ A Fragment of debian/rules
+    | DebCompat Int                               -- ^ Write debian/compat (required?)
+    | DebCopyright String                         -- ^ Write debian/copyright (required?)
+    | DebSourceFormat String                      -- ^ Write debian/source/format
+    | DebWatch String                             -- ^ Write debian/watch
+    | DHInstall BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package
+    | DHInstallDir BinPkgName FilePath            -- ^ Create a directory in the binary package
+    | DHInstallInit BinPkgName String             -- ^ Add an init.d file to the binary package
+    | DHInstallLogrotate BinPkgName String        -- ^ Add a logrotate file to the binary package
+    | DHLink BinPkgName [(FilePath, FilePath)]    -- ^ Create a symbolic link in the binary package
+    | DHPostInst BinPkgName String                -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
+    | DHPostRm BinPkgName String                  -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
+    | DHPreInst BinPkgName String                 -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
+    | DHPreRm BinPkgName String                   -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
+    | OtherFile FilePath String                   -- ^ Create a file at a location
+
+changeLog :: [DebAtom] -> [ChangeLogEntry]
+changeLog xs =
+    case mapMaybe f xs of
+      [x] -> x
+      _ -> error "Missing or multiple debian/changelog files"
+    where
+      f :: DebAtom -> Maybe [ChangeLogEntry]
+      f (DebChangelog x) = Just x
+      f _ = Nothing
+
+controlFile :: [DebAtom] -> Control' String
+controlFile xs =
+    case mapMaybe f xs of
+      [x] -> x
+      _ -> error "Missing or multiple debian/control files"
+    where
+      f :: DebAtom -> Maybe (Control' String)
+      f (DebControl x) = Just x
+      f _ = Nothing
+
+rules :: [DebAtom] -> [String]
+rules xs =
+    mapMaybe f xs ++ mapMaybe g xs
+    where
+      f :: DebAtom -> Maybe String
+      f (DebRulesHead x) = Just x
+      f _ = Nothing
+      g :: DebAtom -> Maybe String
+      g (DebRules x) = Just x
+      g _ = Nothing
+
+compat :: [DebAtom] -> Int
+compat xs =
+    case mapMaybe f xs of
+      [n] -> n
+      _ -> error "Missing or multiple debian/compat values"
+    where
+      f :: DebAtom -> Maybe Int
+      f (DebCompat x) = Just x
+      f _ = Nothing
+
+copyright :: [DebAtom] -> String
+copyright xs =
+    case mapMaybe f xs of
+      [x] -> x
+      _ -> error "Missing or multiple debian/copyright files"
+    where
+      f :: DebAtom -> Maybe String
+      f (DebCopyright x) = Just x
+      f _ = Nothing
+
+sourceFormat :: [DebAtom] -> String
+sourceFormat xs =
+    case mapMaybe f xs of
+      [x] -> x
+      _ -> error "Missing or multiple debian/source/format files"
+    where
+      f :: DebAtom -> Maybe String
+      f (DebSourceFormat x) = Just x
+      f _ = Nothing
+
+watch :: [DebAtom] -> String
+watch xs =
+    case mapMaybe f xs of
+      [x] -> x
+      _ -> error "Missing or multiple debian/watch files"
+    where
+      f :: DebAtom -> Maybe String
+      f (DebWatch x) = Just x
+      f _ = Nothing
+
+install :: [DebAtom] -> [(FilePath, String)]
+install xs =
+    map (\ (name, pairs) -> ("debian" </> show (pretty name) ++ ".install", unlines (map (\ (src, dst) -> src ++ " " ++ dst) pairs)))
+        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+    where
+      f (DHInstall name src dst) = Just (name, [(src, dst)])
+      f _ = Nothing
+
+dir :: [DebAtom] -> [(FilePath, String)]
+dir xs =
+    map (\ (name, ls) -> ("debian" </> show (pretty name) ++ ".dir", unlines ls))
+        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+    where
+      f (DHInstallDir name d) = Just (name, [d])
+      f _ = Nothing
+
+init :: [DebAtom] -> [(FilePath, String)]
+init xs =
+    map (\ (name, [t]) -> ("debian" </> show (pretty name) ++ ".init", t))
+        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+    where
+      f (DHInstallInit name t) = Just (name, [t])
+      f _ = Nothing
+
+logrotate :: [DebAtom] -> [(FilePath, String)]
+logrotate xs =
+    map g (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+    where
+      g (name, [t]) = ("debian" </> show (pretty name) ++ ".logrotate", t)
+      g (name, ts) = error $ "Multiple logrotate entries for " ++ show name ++ ": " ++ show ts
+      f (DHInstallLogrotate name t) = Just (name, [t])
+      f _ = Nothing
+
+link :: [DebAtom] -> [(FilePath, String)]
+link xs =
+    map (\ (name, pairs) -> ("debian" </> show (pretty name) ++ ".link", unlines (map (\ (loc, txt) -> loc ++ " " ++ txt) pairs)))
+        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+    where
+      f (DHLink name pairs) = Just (name, pairs)
+      f _ = Nothing
+
+postinst :: [DebAtom] -> [(FilePath, String)]
+postinst xs =
+    map (\ (name, [t]) -> ("debian" </> show (pretty name) ++ ".postinst", t))
+        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+    where
+      f (DHPostInst name t) = Just (name, [t])
+      f _ = Nothing
+
+postrm :: [DebAtom] -> [(FilePath, String)]
+postrm xs =
+    map (\ (name, [t]) -> ("debian" </> show (pretty name) ++ ".postrm", t))
+        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+    where
+      f (DHPostRm name t) = Just (name, [t])
+      f _ = Nothing
+
+preinst :: [DebAtom] -> [(FilePath, String)]
+preinst xs =
+    map (\ (name, [t]) -> ("debian" </> show (pretty name) ++ ".preinst", t))
+        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+    where
+      f (DHPreInst name t) = Just (name, [t])
+      f _ = Nothing
+
+prerm :: [DebAtom] -> [(FilePath, String)]
+prerm xs =
+    map (\ (name, [t]) -> ("debian" </> show (pretty name) ++ ".prerm", t))
+        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+    where
+      f (DHPreRm name t) = Just (name, [t])
+      f _ = Nothing
+
+other :: [DebAtom] -> [(FilePath, String)]
+other xs =
+    mapMaybe f xs
+    where
+      f (OtherFile path s) = Just (path, s)
+      f _ = Nothing
+
+toFiles :: [DebAtom] -> [(FilePath, String)]
+toFiles d =
+    [("debian/control", show (pretty (controlFile d))),
+     ("debian/changelog", concatMap (show . prettyEntry) (changeLog d)),
+     ("debian/rules", unlines (rules d)),
+     ("debian/compat", show (compat d) ++ "\n"),
+     ("debian/copyright", copyright d),
+     ("debian/source/format", sourceFormat d),
+     ("debian/watch", watch d)] ++
+    install d ++ dir d ++ init d ++ logrotate d ++ link d ++ postinst d ++ postrm d ++ preinst d ++ prerm d ++ other d
 
 {-
 dh_install (1)       - install files into package build directories

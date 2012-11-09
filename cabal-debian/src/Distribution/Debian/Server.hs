@@ -5,7 +5,7 @@ module Distribution.Debian.Server
        ( Executable(..)
        , Server(..)
        , Site(..)
-       , serverFiles
+       , execAtoms
        , serviceName
        , databaseDirectory
        , apacheSiteName
@@ -18,26 +18,27 @@ module Distribution.Debian.Server
        ) where
 
 import Data.Maybe (isJust, fromMaybe)
+import Debian.Relation (BinPkgName(BinPkgName), PkgName(PkgName))
+import Distribution.Debian.DebHelper (DebAtom(..))
 import System.FilePath ((</>))
 import System.Process (showCommandForUser)
 
-type File = (FilePath, String)
-
 -- | Return a list of files to add to the debianization to manage the
 -- server or web site.
-serverFiles :: Executable -> [File]
-serverFiles exec@(Executable {}) =
-    [debianFiles exec] ++
+execAtoms :: Executable -> [DebAtom]
+execAtoms e@(Executable {}) =
+    DHInstall b (fromMaybe ("dist-ghc" </> "build" </> execName e </> execName e) (sourceDir e)) (fromMaybe "usr/bin" (destDir e)) :
     maybe []
           (\server ->
-               filter (not . null . snd)
-                      (map (\ f -> f server)
-                               [ debianPostinst exec
-                               , debianLinks exec
-                               , debianDirs exec
-                               , debianInit exec
-                               , logrotateConfig exec] ++ maybe [] (\ site -> [apacheSite exec server site]) (site server)))
-          (execServer exec)
+               (debianPostinst b e server ++
+                debianLinks b e server ++
+                debianDirs b e server ++
+                debianInit b e server ++
+                logrotateConfig b e server ++
+                apacheSite e server))
+          (execServer e)
+    where
+      b = BinPkgName (PkgName (execName e))
 
 -- | Does this package require an apache site file?
 needsApacheSite :: Server -> Bool
@@ -97,20 +98,21 @@ serverAppLog exec = serverLogDirectory exec </> "app.log"
 serverAccessLog :: Executable -> String
 serverAccessLog exec = serverLogDirectory exec </> "access.log"
 
-debianPostinst :: Executable -> Server -> File
-debianPostinst e server@(Server {..}) =
-  ("debian" </> execName e ++ ".postinst",
-   unlines $
-   if needsInit server
-   then ([ "#!/bin/sh"
-          , ""
-          , "case \"$1\" in"
-          , "  configure)" ] ++
-          apache ++
-          [ "    service " ++ serviceName e ++ " start"
-          , "    ;;"
-          , "esac" ])
-   else [])
+debianPostinst :: BinPkgName -> Executable -> Server -> [DebAtom]
+debianPostinst b e server@(Server {..}) =
+    if needsInit server
+    then [DHPostInst
+          b
+          (unlines $
+           ([ "#!/bin/sh"
+            , ""
+            , "case \"$1\" in"
+            , "  configure)" ] ++
+            apache ++
+            [ "    service " ++ serviceName e ++ " start"
+            , "    ;;"
+            , "esac" ]))]
+    else []
     where
       apache =
           if needsApacheSite server
@@ -123,65 +125,47 @@ debianPostinst e server@(Server {..}) =
           else []
 
 
-debianDirs :: Executable -> Server -> File
-debianDirs e server@(Server {..}) =
-  ("debian" </> execName e ++ ".dirs",
-   unlines $
-   if needsApacheSite server
-   then [apacheLogDirectory e,
-         "/etc/apache2/sites-available"]
-   else [])
+debianDirs :: BinPkgName -> Executable -> Server -> [DebAtom]
+debianDirs b e server@(Server {..}) =
+    if needsApacheSite server
+    then map (DHInstallDir b) [apacheLogDirectory e, "/etc/apache2/sites-available"]
+    else []
 
-debianFiles :: Executable -> File
-debianFiles e@(Executable {}) =
-    ("debian" </> execName e ++ ".install",
-     unlines (binaryInstall : maybe [] (\ server -> logrotate server ++ apacheSiteInstall server) (execServer e)))
-    where
-      logrotate server =
-          if needsInit server
-          then ["dist-ghc/logrotate" </> execName e ++ " etc/logrotate.d"]
-          else []
-      apacheSiteInstall server =
-          maybe [] (\ x -> ["dist-ghc/apachesite" </> apacheSiteName x ++ " etc/apache2/sites-available"]) (site server)
-      binaryInstall =
-          fromMaybe ("dist-ghc" </> "build" </> execName e </> execName e) (sourceDir e) ++ " " ++ fromMaybe "usr/bin" (destDir e)
+debianLinks :: BinPkgName -> Executable -> Server -> [DebAtom]
+debianLinks b _ (Server {..}) =
+    maybe [] (\ x -> [DHLink b [("/etc/apache2/sites-available/" ++ apacheSiteName x,
+                                                "/etc/apache2/sites-enabled/" ++ apacheSiteName x)]]) site
 
-debianLinks :: Executable -> Server -> File
-debianLinks e (Server {..}) =
-    ("debian" </> execName e ++ ".links", unlines apacheSiteLink)
-    where
-      apacheSiteLink =
-          maybe [] (\ x -> ["/etc/apache2/sites-available/" ++ apacheSiteName x ++ " /etc/apache2/sites-enabled/" ++ apacheSiteName x]) site
-
-debianInit :: Executable -> Server -> File
-debianInit e spec@(Server{..}) =
-  ("debian" </> serviceName e ++ ".init",
-   unlines $
-   if needsInit spec
-   then   [ "#! /bin/sh -e"
-          , ""
-          , ". /lib/lsb/init-functions"
-          , ""
-          , "case \"$1\" in"
-          , "  start)"
-          , "    test -x /usr/bin/" ++ execName e ++ " || exit 0"
-          , "    log_begin_msg \"Starting " ++ execName e ++ "...\""
-          , "    mkdir -p " ++ databaseDirectory e
-          , "    " ++ startCommand
-          , "    log_end_msg $?"
-          , "    ;;"
-          , "  stop)"
-          , "    log_begin_msg \"Stopping " ++ execName e ++ "...\""
-          , "    " ++ stopCommand
-          , "    log_end_msg $?"
-          , "    ;;"
-          , "  *)"
-          , "    log_success_msg \"Usage: ${0} {start|stop}\""
-          , "    exit 1"
-          , "esac"
-          , ""
-          , "exit 0" ]
-   else [])
+debianInit :: BinPkgName -> Executable -> Server -> [DebAtom]
+debianInit b e spec@(Server{..}) =
+    if needsInit spec
+    then [DHInstallInit
+            b
+            (unlines
+             [ "#! /bin/sh -e"
+             , ""
+             , ". /lib/lsb/init-functions"
+             , ""
+             , "case \"$1\" in"
+             , "  start)"
+             , "    test -x /usr/bin/" ++ execName e ++ " || exit 0"
+             , "    log_begin_msg \"Starting " ++ execName e ++ "...\""
+             , "    mkdir -p " ++ databaseDirectory e
+             , "    " ++ startCommand
+             , "    log_end_msg $?"
+             , "    ;;"
+             , "  stop)"
+             , "    log_begin_msg \"Stopping " ++ execName e ++ "...\""
+             , "    " ++ stopCommand
+             , "    log_end_msg $?"
+             , "    ;;"
+             , "  *)"
+             , "    log_success_msg \"Usage: ${0} {start|stop}\""
+             , "    exit 1"
+             , "esac"
+             , ""
+             , "exit 0" ])]
+    else []
   where
     startCommand = showCommandForUser "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
     stopCommand = showCommandForUser "start-stop-daemon" (stopOptions ++ commonOptions)
@@ -194,48 +178,53 @@ debianInit e spec@(Server{..}) =
 
 -- | An apache site configuration file.  This is installed via a line
 -- in debianFiles.
-apacheSite :: Executable -> Server -> Site -> File
-apacheSite exec server (Site {..}) =
-          ("dist-ghc/apachesite" </> domain,
-           unlines $
-           [ "# " ++ headerMessage server
-           , ""
-           , "<VirtualHost *:80>"
-           , "    ServerAdmin " ++ serverAdmin
-           , "    ServerName www." ++ domain
-           , "    ServerAlias " ++ domain
-           , ""
-           , "    ErrorLog " ++ apacheErrorLog exec
-           , "    CustomLog " ++ apacheAccessLog exec ++ " combined"
-           , ""
-           , "    ProxyRequests Off"
-           , "    AllowEncodedSlashes NoDecode"
-           , ""
-           , "    <Proxy *>"
-           , "                AddDefaultCharset off"
-           , "                Order deny,allow"
-           , "                #Allow from .example.com"
-           , "                Deny from all"
-           , "                #Allow from all"
-           , "    </Proxy>"
-           , ""
-           , "    <Proxy http://127.0.0.1:" ++ show (port server) ++ "/*>"
-           , "                AddDefaultCharset off"
-           , "                Order deny,allow"
-           , "                #Allow from .example.com"
-           , "                #Deny from all"
-           , "                Allow from all"
-           , "    </Proxy>"
-           , ""
-           , "    ProxyPass / http://127.0.0.1:" ++ show (port server) ++ "/ nocanon"
-           , "    ProxyPassReverse / http://127.0.0.1:" ++ show (port server) ++ "/"
-           , "</VirtualHost>" ])
+apacheSite :: Executable -> Server -> [DebAtom]
+apacheSite exec server =
+    maybe
+      []
+      (\ (Site{..}) ->
+           [OtherFile
+            ("dist-ghc/apachesite" </> domain)
+            (unlines $
+             [ "# " ++ headerMessage server
+              , ""
+              , "<VirtualHost *:80>"
+              , "    ServerAdmin " ++ serverAdmin
+              , "    ServerName www." ++ domain
+              , "    ServerAlias " ++ domain
+              , ""
+              , "    ErrorLog " ++ apacheErrorLog exec
+              , "    CustomLog " ++ apacheAccessLog exec ++ " combined"
+              , ""
+              , "    ProxyRequests Off"
+              , "    AllowEncodedSlashes NoDecode"
+              , ""
+              , "    <Proxy *>"
+              , "                AddDefaultCharset off"
+              , "                Order deny,allow"
+              , "                #Allow from .example.com"
+              , "                Deny from all"
+              , "                #Allow from all"
+              , "    </Proxy>"
+              , ""
+              , "    <Proxy http://127.0.0.1:" ++ show (port server) ++ "/*>"
+              , "                AddDefaultCharset off"
+              , "                Order deny,allow"
+              , "                #Allow from .example.com"
+              , "                #Deny from all"
+              , "                Allow from all"
+              , "    </Proxy>"
+              , ""
+              , "    ProxyPass / http://127.0.0.1:" ++ show (port server) ++ "/ nocanon"
+              , "    ProxyPassReverse / http://127.0.0.1:" ++ show (port server) ++ "/"
+              , "</VirtualHost>" ])])
+       (site server)
 
 -- | A configuration file for the logrotate facility, installed via a line
 -- in debianFiles.
-logrotateConfig :: Executable -> Server -> File
-logrotateConfig e server@(Server {..}) =
-    ("dist-ghc/logrotate" </> execName e, unlines $ apacheConfig ++ serverConfig)
+logrotateConfig :: BinPkgName -> Executable -> Server -> [DebAtom]
+logrotateConfig b e server@(Server {..}) =
+    [DHInstallLogrotate b (unlines (apacheConfig ++ serverConfig))]
     where
       apacheConfig =
           if needsApacheSite server
