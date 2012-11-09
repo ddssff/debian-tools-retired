@@ -1,3 +1,9 @@
+haskell-cabal-debian (2.3) unstable; urgency=low
+
+  * Add MonadBuild.
+
+ -- David Fox <dsf@seereason.com>  Fri, 09 Nov 2012 12:21:14 -0800
+
 haskell-cabal-debian (2.2.1) unstable; urgency=low
 
   * Add a modifyAtoms function to Flags that is applied to final list of
