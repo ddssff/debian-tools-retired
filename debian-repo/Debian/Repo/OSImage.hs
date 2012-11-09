@@ -145,7 +145,9 @@ data UpdateError
     | Flushed
 
 instance Show UpdateError where
-    show (Changed r p l1 l2) = intercalate " " ["Changed", show r, show p, show (pretty l1), show (pretty l2)]
+    show (Changed r p l1 l2) = unwords ["Changed", show r, show p, show (pretty l1), show (pretty l2)]
+    show (Missing r p) = unwords ["Missing", show r, show p]
+    show Flushed = "Flushed"
 
 -- |Create or update an OS image in which packages can be built.
 prepareEnv :: (MonadApt m, MonadTop m) =>
