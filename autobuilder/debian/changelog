@@ -7,6 +7,9 @@ autobuilder (6.42) unstable; urgency=low
   * The Lax mode is now the default, a --strict argument is added
   * A --flush-depends argument is added which flushes all build
     dependencies before starting the build.
+  * Always make sure that clean exists, then if depends doesn't exist or
+    flushDepends is set copy clean to depend.  Then install dependencies,
+    copy depends to build, and continue.
 
  -- David Fox <dsf@seereason.com>  Thu, 08 Nov 2012 04:45:57 -0800
 

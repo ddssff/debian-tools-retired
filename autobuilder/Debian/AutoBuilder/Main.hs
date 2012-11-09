@@ -53,7 +53,7 @@ import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
 import Prelude hiding (catch)
-import System.Directory(createDirectoryIfMissing)
+import System.Directory(createDirectoryIfMissing, doesDirectoryExist)
 import System.Posix.Files(removeLink)
 import System.Exit(ExitCode(..), exitWith)
 import qualified System.IO as IO
@@ -107,6 +107,31 @@ doParameterSet results (params, packages) =
       isFailure (Failure _) = True
       isFailure _ = False
 
+prepareDependOS :: MonadDeb m => P.ParamRec -> NamedSliceList -> LocalRepository -> m OSImage
+prepareDependOS params buildRelease localRepo =
+    do dependRoot <- dependEnv (P.buildRelease params)
+       exists <- liftIO $ doesDirectoryExist (rootPath dependRoot)
+       when (not exists || P.flushDepends params)
+            (do cleanRoot <- cleanEnv (P.buildRelease params)
+                _ <- prepareEnv cleanRoot
+                                buildRelease
+                                (Just localRepo)
+                                (P.flushRoot params)
+                                (P.ifSourcesChanged params)
+                                (P.includePackages params)
+                                (P.excludePackages params)
+                                (P.components params)
+                _ <- rsync ["-x"] (rootPath cleanRoot) (rootPath dependRoot)
+                return ())
+       prepareEnv dependRoot
+                  buildRelease
+                  (Just localRepo)
+                  False
+                  (P.ifSourcesChanged params)
+                  (P.includePackages params)
+                  (P.excludePackages params)
+                  (P.components params)
+
 runParameterSet :: MonadDeb m => C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet cache =
     do
@@ -118,28 +143,7 @@ runParameterSet cache =
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       localRepo <- prepareLocalRepo			-- Prepare the local repository for initial uploads
-      dependRoot <- dependEnv (P.buildRelease (C.params cache))
-      dependOS <-
-          case P.flushDepends params of
-            True -> do cleanRoot <- cleanEnv (P.buildRelease (C.params cache))
-                       os <- prepareEnv cleanRoot
-                                        buildRelease
-                                        (Just localRepo)
-                                        (P.flushRoot params)
-                                        (P.ifSourcesChanged params)
-                                        (P.includePackages params)
-                                        (P.excludePackages params)
-                                        (P.components params)
-                       _ <- rsync ["-x"] (rootPath cleanRoot) (rootPath dependRoot)
-                       return os
-            False -> prepareEnv dependRoot
-                                buildRelease
-                                (Just localRepo)
-                                (P.flushRoot params)
-                                (P.ifSourcesChanged params)
-                                (P.includePackages params)
-                                (P.excludePackages params)
-                                (P.components params)
+      dependOS <- prepareDependOS params buildRelease localRepo
       _ <- updateCacheSources (P.ifSourcesChanged params) dependOS
       -- Compute the essential and build essential packages, they will all
       -- be implicit build dependencies.
