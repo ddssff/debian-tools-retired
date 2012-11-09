@@ -1,3 +1,13 @@
+haskell-cabal-debian (2.2.1) unstable; urgency=low
+
+  * Add a modifyAtoms function to Flags that is applied to final list of
+    DebAtom before writing the debianization.
+  * Add DHApacheSite and DHInstallCabalExec atoms so atoms don't depend on
+    the build directory
+  * Add #DEBHELPER# and exit 0 to default web server postinst.
+
+ -- David Fox <dsf@seereason.com>  Fri, 09 Nov 2012 10:25:32 -0800
+
 haskell-cabal-debian (2.2.0) unstable; urgency=low
 
   * Append a trailing slash to the --base-uri argument passed to the

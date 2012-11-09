@@ -27,17 +27,17 @@ import System.Process (showCommandForUser)
 -- server or web site.
 execAtoms :: Executable -> [DebAtom]
 execAtoms e@(Executable {}) =
-    DHInstall b (fromMaybe ("dist-ghc" </> "build" </> execName e </> execName e) (sourceDir e)) (fromMaybe "usr/bin" (destDir e)) :
+    a :
     maybe []
           (\server ->
                (debianPostinst b e server ++
-                debianLinks b e server ++
-                debianDirs b e server ++
                 debianInit b e server ++
                 logrotateConfig b e server ++
-                apacheSite e server))
+                apacheSite b e server))
           (execServer e)
     where
+      a = maybe (DHInstallCabalExec b (execName e)) (DHInstall b) (sourceDir e) $ d
+      d = fromMaybe "usr/bin" (destDir e)
       b = BinPkgName (PkgName (execName e))
 
 -- | Does this package require an apache site file?
@@ -111,7 +111,11 @@ debianPostinst b e server@(Server {..}) =
             apache ++
             [ "    service " ++ serviceName e ++ " start"
             , "    ;;"
-            , "esac" ]))]
+            , "esac"
+            , ""
+            , "#DEBHELPER#"
+            , ""
+            , "exit 0" ]))]
     else []
     where
       apache =
@@ -123,18 +127,6 @@ debianPostinst b e server@(Server {..}) =
                , "    /usr/sbin/a2enmod proxy_http"
                , "    service apache2 restart" ]
           else []
-
-
-debianDirs :: BinPkgName -> Executable -> Server -> [DebAtom]
-debianDirs b e server@(Server {..}) =
-    if needsApacheSite server
-    then map (DHInstallDir b) [apacheLogDirectory e, "/etc/apache2/sites-available"]
-    else []
-
-debianLinks :: BinPkgName -> Executable -> Server -> [DebAtom]
-debianLinks b _ (Server {..}) =
-    maybe [] (\ x -> [DHLink b [("/etc/apache2/sites-available/" ++ apacheSiteName x,
-                                                "/etc/apache2/sites-enabled/" ++ apacheSiteName x)]]) site
 
 debianInit :: BinPkgName -> Executable -> Server -> [DebAtom]
 debianInit b e spec@(Server{..}) =
@@ -178,13 +170,16 @@ debianInit b e spec@(Server{..}) =
 
 -- | An apache site configuration file.  This is installed via a line
 -- in debianFiles.
-apacheSite :: Executable -> Server -> [DebAtom]
-apacheSite exec server =
+apacheSite :: BinPkgName -> Executable -> Server -> [DebAtom]
+apacheSite b e server =
     maybe
       []
       (\ (Site{..}) ->
-           [OtherFile
-            ("dist-ghc/apachesite" </> domain)
+           [DHInstallDir b "/etc/apache2/sites-available",
+            DHInstallDir b (apacheLogDirectory e),
+            DHLink b [("/etc/apache2/sites-available/" ++ domain, "/etc/apache2/sites-enabled/" ++ domain)],
+            DHApacheSite
+            domain
             (unlines $
              [ "# " ++ headerMessage server
               , ""
@@ -193,8 +188,8 @@ apacheSite exec server =
               , "    ServerName www." ++ domain
               , "    ServerAlias " ++ domain
               , ""
-              , "    ErrorLog " ++ apacheErrorLog exec
-              , "    CustomLog " ++ apacheAccessLog exec ++ " combined"
+              , "    ErrorLog " ++ apacheErrorLog e
+              , "    CustomLog " ++ apacheAccessLog e ++ " combined"
               , ""
               , "    ProxyRequests Off"
               , "    AllowEncodedSlashes NoDecode"

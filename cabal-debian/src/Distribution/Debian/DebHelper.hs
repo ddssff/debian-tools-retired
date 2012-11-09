@@ -32,7 +32,9 @@ data DebAtom
     | DebCopyright String                         -- ^ Write debian/copyright (required?)
     | DebSourceFormat String                      -- ^ Write debian/source/format
     | DebWatch String                             -- ^ Write debian/watch
+    | DHApacheSite String String                  -- ^ Install the apache site file for a domain
     | DHInstall BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package
+    | DHInstallCabalExec BinPkgName String FilePath -- ^ Install a cabal executable into the binary package
     | DHInstallDir BinPkgName FilePath            -- ^ Create a directory in the binary package
     | DHInstallInit BinPkgName String             -- ^ Add an init.d file to the binary package
     | DHInstallLogrotate BinPkgName String        -- ^ Add a logrotate file to the binary package
@@ -114,12 +116,28 @@ watch xs =
       f (DebWatch x) = Just x
       f _ = Nothing
 
+apache :: [DebAtom] -> [(FilePath, String)]
+apache xs =
+    map (\ (domain, s) -> ("debian/tmp/etc/apache2/sites-available" </> domain, s))
+        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+    where
+      f (DHApacheSite domain s) = Just (domain, s)
+      f _ = Nothing
+
 install :: [DebAtom] -> [(FilePath, String)]
 install xs =
     map (\ (name, pairs) -> ("debian" </> show (pretty name) ++ ".install", unlines (map (\ (src, dst) -> src ++ " " ++ dst) pairs)))
         (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
     where
       f (DHInstall name src dst) = Just (name, [(src, dst)])
+      f _ = Nothing
+
+installCabalExec :: FilePath -> [DebAtom] -> [(FilePath, String)]
+installCabalExec build xs =
+    map (\ (name, pairs) -> ("debian" </> show (pretty name) ++ ".install", unlines (map (\ (src, dst) -> src ++ " " ++ dst) pairs)))
+        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+    where
+      f (DHInstallCabalExec name exec dst) = Just (name, [(build </> exec </> exec, dst)])
       f _ = Nothing
 
 dir :: [DebAtom] -> [(FilePath, String)]
@@ -194,8 +212,8 @@ other xs =
       f (OtherFile path s) = Just (path, s)
       f _ = Nothing
 
-toFiles :: [DebAtom] -> [(FilePath, String)]
-toFiles d =
+toFiles :: FilePath -> [DebAtom] -> [(FilePath, String)]
+toFiles build d =
     [("debian/control", show (pretty (controlFile d))),
      ("debian/changelog", concatMap (show . prettyEntry) (changeLog d)),
      ("debian/rules", unlines (rules d)),
@@ -203,7 +221,7 @@ toFiles d =
      ("debian/copyright", copyright d),
      ("debian/source/format", sourceFormat d),
      ("debian/watch", watch d)] ++
-    install d ++ dir d ++ init d ++ logrotate d ++ link d ++ postinst d ++ postrm d ++ preinst d ++ prerm d ++ other d
+    apache d ++ install d ++ installCabalExec build d ++ dir d ++ init d ++ logrotate d ++ link d ++ postinst d ++ postrm d ++ preinst d ++ prerm d ++ other d
 
 {-
 dh_install (1)       - install files into package build directories

@@ -12,6 +12,7 @@ import qualified Data.Map as Map
 import Data.Version (Version)
 import Debian.Relation (PkgName(..), BinPkgName(..))
 import Distribution.Compiler (CompilerFlavor(..))
+import Distribution.Debian.DebHelper (DebAtom)
 import Distribution.Debian.PackageInfo (DebType)
 import Distribution.Debian.Server (Executable(..))
 import Distribution.PackageDescription (FlagName(..))
@@ -97,8 +98,10 @@ data Flags = Flags
     -- obtained from the cabal file, and if it is not there from the
     -- environment.  As a last result, there is a hard coded string
     -- in here somewhere.
+    , modifyAtoms :: [DebAtom] -> [DebAtom]
+    -- ^ Function to modify the final list of DebAtom before they
+    -- are turned into a debianization.
     }
-    deriving (Eq, Show)
 
 data DebAction = Usage | Debianize | SubstVar DebType deriving (Eq, Show)
 
@@ -130,6 +133,7 @@ defaultFlags =
     , validate = False
     , executablePackages = []
     , debMaintainer = Nothing
+    , modifyAtoms = id
     }
 
 missingDependencies' :: Flags -> [BinPkgName]

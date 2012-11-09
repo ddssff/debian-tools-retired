@@ -38,12 +38,12 @@ import Distribution.Debian.PackageDescription (withSimplePackageDescription)
 import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits)
 import Distribution.Debian.Server (execAtoms, Executable(..))
 import Distribution.Debian.Utility
-import Distribution.Text (display)
-import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.License (License(..))
 import Distribution.Package (PackageIdentifier(..), PackageName(..))
 import Distribution.PackageDescription (PackageDescription(..), BuildInfo(buildable), Executable(exeName, buildInfo))
+import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
+import Distribution.Text (display)
 import Prelude hiding (catch)
 import System.Directory
 import System.Environment
@@ -80,21 +80,22 @@ withEnvironmentFlags flags0 f =
 -- Setup.hs file.  It parses the CABALDEBIAN environment variable and
 -- applies the arguments it finds to the flags argument to produce a
 -- new flags value.  This is then used to do the debianization.
-autobuilderDebianize :: LocalBuildInfo -> Flags -> ([DebAtom] -> [DebAtom]) -> IO ()
-autobuilderDebianize lbi flags modify =
+autobuilderDebianize :: LocalBuildInfo -> Flags -> IO ()
+autobuilderDebianize lbi flags =
   withEnvironmentFlags flags $ \ flags' ->
-  case buildDir lbi of
-    -- The autobuilder calls setup with --builddir=debian, so
-    -- this case actually does the debianization.
-    "debian/build" -> debianize flags' modify
-    -- During dpkg-buildpackage Setup is run by haskell-devscripts,
-    -- but we don't want to change things at that time or the build
-    -- will fail.  So this just makes sure things are already properly
-    -- debianized.
-    "dist-ghc/build" -> debianize (flags' {validate = True}) modify
-    -- This is what gets called when you run Setup configure by hand.
-    -- It just prints the changes debianization would make.
-    _ -> debianize (flags' {dryRun = True}) modify
+  let flags'' = case buildDir lbi of
+                  -- The autobuilder calls setup with --builddir=debian, so
+                  -- this case actually does the debianization.
+                  "debian/build" -> flags'
+                  -- During dpkg-buildpackage Setup is run by haskell-devscripts,
+                  -- but we don't want to change things at that time or the build
+                  -- will fail.  So this just makes sure things are already properly
+                  -- debianized.
+                  "dist-ghc/build" -> flags' {validate = True}
+                  -- This is what happens when you run Setup configure by hand.
+                  -- It just prints the changes debianization would make.
+                  _ -> flags' {dryRun = True} in
+  debianize (buildDir lbi) flags''
 
 -- | Generate a debianization for the cabal package in the current
 -- directory using information from the .cabal file and from the
@@ -102,12 +103,12 @@ autobuilderDebianize lbi flags modify =
 -- for the debian/changelog file.  A new entry changelog is generated,
 -- and any entries already there that look older than the new one are
 -- preserved.
-debianize :: Flags -> ([DebAtom] -> [DebAtom]) -> IO ()
-debianize flags modify =
+debianize :: FilePath -> Flags -> IO ()
+debianize build flags =
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
       old <- try readDebianization >>= return . either (\ (_ :: SomeException) -> Nothing) Just
       let flags' = flags {buildDeps = buildDeps flags ++ if selfDepend flags then ["libghc-cabal-debian-dev"] else []}
-      new <- modify <$> debianization flags' pkgDesc compiler old
+      new <- modifyAtoms flags <$> debianization flags' pkgDesc compiler old
       -- It is imperitive that during the time that dpkg-buildpackage
       -- runs the version number in the changelog and the source and
       -- package names in the control file do not change, or the bulid
@@ -133,8 +134,8 @@ debianize flags modify =
                                        hPutStrLn stderr ("oldPackages: " ++ show (pretty oldPackages) ++ "\nnewPackages: " ++ show (pretty newPackages)) >>
                                        return (Set.fromList oldPackages == Set.fromList newPackages))
                                       (\ (_ :: SomeException) -> return False)
-               when (not (versionsMatch && sourcesMatch && packagesMatch)) (describeDebianization new >>= \ text -> error $ "Debianization mismatch:\n" ++ text))
-      if dryRun flags' then putStrLn "Debianization (dry run):" >> describeDebianization new >>= putStr else writeDebianization new
+               when (not (versionsMatch && sourcesMatch && packagesMatch)) (describeDebianization build new >>= \ text -> error $ "Debianization mismatch:\n" ++ text))
+      if dryRun flags' then putStrLn "Debianization (dry run):" >> describeDebianization build new >>= putStr else writeDebianization build new
 
 readDebianization :: IO Debianization
 readDebianization = do
@@ -192,9 +193,9 @@ updateOriginal f v = parseDebianVersion . f . show . prettyDebianVersion $ v
 debianVersionNumber :: PackageDescription -> DebianVersion
 debianVersionNumber pkgDesc = parseDebianVersion . showVersion . pkgVersion . package $ pkgDesc
 
-describeDebianization :: Debianization -> IO String
-describeDebianization d =
-    concat <$> mapM (uncurry doFile) (debianizationFiles d)
+describeDebianization :: FilePath -> Debianization -> IO String
+describeDebianization build d =
+    concat <$> mapM (uncurry doFile) (debianizationFiles build d)
     where
       doFile path text =
           doesFileExist path >>= \ exists ->
@@ -205,18 +206,18 @@ describeDebianization d =
 indent :: [Char] -> String -> String
 indent prefix text = unlines (map (prefix ++) (lines text))
 
-writeDebianization :: Debianization -> IO ()
-writeDebianization d =
-    mapM_ (uncurry doFile) (debianizationFiles d) >>
+writeDebianization :: FilePath -> Debianization -> IO ()
+writeDebianization build d =
+    mapM_ (uncurry doFile) (debianizationFiles build d) >>
     getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})
     where
       doFile path text =
           createDirectoryIfMissing True (takeDirectory path) >>
           replaceFile path text
 
-debianizationFiles :: Debianization -> [(FilePath, String)]
-debianizationFiles d =
-    toFiles d
+debianizationFiles :: FilePath -> Debianization -> [(FilePath, String)]
+debianizationFiles build d =
+    toFiles build d
 
 watch :: String -> DebAtom
 watch pkgname =
@@ -437,7 +438,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
              Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (D.BinPkgName (D.PkgName (execName p))) (binaryPackageDeps flags)))),
              Field ("Description", " " ++ maybe debianDescription (const executableDescription) (library pkgDesc))] ++
             conflicts (filterMissing (missingDependencies' flags) (extraDeps (b p) (binaryPackageConflicts flags)))),
-           [DHInstall (b p) ("dist-ghc" </> "build" </> execName p </> execName p) ("usr/bin"),
+           [DHInstallCabalExec (b p) (execName p) ("usr/bin"),
             DebRules ("build" </> execName p ++ ":: build-ghc-stamp")])
       b p = D.BinPkgName (D.PkgName (execName p))
       executableDescription = " " ++ "An executable built from the " ++ display (pkgName (package pkgDesc)) ++ " package."
@@ -459,7 +460,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                     Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps p (binaryPackageDeps flags)))),
                     Field ("Description", " " ++ maybe debianDescription (const utilsDescription) (library pkgDesc))] ++
                    conflicts (extraDeps p (binaryPackageConflicts flags))),
-                  (map (\ e -> DHInstall p ("dist-ghc" </> "build" </> exeName e </> exeName e) "usr/bin") bundledExecutables ++
+                  (map (\ e -> DHInstallCabalExec p (exeName e) "usr/bin") bundledExecutables ++
                    map (\ f -> DHInstall p f (takeDirectory ("usr/share" </> c' </> f))) (dataFiles pkgDesc) ++
                    [DebRules ("build" </> p' ++ ":: build-ghc-stamp")])
                  )]
