@@ -43,4 +43,4 @@ maybeCreateLink distro old new =
        when (not newExists)
             (do path <- sub ("dists" </> releaseName' distro </> old)
                 exists <- liftIO $ doesDirectoryExist path
-                when exists (liftIO $ createSymbolicLink path new))
+                when exists (liftIO $ createSymbolicLink new path))
