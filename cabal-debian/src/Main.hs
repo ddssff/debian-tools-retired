@@ -9,5 +9,5 @@ main =
   withFlags $ \ flags ->
       case debAction flags of
         SubstVar debType -> substvars flags debType
-        Debianize -> debianize flags
+        Debianize -> debianize flags id
         Usage -> error "Unexpected debAction: usage" -- this should have happened in withFlags

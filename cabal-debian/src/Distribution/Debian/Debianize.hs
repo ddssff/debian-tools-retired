@@ -80,21 +80,21 @@ withEnvironmentFlags flags0 f =
 -- Setup.hs file.  It parses the CABALDEBIAN environment variable and
 -- applies the arguments it finds to the flags argument to produce a
 -- new flags value.  This is then used to do the debianization.
-autobuilderDebianize :: LocalBuildInfo -> Flags -> IO ()
-autobuilderDebianize lbi flags =
+autobuilderDebianize :: LocalBuildInfo -> Flags -> ([DebAtom] -> [DebAtom]) -> IO ()
+autobuilderDebianize lbi flags modify =
   withEnvironmentFlags flags $ \ flags' ->
   case buildDir lbi of
     -- The autobuilder calls setup with --builddir=debian, so
     -- this case actually does the debianization.
-    "debian/build" -> debianize flags'
+    "debian/build" -> debianize flags' modify
     -- During dpkg-buildpackage Setup is run by haskell-devscripts,
     -- but we don't want to change things at that time or the build
     -- will fail.  So this just makes sure things are already properly
     -- debianized.
-    "dist-ghc/build" -> debianize (flags' {validate = True})
+    "dist-ghc/build" -> debianize (flags' {validate = True}) modify
     -- This is what gets called when you run Setup configure by hand.
     -- It just prints the changes debianization would make.
-    _ -> debianize (flags' {dryRun = True})
+    _ -> debianize (flags' {dryRun = True}) modify
 
 -- | Generate a debianization for the cabal package in the current
 -- directory using information from the .cabal file and from the
@@ -102,12 +102,12 @@ autobuilderDebianize lbi flags =
 -- for the debian/changelog file.  A new entry changelog is generated,
 -- and any entries already there that look older than the new one are
 -- preserved.
-debianize :: Flags -> IO ()
-debianize flags =
+debianize :: Flags -> ([DebAtom] -> [DebAtom]) -> IO ()
+debianize flags modify =
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
       old <- try readDebianization >>= return . either (\ (_ :: SomeException) -> Nothing) Just
       let flags' = flags {buildDeps = buildDeps flags ++ if selfDepend flags then ["libghc-cabal-debian-dev"] else []}
-      new <- debianization flags' pkgDesc compiler old
+      new <- modify <$> debianization flags' pkgDesc compiler old
       -- It is imperitive that during the time that dpkg-buildpackage
       -- runs the version number in the changelog and the source and
       -- package names in the control file do not change, or the bulid

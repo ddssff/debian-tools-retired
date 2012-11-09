@@ -70,7 +70,7 @@ debianize cache pflags dir =
     do args <- collectPackageFlags cache pflags
        let flags = Cabal.compileArgs args Cabal.defaultFlags
        withCurrentDirectory dir $ runSetupConfigure args >>= \ done ->
-                                  if done then qPutStrLn "Setup configure succeeded in creating a debianization!" else Cabal.debianize flags
+                                  if done then qPutStrLn "Setup configure succeeded in creating a debianization!" else Cabal.debianize flags id
          -- Running Setup configure didn't produce a debianization, call
          -- the debianize function instead.
 
