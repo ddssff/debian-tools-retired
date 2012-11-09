@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, TypeSynonymInstances #-}
 {-# OPTIONS -Wall #-}
-module Debian.Repo.Monads.Deb
+module Debian.AutoBuilder.Monads.Deb
     ( MonadDeb
     , runDebT
     ) where
@@ -10,8 +10,9 @@ import Control.Monad.State (StateT(runStateT))
 import Control.Monad.Trans (MonadIO)
 import Debian.Repo.Monads.Apt (AptState, MonadApt, initState)
 import Debian.Repo.Monads.Top (MonadTop)
+import Distribution.Debian.MonadBuild (MonadBuild)
 
-class (MonadIO m, Functor m, MonadApt m, MonadTop m) => MonadDeb m where
+class (MonadIO m, Functor m, MonadApt m, MonadTop m, MonadBuild m) => MonadDeb m where
 
 instance MonadApt m => MonadDeb (ReaderT FilePath m)
 

@@ -8,18 +8,20 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     ) where
 
 import Control.Applicative ((<$>))
-import Control.Exception (bracket, catch)
-import Control.Monad.Trans (liftIO)
+import Control.Monad.CatchIO (MonadCatchIO, bracket, catch)
+import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.List (isSuffixOf)
+import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Relation (PkgName(unPkgName), BinPkgName(unBinPkgName))
-import Debian.Repo (MonadDeb, sub)
+import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
 import qualified Distribution.Debian as Cabal
+import Distribution.Debian.MonadBuild (MonadBuild)
 import qualified Distribution.Debian.Options as Cabal
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..) {-, PackageName(..)-})
@@ -51,7 +53,7 @@ prepare cache package' cabal =
                 let version = pkgVersion . package . packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ debianize cache (P.flags package') dir
+                debianize cache (P.flags package') dir
                 return $ T.Download { T.package = package'
                                     , T.getTop = dir
                                     , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
@@ -61,16 +63,16 @@ prepare cache package' cabal =
                                     , T.buildWrapper = id }
          _ -> error $ "Download at " ++ dir ++ ": missing or multiple cabal files"
 
-withCurrentDirectory :: FilePath -> IO a -> IO a
-withCurrentDirectory new action = bracket (getCurrentDirectory >>= \ old -> setCurrentDirectory new >> return old) setCurrentDirectory (\ _ -> action)
+withCurrentDirectory :: MonadCatchIO m => FilePath -> m a -> m a
+withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old -> liftIO (setCurrentDirectory new) >> return old) (liftIO . setCurrentDirectory) (\ _ -> action)
 
 -- | Run cabal-debian on the given directory, creating a debian subdirectory.
-debianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
+debianize :: (MonadCatchIO m, MonadBuild m) => P.CacheRec -> [P.PackageFlag] -> FilePath -> m ()
 debianize cache pflags dir =
-    do args <- collectPackageFlags cache pflags
+    do args <- liftIO $ collectPackageFlags cache pflags
        let flags = Cabal.compileArgs args Cabal.defaultFlags
-       withCurrentDirectory dir $ runSetupConfigure args >>= \ done ->
-                                  if done then qPutStrLn "Setup configure succeeded in creating a debianization!" else Cabal.debianize flags id
+       withCurrentDirectory dir $ liftIO (runSetupConfigure args) >>= \ done ->
+                                  if done then qPutStrLn "Setup configure succeeded in creating a debianization!" else Cabal.debianize flags
          -- Running Setup configure didn't produce a debianization, call
          -- the debianize function instead.
 

@@ -31,6 +31,7 @@ Library
    Distribution.Debian.DebHelper
    Distribution.Debian.Dependencies
    Distribution.Debian.Interspersed
+   Distribution.Debian.MonadBuild
    Distribution.Debian.Options
    Distribution.Debian.PackageDescription
    Distribution.Debian.PackageInfo

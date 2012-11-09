@@ -9,6 +9,7 @@ import Control.Monad.Trans
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5 (md5)
 import Data.List
+import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
@@ -28,12 +29,12 @@ documentation = [ "svn:<uri> - A target of this form retrieves the source code f
 svn :: [String] -> IO [Output L.ByteString]
 svn args = runProcessF id (RawCommand "svn" args) L.empty
 
-username userInfo = 
+username userInfo =
     let un = takeWhile (/= ':') userInfo in
     if null un
     then []
     else ["--username", unEscapeString un]
-     
+
 password userInfo =
     let pw = takeWhile (/= '@') . dropWhile (== ':') . dropWhile (/= ':') $ userInfo in
     if null pw

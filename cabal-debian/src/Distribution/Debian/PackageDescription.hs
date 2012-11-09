@@ -5,6 +5,7 @@ module Distribution.Debian.PackageDescription
 
 import Control.Exception (bracket)
 import Control.Monad (when)
+import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List
 import Data.Maybe
 import Distribution.Debian.Config (Flags(..))
@@ -27,20 +28,19 @@ import System.Posix.Files (setFileCreationMask)
 
 withSimplePackageDescription :: Flags -> (PackageDescription -> Compiler -> IO ()) -> IO ()
 withSimplePackageDescription flags action = do
-  descPath <- defaultPackageDesc (verbosity flags)
-  genPkgDesc <- readPackageDescription (verbosity flags) descPath
+  descPath <- liftIO $ defaultPackageDesc (verbosity flags)
+  genPkgDesc <- liftIO $ readPackageDescription (verbosity flags) descPath
   when (compilerFlavor flags /= GHC) (error "Only the GHC compiler is supported.")
-  (compiler', _) <- configCompiler (Just (compilerFlavor flags)) Nothing Nothing defaultProgramConfiguration (verbosity flags)
+  (compiler', _) <- liftIO $ configCompiler (Just (compilerFlavor flags)) Nothing Nothing defaultProgramConfiguration (verbosity flags)
   let compiler = case (compilerVersion flags, compilerFlavor flags) of
                    (Just v, ghc) -> compiler' {compilerId = CompilerId ghc v}
                    _ -> compiler'
   pkgDesc <- case finalizePackageDescription (configurationsFlags flags) (const True) (Platform buildArch buildOS) (compilerId compiler) [] genPkgDesc of
-               Left e -> die $ "finalize failed: " ++ show e
+               Left e -> error $ "finalize failed: " ++ show e
                Right (pd, _) -> return pd
   --lbi <- localBuildInfo pkgDesc flags
-  bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> do
-                                        autoreconf (verbosity flags) pkgDesc
-                                        action pkgDesc compiler
+  liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> do autoreconf (verbosity flags) pkgDesc
+                                                                               action pkgDesc compiler
 
 -- | Run the package's configuration script.
 autoreconf :: Verbosity -> PackageDescription -> IO ()

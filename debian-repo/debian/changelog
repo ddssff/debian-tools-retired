@@ -1,3 +1,9 @@
+haskell-debian-repo (5.36) unstable; urgency=low
+
+  * Move MonadDeb into the autobuilder package, its not used here.
+
+ -- David Fox <dsf@seereason.com>  Fri, 09 Nov 2012 10:55:45 -0800
+
 haskell-debian-repo (5.35) unstable; urgency=low
 
   * Supply some missing cases in a Show instance.

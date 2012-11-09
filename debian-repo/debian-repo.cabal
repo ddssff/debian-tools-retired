@@ -1,5 +1,5 @@
 Name:           debian-repo
-Version:        5.35
+Version:        5.36
 License:        BSD3
 License-File:	debian/copyright
 Author:         David Fox
@@ -47,7 +47,6 @@ Library
         Debian.Repo.Insert,
         Debian.Repo.LocalRepository,
         Debian.Repo.Monads.Apt,
-        Debian.Repo.Monads.Deb,
         Debian.Repo.Monads.Top,
         Debian.Repo.OSImage,
         Debian.Repo.Package,

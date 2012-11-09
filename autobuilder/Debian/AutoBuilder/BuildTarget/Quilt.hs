@@ -16,10 +16,11 @@ import Data.List (intercalate, sortBy)
 import Data.Maybe
 import Data.Time
 import Data.Time.LocalTime ()
+import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (ChangeLogEntry(..), prettyEntry, parseLog, parseEntry)
-import Debian.Repo (MonadDeb, DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub)
+import Debian.Repo (DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub)
 import Debian.Version
 import Extra.Files (replaceFile)
 import "Extra" Extra.List ()

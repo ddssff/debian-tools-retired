@@ -5,6 +5,7 @@ import Control.Exception (SomeException, try)
 import Control.Monad
 import Control.Monad.Trans
 import qualified Data.ByteString.Lazy.Char8 as L
+import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P

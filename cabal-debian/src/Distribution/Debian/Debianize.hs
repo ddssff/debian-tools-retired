@@ -16,6 +16,7 @@ import Control.Applicative ((<$>))
 import Control.Arrow (second)
 import Control.Exception (SomeException, catch, try)
 import Control.Monad (mplus, when)
+import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Either (partitionEithers)
 import Data.List
 import qualified Data.Map as Map
@@ -33,6 +34,7 @@ import Distribution.Debian.Config (Flags(..), missingDependencies')
 import Distribution.Debian.DebHelper (DebAtom(..), controlFile, changeLog, toFiles)
 import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName, debianUtilsPackageName, debianSourcePackageName,
                                          debianDocPackageName, debianDevPackageName, debianProfPackageName)
+import Distribution.Debian.MonadBuild (runBuildT, MonadBuild(askBuild))
 import Distribution.Debian.Options (compileArgs)
 import Distribution.Debian.PackageDescription (withSimplePackageDescription)
 import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits)
@@ -95,7 +97,7 @@ autobuilderDebianize lbi flags =
                   -- This is what happens when you run Setup configure by hand.
                   -- It just prints the changes debianization would make.
                   _ -> flags' {dryRun = True} in
-  debianize (buildDir lbi) flags''
+  runBuildT (buildDir lbi) (debianize flags'')
 
 -- | Generate a debianization for the cabal package in the current
 -- directory using information from the .cabal file and from the
@@ -103,8 +105,9 @@ autobuilderDebianize lbi flags =
 -- for the debian/changelog file.  A new entry changelog is generated,
 -- and any entries already there that look older than the new one are
 -- preserved.
-debianize :: FilePath -> Flags -> IO ()
-debianize build flags =
+debianize :: (MonadBuild m, MonadIO m) => Flags -> m ()
+debianize flags =
+    askBuild >>= \ build -> liftIO $
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
       old <- try readDebianization >>= return . either (\ (_ :: SomeException) -> Nothing) Just
       let flags' = flags {buildDeps = buildDeps flags ++ if selfDepend flags then ["libghc-cabal-debian-dev"] else []}
@@ -134,7 +137,7 @@ debianize build flags =
                                        hPutStrLn stderr ("oldPackages: " ++ show (pretty oldPackages) ++ "\nnewPackages: " ++ show (pretty newPackages)) >>
                                        return (Set.fromList oldPackages == Set.fromList newPackages))
                                       (\ (_ :: SomeException) -> return False)
-               when (not (versionsMatch && sourcesMatch && packagesMatch)) (describeDebianization build new >>= \ text -> error $ "Debianization mismatch:\n" ++ text))
+               when (not (versionsMatch && sourcesMatch && packagesMatch)) (describeDebianization build new >>= \ text -> error ("Debianization mismatch:\n" ++ text)))
       if dryRun flags' then putStrLn "Debianization (dry run):" >> describeDebianization build new >>= putStr else writeDebianization build new
 
 readDebianization :: IO Debianization
@@ -195,8 +198,9 @@ debianVersionNumber pkgDesc = parseDebianVersion . showVersion . pkgVersion . pa
 
 describeDebianization :: FilePath -> Debianization -> IO String
 describeDebianization build d =
-    concat <$> mapM (uncurry doFile) (debianizationFiles build d)
+    mapM (\ (path, text) -> liftIO (doFile path text)) (debianizationFiles build d) >>= return . concat
     where
+      doFile :: FilePath -> String -> IO String
       doFile path text =
           doesFileExist path >>= \ exists ->
               if exists
@@ -216,8 +220,7 @@ writeDebianization build d =
           replaceFile path text
 
 debianizationFiles :: FilePath -> Debianization -> [(FilePath, String)]
-debianizationFiles build d =
-    toFiles build d
+debianizationFiles = toFiles
 
 watch :: String -> DebAtom
 watch pkgname =
