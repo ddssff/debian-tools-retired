@@ -1,3 +1,9 @@
+haskell-cabal-debian (2.3.2) unstable; urgency=low
+
+  * Fix exception that was keeping changelogs from being preserved.
+
+ -- David Fox <dsf@seereason.com>  Sat, 10 Nov 2012 10:07:50 -0800
+
 haskell-cabal-debian (2.3.1) unstable; urgency=low
 
   * Fix the extension of the debhelper links files

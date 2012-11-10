@@ -14,7 +14,7 @@ module Distribution.Debian.Debianize
 import Codec.Binary.UTF8.String (decodeString)
 import Control.Applicative ((<$>))
 import Control.Arrow (second)
-import Control.Exception (SomeException, catch, try)
+import Control.Exception (SomeException, catch, throw)
 import Control.Monad (mplus, when)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.ByteString.Lazy (writeFile)
@@ -49,10 +49,11 @@ import Distribution.PackageDescription (PackageDescription(..), BuildInfo(builda
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
 import Distribution.Text (display)
+import GHC.IO.Exception (IOException(ioe_type), IOErrorType(NoSuchThing))
 import Prelude hiding (catch, writeFile)
 import System.Directory
 import System.Environment
-import System.FilePath ((</>), (<.>), takeDirectory, splitFileName)
+import System.FilePath ((</>), takeDirectory, splitFileName)
 import System.IO (hPutStrLn, stderr)
 import Text.PrettyPrint.Class (pretty)
 
@@ -112,7 +113,7 @@ debianize :: (MonadBuild m, MonadIO m) => Flags -> m ()
 debianize flags =
     askBuild >>= \ build -> liftIO $
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
-      old <- try readDebianization >>= return . either (\ (_ :: SomeException) -> Nothing) Just
+      old <- readDebianization
       let flags' = flags {buildDeps = buildDeps flags ++ if selfDepend flags then ["libghc-cabal-debian-dev"] else []}
       new <- (modifyAtoms flags <$> debianization flags' pkgDesc compiler old) >>= mapM (prepareAtom build) >>= return . concat
       -- It is imperitive that during the time that dpkg-buildpackage
@@ -125,17 +126,17 @@ debianize flags =
       -- storing them apart from the package in the autobuilder
       -- configuration.
       when (validate flags')
-          ( do versionsMatch <- catch (let oldVersion = logVersion (head (changeLog (fromJust old)))
+          ( do versionsMatch <- catch (let oldVersion = logVersion (head (changeLog old))
                                            newVersion = logVersion (head (changeLog new)) in
                                        hPutStrLn stderr ("oldVersion: " ++ show (pretty oldVersion) ++ ", newVersion: " ++ show (pretty newVersion)) >>
                                        return (oldVersion == newVersion))
                                       (\ (_ :: SomeException) -> return False)
-               sourcesMatch <- catch (let oldSource = fromJust (lookupP "Source" (head (unControl (controlFile (fromJust old)))))
+               sourcesMatch <- catch (let oldSource = fromJust (lookupP "Source" (head (unControl (controlFile old))))
                                           newSource = fromJust (lookupP "Source" (head (unControl (controlFile new)))) in
                                       hPutStrLn stderr ("oldSource: " ++ show (pretty oldSource) ++ "\nnewSource: " ++ show (pretty newSource)) >>
                                       return (oldSource == newSource))
                                      (\ (_ :: SomeException) -> return False)
-               packagesMatch <- catch (let oldPackages = catMaybes (map (lookupP "Package") (tail (unControl (controlFile (fromJust old)))))
+               packagesMatch <- catch (let oldPackages = catMaybes (map (lookupP "Package") (tail (unControl (controlFile old))))
                                            newPackages = catMaybes (map (lookupP "Package") (tail (unControl (controlFile new)))) in
                                        hPutStrLn stderr ("oldPackages: " ++ show (pretty oldPackages) ++ "\nnewPackages: " ++ show (pretty newPackages)) >>
                                        return (Set.fromList oldPackages == Set.fromList newPackages))
@@ -148,7 +149,6 @@ prepareAtom build (DHFile b path s) =
     do let s' = fromString s
            (destDir, destName) = splitFileName path
            tmpDir = takeDirectory build </> "tmp" </> show (md5 s')
-           tmp = takeDirectory build </> show (pretty b) <.> show (md5 s')
        createDirectoryIfMissing True tmpDir
        writeFile (tmpDir </> destName) s'
        return [DHInstall b (tmpDir </> destName) destDir]
@@ -156,20 +156,26 @@ prepareAtom _ x = return [x]
 
 readDebianization :: IO Debianization
 readDebianization = do
-  (_errs, oldLog) <- readFile "debian/changelog" >>= return . partitionEithers . parseLog
-  oldControl <- parseControlFromFile "debian/control" >>= either (error . show) return
-  return $ [DebControl oldControl, DebChangelog oldLog]
+  oldLog <- (readFile "debian/changelog" >>= return . (: []) . DebChangelog . snd . partitionEithers . parseLog) `catch` (return . handleDoesNotExist) :: IO [DebAtom]
+  oldControl <- (parseControlFromFile "debian/control" >>= return . either (error . show) ((: []) . DebControl)) `catch` (return . handleDoesNotExist) :: IO [DebAtom]
+  return $ oldLog ++ oldControl
+  -- let oldControl' = either (\ (e :: SomeException) -> []) (either (\ _ -> []) (\ c -> [DebControl c])) oldControl
+  -- return $ oldControl' ++ [DebChangelog oldLog]
+    where
+      handleDoesNotExist :: IOError -> [a]
+      handleDoesNotExist e | ioe_type e == NoSuchThing = []
+      handleDoesNotExist e = throw e
 
 debianization :: Flags		 -- ^ command line flags
               -> PackageDescription  -- ^ info from the .cabal file
               -> Compiler            -- ^ compiler details
-              -> Maybe Debianization
+              -> Debianization
               -> IO Debianization
 debianization flags pkgDesc compiler oldDeb =
     do date <- getCurrentLocalRFC822Time
        copyright <- readFile' (licenseFile pkgDesc) `catch` (\ (_ :: SomeException) -> return . showLicense . license $ pkgDesc)
        maint <- getMaintainer flags pkgDesc >>= maybe (error "Missing value for --maintainer") return
-       let newLog = updateChangelog flags maint pkgDesc date (maybe [] changeLog oldDeb)
+       let newLog = updateChangelog flags maint pkgDesc date (changeLog oldDeb)
        return $ control flags compiler maint pkgDesc ++
                    [ cdbsRules pkgDesc
                    , DebChangelog newLog
