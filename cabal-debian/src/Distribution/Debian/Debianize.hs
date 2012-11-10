@@ -17,6 +17,9 @@ import Control.Arrow (second)
 import Control.Exception (SomeException, catch, try)
 import Control.Monad (mplus, when)
 import Control.Monad.Trans (MonadIO, liftIO)
+import Data.ByteString.Lazy (writeFile)
+import Data.ByteString.Lazy.UTF8 (fromString)
+import Data.Digest.Pure.MD5 (md5)
 import Data.Either (partitionEithers)
 import Data.List
 import qualified Data.Map as Map
@@ -46,10 +49,10 @@ import Distribution.PackageDescription (PackageDescription(..), BuildInfo(builda
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
 import Distribution.Text (display)
-import Prelude hiding (catch)
+import Prelude hiding (catch, writeFile)
 import System.Directory
 import System.Environment
-import System.FilePath ((</>), takeDirectory)
+import System.FilePath ((</>), (<.>), takeDirectory, splitFileName)
 import System.IO (hPutStrLn, stderr)
 import Text.PrettyPrint.Class (pretty)
 
@@ -111,7 +114,7 @@ debianize flags =
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
       old <- try readDebianization >>= return . either (\ (_ :: SomeException) -> Nothing) Just
       let flags' = flags {buildDeps = buildDeps flags ++ if selfDepend flags then ["libghc-cabal-debian-dev"] else []}
-      new <- modifyAtoms flags <$> debianization flags' pkgDesc compiler old
+      new <- (modifyAtoms flags <$> debianization flags' pkgDesc compiler old) >>= mapM (prepareAtom build) >>= return . concat
       -- It is imperitive that during the time that dpkg-buildpackage
       -- runs the version number in the changelog and the source and
       -- package names in the control file do not change, or the bulid
@@ -140,6 +143,17 @@ debianize flags =
                when (not (versionsMatch && sourcesMatch && packagesMatch)) (describeDebianization build new >>= \ text -> error ("Debianization mismatch:\n" ++ text)))
       if dryRun flags' then putStrLn "Debianization (dry run):" >> describeDebianization build new >>= putStr else writeDebianization build new
 
+prepareAtom :: FilePath -> DebAtom -> IO [DebAtom]
+prepareAtom build (DHFile b path s) =
+    do let s' = fromString s
+           (destDir, destName) = splitFileName path
+           tmpDir = takeDirectory build </> "tmp" </> show (md5 s')
+           tmp = takeDirectory build </> show (pretty b) <.> show (md5 s')
+       createDirectoryIfMissing True tmpDir
+       writeFile (tmpDir </> destName) s'
+       return [DHInstall b (tmpDir </> destName) destDir]
+prepareAtom _ x = return [x]
+
 readDebianization :: IO Debianization
 readDebianization = do
   (_errs, oldLog) <- readFile "debian/changelog" >>= return . partitionEithers . parseLog
@@ -156,13 +170,14 @@ debianization flags pkgDesc compiler oldDeb =
        copyright <- readFile' (licenseFile pkgDesc) `catch` (\ (_ :: SomeException) -> return . showLicense . license $ pkgDesc)
        maint <- getMaintainer flags pkgDesc >>= maybe (error "Missing value for --maintainer") return
        let newLog = updateChangelog flags maint pkgDesc date (maybe [] changeLog oldDeb)
-       let controlAtoms = control flags compiler maint pkgDesc
-       return $ controlAtoms ++ [ cdbsRules pkgDesc,
-                                  DebChangelog newLog,
-                                  DebCompat 7, -- should this be hardcoded, or automatically read from /var/lib/dpkg/status?
-                                  DebCopyright copyright,
-                                  DebSourceFormat (sourceFormat flags ++ "\n"),
-                                  watch pkgname ] ++ concatMap execAtoms (executablePackages flags)
+       return $ control flags compiler maint pkgDesc ++
+                   [ cdbsRules pkgDesc
+                   , DebChangelog newLog
+                   , DebCompat 7 -- should this be hardcoded, or automatically read from /var/lib/dpkg/status?
+                   , DebCopyright copyright
+                   , DebSourceFormat (sourceFormat flags ++ "\n")
+                   , watch pkgname ] ++
+                   concatMap execAtoms (executablePackages flags)
     where
         PackageName pkgname = pkgName . package $ pkgDesc
 

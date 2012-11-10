@@ -174,13 +174,14 @@ apacheSite :: BinPkgName -> Executable -> Server -> [DebAtom]
 apacheSite b e server =
     maybe
       []
-      (\ (Site{..}) ->
-           [DHInstallDir b "/etc/apache2/sites-available",
-            DHInstallDir b (apacheLogDirectory e),
+      (\ site@(Site{..}) ->
+           [DHInstallDir b (apacheLogDirectory e),
             DHLink b [("/etc/apache2/sites-available/" ++ domain, "/etc/apache2/sites-enabled/" ++ domain)],
-            DHApacheSite
-            domain
-            (unlines $
+            DHFile b ("/etc/apache2/sites-available" </> domain) (text site)])
+       (site server)
+    where
+      text (Site{..}) =
+           (unlines $
              [ "# " ++ headerMessage server
               , ""
               , "<VirtualHost *:80>"
@@ -212,8 +213,7 @@ apacheSite b e server =
               , ""
               , "    ProxyPass / http://127.0.0.1:" ++ show (port server) ++ "/ nocanon"
               , "    ProxyPassReverse / http://127.0.0.1:" ++ show (port server) ++ "/"
-              , "</VirtualHost>" ])])
-       (site server)
+              , "</VirtualHost>" ])
 
 -- | A configuration file for the logrotate facility, installed via a line
 -- in debianFiles.

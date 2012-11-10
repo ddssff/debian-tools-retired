@@ -1,4 +1,5 @@
 -- | Preliminary.
+{-# LANGUAGE FlexibleInstances #-}
 module Distribution.Debian.DebHelper
     ( DebAtom(..)
     , changeLog
@@ -10,11 +11,14 @@ import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import Debian.Changes (ChangeLogEntry(..), prettyEntry)
 import Debian.Control
-import Debian.Relation (BinPkgName(BinPkgName), PkgName(PkgName))
+import Debian.Relation (BinPkgName(BinPkgName), PkgName(PkgName), SrcPkgName(SrcPkgName))
 import Prelude hiding (catch, init)
-import System.FilePath ((</>))
+import System.FilePath ((</>), makeRelative)
 import Text.PrettyPrint (text)
 import Text.PrettyPrint.Class (Pretty(pretty))
+
+instance Pretty SrcPkgName where
+    pretty (SrcPkgName x) = pretty x
 
 instance Pretty BinPkgName where
     pretty (BinPkgName x) = pretty x
@@ -32,8 +36,8 @@ data DebAtom
     | DebCopyright String                         -- ^ Write debian/copyright (required?)
     | DebSourceFormat String                      -- ^ Write debian/source/format
     | DebWatch String                             -- ^ Write debian/watch
-    | DHApacheSite String String                  -- ^ Install the apache site file for a domain
     | DHInstall BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package
+    | DHFile BinPkgName FilePath String           -- ^ Create a file with the given text at the given path
     | DHInstallCabalExec BinPkgName String FilePath -- ^ Install a cabal executable into the binary package
     | DHInstallDir BinPkgName FilePath            -- ^ Create a directory in the binary package
     | DHInstallInit BinPkgName String             -- ^ Add an init.d file to the binary package
@@ -43,7 +47,13 @@ data DebAtom
     | DHPostRm BinPkgName String                  -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
     | DHPreInst BinPkgName String                 -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
     | DHPreRm BinPkgName String                   -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
-    | OtherFile FilePath String                   -- ^ Create a file at a location
+    deriving Show
+
+instance Show (Control' String) where
+    show _ = "<control file>"
+
+instance Show ChangeLogEntry where
+    show _ = "<log entry>"
 
 changeLog :: [DebAtom] -> [ChangeLogEntry]
 changeLog xs =
@@ -116,28 +126,24 @@ watch xs =
       f (DebWatch x) = Just x
       f _ = Nothing
 
-apache :: [DebAtom] -> [(FilePath, String)]
-apache xs =
-    map (\ (domain, s) -> ("debian/tmp/etc/apache2/sites-available" </> domain, s))
-        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
-    where
-      f (DHApacheSite domain s) = Just (domain, s)
-      f _ = Nothing
-
-install :: [DebAtom] -> [(FilePath, String)]
-install xs =
+install :: FilePath -> [DebAtom] -> [(FilePath, String)]
+install build xs =
     map (\ (name, pairs) -> ("debian" </> show (pretty name) ++ ".install", unlines (map (\ (src, dst) -> src ++ " " ++ dst) pairs)))
         (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
     where
       f (DHInstall name src dst) = Just (name, [(src, dst)])
+      f (DHInstallCabalExec name exec dst) = Just (name, [(build </> exec </> exec, dst)])
       f _ = Nothing
 
-installCabalExec :: FilePath -> [DebAtom] -> [(FilePath, String)]
-installCabalExec build xs =
-    map (\ (name, pairs) -> ("debian" </> show (pretty name) ++ ".install", unlines (map (\ (src, dst) -> src ++ " " ++ dst) pairs)))
-        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+-- Install files directly into the binary package.  Actually,
+-- installing them immediately doesn't work because the whole thing
+-- gets removed before all the dh scripts are called.  We need to make
+-- up a temporary file name and add an entry to the .install file.
+file :: [DebAtom] -> [(FilePath, String)]
+file xs =
+    mapMaybe f xs
     where
-      f (DHInstallCabalExec name exec dst) = Just (name, [(build </> exec </> exec, dst)])
+      f (DHFile pkg dest s) = Just ("debian" </> show (pretty pkg) </> makeRelative "/" dest, s)
       f _ = Nothing
 
 dir :: [DebAtom] -> [(FilePath, String)]
@@ -165,13 +171,14 @@ logrotate xs =
       f (DHInstallLogrotate name t) = Just (name, [t])
       f _ = Nothing
 
+-- | Collect all the links by package and output one file each
 link :: [DebAtom] -> [(FilePath, String)]
 link xs =
-    map (\ (name, pairs) -> ("debian" </> show (pretty name) ++ ".link", unlines (map (\ (loc, txt) -> loc ++ " " ++ txt) pairs)))
-        (Map.toList (Map.fromListWith (++) (mapMaybe f xs)))
+    map doPackage (Map.toList (Map.fromListWith (++) (mapMaybe collect xs)))
     where
-      f (DHLink name pairs) = Just (name, pairs)
-      f _ = Nothing
+      doPackage (name, pairs) = ("debian" </> show (pretty name) ++ ".links", unlines (map (\ (loc, txt) -> loc ++ " " ++ txt) pairs))
+      collect (DHLink name pairs) = Just (name, pairs)
+      collect _ = Nothing
 
 postinst :: [DebAtom] -> [(FilePath, String)]
 postinst xs =
@@ -205,23 +212,29 @@ prerm xs =
       f (DHPreRm name t) = Just (name, [t])
       f _ = Nothing
 
-other :: [DebAtom] -> [(FilePath, String)]
-other xs =
-    mapMaybe f xs
-    where
-      f (OtherFile path s) = Just (path, s)
-      f _ = Nothing
-
+-- | Turn the DebAtoms into a list of files, making sure the text
+-- associated with each path is unique.
 toFiles :: FilePath -> [DebAtom] -> [(FilePath, String)]
 toFiles build d =
-    [("debian/control", show (pretty (controlFile d))),
-     ("debian/changelog", concatMap (show . prettyEntry) (changeLog d)),
-     ("debian/rules", unlines (rules d)),
-     ("debian/compat", show (compat d) ++ "\n"),
-     ("debian/copyright", copyright d),
-     ("debian/source/format", sourceFormat d),
-     ("debian/watch", watch d)] ++
-    apache d ++ install d ++ installCabalExec build d ++ dir d ++ init d ++ logrotate d ++ link d ++ postinst d ++ postrm d ++ preinst d ++ prerm d ++ other d
+    Map.toList $
+    Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
+      [("debian/control", show (pretty (controlFile d))),
+       ("debian/changelog", concatMap (show . prettyEntry) (changeLog d)),
+       ("debian/rules", unlines (rules d)),
+       ("debian/compat", show (compat d) ++ "\n"),
+       ("debian/copyright", copyright d),
+       ("debian/source/format", sourceFormat d),
+       ("debian/watch", watch d)] ++
+      install build d ++
+      file d ++
+      dir d ++
+      init d ++
+      logrotate d ++
+      link d ++
+      postinst d ++
+      postrm d ++
+      preinst d ++
+      prerm d
 
 {-
 dh_install (1)       - install files into package build directories

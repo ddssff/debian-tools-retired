@@ -1,3 +1,11 @@
+haskell-cabal-debian (2.3.1) unstable; urgency=low
+
+  * Fix the extension of the debhelper links files
+  * Add a general mechanism for installing a file into a deb when
+    we have the file's text in a String (rather than in a file.)
+
+ -- David Fox <dsf@seereason.com>  Sat, 10 Nov 2012 07:35:09 -0800
+
 haskell-cabal-debian (2.3) unstable; urgency=low
 
   * Add MonadBuild.

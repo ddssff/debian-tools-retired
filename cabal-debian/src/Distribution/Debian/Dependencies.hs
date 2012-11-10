@@ -25,6 +25,7 @@ import Debian.Relation (Relations, Relation, BinPkgName(BinPkgName), PkgName(Pkg
 import qualified Debian.Relation as D
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Distribution.Debian.Bundled (ghcBuiltIn)
+import Distribution.Debian.DebHelper ({- instances only -})
 import Distribution.Debian.Interspersed (Interspersed(..))
 import Distribution.Package (PackageName(PackageName))
 import Distribution.Simple.Compiler (Compiler(..))
@@ -178,15 +179,6 @@ instance Pretty a => Pretty [a] where
 
 instance (Pretty a, Pretty b) => Pretty (a, b) where
     pretty (a, b) = text "(" <> pretty a <> text ", " <> pretty b <> text ")"
-
-instance Pretty SrcPkgName where
-    pretty (SrcPkgName x) = pretty x
-
-instance Pretty D.BinPkgName where
-    pretty (D.BinPkgName p) = text "deb:" <> (pretty p)
-
-instance Pretty D.PkgName where
-    pretty (D.PkgName p) = text p
 
 instance Pretty D.Relation where
     pretty (D.Rel name ver arch) =

@@ -1,5 +1,5 @@
 Name:           cabal-debian
-Version:        2.3
+Version:        2.3.1
 License:        BSD3
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>
@@ -22,7 +22,7 @@ Library
  Hs-Source-Dirs: src
  GHC-Options: -threaded -Wall -O2
  Build-Depends:
-   applicative-extras, base < 5, bytestring, Cabal >= 1.9, containers, debian >= 3.65, directory, filepath, mtl, network, parsec >= 3, pretty, pretty-class, process, regex-tdfa, unix, Unixutils >= 1.50, utf8-string
+   applicative-extras, base < 5, bytestring, Cabal >= 1.9, containers, debian >= 3.65, directory, filepath, mtl, network, parsec >= 3, pretty, pretty-class, process, pureMD5, regex-tdfa, unix, Unixutils >= 1.50, utf8-string
  Exposed-Modules:
    Distribution.Debian
    Distribution.Debian.Bundled
@@ -46,4 +46,4 @@ Executable cabal-debian
  Main-is: Main.hs
  ghc-options: -threaded -Wall -O2
  Build-Depends:
-   applicative-extras, base < 5, bytestring, Cabal >= 1.9, containers, debian >= 3.65, directory, filepath, mtl, network, parsec >= 3, pretty, pretty-class, process, regex-tdfa, unix, Unixutils >= 1.50, utf8-string
+   applicative-extras, base < 5, bytestring, Cabal >= 1.9, containers, debian >= 3.65, directory, filepath, mtl, network, parsec >= 3, pretty, pretty-class, process, pureMD5, regex-tdfa, unix, Unixutils >= 1.50, utf8-string
