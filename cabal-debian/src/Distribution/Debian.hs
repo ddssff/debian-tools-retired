@@ -12,16 +12,12 @@
 -- 
 -- > import Distribution.Debian (Flags(..), defaultFlags, autobuilderDebianize,
 -- >                             Executable(..), Server(..), Site(..))
--- > import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
 -- > 
--- > main = defaultMainWithHooks simpleUserHooks { postConf = \ _ _ _ lbi -> autobuilderDebianize lbi flags }
+-- > main = defaultMainWithHooks simpleUserHooks
+-- >          { postConf = \ _ _ _ lbi -> autobuilderDebianize lbi defaultFlags }
 -- 
--- Now define flags:
--- 
--- ^ flags :: Flags
--- ^ flags = defaultFlags { ... }
--- 
--- To see what your debianization would produce run
+-- To see what your debianization would produce, or how it differs
+-- from the debianization already present:
 -- 
 -- > runhaskell Setup configure
 -- 
@@ -29,6 +25,9 @@
 -- 
 -- > runhaskell Setup configure --builddir=debian
 -- > dpkg-buildpackage
+-- 
+-- At this point you may need to modify defaultFlags to achieve
+-- specific packaging goals.
 module Distribution.Debian
     ( debianize
     , autobuilderDebianize
