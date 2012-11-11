@@ -28,7 +28,7 @@ prepare package upstream debian =
     sub ("deb-dir" </> show (md5 (pack (show (P.spec package))))) >>= \ dest ->
     liftIO (createDirectoryIfMissing True dir) >>
     rsync [] (T.getTop upstream) dest >>
-    rsync [] (T.getTop debian </> "debian") dest >>
+    rsync [] (T.getTop debian </> "debian") (dest </> "debian") >>
     liftIO (findDebianSourceTree dest) >>= \ tree ->
     let tgt = T.Download {
                 T.package = package
