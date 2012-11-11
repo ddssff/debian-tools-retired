@@ -24,7 +24,7 @@
 -- To actually create the files, and then build:
 -- 
 -- > runhaskell Setup configure --builddir=debian
--- > dpkg-buildpackage
+-- > sudo dpkg-buildpackage
 -- 
 -- At this point you may need to modify defaultFlags to achieve
 -- specific packaging goals.

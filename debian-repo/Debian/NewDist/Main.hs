@@ -19,7 +19,7 @@ import		 System.Environment
 import		 System.Exit
 import qualified System.IO as IO
 import           System.Process.Progress (quieter, qPutStrLn)
-import           Text.PrettyPrint.Class (pretty)
+import           Text.PrettyPrint.ANSI.Leijen (pretty)
 import		 Text.Regex
 import           Debian.NewDist.Version (myVersion)
 import		 Extra.Email

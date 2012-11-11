@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances, UndecidableInstances #-}
 module Text.Format where
 
-import Text.PrettyPrint (Doc, text)
+import Text.PrettyPrint.ANSI.Leijen (Doc, text)
 
 class Pretty a where
     pretty :: a -> Doc

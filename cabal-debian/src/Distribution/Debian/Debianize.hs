@@ -55,7 +55,7 @@ import System.Directory
 import System.Environment
 import System.FilePath ((</>), takeDirectory, splitFileName)
 import System.IO (hPutStrLn, stderr)
-import Text.PrettyPrint.Class (pretty)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 type Debianization = [DebAtom]
 

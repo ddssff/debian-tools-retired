@@ -49,7 +49,7 @@ import System.Process.Progress (ePutStr, ePutStrLn, readProcessChunks, doOutput,
 import System.Unix.Chroot ( useEnv )
 import System.Unix.Directory (removeRecursiveSafely)
 import System.Unix.Mount ( umountBelow )
-import Text.PrettyPrint.Class (pretty)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Regex ( matchRegex, mkRegex )
 
 forceList :: [a] -> IO [a]

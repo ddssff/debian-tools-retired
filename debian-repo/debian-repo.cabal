@@ -34,8 +34,8 @@ Library
     Build-Depends: debian >= 3.65
 
   Build-Depends:
-        base, bytestring, Cabal, containers, directory, Extra >= 1.43, filepath, MonadCatchIO-mtl,
-        mtl, old-time, old-locale, network, parsec >= 3, pretty, pretty-class, process, process-extras, process-progress >= 0.4.7, pureMD5,
+        ansi-wl-pprint, base, bytestring, Cabal, containers, directory, Extra >= 1.43, filepath, MonadCatchIO-mtl,
+        mtl, old-time, old-locale, network, parsec >= 3, process, process-extras, process-progress >= 0.4.7, pureMD5,
         regex-compat, regex-tdfa, template-haskell, time, unix,
         Unixutils >= 1.51, bzlib, zlib, HaXml, MIME, applicative-extras, utf8-string
   Exposed-modules:

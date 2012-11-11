@@ -17,7 +17,6 @@ import Distribution.Debian.PackageInfo (DebType)
 import Distribution.Debian.Server (Executable(..))
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
-import Distribution.Verbosity (Verbosity, normal)
 
 data Flags = Flags
     {

@@ -33,8 +33,7 @@ import Distribution.Version (Version(..), VersionRange(..), anyVersion, foldVers
                              laterVersion, orLaterVersion, earlierVersion, orEarlierVersion, fromVersionIntervals, toVersionIntervals, withinVersion,
                              isNoVersion, asVersionIntervals)
 import Distribution.Version.Invert (invertVersionRange)
-import Text.PrettyPrint (text, hcat , (<>), empty)
-import Text.PrettyPrint.Class (Pretty(pretty))
+import Text.PrettyPrint.ANSI.Leijen (text, hcat , (<>), empty, Pretty(pretty))
 
 data PackageType = Source | Development | Profiling | Documentation | Utilities | Extra deriving (Eq, Show)
 
@@ -173,12 +172,6 @@ instance Pretty VersionRange where
 
 instance Pretty Version where
     pretty = text . showVersion
-
-instance Pretty a => Pretty [a] where
-    pretty xs = text "[" <> hcat (intersperse (text ", ") (map pretty xs)) <> text "]"
-
-instance (Pretty a, Pretty b) => Pretty (a, b) where
-    pretty (a, b) = text "(" <> pretty a <> text ", " <> pretty b <> text ")"
 
 instance Pretty D.Relation where
     pretty (D.Rel name ver arch) =

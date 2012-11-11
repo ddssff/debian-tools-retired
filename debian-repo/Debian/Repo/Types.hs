@@ -63,8 +63,7 @@ import Data.Maybe ( fromJust )
 import System.FilePath ( (</>) )
 import System.Posix.Types ( FileOffset )
 --import System.Unix.QIO (quieter, qPutStrLn)
-import Text.PrettyPrint (Doc, text, (<>), vcat)
-import Text.PrettyPrint.Class (Pretty(pretty))
+import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), vcat, Pretty(pretty))
 
 -- |The root directory of an OS image.
 data EnvRoot = EnvRoot { rootPath :: FilePath } deriving (Ord, Eq, Read, Show)

@@ -29,7 +29,7 @@ import System.Posix.Files ( setFileMode )
 import qualified System.Posix.Files as F ( fileSize, getFileStatus )
 import System.FilePath ( (</>) )
 import System.Process.Progress (qPutStrLn)
-import Text.PrettyPrint.Class (pretty)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 lookupRelease :: MonadApt m => Repository -> ReleaseName -> m (Maybe Release)
 lookupRelease repo dist = getApt >>= return . findRelease repo dist

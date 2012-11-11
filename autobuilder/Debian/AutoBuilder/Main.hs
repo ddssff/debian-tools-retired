@@ -62,7 +62,7 @@ import System.Process (CmdSpec(..))
 import System.Process.Progress (Output, timeTask, runProcessF, withModifiedVerbosity, quieter, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
-import Text.PrettyPrint.Class (pretty)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | Called from the configuration script, this processes a list of
 -- parameter sets.

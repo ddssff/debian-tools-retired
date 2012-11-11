@@ -14,8 +14,7 @@ import Debian.Control
 import Debian.Relation (BinPkgName(BinPkgName), PkgName(PkgName), SrcPkgName(SrcPkgName))
 import Prelude hiding (catch, init)
 import System.FilePath ((</>), makeRelative)
-import Text.PrettyPrint (text)
-import Text.PrettyPrint.Class (Pretty(pretty))
+import Text.PrettyPrint.ANSI.Leijen (text, Pretty(pretty))
 
 instance Pretty SrcPkgName where
     pretty (SrcPkgName x) = pretty x

@@ -31,7 +31,7 @@ import System.Unix.Directory ( removeRecursiveSafely )
 import System.Process (CmdSpec(..))
 import System.Process.Progress (runProcessF, quieter, qPutStr, qPutStrLn)
 import System.Directory ( createDirectoryIfMissing )
-import Text.PrettyPrint.Class (pretty)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 instance Show AptImage where
     show apt = "AptImage " ++ relName (aptImageReleaseName apt)

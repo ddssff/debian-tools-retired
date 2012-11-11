@@ -40,7 +40,8 @@ Library
     Build-Depends: debian-repo >= 5.32, debian >= 3.65
 
   Build-Depends:
-        applicative-extras >= 0.1.8
+        ansi-wl-pprint
+      , applicative-extras >= 0.1.8
       , base
       , bytestring
       , bzlib
@@ -60,8 +61,6 @@ Library
       , old-locale
       , old-time
       , parsec
-      , pretty
-      , pretty-class
       , process
       , process-extras
       , process-progress

@@ -47,7 +47,7 @@ import System.Unix.Chroot ( useEnv )
 import System.Unix.Directory ( removeRecursiveSafely )
 import System.Process (CmdSpec(ShellCommand))
 import System.Process.Progress (readProcessChunks, ePutStrLn, ePutStr, runProcess, unpackOutputs, quieter, qPutStrLn)
-import Text.PrettyPrint.Class (pretty)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 forceList :: [a] -> IO [a]
 forceList output = evaluate (length output) >> return output

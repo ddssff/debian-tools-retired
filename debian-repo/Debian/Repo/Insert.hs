@@ -52,7 +52,7 @@ import System.Posix.Types ( FileOffset )
 import System.Process ( runInteractiveCommand, waitForProcess )
 import System.Process.Progress (quieter, qPutStr, qPutStrLn)
 import qualified Text.Format as F ( Pretty(..) )
-import Text.PrettyPrint (text, cat)
+import Text.PrettyPrint.ANSI.Leijen (text, cat)
 
 data InstallResult 
     = Ok

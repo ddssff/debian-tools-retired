@@ -24,7 +24,7 @@ import Data.Maybe ( catMaybes )
 import qualified Data.Set as Set ( Set, union, singleton, toList )
 import Debian.Relation ( ArchitectureReq(..), BinPkgName, Relation(..), prettyRelation, Relations, VersionReq(..) )
 import "Extra" Extra.List ( cartesianProduct )
-import Text.PrettyPrint (Doc, text)
+import Text.PrettyPrint.ANSI.Leijen (Doc, text)
 
 type Excuse = String
 

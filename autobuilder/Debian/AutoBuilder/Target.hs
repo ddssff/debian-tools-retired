@@ -77,8 +77,7 @@ import System.Process (CmdSpec(ShellCommand, RawCommand), CreateProcess(cwd))
 import System.Process.Progress (unpackOutputs, mergeToStdout, keepStdout, keepResult, collectOutputs,
                                 keepResult, runProcessF, runProcess, quieter, qPutStrLn, ePutStr, ePutStrLn)
 import System.Process.Read (Chars(toString), readModifiedProcess)
-import Text.PrettyPrint (Doc, text, (<>))
-import Text.PrettyPrint.Class (pretty)
+import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), pretty)
 import Text.Printf(printf)
 import Text.Regex(matchRegex, mkRegex)
 
