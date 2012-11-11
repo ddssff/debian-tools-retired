@@ -19,19 +19,22 @@ import Distribution.Simple.Configure (configCompiler)
 import Distribution.Simple.Program (defaultProgramConfiguration)
 import Distribution.Simple.Utils (defaultPackageDesc, die, setupMessage)
 import Distribution.System (Platform(..), buildOS, buildArch)
-import Distribution.Verbosity (Verbosity)
+import Distribution.Verbosity (Verbosity, intToVerbosity)
 import Prelude hiding (catch)
 import System.Cmd (system)
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.Posix.Files (setFileCreationMask)
 
+intToVerbosity' :: Int -> Verbosity
+intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
+
 withSimplePackageDescription :: Flags -> (PackageDescription -> Compiler -> IO ()) -> IO ()
 withSimplePackageDescription flags action = do
-  descPath <- liftIO $ defaultPackageDesc (verbosity flags)
-  genPkgDesc <- liftIO $ readPackageDescription (verbosity flags) descPath
+  descPath <- liftIO $ defaultPackageDesc (intToVerbosity' (verbosity flags))
+  genPkgDesc <- liftIO $ readPackageDescription (intToVerbosity' (verbosity flags)) descPath
   when (compilerFlavor flags /= GHC) (error "Only the GHC compiler is supported.")
-  (compiler', _) <- liftIO $ configCompiler (Just (compilerFlavor flags)) Nothing Nothing defaultProgramConfiguration (verbosity flags)
+  (compiler', _) <- liftIO $ configCompiler (Just (compilerFlavor flags)) Nothing Nothing defaultProgramConfiguration (intToVerbosity' (verbosity flags))
   let compiler = case (compilerVersion flags, compilerFlavor flags) of
                    (Just v, ghc) -> compiler' {compilerId = CompilerId ghc v}
                    _ -> compiler'
@@ -39,7 +42,7 @@ withSimplePackageDescription flags action = do
                Left e -> error $ "finalize failed: " ++ show e
                Right (pd, _) -> return pd
   --lbi <- localBuildInfo pkgDesc flags
-  liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> do autoreconf (verbosity flags) pkgDesc
+  liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> do autoreconf (intToVerbosity' (verbosity flags)) pkgDesc
                                                                                action pkgDesc compiler
 
 -- | Run the package's configuration script.

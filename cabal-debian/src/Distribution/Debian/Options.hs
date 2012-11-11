@@ -16,10 +16,8 @@ import Debian.Relation (PkgName(..), BinPkgName(..))
 import Distribution.Compiler (CompilerFlavor(..))
 import Distribution.Debian.Config (Flags(..), DebAction(Usage, Debianize, SubstVar), defaultFlags)
 import Distribution.Debian.Server (Executable(..))
-import Distribution.ReadE (readEOrFail)
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
-import Distribution.Verbosity (flagToVerbosity)
 import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..),
                               usageInfo, getOpt')
 import System.Environment (getArgs, getProgName)
@@ -84,7 +82,7 @@ options =
              "Don't generate profiling libraries",
       Option "f" ["flags"] (ReqArg (\flags x -> x { configurationsFlags = configurationsFlags x ++ flagList flags }) "FLAGS")
              "Set given flags in Cabal conditionals",
-      Option "v" ["verbose"] (ReqArg (\verb x -> x { verbosity = readEOrFail flagToVerbosity verb }) "n")
+      Option "v" ["verbose"] (ReqArg (\s x -> x { verbosity = read s }) "n")
              "Change build verbosity",
       Option "" ["maintainer"] (ReqArg (\maint x -> x { debMaintainer = Just maint }) "Maintainer Name <email addr>")
              "Override the Maintainer name and email in $DEBEMAIL/$EMAIL/$DEBFULLNAME/$FULLNAME",

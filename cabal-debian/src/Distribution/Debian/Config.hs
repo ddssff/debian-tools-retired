@@ -37,7 +37,7 @@ data Flags = Flags
     , debLibProf :: Bool
     -- ^ Don't generate profiling libraries.  May be needed to work
     -- around a compiler bug.
-    , verbosity :: Verbosity
+    , verbosity :: Int
     -- ^ Run with progress messages at the given level of verboseness.
     , debAction :: DebAction
     -- ^ What to do - Usage, Debianize or Substvar
@@ -115,7 +115,7 @@ defaultFlags =
     , missingDependencies = []
     , help = False
     , debLibProf = True
-    , verbosity = normal
+    , verbosity = 1
     , debAction = Usage
     , buildDeps = []
     , extraDevDeps = []
