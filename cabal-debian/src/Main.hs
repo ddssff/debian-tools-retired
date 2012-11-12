@@ -1,7 +1,6 @@
 import Distribution.Debian.Config (Flags(..), DebAction(..))
 import Distribution.Debian.Debianize (debianize)
 import Distribution.Debian.Options (withFlags)
-import Distribution.Debian.MonadBuild (runBuildT)
 import Distribution.Debian.SubstVars (substvars)
 import Prelude hiding (catch)
 
@@ -13,5 +12,5 @@ main =
   withFlags $ \ flags ->
       case debAction flags of
         SubstVar debType -> substvars flags debType
-        Debianize -> runBuildT "dist-cabal/build" (debianize flags)
+        Debianize -> debianize "dist-cabal/build" flags
         Usage -> error "Unexpected debAction: usage" -- this should have happened in withFlags

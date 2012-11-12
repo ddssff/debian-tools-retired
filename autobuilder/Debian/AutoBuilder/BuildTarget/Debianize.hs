@@ -21,7 +21,6 @@ import Debian.Relation (PkgName(unPkgName), BinPkgName(unBinPkgName))
 import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
 import qualified Distribution.Debian as Cabal
-import Distribution.Debian.MonadBuild (MonadBuild)
 import qualified Distribution.Debian.Options as Cabal
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..) {-, PackageName(..)-})
