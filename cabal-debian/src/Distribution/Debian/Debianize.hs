@@ -37,7 +37,6 @@ import Distribution.Debian.Config (Flags(..), missingDependencies')
 import Distribution.Debian.DebHelper (DebAtom(..), controlFile, changeLog, toFiles)
 import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName, debianUtilsPackageName, debianSourcePackageName,
                                          debianDocPackageName, debianDevPackageName, debianProfPackageName)
-import Distribution.Debian.MonadBuild (runBuildT, MonadBuild(askBuild))
 import Distribution.Debian.Options (compileArgs)
 import Distribution.Debian.PackageDescription (withSimplePackageDescription)
 import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits, extraDebianLibs)
@@ -101,7 +100,7 @@ autobuilderDebianize lbi flags =
                   -- This is what happens when you run Setup configure by hand.
                   -- It just prints the changes debianization would make.
                   _ -> flags' {dryRun = True} in
-  runBuildT (buildDir lbi) (debianize flags'')
+  debianize (buildDir lbi) flags''
 
 -- | Generate a debianization for the cabal package in the current
 -- directory using information from the .cabal file and from the
@@ -109,9 +108,8 @@ autobuilderDebianize lbi flags =
 -- for the debian/changelog file.  A new entry changelog is generated,
 -- and any entries already there that look older than the new one are
 -- preserved.
-debianize :: (MonadBuild m, MonadIO m) => Flags -> m ()
-debianize flags =
-    askBuild >>= \ build -> liftIO $
+debianize :: FilePath -> Flags -> IO ()
+debianize build flags =
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
       old <- readDebianization
       let flags' = flags {buildDeps = buildDeps flags ++ if selfDepend flags then ["libghc-cabal-debian-dev"] else []}

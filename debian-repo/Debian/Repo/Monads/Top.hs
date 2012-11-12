@@ -12,16 +12,18 @@ import Control.Monad.State (StateT)
 import Control.Monad.Trans (lift)
 import System.FilePath ((</>), isRelative)
 
-type TopT = ReaderT FilePath
+newtype TopDir = TopDir {unTopDir :: FilePath}
+
+type TopT = ReaderT TopDir
 
 runTopT :: FilePath -> TopT m a -> m a
-runTopT path action = (runReaderT action) path
+runTopT path action = (runReaderT action) (TopDir path)
 
 class Monad m => MonadTop m where
     askTop :: m FilePath
 
 instance Monad m => MonadTop (TopT m) where
-    askTop = ask
+    askTop = ask >>= return . unTopDir
 
 sub :: MonadTop m => FilePath -> m FilePath
 sub path | isRelative path = askTop >>= \ top -> return $ top </> path

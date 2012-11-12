@@ -51,9 +51,12 @@ prepare cache package' cabal =
              do desc <- liftIO $ readPackageDescription normal (dir </> cabfile)
                 -- let (PackageName name) = pkgName . package . packageDescription $ desc
                 let version = pkgVersion . package . packageDescription $ desc
+                -- Because this is the autobuilder, the cabal-debian code will run from
+                -- inside of dpkg-buildpackage, so we can hard code this build directory.
+                let build = "dist-ghc/build"
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                debianize cache (P.flags package') dir
+                liftIO $ debianize cache (P.flags package') dir build
                 return $ T.Download { T.package = package'
                                     , T.getTop = dir
                                     , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
@@ -67,13 +70,14 @@ withCurrentDirectory :: MonadCatchIO m => FilePath -> m a -> m a
 withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old -> liftIO (setCurrentDirectory new) >> return old) (liftIO . setCurrentDirectory) (\ _ -> action)
 
 -- | Run cabal-debian on the given directory, creating a debian subdirectory.
-debianize :: (MonadCatchIO m, MonadBuild m) => P.CacheRec -> [P.PackageFlag] -> FilePath -> m ()
-debianize cache pflags dir =
+debianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> FilePath -> IO ()
+debianize cache pflags currentDirectory buildDirectory =
     do args <- liftIO $ collectPackageFlags cache pflags
        let flags = Cabal.compileArgs args Cabal.defaultFlags
-       withCurrentDirectory dir $ liftIO (runSetupConfigure args) >>= \ done ->
-                                  if done then qPutStrLn "Setup configure succeeded in creating a debianization!" else Cabal.debianize flags
-         -- Running Setup configure didn't produce a debianization, call
+       withCurrentDirectory currentDirectory $
+         liftIO (runSetupConfigure args) >>= \ done ->
+         if done then qPutStrLn "Setup configure succeeded in creating a debianization!" else Cabal.debianize buildDirectory flags
+    -- Running Setup configure didn't produce a debianization, call
          -- the debianize function instead.
 
     where

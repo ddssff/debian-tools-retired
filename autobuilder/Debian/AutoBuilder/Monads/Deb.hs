@@ -5,17 +5,15 @@ module Debian.AutoBuilder.Monads.Deb
     , runDebT
     ) where
 
-import Control.Monad.Reader (ReaderT, runReaderT)
 import Control.Monad.State (StateT(runStateT))
 import Control.Monad.Trans (MonadIO)
 import Debian.Repo.Monads.Apt (AptState, MonadApt, initState)
-import Debian.Repo.Monads.Top (MonadTop)
-import Distribution.Debian.MonadBuild (MonadBuild)
+import Debian.Repo.Monads.Top (MonadTop, TopT, runTopT)
 
-class (MonadIO m, Functor m, MonadApt m, MonadTop m, MonadBuild m) => MonadDeb m where
+class (MonadIO m, Functor m, MonadApt m, MonadTop m) => MonadDeb m where
 
-instance MonadApt m => MonadDeb (ReaderT FilePath m)
+instance MonadApt m => MonadDeb (TopT m)
 
 -- | Run a known instance of MonadDeb.
-runDebT :: Monad m => FilePath -> ReaderT FilePath (StateT AptState m) a -> m a
-runDebT top action = runStateT (runReaderT action top) initState >>= return . fst
+runDebT :: Monad m => FilePath -> TopT (StateT AptState m) a -> m a
+runDebT top action = runStateT (runTopT top action) initState >>= return . fst
