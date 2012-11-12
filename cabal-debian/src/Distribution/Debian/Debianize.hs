@@ -40,7 +40,7 @@ import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName
 import Distribution.Debian.MonadBuild (runBuildT, MonadBuild(askBuild))
 import Distribution.Debian.Options (compileArgs)
 import Distribution.Debian.PackageDescription (withSimplePackageDescription)
-import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits)
+import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits, extraDebianLibs)
 import Distribution.Debian.Server (execAtoms, Executable(..))
 import Distribution.Debian.Utility
 import Distribution.License (License(..))
@@ -377,7 +377,7 @@ control flags compiler maint pkgDesc =
             -- See http://www.debian.org/doc/debian-policy/ch-archive.html#s-subsections
             Field ("Section", " " ++ "haskell"),
             Field ("Maintainer", " " ++ maint),
-            Field ("Build-Depends", " " ++ showDeps' "Build-Depends:" (filterMissing (missingDependencies' flags) (debianBuildDeps ++ map anyrel (buildDeps flags)))),
+            Field ("Build-Depends", " " ++ showDeps' "Build-Depends:" (filterMissing (missingDependencies' flags) debianBuildDeps)),
             Field ("Build-Depends-Indep", " " ++ showDeps' "Build-Depends-Indep:" (filterMissing (missingDependencies' flags) debianBuildDepsIndep)),
             --Field ("Build-Depends-Indep", " " ++ buildDepsIndep),
             Field ("Standards-Version", " " ++ "3.9.3"),
@@ -394,7 +394,9 @@ control flags compiler maint pkgDesc =
            Field ("Architecture", " " ++ arch),
            Field ("Depends", " " ++ showDeps' "Depends:" (filterMissing (missingDependencies' flags) (
                      (if typ == Development
-                      then [anyrel "${shlibs:Depends}"] ++ map anyrel (extraDevDeps flags)
+                      then [anyrel "${shlibs:Depends}"] ++
+                           map anyrel (extraDevDeps flags) ++
+                           extraDebianLibs (extraLibMap flags) pkgDesc
                       else []) ++
                      ([anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
                       extraDeps (debianName pkgDesc) (binaryPackageDeps flags))))),
@@ -424,6 +426,7 @@ control flags compiler maint pkgDesc =
            [D.Rel (D.BinPkgName (D.PkgName "haskell-devscripts")) (Just (D.GRE (parseDebianVersion "0.8"))) Nothing],
            anyrel "cdbs",
            anyrel "ghc"] ++
+          (map anyrel (buildDeps flags)) ++
           (if debLibProf flags then [anyrel "ghc-prof"] else []) ++
           (concat . map (buildDependencies (epochMap flags) (execMap flags) compiler) . allBuildDepends (extraLibMap flags) $ pkgDesc)
       debianBuildDepsIndep :: D.Relations
@@ -503,7 +506,6 @@ extraDeps p deps =
       [] -> []
       pairs -> map (mkDep . snd) pairs
     where mkDep name = [D.Rel name Nothing Nothing]
-
 
 anyrel :: String -> [D.Relation]
 anyrel x = [D.Rel (D.BinPkgName (D.PkgName x)) Nothing Nothing]

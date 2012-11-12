@@ -10,6 +10,7 @@ module Distribution.Debian.Relations
     , docDependencies
     , cabalDependencies
     , versionSplits
+    , extraDebianLibs
     ) where
 
 import Data.Char (isSpace)
@@ -26,6 +27,19 @@ import System.Exit (ExitCode(ExitSuccess))
 import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readProcessWithExitCode)
 
+data Dependency_
+  = BuildDepends Dependency
+  | BuildTools Dependency
+  | PkgConfigDepends Dependency
+  | ExtraLibs D.BinPkgName
+    deriving (Eq, Show)
+
+unboxDependency :: Dependency_ -> Maybe Dependency
+unboxDependency (BuildDepends d) = Just d
+unboxDependency (BuildTools d) = Just d
+unboxDependency (PkgConfigDepends d) = Just d
+unboxDependency (ExtraLibs _) = Nothing -- Dependency (PackageName d) anyVersion
+
 cabalDependencies :: Map.Map String [D.BinPkgName] -> PackageDescription -> [Dependency]
 cabalDependencies extraLibMap pkgDesc = catMaybes $ map unboxDependency $ allBuildDepends extraLibMap pkgDesc
 
@@ -35,17 +49,22 @@ allBuildDepends :: Map.Map String [D.BinPkgName] -> PackageDescription -> [Depen
 allBuildDepends extraLibMap pkgDesc =
     nub $ map BuildDepends (buildDepends pkgDesc) ++
           concat (map (map BuildTools . buildTools) (allBuildInfo pkgDesc) ++
-                  map
-                    (map PkgConfigDepends . pkgconfigDepends)
-                    (allBuildInfo pkgDesc) ++
+                  map (map PkgConfigDepends . pkgconfigDepends) (allBuildInfo pkgDesc) ++
                   map (map ExtraLibs . (fixDeps . extraLibs)) (allBuildInfo pkgDesc))
     where
       fixDeps :: [String] -> [D.BinPkgName]
       fixDeps xs = concatMap (\ cab -> fromMaybe [D.BinPkgName (D.PkgName ("lib" ++ cab ++ "-dev"))] (Map.lookup cab extraLibMap)) xs
 
--- The build dependencies for a package include the profiling
+extraDebianLibs :: Map.Map String [D.BinPkgName] -> PackageDescription -> D.Relations
+extraDebianLibs extraLibMap pkgDesc =
+    map anyrel $ fixDeps $ nub $ concatMap extraLibs $ allBuildInfo $ pkgDesc
+    where
+      fixDeps :: [String] -> [D.BinPkgName]
+      fixDeps xs = concatMap (\ cab -> fromMaybe [D.BinPkgName (D.PkgName ("lib" ++ cab ++ "-dev"))] (Map.lookup cab extraLibMap)) xs
+
+-- | The Debian build dependencies for a package include the profiling
 -- libraries and the documentation packages, used for creating cross
--- references.
+-- references.  Also the packages associated with extra libraries.
 buildDependencies :: Map.Map PackageName Int -> Map.Map String D.BinPkgName -> Compiler -> Dependency_ -> D.Relations
 buildDependencies epochMap _ compiler (BuildDepends (Dependency name ranges)) =
     dependencies epochMap compiler versionSplits Development name ranges ++
@@ -70,7 +89,7 @@ adapt execMap (BuildTools (Dependency (PackageName pkg) _)) =
 adapt _flags (ExtraLibs x) = [x]
 adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [D.BinPkgName (D.PkgName pkg)]
 
--- |There are two reasons this may not work, or may work
+-- There are two reasons this may not work, or may work
 -- incorrectly: (1) the build environment may be a different
 -- distribution than the parent environment (the environment the
 -- autobuilder was run from), so the packages in that
@@ -80,31 +99,18 @@ adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [D.BinPkgName (D.
 aptFile :: String -> [D.BinPkgName] -- Maybe would probably be more correct
 aptFile pkg =
     unsafePerformIO $
-          do ret <- readProcessWithExitCode "apt-file" ["-l", "search", pkg ++ ".pc"] ""
-             return $ case ret of
-                        (ExitSuccess, out, _) -> [D.BinPkgName (D.PkgName (takeWhile (not . isSpace) out))]
-                        _ -> []
+    do ret <- readProcessWithExitCode "apt-file" ["-l", "search", pkg ++ ".pc"] ""
+       return $ case ret of
+                  (ExitSuccess, out, _) -> [D.BinPkgName (D.PkgName (takeWhile (not . isSpace) out))]
+                  _ -> []
 
--- The documentation dependencies for a package include the documentation
--- package for any libraries which are build dependencies, so we have access
--- to all the cross references.
+-- | The documentation dependencies for a package include the
+-- documentation package for any libraries which are build
+-- dependencies, so we have access to all the cross references.
 docDependencies :: Map.Map PackageName Int -> Compiler -> Dependency_ -> D.Relations
 docDependencies epochMap compiler (BuildDepends (Dependency name ranges)) =
     dependencies epochMap compiler versionSplits Documentation name ranges
 docDependencies _ _ _ = []
-
-data Dependency_
-  = BuildDepends Dependency
-      | BuildTools Dependency
-      | PkgConfigDepends Dependency
-      | ExtraLibs D.BinPkgName
-    deriving (Eq, Show)
-
-unboxDependency :: Dependency_ -> Maybe Dependency
-unboxDependency (BuildDepends d) = Just d
-unboxDependency (BuildTools d) = Just d
-unboxDependency (PkgConfigDepends d) = Just d
-unboxDependency (ExtraLibs _) = Nothing -- Dependency (PackageName d) anyVersion
 
 -- | These are the instances of debian names changing that we know about.
 versionSplits :: PackageType -> [VersionSplits]
@@ -118,3 +124,7 @@ versionSplits typ =
       , oldestPackage = mkPkgName "quickcheck1" typ
       , splits = [(Version [2] [], mkPkgName "quickcheck2" typ)] }
     ]
+
+anyrel :: D.BinPkgName -> [D.Relation]
+anyrel x = [D.Rel x Nothing Nothing]
+
