@@ -88,19 +88,20 @@ withEnvironmentFlags flags0 f =
 autobuilderDebianize :: LocalBuildInfo -> Flags -> IO ()
 autobuilderDebianize lbi flags =
   withEnvironmentFlags flags $ \ flags' ->
-  let flags'' = case buildDir lbi of
-                  -- The autobuilder calls setup with --builddir=debian, so
-                  -- this case actually does the debianization.
-                  "debian/build" -> flags'
-                  -- During dpkg-buildpackage Setup is run by haskell-devscripts,
-                  -- but we don't want to change things at that time or the build
-                  -- will fail.  So this just makes sure things are already properly
-                  -- debianized.
-                  "dist-ghc/build" -> flags' {validate = True}
-                  -- This is what happens when you run Setup configure by hand.
-                  -- It just prints the changes debianization would make.
-                  _ -> flags' {dryRun = True} in
-  debianize (buildDir lbi) flags''
+  case buildDir lbi of
+    -- The autobuilder calls setup with --builddir=debian, so this
+    -- case actually does the debianization.  We want the
+    -- debianization to work later when dpkg-buildpackage runs it, so
+    -- change the build directory parameter accordingly.
+    "debian/build" -> debianize "dist-ghc/build" flags'
+    -- During dpkg-buildpackage Setup is run by haskell-devscripts,
+    -- but we don't want to change things at that time or the build
+    -- will fail.  So this just makes sure things are already properly
+    -- debianized.
+    "dist-ghc/build" -> debianize (buildDir lbi) (flags' {validate = True})
+    -- This is what happens when you run Setup configure by hand.  It
+    -- just prints the changes debianization would make.
+    _ -> debianize (buildDir lbi) (flags' {dryRun = True})
 
 -- | Generate a debianization for the cabal package in the current
 -- directory using information from the .cabal file and from the
@@ -139,11 +140,16 @@ debianize build flags =
           | dryRun flags' -> putStrLn "Debianization (dry run):" >> describeDebianization build new >>= putStr
           | True -> writeDebianization build new
 
+-- | Turn the DHFile atoms into DHInstal atoms, and create the file
+-- they are supposed to install.  These files are part of the
+-- debianization, and they need to go somewhere they won't be removed
+-- by dh_clean.
 prepareAtom :: FilePath -> DebAtom -> IO [DebAtom]
 prepareAtom build (DHFile b path s) =
     do let s' = fromString s
            (destDir, destName) = splitFileName path
-           tmpDir = "debian" </> "tmp" </> show (md5 s')
+           tmpDir = build </> "install" </> show (md5 s')
+       putStrLn ("tmpDir=" ++ tmpDir)
        createDirectoryIfMissing True tmpDir
        writeFile (tmpDir </> destName) s'
        return [DHInstall b (tmpDir </> destName) destDir]
