@@ -123,24 +123,21 @@ debianize build flags =
       -- put the debianize parameters in the Setup file, rather than
       -- storing them apart from the package in the autobuilder
       -- configuration.
-      when (validate flags')
-          ( do versionsMatch <- catch (let oldVersion = logVersion (head (changeLog old))
-                                           newVersion = logVersion (head (changeLog new)) in
-                                       hPutStrLn stderr ("oldVersion: " ++ show (pretty oldVersion) ++ ", newVersion: " ++ show (pretty newVersion)) >>
-                                       return (oldVersion == newVersion))
-                                      (\ (_ :: SomeException) -> return False)
-               sourcesMatch <- catch (let oldSource = fromJust (lookupP "Source" (head (unControl (controlFile old))))
-                                          newSource = fromJust (lookupP "Source" (head (unControl (controlFile new)))) in
-                                      hPutStrLn stderr ("oldSource: " ++ show (pretty oldSource) ++ "\nnewSource: " ++ show (pretty newSource)) >>
-                                      return (oldSource == newSource))
-                                     (\ (_ :: SomeException) -> return False)
-               packagesMatch <- catch (let oldPackages = catMaybes (map (lookupP "Package") (tail (unControl (controlFile old))))
-                                           newPackages = catMaybes (map (lookupP "Package") (tail (unControl (controlFile new)))) in
-                                       hPutStrLn stderr ("oldPackages: " ++ show (pretty oldPackages) ++ "\nnewPackages: " ++ show (pretty newPackages)) >>
-                                       return (Set.fromList oldPackages == Set.fromList newPackages))
-                                      (\ (_ :: SomeException) -> return False)
-               when (not (versionsMatch && sourcesMatch && packagesMatch)) (describeDebianization build new >>= \ text -> error ("Debianization mismatch:\n" ++ text)))
-      if dryRun flags' then putStrLn "Debianization (dry run):" >> describeDebianization build new >>= putStr else writeDebianization build new
+      case () of
+        _ | (validate flags') ->
+              do let oldVersion = logVersion (head (changeLog old))
+                     newVersion = logVersion (head (changeLog new))
+                     oldSource = fromJust (lookupP "Source" (head (unControl (controlFile old))))
+                     newSource = fromJust (lookupP "Source" (head (unControl (controlFile new))))
+                     oldPackages = catMaybes (map (lookupP "Package") (tail (unControl (controlFile old))))
+                     newPackages = catMaybes (map (lookupP "Package") (tail (unControl (controlFile new))))
+                 case () of
+                   _ | oldVersion /= newVersion -> error ("Version mismatch, expected " ++ show (pretty oldVersion) ++ ", found " ++ show (pretty newVersion))
+                     | oldSource /= newSource -> error ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource))
+                     | oldPackages /= newPackages -> error ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages))
+                     | True -> return ()
+          | dryRun flags' -> putStrLn "Debianization (dry run):" >> describeDebianization build new >>= putStr
+          | True -> writeDebianization build new
 
 prepareAtom :: FilePath -> DebAtom -> IO [DebAtom]
 prepareAtom build (DHFile b path s) =
