@@ -143,7 +143,7 @@ prepareAtom :: FilePath -> DebAtom -> IO [DebAtom]
 prepareAtom build (DHFile b path s) =
     do let s' = fromString s
            (destDir, destName) = splitFileName path
-           tmpDir = takeDirectory build </> "tmp" </> show (md5 s')
+           tmpDir = "debian" </> "tmp" </> show (md5 s')
        createDirectoryIfMissing True tmpDir
        writeFile (tmpDir </> destName) s'
        return [DHInstall b (tmpDir </> destName) destDir]
