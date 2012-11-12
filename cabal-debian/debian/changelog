@@ -1,3 +1,9 @@
+haskell-cabal-debian (2.3.3) unstable; urgency=low
+
+  * Eliminate class MonadBuild and the BuildT monad.
+
+ -- David Fox <dsf@seereason.com>  Sun, 11 Nov 2012 17:46:31 -0800
+
 haskell-cabal-debian (2.3.2) unstable; urgency=low
 
   * Fix exception that was keeping changelogs from being preserved.
