@@ -231,7 +231,8 @@ data SourcesChangedAction =
 -- value of sourcesChangedAction.
 updateCacheSources :: (MonadApt m, AptCache c) => SourcesChangedAction -> c -> m c
 updateCacheSources sourcesChangedAction distro =
-    (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
+    -- (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
+    qPutStrLn "Updating cache sources" >>
     do
       let baseSources = aptBaseSliceList distro
       --let distro@(ReleaseCache _ dist _) = releaseFromConfig' top text
