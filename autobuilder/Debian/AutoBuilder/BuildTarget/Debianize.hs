@@ -71,7 +71,7 @@ debianize cache pflags currentDirectory =
        let flags = Cabal.compileArgs args Cabal.defaultFlags
            -- Because this is the autobuilder, the cabal-debian code will run from
            -- inside of dpkg-buildpackage, so we can hard code this build directory.
-           flags' = flags {buildDir = "dist-ghc"}
+           flags' = flags {Cabal.buildDir = "dist-ghc"}
        withCurrentDirectory currentDirectory $
          liftIO (runSetupConfigure args) >>= \ done ->
          if done then qPutStrLn "Setup configure succeeded in creating a debianization!" else Cabal.debianize flags'
