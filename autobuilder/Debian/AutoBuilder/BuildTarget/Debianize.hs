@@ -49,12 +49,9 @@ prepare cache package' cabal =
              do desc <- liftIO $ readPackageDescription normal (dir </> cabfile)
                 -- let (PackageName name) = pkgName . package . packageDescription $ desc
                 let version = pkgVersion . package . packageDescription $ desc
-                -- Because this is the autobuilder, the cabal-debian code will run from
-                -- inside of dpkg-buildpackage, so we can hard code this build directory.
-                let build = "dist-ghc/build"
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ debianize cache (P.flags package') dir build
+                liftIO $ debianize cache (P.flags package') dir
                 return $ T.Download { T.package = package'
                                     , T.getTop = dir
                                     , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
@@ -68,13 +65,17 @@ withCurrentDirectory :: MonadCatchIO m => FilePath -> m a -> m a
 withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old -> liftIO (setCurrentDirectory new) >> return old) (liftIO . setCurrentDirectory) (\ _ -> action)
 
 -- | Run cabal-debian on the given directory, creating a debian subdirectory.
-debianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> FilePath -> IO ()
-debianize cache pflags currentDirectory buildDirectory =
+debianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
+debianize cache pflags currentDirectory =
     do args <- liftIO $ collectPackageFlags cache pflags
        let flags = Cabal.compileArgs args Cabal.defaultFlags
+           -- Because this is the autobuilder, the cabal-debian code will run from
+           -- inside of dpkg-buildpackage, so we can hard code this build directory.
+           flags' = flags {buildDir = "dist-ghc"}
        withCurrentDirectory currentDirectory $
          liftIO (runSetupConfigure args) >>= \ done ->
-         if done then qPutStrLn "Setup configure succeeded in creating a debianization!" else Cabal.debianize buildDirectory flags
+                let build = "dist-ghc/build"
+         if done then qPutStrLn "Setup configure succeeded in creating a debianization!" else Cabal.debianize flags'
     -- Running Setup configure didn't produce a debianization, call
          -- the debianize function instead.
 
