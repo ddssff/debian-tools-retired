@@ -124,7 +124,9 @@ options =
       Option "" ["quilt"] (NoArg (\ x -> x {sourceFormat = "3.0 (quilt)"}))
              "The package has an upstream tarball, write '3.0 (quilt)' into source/format.",
       Option "n" ["dry-run", "compare"] (NoArg (\ x -> x {dryRun = True}))
-             "Just compare the existing debianization to the one we would generate."
+             "Just compare the existing debianization to the one we would generate.",
+      Option "" ["builddir"] (ReqArg (\ s x -> x {buildDir = s}) "PATH")
+             "Subdirectory where cabal does its build, dist/build by default, dist-ghc/build when run by haskell-devscripts."
     ]
 
 parseDeps :: String -> [(BinPkgName, BinPkgName)]

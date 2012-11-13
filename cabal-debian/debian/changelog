@@ -1,3 +1,11 @@
+haskell-cabal-debian (2.3.4) unstable; urgency=low
+
+  * Fix the builddir used when running the cabal-debian standalone
+    executable - it was dist-cabal/build, so the resulting debianization
+    had files in places where cabal didn't expect them.
+
+ -- David Fox <dsf@seereason.com>  Tue, 13 Nov 2012 06:20:51 -0800
+
 haskell-cabal-debian (2.3.3) unstable; urgency=low
 
   * Eliminate class MonadBuild and the BuildT monad.

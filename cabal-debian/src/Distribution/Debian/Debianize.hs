@@ -45,7 +45,7 @@ import Distribution.License (License(..))
 import Distribution.Package (PackageIdentifier(..), PackageName(..))
 import Distribution.PackageDescription (PackageDescription(..), BuildInfo(buildable), Executable(exeName, buildInfo))
 import Distribution.Simple.Compiler (Compiler(..))
-import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
+import qualified Distribution.Simple.LocalBuildInfo as Cabal (LocalBuildInfo(buildDir))
 import Distribution.Text (display)
 import GHC.IO.Exception (IOException(ioe_type), IOErrorType(NoSuchThing))
 import Prelude hiding (catch, writeFile)
@@ -83,23 +83,23 @@ withEnvironmentFlags flags0 f =
 -- Setup.hs file.  It parses the CABALDEBIAN environment variable and
 -- applies the arguments it finds to the flags argument to produce a
 -- new flags value.  This is then used to do the debianization.
-autobuilderDebianize :: LocalBuildInfo -> Flags -> IO ()
+autobuilderDebianize :: Cabal.LocalBuildInfo -> Flags -> IO ()
 autobuilderDebianize lbi flags =
   withEnvironmentFlags flags $ \ flags' ->
-  case buildDir lbi of
+  case Cabal.buildDir lbi of
     -- The autobuilder calls setup with --builddir=debian, so this
     -- case actually does the debianization.  We want the
     -- debianization to work later when dpkg-buildpackage runs it, so
     -- change the build directory parameter accordingly.
-    "debian/build" -> debianize "dist-ghc/build" flags'
+    "debian/build" -> debianize (flags' {buildDir = "dist-ghc/build"})
     -- During dpkg-buildpackage Setup is run by haskell-devscripts,
     -- but we don't want to change things at that time or the build
     -- will fail.  So this just makes sure things are already properly
     -- debianized.
-    "dist-ghc/build" -> debianize (buildDir lbi) (flags' {validate = True})
+    "dist-ghc/build" -> debianize (flags' {validate = True, buildDir = Cabal.buildDir lbi})
     -- This is what happens when you run Setup configure by hand.  It
     -- just prints the changes debianization would make.
-    _ -> debianize (buildDir lbi) (flags' {dryRun = True})
+    _ -> debianize (flags' {dryRun = True, buildDir = Cabal.buildDir lbi})
 
 -- | Generate a debianization for the cabal package in the current
 -- directory using information from the .cabal file and from the
@@ -107,12 +107,12 @@ autobuilderDebianize lbi flags =
 -- for the debian/changelog file.  A new entry changelog is generated,
 -- and any entries already there that look older than the new one are
 -- preserved.
-debianize :: FilePath -> Flags -> IO ()
-debianize build flags =
+debianize :: Flags -> IO ()
+debianize flags =
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
       old <- readDebianization
       let flags' = flags {buildDeps = buildDeps flags ++ if selfDepend flags then ["libghc-cabal-debian-dev"] else []}
-      new <- (modifyAtoms flags <$> debianization flags' pkgDesc compiler old) >>= mapM (prepareAtom build) >>= return . concat
+      new <- (modifyAtoms flags <$> debianization flags' pkgDesc compiler old) >>= mapM (prepareAtom flags) >>= return . concat
       -- It is imperitive that during the time that dpkg-buildpackage
       -- runs the version number in the changelog and the source and
       -- package names in the control file do not change, or the bulid
@@ -135,18 +135,18 @@ debianize build flags =
                      | oldSource /= newSource -> error ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource))
                      | oldPackages /= newPackages -> error ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages))
                      | True -> return ()
-          | dryRun flags' -> putStrLn "Debianization (dry run):" >> describeDebianization build new >>= putStr
-          | True -> writeDebianization build new
+          | dryRun flags' -> putStrLn "Debianization (dry run):" >> describeDebianization flags new >>= putStr
+          | True -> writeDebianization flags new
 
 -- | Turn the DHFile atoms into DHInstal atoms, and create the file
 -- they are supposed to install.  These files are part of the
 -- debianization, and they need to go somewhere they won't be removed
 -- by dh_clean.
-prepareAtom :: FilePath -> DebAtom -> IO [DebAtom]
-prepareAtom build (DHFile b path s) =
+prepareAtom :: Flags -> DebAtom -> IO [DebAtom]
+prepareAtom flags (DHFile b path s) =
     do let s' = fromString s
            (destDir, destName) = splitFileName path
-           tmpDir = build </> "install" </> show (md5 s')
+           tmpDir = buildDir flags </> "install" </> show (md5 s')
        putStrLn ("tmpDir=" ++ tmpDir)
        createDirectoryIfMissing True tmpDir
        writeFile (tmpDir </> destName) s'
@@ -216,9 +216,9 @@ updateOriginal f v = parseDebianVersion . f . show . prettyDebianVersion $ v
 debianVersionNumber :: PackageDescription -> DebianVersion
 debianVersionNumber pkgDesc = parseDebianVersion . showVersion . pkgVersion . package $ pkgDesc
 
-describeDebianization :: FilePath -> Debianization -> IO String
-describeDebianization build d =
-    mapM (\ (path, text) -> liftIO (doFile path text)) (debianizationFiles build d) >>= return . concat
+describeDebianization :: Flags -> Debianization -> IO String
+describeDebianization flags d =
+    mapM (\ (path, text) -> liftIO (doFile path text)) (debianizationFiles flags d) >>= return . concat
     where
       doFile :: FilePath -> String -> IO String
       doFile path text =
@@ -230,17 +230,17 @@ describeDebianization build d =
 indent :: [Char] -> String -> String
 indent prefix text = unlines (map (prefix ++) (lines text))
 
-writeDebianization :: FilePath -> Debianization -> IO ()
-writeDebianization build d =
-    mapM_ (uncurry doFile) (debianizationFiles build d) >>
+writeDebianization :: Flags -> Debianization -> IO ()
+writeDebianization flags d =
+    mapM_ (uncurry doFile) (debianizationFiles flags d) >>
     getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})
     where
       doFile path text =
           createDirectoryIfMissing True (takeDirectory path) >>
           replaceFile path text
 
-debianizationFiles :: FilePath -> Debianization -> [(FilePath, String)]
-debianizationFiles = toFiles
+debianizationFiles :: Flags -> Debianization -> [(FilePath, String)]
+debianizationFiles flags = toFiles (buildDir flags)
 
 watch :: String -> DebAtom
 watch pkgname =

@@ -12,5 +12,5 @@ main =
   withFlags $ \ flags ->
       case debAction flags of
         SubstVar debType -> substvars flags debType
-        Debianize -> debianize "dist-cabal/build" flags
+        Debianize -> debianize flags
         Usage -> error "Unexpected debAction: usage" -- this should have happened in withFlags
