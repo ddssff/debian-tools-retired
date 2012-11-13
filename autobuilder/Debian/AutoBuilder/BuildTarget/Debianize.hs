@@ -74,7 +74,6 @@ debianize cache pflags currentDirectory =
            flags' = flags {buildDir = "dist-ghc"}
        withCurrentDirectory currentDirectory $
          liftIO (runSetupConfigure args) >>= \ done ->
-                let build = "dist-ghc/build"
          if done then qPutStrLn "Setup configure succeeded in creating a debianization!" else Cabal.debianize flags'
     -- Running Setup configure didn't produce a debianization, call
          -- the debianize function instead.
