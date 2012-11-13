@@ -162,8 +162,8 @@ debianInit b e spec@(Server{..}) =
     startCommand = showCommandForUser "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
     stopCommand = showCommandForUser "start-stop-daemon" (stopOptions ++ commonOptions)
     commonOptions = ["--pidfile", "/var/run/" ++ execName e]
-    startOptions = ["--start", "-b", "--quiet", "--make-pidfile", "-d", databaseDirectory e, "--exec", "/usr/bin" </> execName e]
-    stopOptions = ["--stop", "--quiet", "--retry", retry, "--oknodo"]
+    startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory e, "--exec", "/usr/bin" </> execName e]
+    stopOptions = ["--stop", "--oknodo"] ++ if retry /= "" then ["--retry=" ++ retry] else []
     serverOptions = baseURI ++ ["--http-port", show port] ++ flags
     -- According to the happstack-server documentation this needs a trailing slash.
     baseURI = ["--base-uri", "http://" ++ maybe (hostname ++ ":" ++ show port) domain site ++ "/"]
