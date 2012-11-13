@@ -15,7 +15,7 @@ import Codec.Binary.UTF8.String (decodeString)
 import Control.Applicative ((<$>))
 import Control.Arrow (second)
 import Control.Exception (SomeException, catch, throw)
-import Control.Monad (mplus, when)
+import Control.Monad (mplus)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.ByteString.Lazy (writeFile)
 import Data.ByteString.Lazy.UTF8 (fromString)
@@ -24,7 +24,6 @@ import Data.Either (partitionEithers)
 import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
-import qualified Data.Set as Set
 import Data.Version (showVersion)
 import Debian.Control
 import qualified Debian.Relation as D
@@ -53,7 +52,6 @@ import Prelude hiding (catch, writeFile)
 import System.Directory
 import System.Environment
 import System.FilePath ((</>), takeDirectory, splitFileName)
-import System.IO (hPutStrLn, stderr)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 type Debianization = [DebAtom]

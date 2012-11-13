@@ -90,7 +90,7 @@ compat :: [DebAtom] -> Int
 compat xs =
     case mapMaybe f xs of
       [n] -> n
-      _ -> error "Missing or multiple debian/compat values"
+      ns -> error $ "Missing or multiple debian/compat values: " ++ show ns
     where
       f :: DebAtom -> Maybe Int
       f (DebCompat x) = Just x

@@ -17,7 +17,7 @@ import Debian.Repo
 import Debian.URI
 import System.FilePath (splitFileName, (</>))
 import System.Unix.Directory
-import System.Process (CmdSpec(..))
+import System.Process (shell)
 import System.Process.Progress (keepOutput, timeTask, runProcessF, qPutStrLn)
 import System.Directory
 
@@ -40,13 +40,13 @@ prepare cache package version =
                , cleanTarget = \ top ->
                    do qPutStrLn ("Clean Bazaar target in " ++ top)
                       let cmd = "find '" ++ top ++ "' -name '.bzr' -prune | xargs rm -rf"
-                      timeTask (runProcessF id (ShellCommand cmd) L.empty)
+                      timeTask (runProcessF (shell cmd) L.empty)
                , buildWrapper = id }
     where
         -- Tries to update a pre-existant bazaar source tree
         updateSource dir =
             qPutStrLn ("Verifying Bazaar source archive '" ++ dir ++ "'") >>
-            (runProcessF id (ShellCommand cmd) L.empty >>= \ _ ->
+            (runProcessF (shell cmd) L.empty >>= \ _ ->
              -- If we succeed then we try to merge with the parent tree
              mergeSource dir)
               -- if we fail then the source tree is corrupted, so get a new one
@@ -56,7 +56,7 @@ prepare cache package version =
 
         -- computes a diff between this archive and some other parent archive and tries to merge the changes
         mergeSource dir =
-            runProcessF id (ShellCommand cmd) L.empty >>= \ b ->
+            runProcessF (shell cmd) L.empty >>= \ b ->
             if isInfixOf "Nothing to do." (L.unpack (L.concat (keepOutput b)))
             then findSourceTree dir
             else commitSource dir
@@ -68,7 +68,7 @@ prepare cache package version =
         -- Bazaar is a distributed revision control system so you must commit to the local source
         -- tree after you merge from some other source tree
         commitSource dir =
-            runProcessF id (ShellCommand cmd) L.empty >> findSourceTree dir
+            runProcessF (shell cmd) L.empty >> findSourceTree dir
             where
                 cmd   = "cd " ++ dir ++ " && bzr commit -m 'Merged Upstream'"
                 -- style = (setStart (Just ("Commiting merge to local Bazaar source archive '" ++ dir ++ "'")) .
@@ -80,7 +80,7 @@ prepare cache package version =
             -- Create parent dir and let bzr create dir
             let (parent, _) = splitFileName dir
             createDirectoryIfMissing True parent
-            _output <- runProcessF id (ShellCommand cmd) L.empty
+            _output <- runProcessF (shell cmd) L.empty
             findSourceTree dir
             where
                 cmd   = "bzr branch " ++ version ++ " " ++ dir

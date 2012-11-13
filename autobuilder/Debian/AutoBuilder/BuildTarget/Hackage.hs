@@ -26,7 +26,7 @@ import System.Exit
 import System.Directory (doesFileExist, createDirectoryIfMissing, removeFile)
 import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
-import System.Process (showCommandForUser, CmdSpec(..))
+import System.Process (shell, showCommandForUser)
 import System.Process.Read (readProcessWithExitCode)
 import System.Process.Progress (runProcess, collectOutputs)
 import System.Unix.Directory (removeRecursiveSafely)
@@ -178,7 +178,7 @@ findVersion package (Document _ _ (Elem _name _attrs content) _) =
 -- |Download and save the tarball, return its contents.
 download' :: MonadDeb m => String -> String -> Version -> m B.ByteString
 download' server name version =
-    do (res, out, err, _) <- liftIO (runProcess id (ShellCommand (downloadCommand server name version)) B.empty) >>= return . collectOutputs
+    do (res, out, err, _) <- liftIO (runProcess (shell (downloadCommand server name version)) B.empty) >>= return . collectOutputs
        tmp <- tmpDir
        tar <- tarball name version
        -- (res, out, err) <- runProcessWith

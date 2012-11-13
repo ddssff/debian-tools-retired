@@ -14,7 +14,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo
 import System.Directory
 import System.FilePath (splitFileName, (</>))
-import System.Process (CmdSpec(..))
+import System.Process (shell)
 import System.Process.Progress (timeTask, runProcessF)
 import System.Unix.Directory
 
@@ -36,23 +36,23 @@ prepare cache package archive =
                           , T.cleanTarget =
                               \ path -> 
                                   let cmd = "rm -rf " ++ path ++ "/.hg" in
-                                  timeTask (runProcessF id (ShellCommand cmd) empty)
+                                  timeTask (runProcessF (shell cmd) empty)
                           , T.buildWrapper = id
                           }
     where
       verifySource dir =
-          try (runProcessF id (ShellCommand ("cd " ++ dir ++ " && hg status | grep -q .")) empty) >>=
+          try (runProcessF (shell ("cd " ++ dir ++ " && hg status | grep -q .")) empty) >>=
           either (\ (_ :: SomeException) -> updateSource dir)	-- failure means there were no changes
                  (\ _ -> removeSource dir >> createSource dir)	-- success means there was a change
 
       removeSource dir = liftIO $ removeRecursiveSafely dir
 
       updateSource dir =
-          runProcessF id (ShellCommand ("cd " ++ dir ++ " && hg pull -u")) empty >>
+          runProcessF (shell ("cd " ++ dir ++ " && hg pull -u")) empty >>
           findSourceTree dir
 
       createSource dir =
           let (parent, _) = splitFileName dir in
           liftIO (createDirectoryIfMissing True parent) >>
-          runProcessF id (ShellCommand ("hg clone " ++ archive ++ " " ++ dir)) empty >>
+          runProcessF (shell ("hg clone " ++ archive ++ " " ++ dir)) empty >>
           findSourceTree dir

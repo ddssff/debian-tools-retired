@@ -34,7 +34,7 @@ import Debian.Relation (SrcPkgName(..), PkgName(..))
 import Debian.Repo (OSImage, rootPath, rootDir, findSourceTree, copySourceTree, SourceTree(dir'), topdir)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
-import System.Process (CmdSpec(..))
+import System.Process (proc)
 import System.Process.Progress (runProcessF, qPutStrLn, quieter)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
@@ -119,9 +119,9 @@ retrieve buildOS cache target =
 withProc :: forall a. OSImage -> IO a -> IO a
 withProc buildOS task =
     do createDirectoryIfMissing True dir
-       _ <- quieter 1 $ runProcessF id (RawCommand "mount" ["--bind", "/proc", dir]) L.empty
+       _ <- quieter 1 $ runProcessF (proc "mount" ["--bind", "/proc", dir]) L.empty
        result <- try task :: IO (Either SomeException a)
-       _ <- quieter 1 $ runProcessF id (RawCommand "umount" [dir]) L.empty
+       _ <- quieter 1 $ runProcessF (proc "umount" [dir]) L.empty
        either throw return result
     where
       dir = rootPath (rootDir buildOS) ++ "/proc"

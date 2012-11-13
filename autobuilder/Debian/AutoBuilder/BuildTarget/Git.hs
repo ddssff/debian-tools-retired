@@ -18,7 +18,7 @@ import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
-import System.Process (CmdSpec(..), CreateProcess(cwd), showCommandForUser)
+import System.Process (proc, shell, CmdSpec(..), CreateProcess(cwd, cmdspec), showCommandForUser)
 import System.Process.Progress (keepStdout, keepResult, timeTask, runProcessF, runProcess)
 import System.Unix.Directory
 import Text.Regex
@@ -30,12 +30,12 @@ documentation = [ "darcs:<string> - a target of this form obtains the source cod
 
 darcsRev :: SourceTree -> P.RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
-    try (runProcess (\ p -> p {cwd = Just path}) cmd B.empty >>=
+    try (runProcess (cmd {cwd = Just path}) B.empty >>=
          return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack . B.concat . keepStdout) >>= 
-    return . either Left (maybe (fail $ "could not find hash field in output of '" ++ showCmd cmd ++ "'")
+    return . either Left (maybe (fail $ "could not find hash field in output of '" ++ showCmd (cmdspec cmd) ++ "'")
                                 (\ rev -> Right (show m ++ "=" ++ head rev)))
     where
-      cmd = RawCommand "darcs" ["changes", "--xml-output"]
+      cmd = proc "darcs" ["changes", "--xml-output"]
       path = topdir tree
 
 showCmd (RawCommand cmd args) = showCommandForUser cmd args
@@ -57,14 +57,14 @@ prepare cache package theUri =
                           , T.origTarball = Nothing
                           , T.cleanTarget =
                               \ top -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in
-                                       timeTask (runProcessF id (ShellCommand cmd) B.empty)
+                                       timeTask (runProcessF (shell cmd) B.empty)
                           , T.buildWrapper = id
                           }
     where
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do result <- runProcess (\ p -> p {cwd = Just dir}) (RawCommand "git" ["status", "--porcelain"]) B.empty >>= return . keepResult
+          do result <- runProcess ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) B.empty >>= return . keepResult
 
       -- CB  No output lines means no changes
       -- CB  git reset --hard    will remove all edits back to the most recent commit
@@ -78,7 +78,7 @@ prepare cache package theUri =
 
       updateSource :: FilePath -> IO SourceTree
       updateSource dir =
-          runProcessF (\ p -> p {cwd = Just dir}) (RawCommand "git" ["pull", "--all", "--commit", renderForGit theUri']) B.empty >>
+          runProcessF ((proc "git" ["pull", "--all", "--commit", renderForGit theUri']) {cwd = Just dir}) B.empty >>
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
 
@@ -86,16 +86,16 @@ prepare cache package theUri =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _output <- runProcessF id cmd B.empty
+             _output <- runProcessF cmd B.empty
              findSourceTree dir
           where
-            cmd = RawCommand "git" (["clone", renderForGit theUri'] ++ maybe [] (\ branch -> [" --branch", "'" ++ branch ++ "'"]) theBranch ++ [dir])
+            cmd = proc "git" (["clone", renderForGit theUri'] ++ maybe [] (\ branch -> [" --branch", "'" ++ branch ++ "'"]) theBranch ++ [dir])
 
       -- CB  git reset --hard    will remove all edits back to the most recent commit
       fixLink base =
           let link = base </> name in
-          runProcessF id (RawCommand "rm" ["-rf", link]) B.empty >>
-          runProcessF id (RawCommand "ln" ["-s", sum, link]) B.empty
+          runProcessF (proc "rm" ["-rf", link]) B.empty >>
+          runProcessF (proc "ln" ["-s", sum, link]) B.empty
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndBranch))
       -- Maybe we should include the "git:" in the string we checksum?  -- DSF

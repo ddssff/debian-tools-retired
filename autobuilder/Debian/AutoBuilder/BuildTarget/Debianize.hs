@@ -30,8 +30,7 @@ import Prelude hiding (catch)
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, removeFile, doesFileExist)
 import System.Environment (getEnvironment)
 import System.FilePath ((</>), takeFileName)
-import System.Process (CreateProcess(env))
-import System.Process (CmdSpec(RawCommand))
+import System.Process (proc, CreateProcess(env))
 import System.Process.Progress (qPutStrLn, runProcess, verbosity)
 
 documentation :: [String]
@@ -91,7 +90,7 @@ debianize cache pflags currentDirectory buildDirectory =
              oldEnv <- filter (not . (== "CABALDEBIAN") . fst) <$> getEnvironment
              v <- verbosity
              let newEnv = ("CABALDEBIAN", show args) : ("VERBOSITY", show v) : oldEnv
-             _ <- runProcess (\ p -> p {env = Just newEnv}) (RawCommand "runhaskell" ["Setup", "configure", "--builddir=debian"]) B.empty
+             _ <- runProcess ((proc "runhaskell" ["Setup", "configure", "--builddir=debian"]) {env = Just newEnv}) B.empty
              doesFileExist "debian/compat" `catch` (\ (_ :: IOError) -> return False)
 
 collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> IO [String]

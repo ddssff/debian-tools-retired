@@ -19,7 +19,7 @@ import Debian.URI
 import System.Directory
 import System.Exit
 import System.FilePath (splitFileName, (</>))
-import System.Process (CmdSpec(..))
+import System.Process (shell, proc)
 import System.Process.Progress (Output, keepStdout, keepStderr, keepResult, timeTask, runProcessF, runProcess)
 import System.Unix.Directory
 
@@ -27,7 +27,7 @@ documentation = [ "svn:<uri> - A target of this form retrieves the source code f
                 , "a subversion repository." ]
 
 svn :: [String] -> IO [Output L.ByteString]
-svn args = runProcessF id (RawCommand "svn" args) L.empty
+svn args = runProcessF (proc "svn" args) L.empty
 
 username userInfo =
     let un = takeWhile (/= ':') userInfo in
@@ -55,7 +55,7 @@ prepare cache package uri =
                            , T.cleanTarget =
                                \ path -> 
                                    let cmd = "find " ++ path ++ " -name .svn -type d -print0 | xargs -0 -r -n1 rm -rf" in
-                                   timeTask (runProcessF id (ShellCommand cmd) L.empty)
+                                   timeTask (runProcessF (shell cmd) L.empty)
                            , T.buildWrapper = id
                            }
     where
@@ -83,7 +83,7 @@ prepare cache package uri =
           findSourceTree dir
       checkout :: FilePath -> IO (Either String [Output L.ByteString])
       --checkout = svn createStyle args 
-      checkout dir = runProcess id (RawCommand "svn" args) L.empty >>= return . finish
+      checkout dir = runProcess (proc "svn" args) L.empty >>= return . finish
           where
             args = ([ "co","--no-auth-cache","--non-interactive"] ++ 
                     (username userInfo) ++ (password userInfo) ++ 

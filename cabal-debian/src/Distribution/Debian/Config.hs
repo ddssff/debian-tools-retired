@@ -18,6 +18,8 @@ import Distribution.Debian.Server (Executable(..))
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
 
+-- | This record supplies the information we use to generate a
+-- debianization from a cabal package.
 data Flags = Flags
     {
       compilerFlavor :: CompilerFlavor

@@ -14,7 +14,7 @@ import qualified Debian.Version as V
 import Debian.Repo.Monads.Apt (MonadApt)
 import System.Directory
 import System.Exit (ExitCode(..))
-import System.Process (CmdSpec(..))
+import System.Process (shell)
 import System.Process.Progress (runProcess, keepResult)
 --import System.Unix.Progress.Outputs (exitCodeOnly)
 
@@ -33,7 +33,7 @@ prepare _cache package base =
        case sortBy compareVersions (zip dscFiles dscInfo) of
          [] -> return $  error ("Invalid sourcedeb base: no .dsc file in " ++ show (T.method base))
          (dscName, Right (S.Control (dscInfo : _))) : _ ->
-             do out <- liftIO (runProcess id (ShellCommand (unpack top dscName)) L.empty)
+             do out <- liftIO (runProcess (shell (unpack top dscName)) L.empty)
                 case keepResult out of
                   [ExitSuccess] -> liftIO $ makeTarget dscInfo dscName
                   _ -> error ("*** FAILURE: " ++ unpack top dscName)

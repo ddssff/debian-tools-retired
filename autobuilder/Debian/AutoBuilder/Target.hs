@@ -73,7 +73,7 @@ import System.Exit(ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.FilePath ((</>))
 import System.Posix.Files(fileSize, getFileStatus)
 import System.Unix.Chroot (useEnv)
-import System.Process (CmdSpec(ShellCommand, RawCommand), CreateProcess(cwd))
+import System.Process (proc, shell, CreateProcess(cwd))
 import System.Process.Progress (unpackOutputs, mergeToStdout, keepStdout, keepResult, collectOutputs,
                                 keepResult, runProcessF, runProcess, quieter, qPutStrLn, ePutStr, ePutStrLn)
 import System.Process.Read (Chars(toString), readModifiedProcess)
@@ -391,9 +391,9 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog ta
              -- unless we actually created a patch.
              _ <- liftIO $ useEnv' root (\ _ -> return ())
                              (-- Get the version number of dpkg-dev in the build environment
-                              runProcessF id (ShellCommand ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")) L.empty >>= return . head . words . L.unpack . L.concat . keepStdout >>= \ installed ->
+                              runProcessF (shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")) L.empty >>= return . head . words . L.unpack . L.concat . keepStdout >>= \ installed ->
                               -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
-                              runProcess id (ShellCommand ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) L.empty >>= return . (== [ExitSuccess]) . keepResult >>= \ newer ->
+                              runProcess (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) L.empty >>= return . (== [ExitSuccess]) . keepResult >>= \ newer ->
                               when newer (doesDirectoryExist (path' </> "debian/patches") >>= doDpkgSource)
                               {- when newer (do createDirectoryIfMissing True (path' </> "debian/patches")
                                              -- Create the patch if there are any changes
@@ -420,7 +420,7 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog ta
             doDpkgSource True =
                 doDpkgSource' >>
                 return ()
-            doDpkgSource' = readModifiedProcess (\ p -> p {cwd = Just path'}) (RawCommand "dpkg-source" ["--commit", ".", "autobuilder.diff"]) L.empty
+            doDpkgSource' = readModifiedProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
             path' = fromJust (dropPrefix root path)
             path = debdir buildTree
             root = rootPath (rootDir buildOS)
@@ -726,10 +726,10 @@ updateChangesFile elapsed changes =
 {-    autobuilderVersion <- processOutput "dpkg -s autobuilder | sed -n 's/^Version: //p'" >>=
                             return . either (const Nothing) Just >>=
                             return . maybe Nothing (listToMaybe . lines) -}
-      hostname <- runProcessF id (ShellCommand "hostname") L.empty >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
+      hostname <- runProcessF (shell "hostname") L.empty >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
       cpuInfo <- parseProcCpuinfo
       memInfo <- parseProcMeminfo
-      machine <- runProcessF id (ShellCommand "uname -m") L.empty >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
+      machine <- runProcessF (shell "uname -m") L.empty >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
       let buildInfo = ["Autobuilder-Version: " ++ V.autoBuilderVersion] ++
                       ["Time: " ++ show elapsed] ++
                       maybeField "Memory: " (lookup "MemTotal" memInfo) ++
@@ -761,7 +761,7 @@ downloadDependencies os source extra sourceFingerprint =
     do -- qPutStrLn "Downloading build dependencies"
        quieter 1 $ qPutStrLn $ "Dependency package versions:\n " ++ intercalate "\n  " (showDependencies sourceFingerprint)
        qPutStrLn ("Downloading build dependencies into " ++ rootPath (rootDir os))
-       (code, out, _, _) <- useEnv' (rootPath root) forceList (runProcess id (ShellCommand command) L.empty) >>=
+       (code, out, _, _) <- useEnv' (rootPath root) forceList (runProcess (shell command) L.empty) >>=
                             return . unpackOutputs . mergeToStdout
        case code of
          [ExitSuccess] -> return (Success out)
@@ -783,7 +783,7 @@ pathBelow root path =
 installDependencies :: OSImage -> DebianBuildTree -> [String] -> Fingerprint -> IO (Failing L.ByteString)
 installDependencies os source extra sourceFingerprint =
     do qPutStrLn $ "Installing build dependencies into " ++ rootPath (rootDir os)
-       (code, out, _, _) <- withProc os (useEnv' (rootPath root) forceList $ runProcess id (ShellCommand command) L.empty) >>= return . collectOutputs . mergeToStdout
+       (code, out, _, _) <- withProc os (useEnv' (rootPath root) forceList $ runProcess (shell command) L.empty) >>= return . collectOutputs . mergeToStdout
        case code of
          [ExitSuccess] -> return (Success out)
          code -> ePutStrLn ("FAILURE: " ++ command ++ " -> " ++ show code ++ "\n" ++ toString out) >>
@@ -839,7 +839,7 @@ setRevisionInfo fingerprint changes {- @(Changes dir name version arch fields fi
 -- | Run a checksum command on a file, return the resulting checksum as text.
 doChecksum :: String -> (String -> String) -> FilePath -> IO (Failing String)
 doChecksum cmd f path =
-    runProcess id (RawCommand cmd' [path]) L.empty >>=
+    runProcess (proc cmd' [path]) L.empty >>=
     return . either (doError (cmd' ++ " " ++ path)) (Success . f) . toEither . unpackOutputs
     where cmd' = "/usr/bin/" ++ cmd
 

@@ -21,7 +21,7 @@ import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
-import System.Process (CmdSpec(..))
+import System.Process (shell)
 import System.Process.Progress (keepStdout, keepResult, timeTask, runProcessF, runProcess)
 import System.Unix.Directory
 import Text.Regex
@@ -33,7 +33,7 @@ documentation = [ "darcs:<string> - a target of this form obtains the source cod
 
 darcsRev :: SourceTree -> P.RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
-    try (runProcess id (ShellCommand cmd) B.empty >>= return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack . B.concat . keepStdout) >>= 
+    try (runProcess (shell cmd) B.empty >>= return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack . B.concat . keepStdout) >>= 
     return . either Left (maybe (fail $ "could not find hash field in output of '" ++ cmd ++ "'")
                                 (\ rev -> Right (show m ++ "=" ++ head rev)))
     where
@@ -56,14 +56,14 @@ prepare cache package theUri =
                           , T.origTarball = Nothing
                           , T.cleanTarget =
                               \ top -> let cmd = "find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf" in
-                                       timeTask (runProcessF id (ShellCommand cmd) B.empty)
+                                       timeTask (runProcessF (shell cmd) B.empty)
                           , T.buildWrapper = id
                           }
     where
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do result <- runProcess id (ShellCommand ("cd " ++ dir ++ " && darcs whatsnew")) B.empty >>= return . keepResult
+          do result <- runProcess (shell ("cd " ++ dir ++ " && darcs whatsnew")) B.empty >>= return . keepResult
              case result of
                (ExitSuccess : _) -> removeSource dir >> createSource dir		-- Yes changes
                _ -> updateSource dir				-- No Changes!
@@ -72,7 +72,7 @@ prepare cache package theUri =
 
       updateSource :: FilePath -> IO SourceTree
       updateSource dir =
-          runProcessF id (ShellCommand ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri')) B.empty >>
+          runProcessF (shell ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri')) B.empty >>
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
 
@@ -80,7 +80,7 @@ prepare cache package theUri =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _output <- runProcessF id (ShellCommand cmd) B.empty
+             _output <- runProcessF (shell cmd) B.empty
              findSourceTree dir
           where
             cmd = unwords $ ["darcs", "get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", "'" ++ tag ++ "'"]) theTag ++ [dir]
@@ -88,7 +88,7 @@ prepare cache package theUri =
       fixLink base =
           let link = base ++ "/" ++ name
               cmd = "rm -rf " ++ link ++ " && ln -s " ++ sum ++ " " ++ link in
-          runProcessF id (ShellCommand cmd) B.empty
+          runProcessF (shell cmd) B.empty
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndTag))
       uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag

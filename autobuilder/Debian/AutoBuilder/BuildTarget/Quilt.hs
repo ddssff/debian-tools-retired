@@ -27,7 +27,7 @@ import "Extra" Extra.List ()
 import System.Directory (doesFileExist, createDirectoryIfMissing, doesDirectoryExist, renameDirectory)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
-import System.Process (CmdSpec(..))
+import System.Process (shell)
 import System.Process.Progress (unpackOutputs, mergeToStderr, runProcessF, runProcess, qPutStrLn, quieter)
 import Text.Regex
 
@@ -71,7 +71,7 @@ makeQuiltTree m base patch =
        let cmd1 = ("set -x && cd '" ++ quiltDir ++ "' && rm -f '" ++ quiltPatchesDir ++
                    "' && ln -s '" ++ patchDir ++ "' '" ++ quiltPatchesDir ++ "'")
        -- runTaskAndTest (linkStyle (commandTask cmd1))
-       _output <- runProcessF id (ShellCommand cmd1) L.empty
+       _output <- runProcessF (shell cmd1) L.empty
        -- Now we need to have created a DebianSourceTree so
        -- that there is a changelog for us to reconstruct.
        return (copyTree, quiltDir)
@@ -90,21 +90,21 @@ prepare package base patch =
                 unhide x = doesDirectoryExist pch >>= (flip when) (rmrf pc >> renameDirectory pch pc) >> return x
                 pc = (quiltDir ++ "/.pc")
                 pch = (quiltDir ++ "/.pc.hide")
-                rmrf d = runProcess id (ShellCommand ("rm -rf '"  ++ d ++ "'")) L.empty
+                rmrf d = runProcess (shell ("rm -rf '"  ++ d ++ "'")) L.empty
       make :: (SourceTree, FilePath) -> IO T.Download
       make (quiltTree, quiltDir) =
-          do applied <- runProcess id (ShellCommand cmd1a) L.empty >>= qMessage "Checking for applied patches" >>= return . unpackOutputs
+          do applied <- runProcess (shell cmd1a) L.empty >>= qMessage "Checking for applied patches" >>= return . unpackOutputs
              case applied of
                (ExitFailure 1 : _, _, err, _)
                    | err == "No patches applied\n" ->
                           findUnapplied >>= apply >> buildLog >> cleanSource
                           where
-                            findUnapplied = do unapplied <- liftIO (runProcess id (ShellCommand cmd1b) L.empty) >>= qMessage "Checking for unapplied patches" . unpackOutputs
+                            findUnapplied = do unapplied <- liftIO (runProcess (shell cmd1b) L.empty) >>= qMessage "Checking for unapplied patches" . unpackOutputs
                                                case unapplied of
                                                  ([ExitSuccess], text, _, _) -> return (lines text)
                                                  _ -> fail $ target ++ " - No patches to apply"
                             apply patches =
-                                do result2 <- liftIO (runProcess id (ShellCommand (cmd2 patches)) L.empty) >>= qMessage "Patching Quilt target" . unpackOutputs . mergeToStderr
+                                do result2 <- liftIO (runProcess (shell (cmd2 patches)) L.empty) >>= qMessage "Patching Quilt target" . unpackOutputs . mergeToStderr
                                    case result2 of
                                      ([ExitSuccess], _, _, _) -> return ()
                                      (_, _, err, _) -> fail $ target ++ " - Failed to apply quilt patches: " ++ err
@@ -119,7 +119,7 @@ prepare package base patch =
                                      False -> fail (target ++ "- Missing changelog file: " ++ show (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog"))
                                      True -> mergeChangelogs' (quiltDir ++ "/debian/changelog") (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog")
                             cleanSource =
-                                do result3 <- liftIO (runProcess id (ShellCommand cmd3) L.empty) >>= qMessage "Cleaning Quilt target" . unpackOutputs
+                                do result3 <- liftIO (runProcess (shell cmd3) L.empty) >>= qMessage "Cleaning Quilt target" . unpackOutputs
                                    case result3 of
                                      ([ExitSuccess], _, _, _) ->
                                          do tree <- findSourceTree (topdir quiltTree)
