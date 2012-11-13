@@ -30,7 +30,7 @@ Library
   Build-depends:
     base >= 4 && < 5,
     process,
-    process-extras >= 0.4.6,
+    process-extras >= 0.5,
     bytestring,
     deepseq,
     HUnit,
