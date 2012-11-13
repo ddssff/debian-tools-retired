@@ -45,7 +45,7 @@ import System.Directory ( createDirectoryIfMissing, doesFileExist, removeFile )
 import System.IO ( stdin, hGetLine )
 import System.Unix.Chroot ( useEnv )
 import System.Unix.Directory ( removeRecursiveSafely )
-import System.Process (CmdSpec(ShellCommand))
+import System.Process (shell)
 import System.Process.Progress (readProcessChunks, ePutStrLn, ePutStr, runProcess, unpackOutputs, quieter, qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
@@ -185,7 +185,7 @@ archFiles' deb =
 
 buildArchOfEnv :: EnvRoot -> IO Arch
 buildArchOfEnv (EnvRoot root)  =
-    do (code, out, err, _) <- useEnv root forceList (readProcessChunks id (ShellCommand cmd) L.empty) >>= return . unpackOutputs
+    do (code, out, err, _) <- useEnv root forceList (readProcessChunks (shell cmd) L.empty) >>= return . unpackOutputs
        case code of
          (ExitSuccess : _) ->
              case words out of
@@ -197,7 +197,7 @@ buildArchOfEnv (EnvRoot root)  =
 
 buildArchOfRoot :: IO Arch
 buildArchOfRoot =
-    do (code, out, err, _) <- runProcess id (ShellCommand cmd) L.empty >>= return . unpackOutputs
+    do (code, out, err, _) <- runProcess (shell cmd) L.empty >>= return . unpackOutputs
        case code of
          (ExitSuccess : _) ->
              case words out of

@@ -43,7 +43,7 @@ import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import qualified System.IO as IO ( stderr, hPutStrLn, hPutStr )
 import System.Posix.Files ( createLink )
-import System.Process (readProcess, CmdSpec(ShellCommand))
+import System.Process (readProcess, shell)
 import System.Process.Progress (ePutStr, ePutStrLn, readProcessChunks, doOutput,
                                 runProcess, runProcessF, timeTask, unpackOutputs, oneResult, quieter, foldOutputsL)
 import System.Unix.Chroot ( useEnv )
@@ -219,7 +219,7 @@ prepareDevs root = do
                      let cmd = "mknod " ++ path ++ " " ++ typ ++ " " ++ show major ++ " " ++ show minor ++ " 2> /dev/null"
                      exists <- doesFileExist path
                      case exists of
-                       False -> readProcessChunks id (ShellCommand cmd) L.empty >>= return . oneResult
+                       False -> readProcessChunks (shell cmd) L.empty >>= return . oneResult
                        True -> return ExitSuccess
 
 pbuilderBuild :: MonadApt m =>
@@ -239,7 +239,7 @@ pbuilderBuild cacheDir root distro arch repo extraEssential omitEssential extra 
       -- then add them back in.
     do ePutStrLn ("Creating clean build environment (" ++ sliceName (sliceListName distro) ++ ")")
        ePutStrLn ("# " ++ cmd)
-       liftIO (runProcess id (ShellCommand cmd) L.empty) >>= liftIO . doOutput >>= foldOutputsL codefn outfn errfn exnfn (return ())
+       liftIO (runProcess (shell cmd) L.empty) >>= liftIO . doOutput >>= foldOutputsL codefn outfn errfn exnfn (return ())
        ePutStrLn "done."
        let os = OS { osGlobalCacheDir = cacheDir
                    , osRoot = root
@@ -324,7 +324,7 @@ buildEnv root distro arch repo include exclude components =
       -- file:// URIs because they can't yet be visible inside the
       -- environment.  So we grep them out, create the environment, and
       -- then add them back in.
-      runProcess id (ShellCommand cmd) L.empty >>= foldOutputsL codefn outfn errfn exnfn (return ())
+      runProcess (shell cmd) L.empty >>= foldOutputsL codefn outfn errfn exnfn (return ())
       ePutStrLn "done."
       let os = OS { osGlobalCacheDir = top
                   , osRoot = root
@@ -425,7 +425,7 @@ localeGen :: String -> OSImage -> IO OSImage
 localeGen locale os =
     do
       ePutStr ("Generating locale " ++  locale ++ " (" ++ stripDist (rootPath root) ++ ")...")
-      result <- try $ useEnv (rootPath root) forceList (runProcess id (ShellCommand cmd) L.empty) >>= return . unpackOutputs
+      result <- try $ useEnv (rootPath root) forceList (runProcess (shell cmd) L.empty) >>= return . unpackOutputs
       either (\ (e :: SomeException) -> error $ "Failed to generate locale " ++ rootPath root ++ ": " ++ show e)
              (\ _ -> return os)
              result
@@ -598,7 +598,7 @@ updateLists :: OSImage -> IO NominalDiffTime
 updateLists os =
     withProc os $
       ePutStrLn ("Updating OSImage " ++ root) >>
-      timeTask (useEnv root forceList (runProcessF id (ShellCommand cmd) L.empty)) >>=
+      timeTask (useEnv root forceList (runProcessF (shell cmd) L.empty)) >>=
       return . snd
     where
        root = rootPath (osRoot os)

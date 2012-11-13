@@ -28,7 +28,7 @@ import Data.List ( intercalate, sortBy )
 import Data.Maybe ( listToMaybe )
 import Extra.Files ( writeFileIfMissing, replaceFile )
 import System.Unix.Directory ( removeRecursiveSafely )
-import System.Process (CmdSpec(..))
+import System.Process (shell)
 import System.Process.Progress (runProcessF, quieter, qPutStr, qPutStrLn)
 import System.Directory ( createDirectoryIfMissing )
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -97,7 +97,7 @@ prepareAptEnv' cacheDir sourcesChangedAction sources =
 {-# NOINLINE updateAptEnv #-}
 updateAptEnv :: MonadApt m => AptImage -> m AptImage
 updateAptEnv os =
-    liftIO (runProcessF id (ShellCommand cmd) L.empty) >>
+    liftIO (runProcessF (shell cmd) L.empty) >>
     getSourcePackages os >>= return . sortBy cmp >>= \ sourcePackages ->
     getBinaryPackages os >>= \ binaryPackages ->
     return $ os { aptImageSourcePackages = sourcePackages
@@ -173,7 +173,7 @@ aptGetSource dir os package version =
 -- | Note that apt-get source works for binary or source package names.
 runAptGet :: (AptCache t) => t -> FilePath -> String -> [(PkgName, Maybe DebianVersion)] -> IO ()
 runAptGet os dir command packages =
-    createDirectoryIfMissing True dir >> runProcessF id (ShellCommand cmd) L.empty >> return ()
+    createDirectoryIfMissing True dir >> runProcessF (shell cmd) L.empty >> return ()
     where
       cmd = (intercalate " " ("cd" : dir : "&&" : "apt-get" : aptOpts os : command : map formatPackage packages))
       formatPackage (name, Nothing) = unPkgName name

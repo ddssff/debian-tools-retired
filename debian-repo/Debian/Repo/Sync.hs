@@ -6,14 +6,14 @@ import Control.Monad.Trans (MonadIO)
 import qualified Data.ByteString as B
 import System.Exit (ExitCode)
 import System.FilePath (dropTrailingPathSeparator)
-import System.Process (CmdSpec(RawCommand))
+import System.Process (proc)
 import System.Process.Progress (runProcessF, keepResult)
 
 rsync :: (Functor m, MonadIO m) => [String] -> FilePath -> FilePath -> m ExitCode
 rsync extra source dest =
-    do result <- runProcessF id (RawCommand "rsync" (["-aHxSpDt", "--delete"] ++ extra ++
-                                                     [dropTrailingPathSeparator source ++ "/",
-                                                      dropTrailingPathSeparator dest])) B.empty >>= return . keepResult
+    do result <- runProcessF (proc "rsync" (["-aHxSpDt", "--delete"] ++ extra ++
+                                            [dropTrailingPathSeparator source ++ "/",
+                                             dropTrailingPathSeparator dest])) B.empty >>= return . keepResult
        case result of
          [x] -> return x
          _ -> error "Missing or multiple exit codes"

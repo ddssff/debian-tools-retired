@@ -40,7 +40,7 @@ import System.FilePath ( (</>) )
 import System.Directory ( doesFileExist, getDirectoryContents )
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.IO.Unsafe ( unsafeInterleaveIO )
-import System.Process (CmdSpec(..), readProcessWithExitCode, showCommandForUser)
+import System.Process (shell, readProcessWithExitCode, showCommandForUser)
 --import System.Unix.LazyProcess (Output)
 --import System.Unix.Outputs (checkResult)
 import System.Process.Progress (Output, foldOutputsL, timeTask, runProcessV, quieter, qPutStrLn, qPutStr)
@@ -360,7 +360,7 @@ dupload uri dir changesFile  =
             qPutStrLn ("Uploading " ++ show changesFile)
             (result, elapsed) <-
                 quieter 1 $ timeTask $ do
-                output <- runProcessV id (ShellCommand cmd) L.empty
+                output <- runProcessV (shell cmd) L.empty
                 foldOutputsL (doCode cmd) ignore ignore ignore (return (Right output)) output
             qPutStrLn ("Upload finished, elapsed time " ++ show elapsed)
             return (either (Failure . (: [])) (\ output -> Success (output, elapsed)) result)
