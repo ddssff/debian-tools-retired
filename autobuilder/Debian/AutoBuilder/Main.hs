@@ -229,16 +229,16 @@ runParameterSet cache =
              when (P.report params) (ePutStrLn . doReport $ allTargets)
              qPutStrLn "Retrieving all source code:\n"
              countTasks' (map (\ (target :: P.Packages) ->
-                                   (show (P.spec target),
-                                    (Right <$> retrieve buildOS cache target)
-                                      `catch` (\ (e :: SomeException) ->
-                                                        case (fromException (toException e) :: Maybe AsyncException) of
-                                                          Just UserInterrupt -> throw e -- break out of loop
-                                                          _ -> liftIO (IO.hPutStrLn IO.stderr ("Failure retrieving " ++ show (P.spec target) ++ ":\n " ++ show e)) >> return (Left e))))
-
+                                   (show (P.spec target), (Right <$> retrieve buildOS cache target) `catch` handleRetrieveException target))
                               (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
           where
             allTargets = C.packages cache
+            handleRetrieveException :: MonadDeb m => P.Packages -> SomeException -> m (Either SomeException Download)
+            handleRetrieveException target e =
+                case (fromException (toException e) :: Maybe AsyncException) of
+                  Just UserInterrupt ->
+                      throw e -- break out of loop
+                  _ -> liftIO (IO.hPutStrLn IO.stderr ("Failure retrieving " ++ show (P.spec target) ++ ":\n " ++ show e)) >> return (Left e)
       upload :: MonadApt m => (LocalRepository, [Target]) -> m [Failing ([Output L.ByteString], NominalDiffTime)]
       upload (repo, [])
           | P.doUpload params =

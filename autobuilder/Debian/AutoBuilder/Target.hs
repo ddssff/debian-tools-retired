@@ -13,9 +13,9 @@ module Debian.AutoBuilder.Target
 import Control.Arrow (second)
 import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
-import Control.Exception (SomeException, try, evaluate)
+import Control.Exception (SomeException, try, throw, evaluate, AsyncException(UserInterrupt), fromException, toException)
 import Control.Monad.CatchIO (catch)
-import Control.Monad.RWS(liftIO, when)
+import Control.Monad.RWS(MonadIO, liftIO, when)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Either (partitionEithers)
@@ -71,11 +71,12 @@ import Prelude hiding (catch)
 import System.Directory (doesFileExist, doesDirectoryExist, removeDirectory, createDirectoryIfMissing)
 import System.Exit(ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.FilePath ((</>))
+import System.IO (hPutStrLn, stderr)
 import System.Posix.Files(fileSize, getFileStatus)
 import System.Unix.Chroot (useEnv)
 import System.Process (proc, shell, CreateProcess(cwd))
 import System.Process.Progress (unpackOutputs, mergeToStdout, keepStdout, keepResult, collectOutputs,
-                                keepResult, runProcessF, runProcess, quieter, qPutStrLn, ePutStr, ePutStrLn)
+                                keepResult, runProcessF, runProcess, quieter, noisier, qPutStrLn, ePutStr, ePutStrLn)
 import System.Process.Read (Chars(toString), readModifiedProcess)
 import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), pretty)
 import Text.Printf(printf)
@@ -163,10 +164,9 @@ buildLoop cache globalBuildDeps localRepo poolOS cleanOS' targets =
           ePutStrLn "Computing ready targets..." >>
           case readyTargets cache (goals (Set.toList unbuilt)) (Set.toList unbuilt) of
             [] -> return failed
-            triples -> do quieter (-1) $ qPutStrLn (makeTable triples)
+            triples -> do noisier 1 $ qPutStrLn (makeTable triples)
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
                           loop2 cleanOS' (Set.difference unbuilt ready) failed triples
-      -- Out of ready targets, re-do the dependency computation
       loop2 :: (MonadApt m, MonadTop m) =>
                OSImage
             -> Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
@@ -174,6 +174,7 @@ buildLoop cache globalBuildDeps localRepo poolOS cleanOS' targets =
             -> [(Target, [Target], [Target])] -- ready: the list of known buildable targets
             -> m (Set.Set Target)
       loop2 cleanOS' unbuilt failed [] =
+          -- Out of ready targets, re-do the dependency computation
           loop cleanOS' unbuilt failed
       loop2 cleanOS' unbuilt failed ((target, blocked, _) : ready') =
           do ePutStrLn (printf "[%2d of %2d] TARGET: %s - %s"
@@ -181,7 +182,7 @@ buildLoop cache globalBuildDeps localRepo poolOS cleanOS' targets =
              -- Build one target.
              result <- if Set.member (targetName target) (P.discard (P.params cache))
                        then return (Failure ["--discard option set"])
-                       else buildTarget cache cleanOS' globalBuildDeps localRepo poolOS target `catch` (\ (e :: SomeException) -> return (Failure [show e]))
+                       else (Success <$> buildTarget cache cleanOS' globalBuildDeps localRepo poolOS target) `catch` handleBuildException
              failing -- On failure the target and its dependencies get
                      -- added to failed.
                      (\ errs ->
@@ -204,6 +205,14 @@ buildLoop cache globalBuildDeps localRepo poolOS cleanOS' targets =
                              let unbuilt' = Set.union unbuilt (Set.difference (Set.fromList blocked) failed)
                              loop2 cleanOS'' unbuilt' failed ready')
                      result
+      handleBuildException :: MonadIO m => SomeException -> m (Failing (Maybe LocalRepository))
+      handleBuildException e =
+          liftIO (hPutStrLn stderr $ "Exception during build: " ++ show e) >>
+          case (fromException (toException e) :: Maybe AsyncException) of
+            Just UserInterrupt ->
+                liftIO (hPutStrLn stderr "breaking out of loop") >>
+                throw e -- break out of loop
+            _ -> return (Failure [show e])
       -- If no goals are given in the build parameters, assume all
       -- known targets are goals.
       goals targets =
@@ -308,6 +317,9 @@ showTargets targets =
     where
       heading = show (P.packageCount targets) ++ " Targets:"
 
+qError :: forall (m :: * -> *) b. MonadIO m => String -> m b
+qError message = qPutStrLn message >> error message
+
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
     (MonadApt m, MonadTop m, AptCache t) =>
@@ -317,7 +329,7 @@ buildTarget ::
     LocalRepository ->			-- The local repository the packages will be uploaded to
     t ->
     Target ->
-    m (Failing (Maybe LocalRepository))	-- The local repository after the upload (if it changed), or an error message
+    m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
 buildTarget cache cleanOS globalBuildDeps repo poolOS target =
     do
       _cleanOS' <- liftIO (quieter 2 $ syncPool cleanOS)
@@ -327,10 +339,8 @@ buildTarget cache cleanOS globalBuildDeps repo poolOS target =
       arch <- liftIO $ buildArchOfEnv (rootDir cleanOS)
       let solns = buildDepSolutions' arch (map (BinPkgName . PkgName) (P.preferred (P.params cache))) cleanOS globalBuildDeps debianControl
       case solns of
-        Failure excuses -> do let excuses' = ("Couldn't satisfy build dependencies" : excuses)
-                              qPutStrLn (intercalate "\n " excuses')
-                              return $ Failure excuses'
-        Success [] -> error "Internal error 4"
+        Failure excuses -> qError $ intercalate "\n  " ("Couldn't satisfy build dependencies" : excuses)
+        Success [] -> qError "Internal error 4"
         Success ((_count, sourceDependencies) : _) ->
             do -- Get the newest available version of a source package,
                -- along with its status, either Indep or All
@@ -349,8 +359,7 @@ buildTarget cache cleanOS globalBuildDeps repo poolOS target =
                -- quieter (const 0) $ qPutStrLn ("newVersion: " ++ show (fmap prettyDebianVersion newVersion))
                -- quieter (const 0) $ qPutStrLn ("Release status: " ++ show releaseStatus)
                case newVersion of
-                 Failure messages ->
-                    return (Failure messages)
+                 Failure messages -> qError (intercalate "\n  " ("Failure computing new version number:" : messages))
                  Success version ->
                      -- If we are doing an arch only build, the version number needs to match the
                      -- version number of the architecture independent package already uploaded.
@@ -358,32 +367,31 @@ buildTarget cache cleanOS globalBuildDeps repo poolOS target =
                                           Arch _ -> repoVersion
                                           _ -> Just version in
                      case decision of
-                       Error message -> return (Failure [message])
-                       No _ -> return (Success Nothing)
+                       Error message -> qError ("Failure making build decision: " ++ message)
+                       No _ -> return Nothing
                        _ ->  buildPackage cache cleanOS buildVersion oldFingerprint newFingerprint sourceLog target releaseStatus repo >>=
-                             return . failing Failure (Success . Just)
+                             return . Just
 
 -- | Build a package and upload it to the local repository.
 buildPackage :: (MonadApt m, MonadTop m) =>
-                P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> ChangeLogEntry -> Target -> SourcePackageStatus -> LocalRepository -> m (Failing LocalRepository)
+                P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> ChangeLogEntry -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
 buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog target status repo =
     checkDryRun >>
     buildEnv (P.buildRelease (P.params cache)) >>= return . Debian.Repo.chrootEnv cleanOS >>= \ buildOS ->
-    liftIO (prepareImage buildOS) >>=
-    failing (return . Failure) logEntry >>=
-    failing (return . Failure) (quieter (-1) . build buildOS) >>=
-    failing (return . Failure) find >>=
-    failing (return . Failure) upload
+    liftIO (prepareBuildImage cache cleanOS newFingerprint buildOS target) >>=
+    logEntry >>=
+    noisier 1 . build buildOS >>=
+    find >>=
+    doLocalUpload
     where
       checkDryRun = when (P.dryRun (P.params cache))
                       (do qPutStrLn "Not proceeding due to -n option."
                           liftIO (exitWith ExitSuccess))
-      prepareImage buildOS = prepareBuildImage cache cleanOS newFingerprint buildOS target
       logEntry buildTree =
           case P.noClean (P.params cache) of
-            False -> liftIO $ maybeAddLogEntry buildTree newVersion >> return (Success buildTree)
-            True -> return (Success buildTree)
-      build :: OSImage -> MonadApt m => DebianBuildTree -> m (Failing (DebianBuildTree, NominalDiffTime))
+            False -> liftIO (maybeAddLogEntry buildTree newVersion) >> return buildTree
+            True -> return buildTree
+      build :: OSImage -> MonadApt m => DebianBuildTree -> m (DebianBuildTree, NominalDiffTime)
       build buildOS buildTree =
           do -- The --commit flag does not appear until dpkg-dev-1.16.1,
              -- so we need to check this version number.  We also
@@ -406,11 +414,9 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog ta
              -- to set the exact version number.
              let ver = maybe [] (\ v -> [("CABALDEBIAN", Just (show ["--deb-version", show (prettyDebianVersion v)]))]) newVersion
              let env = ver ++ P.setEnv (P.params cache)
-             result <- liftIO $ try (T.buildWrapper (download (tgt target))
-                                     (buildDebs (P.noClean (P.params cache)) False env buildOS buildTree status))
-             case result of
-               Left (e :: SomeException) -> return (Failure [show e])
-               Right elapsed -> return (Success (buildTree, elapsed))
+             elapsed <- liftIO $ T.buildWrapper (download (tgt target))
+                                     (buildDebs (P.noClean (P.params cache)) False env buildOS buildTree status)
+             return (buildTree, elapsed)
           where
             doDpkgSource False =
                 createDirectoryIfMissing True (path' </> "debian/patches") >>
@@ -424,11 +430,7 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog ta
             path' = fromJust (dropPrefix root path)
             path = debdir buildTree
             root = rootPath (rootDir buildOS)
-      find (buildTree, elapsed) =
-          liftIO $ try (findChanges buildTree) >>=
-                   return . either (\ (e :: SomeException) -> Failure [show e]) (\ changesFile -> Success (changesFile, elapsed))
-      upload :: MonadApt m => (ChangesFile, NominalDiffTime) -> m (Failing LocalRepository)
-      upload (changesFile, elapsed) = doLocalUpload elapsed changesFile
+      find (buildTree, elapsed) = liftIO (findChanges buildTree) >>= \ changesFile -> return (changesFile, elapsed)
       -- Depending on the strictness, build dependencies either
       -- get installed into the clean or the build environment.
       maybeAddLogEntry _ Nothing = return ()
@@ -446,8 +448,8 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog ta
                   , changeRelease = name }
           where setDist name (Field ("Distribution", _)) = Field ("Distribution", ' ' : releaseName' name)
                 setDist _ other = other
-      doLocalUpload :: MonadApt m => NominalDiffTime -> ChangesFile -> m (Failing LocalRepository)
-      doLocalUpload elapsed changesFile =
+      doLocalUpload :: MonadApt m => (ChangesFile, NominalDiffTime) -> m LocalRepository
+      doLocalUpload (changesFile, elapsed) =
           do
             (changesFile' :: ChangesFile) <-
 		-- Set the Distribution field in the .changes file to the one
@@ -466,29 +468,28 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog ta
             (_, errors) <- scanIncoming True Nothing repo
             case errors of
               -- Update lists to reflect the availability of the package we just built
-              [] -> liftIO (updateLists cleanOS) >> return (Success repo)
-              _ -> return (Failure ["Local upload failed:\n " ++ showErrors (map snd errors)])
+              [] -> liftIO (updateLists cleanOS) >> return repo
+              _ -> error $ "Local upload failed:\n " ++ showErrors (map snd errors)
 
 -- |Prepare the build image by copying the clean image, installing
 -- dependencies, and copying the clean source tree.  For a lax build
 -- these operations take place in a different order from other types
 -- of builds.  For lax: dependencies, then image copy, then source
 -- copy.  For other: image copy, then source copy, then dependencies.
-prepareBuildImage :: P.CacheRec -> OSImage -> Fingerprint -> OSImage -> Target -> IO (Failing DebianBuildTree)
+prepareBuildImage :: P.CacheRec -> OSImage -> Fingerprint -> OSImage -> Target -> IO DebianBuildTree
 prepareBuildImage cache cleanOS sourceFingerprint buildOS target | P.strictness (P.params cache) == P.Lax =
     -- Install dependencies directly into the clean environment
     installDependencies cleanOS (cleanSource target) buildDepends sourceFingerprint >>=
-    failing (return . Failure) (prepareTree noClean)
+    prepareTree noClean
     where
       prepareTree True _ =
           (\ x -> qPutStrLn "Finding build tree" >> quieter 1 x) $
           findOneDebianBuildTree newPath >>=
-          return . maybe (Failure ["No build tree at " ++ show newPath]) Success
+          maybe (error ("No build tree at " ++ show newPath)) return
       prepareTree False _ =
           (\ x -> qPutStrLn "Copying build tree..." >> quieter 1 x) $
-          Debian.Repo.syncEnv cleanOS buildOS >>=
-          const (try (copyDebianBuildTree (cleanSource target) newPath)) >>=
-          return . either (\ (e :: SomeException) -> Failure [show e]) Success
+          Debian.Repo.syncEnv cleanOS buildOS >>
+          copyDebianBuildTree (cleanSource target) newPath
       buildDepends = (P.buildDepends (P.params cache))
       noClean = P.noClean (P.params cache)
       newPath = rootPath (rootDir buildOS) ++ fromJust (dropPrefix (rootPath (rootDir cleanOS)) oldPath)
@@ -496,30 +497,29 @@ prepareBuildImage cache cleanOS sourceFingerprint buildOS target | P.strictness 
 prepareBuildImage cache cleanOS sourceFingerprint buildOS target =
     -- Install dependencies directly into the build environment
     findTree noClean >>=
-    failing (return . Failure) downloadDeps >>=
-    failing (return . Failure) (syncEnv noClean) >>=
-    failing (return . Failure) installDeps
+    downloadDeps >>=
+    syncEnv noClean >>=
+    installDeps
     where
       -- findTree :: Bool -> IO (Failing DebianBuildTree)
       findTree False =
           (\ x -> qPutStrLn "Finding build tree" >> quieter 1 x) $
-              try (copyDebianBuildTree (cleanSource target) newPath) >>=
-              return . either (\ (e :: SomeException) -> Failure [show e]) Success
+              copyDebianBuildTree (cleanSource target) newPath
       findTree True =
-          findOneDebianBuildTree newPath >>= \ tree ->
-          return $ maybe (Failure ["prepareBuildImage: could not find build tree in " ++ newPath]) Success tree
+          findOneDebianBuildTree newPath >>=
+          maybe (error ("prepareBuildImage: could not find build tree in " ++ newPath)) return
 
-      downloadDeps buildTree = downloadDependencies cleanOS buildTree buildDepends sourceFingerprint >>=
-                               failing (return . Failure) (const (return (Success buildTree)))
+      downloadDeps buildTree = downloadDependencies cleanOS buildTree buildDepends sourceFingerprint >>
+                               return buildTree
 
       syncEnv False buildTree =
           (\ x -> qPutStrLn "Syncing buildOS" >> quieter 1 x) $
-              Debian.Repo.syncEnv cleanOS buildOS >>= (\ os -> return (Success (os, buildTree)))
+              Debian.Repo.syncEnv cleanOS buildOS >>= (\ os -> return (os, buildTree))
       syncEnv True buildTree =
-          return (Success (buildOS, buildTree))
+          return (buildOS, buildTree)
 
-      installDeps (buildOS, buildTree) = installDependencies buildOS buildTree buildDepends sourceFingerprint >>=
-                                         failing (return . Failure) (const (return (Success buildTree)))
+      installDeps (buildOS, buildTree) =
+          installDependencies buildOS buildTree buildDepends sourceFingerprint >> return buildTree
       buildDepends = P.buildDepends (P.params cache)
       noClean = P.noClean (P.params cache)
       newPath = rootPath (rootDir buildOS) ++ fromJust (dropPrefix (rootPath (rootDir cleanOS)) (topdir (cleanSource target)))
@@ -755,7 +755,7 @@ sinkFields f (Paragraph fields) =
           f' (Comment _) = False
 
 -- |Download the package's build dependencies into /var/cache
-downloadDependencies :: OSImage -> DebianBuildTree -> [String] -> Fingerprint -> IO (Failing String)
+downloadDependencies :: OSImage -> DebianBuildTree -> [String] -> Fingerprint -> IO String
 downloadDependencies os source extra sourceFingerprint =
 
     do -- qPutStrLn "Downloading build dependencies"
@@ -764,8 +764,8 @@ downloadDependencies os source extra sourceFingerprint =
        (code, out, _, _) <- useEnv' (rootPath root) forceList (runProcess (shell command) L.empty) >>=
                             return . unpackOutputs . mergeToStdout
        case code of
-         [ExitSuccess] -> return (Success out)
-         code -> return (Failure ["FAILURE: " ++ command ++ " -> " ++ show code ++ "\nOutput:\n" ++ out])
+         [ExitSuccess] -> return out
+         code -> error ("FAILURE: " ++ command ++ " -> " ++ show code ++ "\nOutput:\n" ++ out)
     where
       command = ("export DEBIAN_FRONTEND=noninteractive; " ++
                  (if True then aptGetCommand else pbuilderCommand))
@@ -780,14 +780,15 @@ pathBelow root path =
     where message = "Expected a path below " ++ root ++ ", saw " ++ path
 
 -- |Install the package's build dependencies.
-installDependencies :: OSImage -> DebianBuildTree -> [String] -> Fingerprint -> IO (Failing L.ByteString)
+installDependencies :: OSImage -> DebianBuildTree -> [String] -> Fingerprint -> IO L.ByteString
 installDependencies os source extra sourceFingerprint =
     do qPutStrLn $ "Installing build dependencies into " ++ rootPath (rootDir os)
-       (code, out, _, _) <- withProc os (useEnv' (rootPath root) forceList $ runProcess (shell command) L.empty) >>= return . collectOutputs . mergeToStdout
+       (code, out, _, _) <- withProc os (useEnv' (rootPath root) forceList $ runProcess (shell command) L.empty) >>=
+                            return . collectOutputs . mergeToStdout
        case code of
-         [ExitSuccess] -> return (Success out)
+         [ExitSuccess] -> return out
          code -> ePutStrLn ("FAILURE: " ++ command ++ " -> " ++ show code ++ "\n" ++ toString out) >>
-                 return (Failure ["FAILURE: " ++ command ++ " -> " ++ show code])
+                 error ("FAILURE: " ++ command ++ " -> " ++ show code)
     where
       command = ("export DEBIAN_FRONTEND=noninteractive; " ++
                  (if True then aptGetCommand else pbuilderCommand))
@@ -799,7 +800,7 @@ installDependencies os source extra sourceFingerprint =
 
 -- | This should probably be what the real useEnv does.
 useEnv' :: FilePath -> (a -> IO a) -> IO a -> IO a
-useEnv' rootPath force action = quieter 1 $ useEnv rootPath force $ quieter (-1) action
+useEnv' rootPath force action = quieter 1 $ useEnv rootPath force $ noisier 1 action
 
 -- |Set a "Revision" line in the .dsc file, and update the .changes
 -- file to reflect the .dsc file's new md5sum.  By using our newdist
