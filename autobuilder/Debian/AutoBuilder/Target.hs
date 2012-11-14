@@ -317,7 +317,7 @@ showTargets targets =
     where
       heading = show (P.packageCount targets) ++ " Targets:"
 
-qError :: forall (m :: * -> *) b. MonadIO m => String -> m b
+qError :: MonadIO m => String -> m b
 qError message = qPutStrLn message >> error message
 
 -- Decide whether a target needs to be built and, if so, build it.
