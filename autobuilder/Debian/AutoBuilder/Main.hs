@@ -25,7 +25,7 @@ import Debian.AutoBuilder.Env (cleanEnv, dependEnv, buildEnv)
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Target(buildTargets, showTargets)
-import Debian.AutoBuilder.Types.Buildable (Target, targetName, asBuildable)
+import Debian.AutoBuilder.Types.Buildable (Target, targetName, Buildable, asBuildable)
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import Debian.AutoBuilder.Types.Download (Download)
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -162,8 +162,8 @@ runParameterSet cache =
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
       -- Build an apt-get environment which we can use to retrieve all the package lists
       poolOS <-prepareAptEnv top (P.ifSourcesChanged params) poolSources
-      (failures, targets) <- retrieveTargetList dependOS >>= mapM (either (return . Left) (liftIO . try . asBuildable)) >>= return . partitionEithers
-      when (not $ null $ failures) (error $ intercalate "\n " $ "Some targets could not be retrieved:" : map show failures)
+      (failures, targets) <- retrieveTargetList dependOS >>= return . partitionEithers
+      when (not $ null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
       buildResult <- buildTargets cache dependOS globalBuildDeps localRepo poolOS targets
       -- If all targets succeed they may be uploaded to a remote repo
       result <- (upload buildResult >>= liftIO . newDist) `catch` (\ (e :: SomeException) -> return (Failure [show e]))
@@ -222,8 +222,12 @@ runParameterSet cache =
                      True -> deleteGarbage repo'
                      False -> return repo'
                _ -> error "Expected local repo"
-      retrieveTargetList :: MonadDeb m => OSImage -> m [Either SomeException Download]
+      retrieveTargetList :: MonadDeb m => OSImage -> m [Either String Buildable]
       retrieveTargetList dependOS =
+          retrieveTargetList' dependOS >>=
+          mapM (either (return . Left) (\ download -> liftIO (try (asBuildable download)) >>= return. either (\ (e :: SomeException) -> Left (show e)) Right))
+      retrieveTargetList' :: MonadDeb m => OSImage -> m [Either String Download]
+      retrieveTargetList' dependOS =
           do qPutStr ("\n" ++ showTargets allTargets ++ "\n")
              buildOS <- chrootEnv dependOS <$> buildEnv (P.buildRelease (C.params cache))
              when (P.report params) (ePutStrLn . doReport $ allTargets)
@@ -233,12 +237,13 @@ runParameterSet cache =
                               (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
           where
             allTargets = C.packages cache
-            handleRetrieveException :: MonadDeb m => P.Packages -> SomeException -> m (Either SomeException Download)
+            handleRetrieveException :: MonadDeb m => P.Packages -> SomeException -> m (Either String Download)
             handleRetrieveException target e =
                 case (fromException (toException e) :: Maybe AsyncException) of
                   Just UserInterrupt ->
                       throw e -- break out of loop
-                  _ -> liftIO (IO.hPutStrLn IO.stderr ("Failure retrieving " ++ show (P.spec target) ++ ":\n " ++ show e)) >> return (Left e)
+                  _ -> let message = ("Failure retrieving " ++ show (P.spec target) ++ ":\n  " ++ show e) in
+                       liftIO (IO.hPutStrLn IO.stderr message) >> return (Left message)
       upload :: MonadApt m => (LocalRepository, [Target]) -> m [Failing ([Output L.ByteString], NominalDiffTime)]
       upload (repo, [])
           | P.doUpload params =

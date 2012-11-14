@@ -31,7 +31,7 @@ import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurr
 import System.Environment (getEnvironment)
 import System.FilePath ((</>), takeFileName)
 import System.Process (proc, CreateProcess(env))
-import System.Process.Progress (qPutStrLn, runProcessF, verbosity)
+import System.Process.Progress (qPutStrLn, runProcessF, verbosity, noisier)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
@@ -90,7 +90,7 @@ debianize cache pflags currentDirectory =
              oldEnv <- filter (not . (== "CABALDEBIAN") . fst) <$> getEnvironment
              v <- verbosity
              let newEnv = ("CABALDEBIAN", show args) : ("VERBOSITY", show v) : oldEnv
-             _ <- runProcessF ((proc "runhaskell" ["Setup", "configure", "--builddir=debian"]) {env = Just newEnv}) B.empty
+             _ <- noisier 2 $ runProcessF ((proc "runhaskell" ["Setup", "configure", "--builddir=debian"]) {env = Just newEnv}) B.empty
              doesFileExist "debian/compat" `catch` (\ (_ :: IOError) -> return False)
 
 collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> IO [String]
