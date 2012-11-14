@@ -35,12 +35,16 @@ module Distribution.Debian
     , Flags(..)
     , DebAction(..)
     , defaultFlags
+    , compileArgs
     , DebType
+    , DebAtom(..)
     , module Distribution.Debian.Server
     ) where
 
+import Distribution.Debian.DebHelper (DebAtom(..))
 import Distribution.Debian.Debianize (debianize, autobuilderDebianize)
 import Distribution.Debian.Config (Flags(..), DebAction(..), defaultFlags)
+import Distribution.Debian.Options (compileArgs)
 import Distribution.Debian.PackageInfo (DebType)
 import Distribution.Debian.Server
 import Distribution.Debian.SubstVars (substvars)
