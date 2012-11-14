@@ -1,3 +1,9 @@
+haskell-debian-repo (5.38) unstable; urgency=low
+
+  * Run dpkg --configure -a if apt-get update fails.
+
+ -- David Fox <dsf@seereason.com>  Wed, 14 Nov 2012 09:48:42 -0800
+
 haskell-debian-repo (5.37) unstable; urgency=low
 
   * Put a newtype in the Top monad so we don't mix it up with the Build

@@ -43,9 +43,9 @@ import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import qualified System.IO as IO ( stderr, hPutStrLn, hPutStr )
 import System.Posix.Files ( createLink )
-import System.Process (readProcess, shell)
+import System.Process (readProcess, shell, proc)
 import System.Process.Progress (ePutStr, ePutStrLn, readProcessChunks, doOutput,
-                                runProcess, runProcessF, timeTask, unpackOutputs, oneResult, quieter, foldOutputsL)
+                                runProcess, runProcessF, timeTask, unpackOutputs, oneResult, quieter, foldOutputsL, keepResult)
 import System.Unix.Chroot ( useEnv )
 import System.Unix.Directory (removeRecursiveSafely)
 import System.Unix.Mount ( umountBelow )
@@ -596,13 +596,21 @@ syncPool os =
 
 updateLists :: OSImage -> IO NominalDiffTime
 updateLists os =
-    withProc os $
-      ePutStrLn ("Updating OSImage " ++ root) >>
-      timeTask (useEnv root forceList (runProcessF (shell cmd) L.empty)) >>=
-      return . snd
+    withProc os $ do
+      ePutStrLn ("Updating OSImage " ++ root)
+      out <- useEnv root forceList (runProcess update L.empty)
+      case keepResult out of
+        [ExitFailure _] ->
+            do useEnv root forceList (runProcessF configure L.empty)
+               useEnv root forceList (runProcessF update L.empty)
+        _ -> return []
+      (_, elapsed) <- timeTask (useEnv root forceList (runProcessF upgrade L.empty))
+      return elapsed
     where
        root = rootPath (osRoot os)
-       cmd = "apt-get update && apt-get -y --force-yes dist-upgrade"
+       update = proc "apt-get" ["update"]
+       configure = proc "dpkg" ["--configure", "-a"]
+       upgrade = proc "apt-get" ["-y", "--force-yes", "dist-upgrade"]
 
 stripDist :: FilePath -> FilePath
 stripDist path = maybe path (\ n -> drop (n + 7) path) (isSublistOf "/dists/" path)
