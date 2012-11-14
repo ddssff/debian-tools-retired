@@ -109,8 +109,7 @@ debianPostinst b e server@(Server {..}) =
             , "case \"$1\" in"
             , "  configure)" ] ++
             apache ++
-            [ "    service " ++ serviceName e ++ " start"
-            , "    ;;"
+            [ "    ;;"
             , "esac"
             , ""
             , "#DEBHELPER#"
