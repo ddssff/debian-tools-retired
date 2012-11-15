@@ -1,3 +1,16 @@
+haskell-cabal-debian (2.4.2) unstable; urgency=low
+
+  * Move location of cabal install files from dist/build/install to
+    debian/cabalInstall, the dist directory was getting wiped at bad
+    moments.
+  * Split the autobuilder function autobuilderDebianize into two
+    new functions in cabal-debian: runDebianize and callDebianize.
+  * Custom debianization code now goes in debian/Debianize.hs rather than
+    in setup, so we can distinguish it failing from it not existing more
+    easily.
+
+ -- David Fox <dsf@seereason.com>  Thu, 15 Nov 2012 11:00:08 -0800
+
 haskell-cabal-debian (2.4.1) unstable; urgency=low
 
   * We need to verify that debian/compat was created after running the

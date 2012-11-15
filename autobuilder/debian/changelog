@@ -1,3 +1,9 @@
+autobuilder (6.44) unstable; urgency=low
+
+  * Move some debianization code into cabal-debian.
+
+ -- David Fox <dsf@seereason.com>  Thu, 15 Nov 2012 11:00:38 -0800
+
 autobuilder (6.43) unstable; urgency=low
 
   * ^C should terminate the autobuilder during a package build, not

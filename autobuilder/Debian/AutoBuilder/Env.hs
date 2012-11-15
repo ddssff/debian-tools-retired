@@ -4,8 +4,7 @@ module Debian.AutoBuilder.Env
     , buildEnv
     ) where
 
-import Control.Monad (when)
-import Control.Monad.Trans (MonadIO, liftIO)
+import Control.Monad.Trans (MonadIO)
 import Debian.Release (ReleaseName, releaseName')
 import Debian.Repo (EnvRoot(EnvRoot))
 import Debian.Repo.Monads.Top (MonadTop, sub)

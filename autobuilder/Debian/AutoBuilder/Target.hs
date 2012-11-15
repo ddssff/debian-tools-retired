@@ -117,7 +117,7 @@ prepareTargets cache cleanOS globalBuildDeps targetSpecs =
     where
       prepare :: Int -> (Int, Buildable) -> IO (Either SomeException Target)
       prepare count (index, tgt) =
-          do qPutStrLn (printf "[%2d of %2d] %s" index count (show (T.method (download tgt))))
+          do qPutStrLn (printf "[%2d of %2d] %s in %s" index count (show (T.method (download tgt))) (T.getTop (download tgt)))
              quieter 2 (try (prepareTarget cache globalBuildDeps cleanOS tgt) >>=
                              either (\ (e :: SomeException) ->
                                          ePutStrLn (printf "[%2d of %2d] - could not prepare %s: %s"

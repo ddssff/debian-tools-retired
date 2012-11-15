@@ -7,11 +7,9 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
-import Control.Exception (SomeException)
-import Control.Monad (unless)
-import Control.Monad.CatchIO (MonadCatchIO, bracket, catch)
+import Control.Monad (when)
+import Control.Monad.CatchIO (MonadCatchIO, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
-import qualified Data.ByteString.Lazy.Char8 as B
 import Data.List (isSuffixOf)
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
@@ -28,11 +26,9 @@ import Distribution.Package (PackageIdentifier(..) {-, PackageName(..)-})
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Prelude hiding (catch)
-import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, removeFile, doesFileExist)
+import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>), takeFileName)
-import System.Posix.Env (setEnv)
-import System.Process (proc)
-import System.Process.Progress (qPutStrLn, runProcessF, verbosity, noisier, foldFailure)
+import System.Process.Progress (verbosity)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
@@ -52,7 +48,7 @@ prepare cache package' cabal =
                 let version = pkgVersion . package . packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ debianize cache (P.flags package') dir
+                liftIO $ autobuilderDebianize cache (P.flags package') dir
                 return $ T.Download { T.package = package'
                                     , T.getTop = dir
                                     , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
@@ -67,28 +63,15 @@ withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old 
 
 -- | Run cabal-debian on the given directory, creating or updating the
 -- debian subdirectory.
-debianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
-debianize cache pflags currentDirectory =
+autobuilderDebianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
+autobuilderDebianize cache pflags currentDirectory =
     withCurrentDirectory currentDirectory $
     do args <- collectPackageFlags cache pflags
        -- Set the build directory to indicate that we are running from inside dpkg-buildpackage.
-       let flags = (Cabal.compileArgs args Cabal.defaultFlags) {Cabal.buildDir = "dist-ghc/build"}
-       -- First try to run the customized debianize function in
-       -- Setup.hs, then run debianize directly.
-       runSetupDebianize args `catch` (\ (e :: SomeException) -> qPutStrLn ("runSetupDebianize failed with '" ++ show e ++ "', running debianize directly.") >> Cabal.debianize flags)
-    where
-      -- Try running Setup configure --builddir=debian to see if there
-      -- is code in the Setup file to create a debianization.
-      runSetupDebianize :: [String] -> IO ()
-      runSetupDebianize args =
-          do v <- verbosity
-             Cabal.putEnvironmentArgs args
-             setEnv "VERBOSITY" (show v) True
-             removeFile "debian/compat" `catch` (\ (_ :: IOError) -> return ())
-             out <- noisier 2 $ runProcessF (proc "ghc" ["-e", "debianize", "Setup.hs"]) B.empty
-             foldFailure (\ n -> error "Setup.debianize failed") out
-             exists <- doesFileExist "debian/compat" `catch` (\ (_ :: IOError) -> return False)
-             unless exists (error "debian/compat was not created")
+       done <- Cabal.runDebianize args
+       when (not done) (Cabal.callDebianize args)
+       when (not done) (let flags = (Cabal.compileArgs args Cabal.defaultFlags) {Cabal.buildDir = "dist-ghc/build"} in
+                        Cabal.debianize flags)
 
 collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> IO [String]
 collectPackageFlags cache pflags =

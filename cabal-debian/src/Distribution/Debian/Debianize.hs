@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleInstances, ScopedTypeVariables, StandaloneDeriving, TupleSections, TypeSynonymInstances #-}
-{-# OPTIONS -Wall -fno-warn-name-shadowing #-}
+{-# OPTIONS -Wall -fno-warn-name-shadowing -fno-warn-orphans #-}
 
 -- | Generate a package Debianization from Cabal data and command line
 -- options.
@@ -9,6 +9,8 @@ module Distribution.Debian.Debianize
     , withEnvironmentFlags
     , putEnvironmentArgs
     , debianize
+    , runDebianize
+    , callDebianize
     ) where
 
 import Codec.Binary.UTF8.String (decodeString)
@@ -17,7 +19,7 @@ import Control.Arrow (second)
 import Control.Exception (SomeException, catch, throw)
 import Control.Monad (mplus)
 import Control.Monad.Trans (MonadIO, liftIO)
-import Data.ByteString.Lazy (writeFile)
+import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Either (partitionEithers)
@@ -32,7 +34,7 @@ import Debian.Changes (ChangeLogEntry(..), parseLog)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Debian.Version.String
-import Distribution.Debian.Config (Flags(..), missingDependencies')
+import Distribution.Debian.Config (Flags(..), defaultFlags, missingDependencies')
 import Distribution.Debian.DebHelper (DebAtom(..), controlFile, changeLog, toFiles)
 import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName, debianUtilsPackageName, debianSourcePackageName,
                                          debianDocPackageName, debianDevPackageName, debianProfPackageName)
@@ -50,13 +52,16 @@ import GHC.IO.Exception (IOException(ioe_type), IOErrorType(NoSuchThing))
 import Prelude hiding (catch, writeFile)
 import System.Directory
 import System.Environment
+import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>), takeDirectory, splitFileName)
+import System.IO (hPutStrLn, stderr)
 import System.Posix.Env (setEnv)
+import System.Process (proc, readProcessWithExitCode)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 type Debianization = [DebAtom]
 
-deriving instance Ord (Field' String)
+-- deriving instance Ord (Field' String)
 
 -- | Call a function with a list of strings read from the value of
 -- $CABALDEBIAN.
@@ -84,6 +89,33 @@ withEnvironmentFlags flags0 f =
 -- putEnvironmentFlags ["--dry-run", "--validate"] (debianize defaultFlags)
 putEnvironmentArgs :: [String] -> IO ()
 putEnvironmentArgs flags = setEnv "CABALDEBIAN" (show flags) True
+
+ePutStrLn = hPutStrLn stderr
+
+-- | Try to run the custom script in debian/Debianize.hs.
+runDebianize :: [String] -> IO Bool
+runDebianize args =
+    do exists <- doesFileExist "debian/Debianize.hs"
+       case exists of
+         True ->
+             do result <- run `catch` (\ (e :: SomeException) -> ePutStrLn ("runDebianize failed: " ++ show e) >> return False)
+                if result then ePutStrLn "runDebianize succeeded" else ePutStrLn "runDebianize failed:"
+                return result
+         False ->
+             do ePutStrLn "No custom debianization"
+                return False
+    where
+      run =
+          do putEnvironmentArgs args
+             (code, out, err) <- readProcessWithExitCode "runhaskell" ("debian/Debianize.hs" : args) ""
+             return (code == ExitSuccess)
+       -- foldFailure (\ n -> error "Setup.debianize failed") out
+       -- exists <- doesFileExist "debian/compat" `catch` (\ (_ :: IOError) -> return False)
+       -- unless exists (error "debian/compat was not created")
+
+callDebianize :: [String] -> IO ()
+callDebianize args =
+    debianize ((compileArgs args defaultFlags) {buildDir = "dist-ghc/build"})
 
 -- | Generate a debianization for the cabal package in the current
 -- directory using information from the .cabal file and from the
@@ -131,23 +163,23 @@ prepareAtom :: Flags -> DebAtom -> IO [DebAtom]
 prepareAtom flags (DHFile b path s) =
     do let s' = fromString s
            (destDir, destName) = splitFileName path
-           tmpDir = buildDir flags </> "install" </> show (md5 s')
+           tmpDir = "debian/cabalInstall" </> show (md5 s')
        createDirectoryIfMissing True tmpDir
-       writeFile (tmpDir </> destName) s'
+       L.writeFile (tmpDir </> destName) s'
        return [DHInstall b (tmpDir </> destName) destDir]
 prepareAtom _ x = return [x]
 
 readDebianization :: IO Debianization
 readDebianization = do
-  oldLog <- (readFile "debian/changelog" >>= return . (: []) . DebChangelog . snd . partitionEithers . parseLog) `catch` (return . handleDoesNotExist) :: IO [DebAtom]
-  oldControl <- (parseControlFromFile "debian/control" >>= return . either (error . show) ((: []) . DebControl)) `catch` (return . handleDoesNotExist) :: IO [DebAtom]
+  oldLog <- (readFile "debian/changelog" >>= return . (: []) . DebChangelog . snd . partitionEithers . parseLog) `catch` handleDoesNotExist :: IO [DebAtom]
+  oldControl <- (parseControlFromFile "debian/control" >>= return . either (error . show) ((: []) . DebControl)) `catch` handleDoesNotExist :: IO [DebAtom]
   return $ oldLog ++ oldControl
   -- let oldControl' = either (\ (e :: SomeException) -> []) (either (\ _ -> []) (\ c -> [DebControl c])) oldControl
   -- return $ oldControl' ++ [DebChangelog oldLog]
-    where
-      handleDoesNotExist :: IOError -> [a]
-      handleDoesNotExist e | ioe_type e == NoSuchThing = []
-      handleDoesNotExist e = throw e
+
+handleDoesNotExist :: IOError -> IO Debianization
+handleDoesNotExist e | ioe_type e == NoSuchThing = return []
+handleDoesNotExist e = throw e
 
 debianization :: Flags		 -- ^ command line flags
               -> PackageDescription  -- ^ info from the .cabal file
