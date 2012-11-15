@@ -72,7 +72,7 @@ debianize cache pflags currentDirectory =
     withCurrentDirectory currentDirectory $
     do args <- collectPackageFlags cache pflags
        -- Set the build directory to indicate that we are running from inside dpkg-buildpackage.
-       let flags = (Cabal.compileArgs args Cabal.defaultFlags) {Cabal.buildDir = "dist-ghc"}
+       let flags = (Cabal.compileArgs args Cabal.defaultFlags) {Cabal.buildDir = "dist-ghc/build"}
        -- First try to run the customized debianize function in
        -- Setup.hs, then run debianize directly.
        runSetupDebianize args `catch` (\ (e :: SomeException) -> qPutStrLn ("runSetupDebianize failed with '" ++ show e ++ "', running debianize directly.") >> Cabal.debianize flags)
