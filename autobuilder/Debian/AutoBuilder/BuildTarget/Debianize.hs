@@ -8,6 +8,7 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     ) where
 
 import Control.Exception (SomeException)
+import Control.Monad (unless)
 import Control.Monad.CatchIO (MonadCatchIO, bracket, catch)
 import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
@@ -27,7 +28,7 @@ import Distribution.Package (PackageIdentifier(..) {-, PackageName(..)-})
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Prelude hiding (catch)
-import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
+import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, removeFile, doesFileExist)
 import System.FilePath ((</>), takeFileName)
 import System.Posix.Env (setEnv)
 import System.Process (proc)
