@@ -83,9 +83,11 @@ debianize cache pflags currentDirectory =
           do v <- verbosity
              Cabal.putEnvironmentArgs args
              setEnv "VERBOSITY" (show v) True
+             removeFile "debian/compat" `catch` (\ (_ :: IOError) -> return ())
              out <- noisier 2 $ runProcessF (proc "ghc" ["-e", "debianize", "Setup.hs"]) B.empty
              foldFailure (\ n -> error "Setup.debianize failed") out
-             return ()
+             exists <- doesFileExist "debian/compat" `catch` (\ (_ :: IOError) -> return False)
+             unless exists (error "debian/compat was not created")
 
 collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> IO [String]
 collectPackageFlags cache pflags =

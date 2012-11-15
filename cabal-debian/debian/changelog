@@ -1,3 +1,10 @@
+haskell-cabal-debian (2.4.1) unstable; urgency=low
+
+  * We need to verify that debian/compat was created after running the
+    debianize function, because ghc still exits with ExitSuccess
+
+ -- David Fox <dsf@seereason.com>  Thu, 15 Nov 2012 06:34:02 -0800
+
 haskell-cabal-debian (2.4.0) unstable; urgency=low
 
   * You can run a function in Setup.hs other than main using ghc -e, so we
