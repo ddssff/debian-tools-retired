@@ -5,10 +5,10 @@
 -- options.
 
 module Distribution.Debian.Debianize
-    ( debianize
-    , autobuilderDebianize
-    , withEnvironmentArgs
+    ( withEnvironmentArgs
     , withEnvironmentFlags
+    , putEnvironmentArgs
+    , debianize
     ) where
 
 import Codec.Binary.UTF8.String (decodeString)
@@ -45,13 +45,13 @@ import Distribution.License (License(..))
 import Distribution.Package (PackageIdentifier(..), PackageName(..))
 import Distribution.PackageDescription (PackageDescription(..), BuildInfo(buildable), Executable(exeName, buildInfo))
 import Distribution.Simple.Compiler (Compiler(..))
-import qualified Distribution.Simple.LocalBuildInfo as Cabal (LocalBuildInfo(buildDir))
 import Distribution.Text (display)
 import GHC.IO.Exception (IOException(ioe_type), IOErrorType(NoSuchThing))
 import Prelude hiding (catch, writeFile)
 import System.Directory
 import System.Environment
 import System.FilePath ((</>), takeDirectory, splitFileName)
+import System.Posix.Env (setEnv)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 type Debianization = [DebAtom]
@@ -79,27 +79,11 @@ withEnvironmentFlags flags0 f =
     handle :: IOError -> IO (Flags -> Flags)
     handle _ = return id
 
--- | This function can be called from the postConf of a package's
--- Setup.hs file.  It parses the CABALDEBIAN environment variable and
--- applies the arguments it finds to the flags argument to produce a
--- new flags value.  This is then used to do the debianization.
-autobuilderDebianize :: Cabal.LocalBuildInfo -> Flags -> IO ()
-autobuilderDebianize lbi flags =
-  withEnvironmentFlags flags $ \ flags' ->
-  case Cabal.buildDir lbi of
-    -- The autobuilder calls setup with --builddir=debian, so this
-    -- case actually does the debianization.  We want the
-    -- debianization to work later when dpkg-buildpackage runs it, so
-    -- change the build directory parameter accordingly.
-    "debian/build" -> debianize (flags' {buildDir = "dist-ghc/build"})
-    -- During dpkg-buildpackage Setup is run by haskell-devscripts,
-    -- but we don't want to change things at that time or the build
-    -- will fail.  So this just makes sure things are already properly
-    -- debianized.
-    "dist-ghc/build" -> debianize (flags' {validate = True, buildDir = Cabal.buildDir lbi})
-    -- This is what happens when you run Setup configure by hand.  It
-    -- just prints the changes debianization would make.
-    _ -> debianize (flags' {dryRun = True, buildDir = Cabal.buildDir lbi})
+-- | Insert a value for CABALDEBIAN into the environment that the
+-- withEnvironment* functions above will find and use.  E.g.
+-- putEnvironmentFlags ["--dry-run", "--validate"] (debianize defaultFlags)
+putEnvironmentArgs :: [String] -> IO ()
+putEnvironmentArgs flags = setEnv "CABALDEBIAN" (show flags) True
 
 -- | Generate a debianization for the cabal package in the current
 -- directory using information from the .cabal file and from the
@@ -108,7 +92,8 @@ autobuilderDebianize lbi flags =
 -- and any entries already there that look older than the new one are
 -- preserved.
 debianize :: Flags -> IO ()
-debianize flags =
+debianize flags0 =
+    withEnvironmentFlags flags0 $ \ flags ->
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
       old <- readDebianization
       let flags' = flags {buildDeps = buildDeps flags ++ if selfDepend flags then ["libghc-cabal-debian-dev"] else []}
@@ -147,7 +132,6 @@ prepareAtom flags (DHFile b path s) =
     do let s' = fromString s
            (destDir, destName) = splitFileName path
            tmpDir = buildDir flags </> "install" </> show (md5 s')
-       putStrLn ("tmpDir=" ++ tmpDir)
        createDirectoryIfMissing True tmpDir
        writeFile (tmpDir </> destName) s'
        return [DHInstall b (tmpDir </> destName) destDir]

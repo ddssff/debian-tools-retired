@@ -6,31 +6,29 @@
 -- 
 -- QUICK START: You can either call the cabal-debian executable, which
 -- is how the autobuilder debianizes library packages, or you can
--- modify a package's Setup.hs file to call autobuilderDebianize for
--- more sophisticated debianization.  This normally looks like a call
--- to autobuilderDebianize:
+-- add a function named debianize to your package's Setup.hs file.  This
+-- function should construct a 'Flags' record and call 'Distribution.Debian.debianize'
 -- 
--- > import Distribution.Debian (Flags(..), defaultFlags, autobuilderDebianize,
--- >                             Executable(..), Server(..), Site(..))
--- > 
--- > main = defaultMainWithHooks simpleUserHooks
--- >          { postConf = \ _ _ _ lbi -> autobuilderDebianize lbi defaultFlags }
+-- > import qualified Distribution.Debian as Cabal
+-- > debianize = Cabal.debianize (Cabal.defaultFlags)
 -- 
 -- To see what your debianization would produce, or how it differs
 -- from the debianization already present:
 -- 
--- > runhaskell Setup configure
+-- > ghc Setup.hs -e 'Cabal.putEnvironmentArgs ["--dry-run"] >> debianize'
 -- 
 -- To actually create the files, and then build:
 -- 
--- > runhaskell Setup configure --builddir=debian
+-- > ghc Setup.hs -e 'debianize'
 -- > sudo dpkg-buildpackage
 -- 
--- At this point you may need to modify defaultFlags to achieve
+-- At this point you may need to modify Cabal.defaultFlags to achieve
 -- specific packaging goals.
 module Distribution.Debian
     ( debianize
-    , autobuilderDebianize
+    , withEnvironmentArgs
+    , withEnvironmentFlags
+    , putEnvironmentArgs
     , substvars
     , Flags(..)
     , DebAction(..)
@@ -42,7 +40,7 @@ module Distribution.Debian
     ) where
 
 import Distribution.Debian.DebHelper (DebAtom(..))
-import Distribution.Debian.Debianize (debianize, autobuilderDebianize)
+import Distribution.Debian.Debianize (debianize, withEnvironmentArgs, withEnvironmentFlags, putEnvironmentArgs)
 import Distribution.Debian.Config (Flags(..), DebAction(..), defaultFlags)
 import Distribution.Debian.Options (compileArgs)
 import Distribution.Debian.PackageInfo (DebType)

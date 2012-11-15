@@ -1,3 +1,12 @@
+haskell-cabal-debian (2.4.0) unstable; urgency=low
+
+  * You can run a function in Setup.hs other than main using ghc -e, so we
+    will use this trick to run the debianize function directly rather than
+    running main.
+  * Eliminate the autobuilderDebianize function.
+
+ -- David Fox <dsf@seereason.com>  Thu, 15 Nov 2012 04:05:49 -0800
+
 haskell-cabal-debian (2.3.4) unstable; urgency=low
 
   * Fix the builddir used when running the cabal-debian standalone

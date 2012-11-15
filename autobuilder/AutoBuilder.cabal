@@ -46,7 +46,7 @@ Library
       , bytestring
       , bzlib
       , Cabal
-      , cabal-debian >= 2.0.8
+      , cabal-debian >= 2.4.0
       , containers
       , directory
       , Extra

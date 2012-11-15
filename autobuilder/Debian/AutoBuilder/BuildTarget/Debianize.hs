@@ -7,7 +7,7 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
-import Control.Applicative ((<$>))
+import Control.Exception (SomeException)
 import Control.Monad.CatchIO (MonadCatchIO, bracket, catch)
 import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
@@ -21,17 +21,17 @@ import Debian.Relation (PkgName(unPkgName), BinPkgName(unBinPkgName))
 import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
 import qualified Distribution.Debian as Cabal
-import qualified Distribution.Debian.Options as Cabal
+import qualified Distribution.Debian.Debianize as Cabal
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..) {-, PackageName(..)-})
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Prelude hiding (catch)
-import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, removeFile, doesFileExist)
-import System.Environment (getEnvironment)
+import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>), takeFileName)
-import System.Process (proc, CreateProcess(env))
-import System.Process.Progress (qPutStrLn, runProcessF, verbosity, noisier)
+import System.Posix.Env (setEnv)
+import System.Process (proc)
+import System.Process.Progress (qPutStrLn, runProcessF, verbosity, noisier, foldFailure)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
@@ -64,34 +64,28 @@ prepare cache package' cabal =
 withCurrentDirectory :: MonadCatchIO m => FilePath -> m a -> m a
 withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old -> liftIO (setCurrentDirectory new) >> return old) (liftIO . setCurrentDirectory) (\ _ -> action)
 
--- | Run cabal-debian on the given directory, creating a debian subdirectory.
+-- | Run cabal-debian on the given directory, creating or updating the
+-- debian subdirectory.
 debianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
 debianize cache pflags currentDirectory =
-    do args <- liftIO $ collectPackageFlags cache pflags
-       let flags = Cabal.compileArgs args Cabal.defaultFlags
-           -- Because this is the autobuilder, the cabal-debian code will run from
-           -- inside of dpkg-buildpackage, so we can hard code this build directory.
-           flags' = flags {Cabal.buildDir = "dist-ghc"}
-       withCurrentDirectory currentDirectory $
-         liftIO (runSetupConfigure args) >>= \ done ->
-         if done then qPutStrLn "Setup configure succeeded in creating a debianization!" else Cabal.debianize flags'
-    -- Running Setup configure didn't produce a debianization, call
-         -- the debianize function instead.
-
+    withCurrentDirectory currentDirectory $
+    do args <- collectPackageFlags cache pflags
+       -- Set the build directory to indicate that we are running from inside dpkg-buildpackage.
+       let flags = (Cabal.compileArgs args Cabal.defaultFlags) {Cabal.buildDir = "dist-ghc"}
+       -- First try to run the customized debianize function in
+       -- Setup.hs, then run debianize directly.
+       runSetupDebianize args `catch` (\ (e :: SomeException) -> qPutStrLn ("runSetupDebianize failed with '" ++ show e ++ "', running debianize directly.") >> Cabal.debianize flags)
     where
       -- Try running Setup configure --builddir=debian to see if there
       -- is code in the Setup file to create a debianization.
-      runSetupConfigure :: [String] -> IO Bool
-      runSetupConfigure args =
-          do removeFile "debian/compat" `catch` (\ (_ :: IOError) -> return ())
-             -- Stash the flags from the package's autobuilder
-             -- configuration in CABALDEBIAN, they may get picked up
-             -- by the code in Setup.hs
-             oldEnv <- filter (not . (== "CABALDEBIAN") . fst) <$> getEnvironment
-             v <- verbosity
-             let newEnv = ("CABALDEBIAN", show args) : ("VERBOSITY", show v) : oldEnv
-             _ <- noisier 2 $ runProcessF ((proc "runhaskell" ["Setup", "configure", "--builddir=debian"]) {env = Just newEnv}) B.empty
-             doesFileExist "debian/compat" `catch` (\ (_ :: IOError) -> return False)
+      runSetupDebianize :: [String] -> IO ()
+      runSetupDebianize args =
+          do v <- verbosity
+             Cabal.putEnvironmentArgs args
+             setEnv "VERBOSITY" (show v) True
+             out <- noisier 2 $ runProcessF (proc "ghc" ["-e", "debianize", "Setup.hs"]) B.empty
+             foldFailure (\ n -> error "Setup.debianize failed") out
+             return ()
 
 collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> IO [String]
 collectPackageFlags cache pflags =
