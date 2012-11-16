@@ -3,6 +3,8 @@
 {-# OPTIONS_GHC -Wall #-}
 module Distribution.Debian.Server
        ( Executable(..)
+       , script
+       , cabal
        , Server(..)
        , Site(..)
        , execAtoms
@@ -20,7 +22,7 @@ module Distribution.Debian.Server
 import Data.Maybe (isJust, fromMaybe)
 import Debian.Relation (BinPkgName(BinPkgName), PkgName(PkgName))
 import Distribution.Debian.DebHelper (DebAtom(..))
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeFileName, takeDirectory)
 import System.Process (showCommandForUser)
 
 -- | Return a list of files to add to the debianization to manage the
@@ -36,7 +38,11 @@ execAtoms e@(Executable {}) =
                 apacheSite b e server))
           (execServer e)
     where
-      a = maybe (DHInstallCabalExec b (execName e)) (DHInstall b) (sourceDir e) $ d
+      a = case (sourceDir e, execName e == destName e) of
+            (Nothing, True) -> DHInstallCabalExec b (execName e) d
+            (Just s, True) -> DHInstall b s d
+            (Nothing, False) -> DHInstallCabalExecTo b (execName e) (d </> destName e)
+            (Just s, False) -> DHInstallTo b s (d </> destName e)
       d = fromMaybe "usr/bin" (destDir e)
       b = BinPkgName (PkgName (debName e))
 
@@ -52,9 +58,28 @@ data Executable
       { execName :: String -- ^ The name of the executable file
       , sourceDir :: Maybe FilePath -- ^ where to find it, default is dist/build/<execName>/
       , destDir :: Maybe FilePath -- ^ where to put it, default is usr/bin/<execName>
+      , destName :: String  -- ^ name to give installed executable
       , execServer :: Maybe Server -- ^ Information about servers - hostname, port, start and stop info, etc.
       , debName :: String -- ^ Name of the debian binary package
       } deriving (Eq, Show)
+
+cabal :: String -> Executable
+cabal name =
+    Executable { execName = name
+               , sourceDir = Nothing
+               , destDir = Nothing
+               , destName = name
+               , execServer = Nothing
+               , debName = name }
+
+script :: FilePath -> Executable
+script path =
+    Executable { execName = takeFileName path
+               , sourceDir = Just (takeDirectory path)
+               , destDir = Nothing
+               , destName = takeFileName path
+               , execServer = Nothing
+               , debName = takeFileName path }
 
 -- | Information about the web site we are packaging.
 data Server
@@ -140,14 +165,14 @@ debianInit b e spec@(Server{..}) =
              , ""
              , "case \"$1\" in"
              , "  start)"
-             , "    test -x /usr/bin/" ++ execName e ++ " || exit 0"
-             , "    log_begin_msg \"Starting " ++ execName e ++ "...\""
+             , "    test -x /usr/bin/" ++ destName e ++ " || exit 0"
+             , "    log_begin_msg \"Starting " ++ destName e ++ "...\""
              , "    mkdir -p " ++ databaseDirectory e
              , "    " ++ startCommand
              , "    log_end_msg $?"
              , "    ;;"
              , "  stop)"
-             , "    log_begin_msg \"Stopping " ++ execName e ++ "...\""
+             , "    log_begin_msg \"Stopping " ++ destName e ++ "...\""
              , "    " ++ stopCommand
              , "    log_end_msg $?"
              , "    ;;"
@@ -161,8 +186,8 @@ debianInit b e spec@(Server{..}) =
   where
     startCommand = showCommandForUser "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
     stopCommand = showCommandForUser "start-stop-daemon" (stopOptions ++ commonOptions)
-    commonOptions = ["--pidfile", "/var/run/" ++ execName e]
-    startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory e, "--exec", "/usr/bin" </> execName e]
+    commonOptions = ["--pidfile", "/var/run/" ++ destName e]
+    startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory e, "--exec", "/usr/bin" </> destName e]
     stopOptions = ["--stop", "--oknodo"] ++ if retry /= "" then ["--retry=" ++ retry] else []
     serverOptions = baseURI ++ ["--http-port", show port] ++ flags
     -- According to the happstack-server documentation this needs a trailing slash.

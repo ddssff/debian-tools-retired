@@ -57,6 +57,7 @@ options =
                                                   let (sd, name) = splitFileName sp in
                                                   x { executablePackages =
                                                           Executable { execName = name
+                                                                     , destName = name
                                                                      , sourceDir = case sd of "./" -> Nothing; _ -> Just sd
                                                                      , destDir = case md of (':' : dd) -> Just dd; _ -> Nothing
                                                                      , execServer = Nothing

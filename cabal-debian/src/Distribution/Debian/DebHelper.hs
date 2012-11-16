@@ -36,8 +36,10 @@ data DebAtom
     | DebSourceFormat String                      -- ^ Write debian/source/format
     | DebWatch String                             -- ^ Write debian/watch
     | DHInstall BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package
+    | DHInstallTo BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package at an exact location
     | DHFile BinPkgName FilePath String           -- ^ Create a file with the given text at the given path
     | DHInstallCabalExec BinPkgName String FilePath -- ^ Install a cabal executable into the binary package
+    | DHInstallCabalExecTo BinPkgName String FilePath -- ^ Install a cabal executable into the binary package at an exact location
     | DHInstallDir BinPkgName FilePath            -- ^ Create a directory in the binary package
     | DHInstallInit BinPkgName String             -- ^ Add an init.d file to the binary package
     | DHInstallLogrotate BinPkgName String        -- ^ Add a logrotate file to the binary package
@@ -75,8 +77,8 @@ controlFile xs =
       f (DebControl x) = Just x
       f _ = Nothing
 
-rules :: [DebAtom] -> [String]
-rules xs =
+rules :: FilePath -> [DebAtom] -> [String]
+rules build xs =
     mapMaybe f xs ++ mapMaybe g xs
     where
       f :: DebAtom -> Maybe String
@@ -84,6 +86,12 @@ rules xs =
       f _ = Nothing
       g :: DebAtom -> Maybe String
       g (DebRules x) = Just x
+      g (DHInstallTo p s d) =
+          Just (unlines [ "binary-fixup" </> show (pretty p) ++ "::"
+                        , "\tinstall -Dp " ++ s ++ " " ++ d ])
+      g (DHInstallCabalExecTo p n d) =
+          Just (unlines [ "binary-fixup" </> show (pretty p) ++ "::"
+                        , "\tinstall -Dp " ++ build </> n </> n ++ " " ++ d ])
       g _ = Nothing
 
 compat :: [DebAtom] -> Int
@@ -220,7 +228,7 @@ toFiles build d =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
       [("debian/control", show (pretty (controlFile d))),
        ("debian/changelog", concatMap (show . prettyEntry) (changeLog d)),
-       ("debian/rules", unlines (rules d)),
+       ("debian/rules", unlines (rules build d)),
        ("debian/compat", show (compat d) ++ "\n"),
        ("debian/copyright", copyright d),
        ("debian/source/format", sourceFormat d),
