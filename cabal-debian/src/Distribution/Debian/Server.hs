@@ -38,7 +38,7 @@ execAtoms e@(Executable {}) =
     where
       a = maybe (DHInstallCabalExec b (execName e)) (DHInstall b) (sourceDir e) $ d
       d = fromMaybe "usr/bin" (destDir e)
-      b = BinPkgName (PkgName (execName e))
+      b = BinPkgName (PkgName (debName e))
 
 -- | Does this package require an apache site file?
 needsApacheSite :: Server -> Bool
@@ -53,6 +53,7 @@ data Executable
       , sourceDir :: Maybe FilePath -- ^ where to find it, default is dist/build/<execName>/<execName>
       , destDir :: Maybe FilePath -- ^ where to put it, default is usr/bin/<execName>
       , execServer :: Maybe Server -- ^ Information about servers - hostname, port, start and stop info, etc.
+      , debName :: String -- ^ Name of the debian binary package
       } deriving (Eq, Show)
 
 -- | Information about the web site we are packaging.
@@ -80,15 +81,15 @@ data Site
 
 
 serviceName :: Executable -> String
-serviceName = execName -- dh_installinit forces the service name to equal the binary package name
+serviceName = debName -- dh_installinit forces the service name to equal the binary package name
 databaseDirectory :: Executable -> String
-databaseDirectory x = "/srv" </> execName x
+databaseDirectory x = "/srv" </> debName x
 apacheSiteName :: Site -> String
 apacheSiteName spec = domain spec
 apacheLogDirectory :: Executable -> String
-apacheLogDirectory x =  "/var/log/apache2/" ++ execName x
+apacheLogDirectory x =  "/var/log/apache2/" ++ debName x
 serverLogDirectory :: Executable -> String
-serverLogDirectory x = "/var/log/" ++ execName x
+serverLogDirectory x = "/var/log/" ++ debName x
 apacheErrorLog :: Executable -> String
 apacheErrorLog exec = apacheLogDirectory exec </> "error.log"
 apacheAccessLog :: Executable -> String

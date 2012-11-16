@@ -60,7 +60,8 @@ options =
                                                           Executable { execName = name
                                                                      , sourceDir = case sd of "./" -> Nothing; _ -> Just sd
                                                                      , destDir = case md of (':' : dd) -> Just dd; _ -> Nothing
-                                                                     , execServer = Nothing } : executablePackages x }) "SOURCEPATH or SOURCEPATH:DESTDIR")
+                                                                     , execServer = Nothing
+                                                                     , debName = name } : executablePackages x }) "SOURCEPATH or SOURCEPATH:DESTDIR")
              "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
       Option "" ["ghc"] (NoArg (\x -> x { compilerFlavor = GHC }))
              "Compile with GHC",
