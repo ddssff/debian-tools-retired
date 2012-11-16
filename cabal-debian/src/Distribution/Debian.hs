@@ -9,21 +9,27 @@
 -- add a function named debianize to your package's Setup.hs file.  This
 -- function should construct a 'Flags' record and call 'Distribution.Debian.debianize'
 -- 
--- > import qualified Distribution.Debian as Cabal
--- > debianize = Cabal.debianize (Cabal.defaultFlags)
--- 
 -- To see what your debianization would produce, or how it differs
 -- from the debianization already present:
 -- 
--- > ghc Setup.hs -e 'Cabal.putEnvironmentArgs ["--dry-run"] >> debianize'
+-- > % ghci
+-- > > :m +Distribution.Debian
+-- > > :m +Posix.System.Env
+-- > > setEnv "CABALDEBIAN" (show ["-n"]) True >> debianize defaultFlags
 -- 
--- To actually create the files, and then build:
+-- To actually create or update the debianization
 -- 
--- > ghc Setup.hs -e 'debianize'
--- > sudo dpkg-buildpackage
+-- > > unsetEnv "CABALDEBIAN" >> debianize defaultFlags
+-- > > :quit
+-- > % sudo dpkg-buildpackage
 -- 
 -- At this point you may need to modify Cabal.defaultFlags to achieve
--- specific packaging goals.
+-- specific packaging goals.  Create a module for this in debian/Debianize.hs:
+-- 
+-- > import Distribution.Debian (Flags(..), defaultFlags)
+-- > main = debianize (defaultFlags { selfDepend = True -- Add a build dependency on libghc-cabal-debian-dev to the debianization
+-- >                                , extraDevDeps = "haskell-hsx-utils" : extraDevDeps defaultFlags})
+-- 
 module Distribution.Debian
     ( debianize
     , withEnvironmentArgs

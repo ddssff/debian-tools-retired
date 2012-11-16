@@ -56,7 +56,7 @@ import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>), takeDirectory, splitFileName)
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Env (setEnv)
-import System.Process (proc, readProcessWithExitCode)
+import System.Process (readProcessWithExitCode)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 type Debianization = [DebAtom]
@@ -90,6 +90,7 @@ withEnvironmentFlags flags0 f =
 putEnvironmentArgs :: [String] -> IO ()
 putEnvironmentArgs flags = setEnv "CABALDEBIAN" (show flags) True
 
+ePutStrLn :: String -> IO ()
 ePutStrLn = hPutStrLn stderr
 
 -- | Try to run the custom script in debian/Debianize.hs.
@@ -107,7 +108,7 @@ runDebianize args =
     where
       run =
           do putEnvironmentArgs args
-             (code, out, err) <- readProcessWithExitCode "runhaskell" ("debian/Debianize.hs" : args) ""
+             (code, _out, _err) <- readProcessWithExitCode "runhaskell" ("debian/Debianize.hs" : args) ""
              return (code == ExitSuccess)
        -- foldFailure (\ n -> error "Setup.debianize failed") out
        -- exists <- doesFileExist "debian/compat" `catch` (\ (_ :: IOError) -> return False)
@@ -160,7 +161,7 @@ debianize flags0 =
 -- debianization, and they need to go somewhere they won't be removed
 -- by dh_clean.
 prepareAtom :: Flags -> DebAtom -> IO [DebAtom]
-prepareAtom flags (DHFile b path s) =
+prepareAtom _flags (DHFile b path s) =
     do let s' = fromString s
            (destDir, destName) = splitFileName path
            tmpDir = "debian/cabalInstall" </> show (md5 s')

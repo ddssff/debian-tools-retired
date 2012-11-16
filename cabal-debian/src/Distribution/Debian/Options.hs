@@ -50,7 +50,6 @@ parseArgs args = do
     where opts = compileArgs args defaultFlags
 
 options :: [OptDescr (Flags -> Flags)]
-
 options =
     [ Option "" ["executable"] (ReqArg (\ path x ->
                                             case span (/= ':') path of

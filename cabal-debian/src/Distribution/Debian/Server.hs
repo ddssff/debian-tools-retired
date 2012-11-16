@@ -50,7 +50,7 @@ needsInit _ = True
 data Executable
     = Executable
       { execName :: String -- ^ The name of the executable file
-      , sourceDir :: Maybe FilePath -- ^ where to find it, default is dist/build/<execName>/<execName>
+      , sourceDir :: Maybe FilePath -- ^ where to find it, default is dist/build/<execName>/
       , destDir :: Maybe FilePath -- ^ where to put it, default is usr/bin/<execName>
       , execServer :: Maybe Server -- ^ Information about servers - hostname, port, start and stop info, etc.
       , debName :: String -- ^ Name of the debian binary package
