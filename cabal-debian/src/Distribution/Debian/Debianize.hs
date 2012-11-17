@@ -481,8 +481,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
              Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (D.BinPkgName (D.PkgName (debName p))) (binaryPackageDeps flags)))),
              Field ("Description", " " ++ maybe debianDescription (const executableDescription) (library pkgDesc))] ++
             conflicts (filterMissing (missingDependencies' flags) (extraDeps (b p) (binaryPackageConflicts flags)))),
-           [DHInstallCabalExec (b p) (execName p) ("usr/bin"),
-            DebRules ("build" </> debName p ++ ":: build-ghc-stamp")])
+           [DebRules ("build" </> debName p ++ ":: build-ghc-stamp")])
       b p = D.BinPkgName (D.PkgName (debName p))
       executableDescription = " " ++ "An executable built from the " ++ display (pkgName (package pkgDesc)) ++ " package."
       makeUtilsPackage =
