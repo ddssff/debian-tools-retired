@@ -26,7 +26,7 @@ import Debian.Changes (logVersion)
 import Debian.Control (lookupP, unControl, stripWS)
 import qualified Debian.Control.String as S
 import qualified Debian.GenBuildDeps as G
-import Debian.Relation (Relation(Rel), BinPkgName(..), PkgName(..))
+import Debian.Relation (Relation(Rel), BinPkgName(..))
 import Debian.Repo.Repository (readPkgVersion, showPkgVersion)
 import Debian.Repo.SourceTree (DebianSourceTreeC(entry), SourcePackageStatus(..))
 import Debian.Repo.Types (SourcePackage(sourceParagraph, sourcePackageID), PkgVersion(PkgVersion, getName, getVersion), BinaryPackage(packageID), PackageID(packageVersion), binaryPackageName, prettyPkgVersion)
@@ -117,8 +117,8 @@ dependencyChanges old new =
       changedDeps = Set.toList (Set.difference (Set.fromList (deps new)) (Set.fromList (deps new)))
       showDepChange newDep =
           case filter (hasName (getName newDep)) (deps old) of
-            [] -> [" " ++ unPkgName (unBinPkgName (getName newDep)) ++ ": ", "(none)", " -> ", show (prettyDebianVersion (getVersion newDep))]
-            (oldDep : _) -> [" " ++ unPkgName (unBinPkgName (getName newDep)) ++ ": ", show (prettyDebianVersion (getVersion oldDep)), " -> ", show (prettyDebianVersion (getVersion newDep))]
+            [] -> [" " ++ unBinPkgName (getName newDep) ++ ": ", "(none)", " -> ", show (prettyDebianVersion (getVersion newDep))]
+            (oldDep : _) -> [" " ++ unBinPkgName (getName newDep) ++ ": ", show (prettyDebianVersion (getVersion oldDep)), " -> ", show (prettyDebianVersion (getVersion newDep))]
       hasName name = ((== name) . getName)
       prefix = "\n    "
       deps (Fingerprint _ _ x _) = x

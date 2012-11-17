@@ -34,10 +34,10 @@ Library
     if flag(local-debian)
       Hs-Source-Dirs: ., ../../haskell-debian, ../debian-repo
     else
-      Build-Depends: debian >= 3.65
+      Build-Depends: debian >= 3.67
       Hs-Source-Dirs: ., ../debian-repo
   else
-    Build-Depends: debian-repo >= 5.32, debian >= 3.65
+    Build-Depends: debian-repo >= 5.32, debian >= 3.67
 
   Build-Depends:
         ansi-wl-pprint
@@ -73,6 +73,7 @@ Library
       , time
       , unix
       , Unixutils >= 1.51
+      , utf8-string
       , xhtml
       , zlib
   GHC-Options: -O2 -threaded -Wall -Wwarn -fno-warn-missing-signatures -fno-warn-name-shadowing -fno-warn-type-defaults

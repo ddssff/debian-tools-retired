@@ -30,7 +30,7 @@ import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Changes (logVersion, ChangeLogEntry(..))
 import Debian.Control (Control, Control'(Control), fieldValue,  Paragraph'(Paragraph), Field'(Comment), parseControlFromFile)
 import qualified Debian.GenBuildDeps as G
-import Debian.Relation (SrcPkgName(..), BinPkgName(..), PkgName(..))
+import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
 import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.SourceTree (DebianBuildTree(..), control, entry, subdir, debdir, findDebianBuildTrees, findDebianBuildTree, copyDebianBuildTree,
@@ -93,8 +93,8 @@ asBuildable download =
 -- its build dependencies.\"
 relaxDepends :: C.CacheRec -> Buildable -> G.OldRelaxInfo
 relaxDepends cache@(C.CacheRec {C.packages = s}) tgt =
-    G.RelaxInfo $ map (\ target -> (BinPkgName (PkgName target), Nothing)) (globalRelaxInfo (C.params cache)) ++
-                  foldPackages (\ _ _spec flags xs -> xs ++ map (\ binPkg -> (BinPkgName (PkgName binPkg), Just (srcPkgName tgt))) (P.relaxInfo flags)) s []
+    G.RelaxInfo $ map (\ target -> (BinPkgName target, Nothing)) (globalRelaxInfo (C.params cache)) ++
+                  foldPackages (\ _ _spec flags xs -> xs ++ map (\ binPkg -> (BinPkgName binPkg, Just (srcPkgName tgt))) (P.relaxInfo flags)) s []
 
 _makeRelaxInfo :: G.OldRelaxInfo -> G.RelaxInfo
 _makeRelaxInfo (G.RelaxInfo xs) srcPkgName binPkgName =
@@ -213,7 +213,7 @@ debianSourcePackageName :: Target -> SrcPkgName
 debianSourcePackageName target =
     case removeCommentParagraphs (targetControl target) of
       (Control (paragraph : _)) ->
-          maybe (error "Missing Source field") (SrcPkgName . PkgName) $ fieldValue "Source" paragraph
+          maybe (error "Missing Source field") SrcPkgName $ fieldValue "Source" paragraph
       _ -> error "Target control information missing"
 
 -- | The /Source:/ attribute of debian\/control.
@@ -221,7 +221,7 @@ srcPkgName :: Buildable -> SrcPkgName
 srcPkgName tgt =
     case removeCommentParagraphs (control' (debianSourceTree tgt)) of
       (Control (paragraph : _)) ->
-          maybe (error "Missing Source field") (SrcPkgName . PkgName) $ fieldValue "Source" paragraph
+          maybe (error "Missing Source field") SrcPkgName $ fieldValue "Source" paragraph
       _ -> error "Buildable control information missing"
 
 {-

@@ -40,7 +40,7 @@ import Debian.Changes (prettyChanges, ChangesFile(changeRelease, changeInfo, cha
 import Debian.Control
 -- import Debian.Control
 import qualified Debian.GenBuildDeps as G
-import Debian.Relation (BinPkgName(..), SrcPkgName(..), PkgName(..), prettyRelation, prettyBinPkgName)
+import Debian.Relation (BinPkgName(..), SrcPkgName(..), PkgName(..), prettyRelation, prettyPkgName)
 import Debian.Relation.ByteString(Relations, Relation(..))
 import Debian.Release (Arch, releaseName')
 import Debian.Repo.Monads.Apt (MonadApt)
@@ -86,7 +86,7 @@ instance Ord Target where
     compare = compare `on` debianSourcePackageName
 
 prettySimpleRelation :: Maybe PkgVersion -> Doc
-prettySimpleRelation rel = maybe (text "Nothing") (\ v -> prettyBinPkgName (getName v) <> text "=" <> prettyDebianVersion (getVersion v)) rel
+prettySimpleRelation rel = maybe (text "Nothing") (\ v -> prettyPkgName (getName v) <> text "=" <> prettyDebianVersion (getVersion v)) rel
 
 -- |Generate the details section of the package's new changelog entry
 -- based on the target type and version info.  This includes the
@@ -298,7 +298,7 @@ cycleMessage cache arcs =
           let rels = targetRelaxed (relaxDepends cache (tgt pkg)) pkg in
           [(show (intersect (binaryNames pkg dep) (binaryNamesOfRelations rels))), targetName dep, " -> ", targetName pkg]
       relaxLine :: (BinPkgName, SrcPkgName) -> String
-      relaxLine (bin, src) = "Relax-Depends: " ++ unPkgName (unBinPkgName bin) ++ " " ++ unPkgName (unSrcPkgName src)
+      relaxLine (bin, src) = "Relax-Depends: " ++ unBinPkgName bin ++ " " ++ unSrcPkgName src
       pairs :: (Target, Target) -> [(BinPkgName, SrcPkgName)]
       pairs (pkg, dep) =
           map (\ bin -> (bin, G.sourceName (targetDepends pkg))) binaryDependencies
@@ -337,7 +337,7 @@ buildTarget cache cleanOS globalBuildDeps repo poolOS target =
       -- build dependencies
       let debianControl = targetControl target
       arch <- liftIO $ buildArchOfEnv (rootDir cleanOS)
-      let solns = buildDepSolutions' arch (map (BinPkgName . PkgName) (P.preferred (P.params cache))) cleanOS globalBuildDeps debianControl
+      let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) cleanOS globalBuildDeps debianControl
       case solns of
         Failure excuses -> qError $ intercalate "\n  " ("Couldn't satisfy build dependencies" : excuses)
         Success [] -> qError "Internal error 4"
@@ -545,7 +545,7 @@ getReleaseControlInfo cleanOS target =
                     "  Available Binary Packages of Source Package:"] ++
                    map (("   " ++) . show) (zip (map (second prettyDebianVersion . sourcePackageVersion) sourcePackages) (map (availableDebNames binaryPackages) sourcePackages)))
       missingMessage Complete = []
-      missingMessage (Missing missing) = ["  Missing Binary Package Names: "] ++ map (\ p -> "   " ++ unPkgName (unBinPkgName p)) missing
+      missingMessage (Missing missing) = ["  Missing Binary Package Names: "] ++ map (\ p -> "   " ++ unBinPkgName p) missing
       sourcePackagesWithBinaryNames = zip sourcePackages (map sourcePackageBinaryNames sourcePackages)
       binaryPackages = Debian.Repo.Cache.binaryPackages cleanOS (nub . concat . map sourcePackageBinaryNames $ sourcePackages)
       sourcePackages = sortBy compareVersion . Debian.Repo.Cache.sourcePackages cleanOS $ [packageName]
@@ -555,7 +555,7 @@ getReleaseControlInfo cleanOS target =
             _ -> error "Missing Package or Version field"
       binaryPackageVersion package =
           case ((fieldValue "Package" . packageInfo $ package), (fieldValue "Version" . packageInfo $ package)) of
-            (Just name, Just version) -> (BinPkgName (PkgName (B.unpack name)), parseDebianVersion (B.unpack version))
+            (Just name, Just version) -> (BinPkgName (B.unpack name), parseDebianVersion (B.unpack version))
             _ -> error "Missing Package or Version field"
       compareVersion a b = case ((fieldValue "Version" . sourceParagraph $ a), (fieldValue "Version" . sourceParagraph $ b)) of
                              (Just a', Just b') -> compare (parseDebianVersion . B.unpack $ b') (parseDebianVersion . B.unpack $ a')
@@ -582,7 +582,7 @@ getReleaseControlInfo cleanOS target =
       udebs :: Set.Set BinPkgName
       udebs = foldr collect Set.empty (T.flags (download (tgt target)))
       collect :: P.PackageFlag -> Set.Set BinPkgName -> Set.Set BinPkgName
-      collect (P.UDeb name) udebs = Set.insert (BinPkgName (PkgName name)) udebs
+      collect (P.UDeb name) udebs = Set.insert (BinPkgName name) udebs
       collect _ udebs = udebs
       -- A binary package is available either if it appears in the
       -- package index, or if it is an available udeb.

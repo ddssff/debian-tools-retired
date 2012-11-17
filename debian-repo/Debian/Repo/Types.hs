@@ -334,7 +334,7 @@ instance PackageVersion BinaryPackage where
 -- | The 'PackageID' type fully identifies a package by name, version,
 -- and a 'PackageIndex' which identifies the package's release,
 -- component and architecture.
-data B.PkgName n => PackageID n
+data PackageID n
     = PackageID
       { packageIndex :: PackageIndex
       , packageName :: n

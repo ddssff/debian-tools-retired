@@ -30,7 +30,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Relation (SrcPkgName(..), PkgName(..))
+import Debian.Relation (SrcPkgName(..))
 import Debian.Repo (OSImage, rootPath, rootDir, findSourceTree, copySourceTree, SourceTree(dir'), topdir)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
@@ -42,7 +42,7 @@ retrieve :: MonadDeb m => OSImage -> P.CacheRec -> P.Packages -> m Download
 retrieve buildOS cache target =
     (\ x -> qPutStrLn (" " ++ show (P.spec target)) >> x) $
      case P.spec target of
-      P.Apt dist package -> Apt.prepare cache target dist (SrcPkgName (PkgName package))
+      P.Apt dist package -> Apt.prepare cache target dist (SrcPkgName package)
       P.Bzr string -> Bzr.prepare cache target string
 
       P.Cd dir spec' ->

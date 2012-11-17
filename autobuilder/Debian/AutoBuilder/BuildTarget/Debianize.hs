@@ -16,7 +16,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
-import Debian.Relation (PkgName(unPkgName), BinPkgName(unBinPkgName))
+import Debian.Relation (BinPkgName(unBinPkgName))
 import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
 import qualified Distribution.Debian as Cabal
@@ -83,7 +83,7 @@ collectPackageFlags cache pflags =
       pflag (P.Maintainer s) = ["--maintainer", s]
       pflag (P.ExtraDep s) = ["--build-dep", s]
       pflag (P.ExtraDevDep s) = ["--dev-dep", s]
-      pflag (P.MapDep c d) = ["--map-dep", c ++ "=" ++ unPkgName (unBinPkgName d)]
+      pflag (P.MapDep c d) = ["--map-dep", c ++ "=" ++ unBinPkgName d]
       pflag (P.DebVersion s) = ["--deb-version", s]
       pflag (P.Revision s) = ["--revision", s]
       pflag (P.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]
