@@ -29,7 +29,7 @@ import qualified Data.ByteString.Lazy.Char8 as L ( empty )
 import Data.Data (Data)
 import Data.List ( sortBy, intercalate )
 import Data.Typeable (Typeable)
-import Debian.Relation (SrcPkgName(..), PkgName(..), BinPkgName)
+import Debian.Relation (SrcPkgName(..), BinPkgName)
 import Debian.Release ( ReleaseName(relName), Arch(..), releaseName', sectionName' )
 import Debian.Sources ( SourceType(..), DebSource(..) )
 import Debian.Repo.Monads.Apt (MonadApt)
@@ -69,7 +69,7 @@ distDir :: AptCache c => c -> FilePath
 distDir cache = cacheDistDir (globalCacheDir cache) (aptReleaseName cache)
 
 aptDir :: AptCache c => c -> SrcPkgName -> FilePath
-aptDir cache package = distDir cache ++ "/apt/" ++ unPkgName (unSrcPkgName package)
+aptDir cache package = distDir cache ++ "/apt/" ++ unSrcPkgName package
 
 -- | The path where a text of the SliceList is stored.
 cacheSourcesPath :: FilePath -> ReleaseName -> FilePath

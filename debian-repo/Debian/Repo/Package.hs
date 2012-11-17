@@ -27,7 +27,7 @@ import Debian.Apt.Index ( Compression(..), controlFromIndex )
 import Debian.Control ( Paragraph', ControlFunctions(asString, stripWS), fieldValue, formatParagraph )
 import Debian.Repo.PackageIndex ( packageIndexPath, sourceIndexList, binaryIndexList )
 import qualified Debian.Control.ByteString as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(lookupP), fieldValue )
-import Debian.Relation (BinPkgName(..), PkgName(..))
+import Debian.Relation (BinPkgName(..))
 import qualified Debian.Relation.ByteString as B ( ParseRelations(..), Relations )
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupSourcePackages, insertSourcePackages, lookupBinaryPackages, insertBinaryPackages, readParagraphs)
 import Debian.Release (Arch(..), releaseName', sectionName')
@@ -70,7 +70,7 @@ binaryPackageSourceVersion package =
 -- see also: 'binaryPackageSourceVersion'
 binarySourceVersion :: B.Paragraph -> Maybe ((BinPkgName, DebianVersion), (String, DebianVersion))
 binarySourceVersion paragraph =
-    let mBinaryName = fmap (BinPkgName . PkgName . B.unpack) $ fieldValue "Package" paragraph
+    let mBinaryName = fmap (BinPkgName . B.unpack) $ fieldValue "Package" paragraph
         mBinaryVersion = fmap (parseDebianVersion . B.unpack) $ fieldValue "Version" paragraph
     in
       case (mBinaryName, mBinaryVersion) of
@@ -87,7 +87,7 @@ binarySourceVersion' binaryName binaryVersion paragraph =
             Just [name, _, version] -> Just (name, copyEpoch binaryVersion (parseDebianVersion version))
             _ -> error "internal error"
       Nothing ->
-          Just (asString (unPkgName (unBinPkgName binaryName)), binaryVersion)
+          Just (asString (unBinPkgName binaryName), binaryVersion)
     where
       re = mkRegex "^[ ]*([^ (]*)[ ]*(\\([ ]*([^ )]*)\\))?[ ]*$"
       -- In the Packages file the version number in the Source: field has
@@ -102,7 +102,7 @@ sourcePackageBinaryNames package =
 sourceBinaryNames :: B.Paragraph -> [BinPkgName]
 sourceBinaryNames paragraph = 
     case B.fieldValue "Binary" paragraph of
-      Just names -> map (BinPkgName . PkgName) (splitRegex (mkRegex "[ ,\t\n]+") (B.unpack names))
+      Just names -> map BinPkgName (splitRegex (mkRegex "[ ,\t\n]+") (B.unpack names))
       _ -> error ("Source package info has no 'Binary' field:\n" ++ (B.unpack . formatParagraph $ paragraph))
 
 toSourcePackage :: PackageIndex -> B.Paragraph -> SourcePackage
@@ -181,7 +181,7 @@ tryParseRel _ = []
 -- information, this may specify a version number for the source
 -- package if it differs from the version number of the binary
 -- package.
-binaryPackageSourceID :: BinaryPackage -> PackageID
+binaryPackageSourceID :: BinaryPackage -> PackageID BinPkgName
 binaryPackageSourceID package =
     case maybe Nothing (matchRegex re . B.unpack) (B.fieldValue "Source" (packageInfo package)) of
       Just [name, _, ""] -> makeBinaryPackageID sourceIndex name (packageVersion id)
@@ -193,7 +193,7 @@ binaryPackageSourceID package =
       id = packageID package
       re = mkRegex "^[ ]*([^ (]*)[ ]*(\\([ ]*([^ )]*)\\))?[ ]*$"
 
-sourcePackageBinaryIDs :: Arch -> SourcePackage -> [PackageID]
+sourcePackageBinaryIDs :: Arch -> SourcePackage -> [PackageID BinPkgName]
 sourcePackageBinaryIDs Source _ = error "invalid argument"
 sourcePackageBinaryIDs arch package =
     case (B.fieldValue "Version" info, B.fieldValue "Binary" info) of
@@ -248,7 +248,7 @@ sourcePackagesOfIndex' :: (AptCache a, MonadApt m) => a -> PackageIndex -> m [So
 sourcePackagesOfIndex' cache index =
     do state <- getApt
        let cached = lookupSourcePackages path state
-       status <- liftIO $ getFileStatus path `catch` (\ (e :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory (rootPath (rootDir cache)) ++ " and try again - sorry about that.")
+       status <- liftIO $ getFileStatus path `catch` (\ (_ :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory (rootPath (rootDir cache)) ++ " and try again - sorry about that.")
        case cached of
          Just (status', packages) | status == status' -> return packages
          _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)

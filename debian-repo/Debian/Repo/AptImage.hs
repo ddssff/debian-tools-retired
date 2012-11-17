@@ -145,12 +145,12 @@ aptGetSource dir os package version =
        let version' = maybe newest Just version
        case (version', ready) of
          (Nothing, _) ->
-             fail $ "No available versions of " ++ unPkgName (unSrcPkgName package) ++ " in " ++ rootPath (rootDir os)
+             fail $ "No available versions of " ++ unSrcPkgName package ++ " in " ++ rootPath (rootDir os)
          (Just requested, [tree])
              | requested == (logVersion . entry $ tree) ->
                  return tree
          (Just requested, []) ->
-             do runAptGet os dir "source" [(unSrcPkgName package, Just requested)]
+             do runAptGet os dir "source" [(package, Just requested)]
                 trees <- findDebianBuildTrees dir
                 case trees of
                   [tree] -> return tree
@@ -158,8 +158,8 @@ aptGetSource dir os package version =
          (Just requested, _) ->
              do -- One or more incorrect versions are available, remove them
                 liftIO $ removeRecursiveSafely dir
-                qPutStr $ "Retrieving APT source for " ++ unPkgName (unSrcPkgName package)
-                runAptGet os dir "source" [(unSrcPkgName package, Just requested)]
+                qPutStr $ "Retrieving APT source for " ++ unSrcPkgName package
+                runAptGet os dir "source" [(package, Just requested)]
                 trees <- findDebianBuildTrees dir
                 case trees of
                   [tree] -> return tree
@@ -171,13 +171,13 @@ aptGetSource dir os package version =
 -}
 
 -- | Note that apt-get source works for binary or source package names.
-runAptGet :: (AptCache t) => t -> FilePath -> String -> [(PkgName, Maybe DebianVersion)] -> IO ()
+runAptGet :: (PkgName n, AptCache t) => t -> FilePath -> String -> [(n, Maybe DebianVersion)] -> IO ()
 runAptGet os dir command packages =
     createDirectoryIfMissing True dir >> runProcessF (shell cmd) L.empty >> return ()
     where
       cmd = (intercalate " " ("cd" : dir : "&&" : "apt-get" : aptOpts os : command : map formatPackage packages))
-      formatPackage (name, Nothing) = unPkgName name
-      formatPackage (name, Just version) = unPkgName name ++ "=" ++ show (prettyDebianVersion version)
+      formatPackage (name, Nothing) = show (prettyPkgName name)
+      formatPackage (name, Just version) = show (prettyPkgName name) ++ "=" ++ show (prettyDebianVersion version)
 
 aptOpts :: AptCache t => t -> String
 aptOpts os =

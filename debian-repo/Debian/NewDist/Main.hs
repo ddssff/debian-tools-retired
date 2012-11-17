@@ -11,6 +11,7 @@ import		 Data.Maybe
 import		 Extra.GPGSign
 import		 Extra.Lock
 import           Debian.Changes (ChangesFile(..))
+import           Debian.Relation (BinPkgName)
 import           Debian.Release
 import		 Debian.Version
 import		 System.Console.GetOpt
@@ -312,7 +313,7 @@ deletePackages releases flags keyname =
     do let toRemove = map (parsePackage releases) $ findValues flags "Remove"
        deleteSourcePackages keyname toRemove
     where
-      parsePackage :: [Release] -> String -> PackageID
+      parsePackage :: [Release] -> String -> PackageID BinPkgName
       -- Parse a string in the form <dist>,<packagename>=<versionnumber>
       parsePackage releases s =
           case splitRegex (mkRegex "[,=]") s of

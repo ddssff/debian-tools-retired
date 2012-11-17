@@ -51,7 +51,7 @@ module Debian.Repo.Types
 import qualified Data.ByteString.Char8 as B ( ByteString )
 import qualified Debian.Control.ByteString as B ( Paragraph )
 import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
-import Debian.Relation (BinPkgName(..), SrcPkgName(..), prettyBinPkgName, prettyPkgName)
+import Debian.Relation (BinPkgName(..), SrcPkgName(..), prettyPkgName)
 import Debian.URI ( URI(uriPath), URIString, fileFromURI, parseURI )
 import Debian.Release (Section(..), ReleaseName(..), Arch(..))
 import Debian.Sources ( SliceName(..), DebSource(..) )
@@ -187,7 +187,7 @@ instance PackageVersion PkgVersion where
     pkgVersion = getVersion
 
 prettyPkgVersion :: PkgVersion -> Doc
-prettyPkgVersion v = prettyBinPkgName (getName v) <> text "=" <> prettyDebianVersion (getVersion v)
+prettyPkgVersion v = prettyPkgName (getName v) <> text "=" <> prettyDebianVersion (getVersion v)
 
 -------------------- RELEASE --------------------
 
@@ -319,13 +319,13 @@ data PackageIndex
 type PackageIndexLocal = PackageIndex
 
 prettyBinaryPackage :: BinaryPackage -> Doc
-prettyBinaryPackage p = prettyBinPkgName (pkgName p) <> text "-" <> prettyDebianVersion (pkgVersion p)
+prettyBinaryPackage p = prettyPkgName (pkgName p) <> text "-" <> prettyDebianVersion (pkgVersion p)
 
-makeBinaryPackageID :: PackageIndex -> String -> DebianVersion -> PackageID
-makeBinaryPackageID i n v = PackageID i (B.PkgName n) v
+makeBinaryPackageID :: PackageIndex -> String -> DebianVersion -> PackageID BinPkgName
+makeBinaryPackageID i n v = PackageID i (BinPkgName n) v
 
-makeSourcePackageID :: PackageIndex -> String -> DebianVersion -> PackageID
-makeSourcePackageID i n v = PackageID i (B.PkgName n) v
+makeSourcePackageID :: PackageIndex -> String -> DebianVersion -> PackageID SrcPkgName
+makeSourcePackageID i n v = PackageID i (SrcPkgName n) v
 
 instance PackageVersion BinaryPackage where
     pkgName = binaryPackageName
@@ -334,27 +334,27 @@ instance PackageVersion BinaryPackage where
 -- | The 'PackageID' type fully identifies a package by name, version,
 -- and a 'PackageIndex' which identifies the package's release,
 -- component and architecture.
-data PackageID
+data B.PkgName n => PackageID n
     = PackageID
       { packageIndex :: PackageIndex
-      , packageName :: B.PkgName
+      , packageName :: n
       , packageVersion :: DebianVersion
       } deriving (Eq, Ord)
 
 binaryPackageName :: BinaryPackage -> BinPkgName
-binaryPackageName = BinPkgName . packageName . packageID
+binaryPackageName = packageName . packageID
 
 sourcePackageName :: SourcePackage -> SrcPkgName
-sourcePackageName = SrcPkgName . packageName . sourcePackageID
+sourcePackageName = packageName . sourcePackageID
 
-prettyPackageID :: PackageID -> Doc
+prettyPackageID :: B.PkgName n => PackageID n -> Doc
 prettyPackageID p = prettyPkgName (packageName p) <> text "=" <> prettyDebianVersion (packageVersion p)
 
 -- | The 'BinaryPackage' type adds to the 'PackageID' type the control
 -- information obtained from the package index.
 data BinaryPackage
     = BinaryPackage
-      { packageID :: PackageID
+      { packageID :: PackageID BinPkgName
       , packageInfo :: B.Paragraph
       , pDepends :: B.Relations
       , pPreDepends :: B.Relations
@@ -371,7 +371,7 @@ instance Eq BinaryPackage where
 
 data SourcePackage
     = SourcePackage
-      { sourcePackageID :: PackageID
+      { sourcePackageID :: PackageID SrcPkgName
       , sourceParagraph :: B.Paragraph
       , sourceControl :: SourceControl
       , sourceDirectory :: String

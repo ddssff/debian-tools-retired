@@ -21,7 +21,7 @@ import qualified Data.Set as Set ( member, fromList )
 import Debian.Changes ( ChangesFile(changeDir, changePackage, changeRelease, changeVersion), prettyChangesFile )
 import qualified Debian.Control.ByteString as B ( Paragraph, Control'(Control), ControlFunctions(parseControl), fieldValue )
 import qualified Debian.Control.String as S ( Paragraph', Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
-import Debian.Relation (PkgName(..), BinPkgName(..))
+import Debian.Relation (BinPkgName(..))
 import Debian.Release (Arch(Binary), ReleaseName(..), parseReleaseName, releaseName')
 import Debian.Repo.Changes ( findChangesFiles, key, path )
 import Debian.Repo.LocalRepository ( prepareLocalRepository, makeReleaseInfo )
@@ -318,7 +318,7 @@ showPkgVersion v = show (prettyPkgVersion v)
 
 readPkgVersion :: String -> PkgVersion
 readPkgVersion s = case mapSnd (parseDebianVersion . (drop 1)) (span (/= '=') s) of
-                     (n, v) -> PkgVersion { getName = BinPkgName (PkgName n), getVersion = v }
+                     (n, v) -> PkgVersion { getName = BinPkgName n, getVersion = v }
 
 mapSnd f (a, b) = (a, f b)
 

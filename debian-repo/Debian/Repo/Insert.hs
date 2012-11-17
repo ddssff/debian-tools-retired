@@ -26,7 +26,7 @@ import Debian.Control ( formatControl )
 import qualified Debian.Control.ByteString as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(parseControlFromHandle), Control,
                                                   appendFields, fieldValue, modifyField, raiseFields, renameField )
 import qualified Debian.Control.String as S ( Control'(Control), ControlFunctions(parseControlFromFile) )
-import Debian.Relation (SrcPkgName(unSrcPkgName), PkgName(unPkgName))
+import Debian.Relation (BinPkgName, PkgName(prettyPkgName))
 import Debian.Repo.Changes ( findChangesFiles, poolDir', name, path )
 import Debian.Repo.Monads.Apt (MonadApt)
 import qualified Debian.Repo.Package as DRP ( sourceFilePaths, toBinaryPackage, binaryPackageSourceID, getPackages, releaseSourcePackages, releaseBinaryPackages, putPackages )
@@ -634,17 +634,17 @@ findLive repo@(LocalRepository root (Just layout) _) =
       changesFilePaths root Pool releases package =
           map ((outsidePath root ++ "/installed/") ++) . changesFileNames releases $ package
       changesFileNames releases package = 
-          map (\ arch -> intercalate "_" [unPkgName (unSrcPkgName (sourcePackageName package)),
+          map (\ arch -> intercalate "_" [show (prettyPkgName (sourcePackageName package)),
                                           show . prettyDebianVersion . packageVersion . sourcePackageID $ package,
                                           archName arch] ++ ".changes") (nub (concat (architectures releases)))
       uploadFilePaths root releases package = map ((outsidePath root ++ "/") ++) . uploadFileNames releases $ package
       uploadFileNames releases package =
-          map (\ arch -> intercalate "_" [unPkgName (unSrcPkgName (sourcePackageName package)),
+          map (\ arch -> intercalate "_" [show (prettyPkgName (sourcePackageName package)),
                                           show . prettyDebianVersion . packageVersion . sourcePackageID $ package,
                                           archName arch] ++ ".upload") (nub (concat (architectures releases)))
       architectures releases = map head . group . sort . map releaseArchitectures $ releases
 
-deleteSourcePackages :: Maybe PGPKey -> [PackageIDLocal] -> IO [Release]
+deleteSourcePackages :: Maybe PGPKey -> [PackageIDLocal BinPkgName] -> IO [Release]
 deleteSourcePackages keyname packages =
     if Set.null invalid
     then qPutStrLn (unlines ("Removing packages:" : map (show . F.pretty) packages)) >>
@@ -680,7 +680,7 @@ deleteSourcePackages keyname packages =
                 let text = L.fromChunks (formatControl (B.Control (map packageInfo packages))) in
                 liftIO $ writeAndZipFileWithBackup (outsidePath root </> packageIndexPath index) text
 
-instance F.Pretty PackageID where
+instance PkgName name => F.Pretty (PackageID name) where
     pretty p = prettyPackageID p -- packageName p ++ "=" ++ show (prettyDebianVersion (packageVersion p))
 
 instance F.Pretty PackageIndex where
