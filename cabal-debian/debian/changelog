@@ -1,3 +1,11 @@
+haskell-cabal-debian (2.5.3) unstable; urgency=low
+
+  * Remove extra copy of binary from the executable debs
+  * Add a sourcePackageName field to Flags, and a --source-package-name
+    command line option.
+
+ -- David Fox <dsf@seereason.com>  Sat, 17 Nov 2012 00:16:21 -0800
+
 haskell-cabal-debian (2.5.2) unstable; urgency=low
 
   * Fix the path to where the DHInstallTo and DHInstallCabalExecTo

@@ -92,6 +92,9 @@ data Flags = Flags
     -- the control file must match.
     , executablePackages :: [Executable]
     -- ^ List of executable debian binary packages to create.
+    , sourcePackageName :: Maybe String
+    -- ^ Name to give the debian source package.  If none is given it
+    -- is constructed from the cabal package name.
     , debMaintainer :: Maybe String
     -- ^ Value for the maintainer field in the control file.  Note
     -- that the cabal maintainer field can have multiple addresses,
@@ -138,6 +141,7 @@ defaultFlags =
     , dryRun = False
     , validate = False
     , executablePackages = []
+    , sourcePackageName = Nothing
     , debMaintainer = Nothing
     , modifyAtoms = id
     , buildDir = "dist-ghc/build"

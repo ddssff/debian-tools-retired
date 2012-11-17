@@ -79,6 +79,8 @@ options =
              "Don't generate API documentation.  Use this if build is crashing due to a haddock error.",
       Option "" ["missing-dependency"] (ReqArg (\ name x -> x {missingDependencies = name : missingDependencies x}) "DEB")
              "Mark a package missing, do not add it to any dependency lists in the debianization.",
+      Option "" ["source-package-name"] (ReqArg (\ name x -> x {sourcePackageName = Just name}) "NAME")
+             "Use this name for the debian source package.  Default is haskell-<cabalname>, where the cabal package name is downcased.",
       Option "" ["disable-library-profiling"] (NoArg (\x -> x { debLibProf = False }))
              "Don't generate profiling libraries",
       Option "f" ["flags"] (ReqArg (\flags x -> x { configurationsFlags = configurationsFlags x ++ flagList flags }) "FLAGS")
