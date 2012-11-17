@@ -88,10 +88,10 @@ rules build xs =
       g (DebRules x) = Just x
       g (DHInstallTo p s d) =
           Just (unlines [ "binary-fixup" </> show (pretty p) ++ "::"
-                        , "\tinstall -Dp " ++ s ++ " " ++ d ])
+                        , "\tinstall -Dp " ++ s ++ " " ++ "debian" </> show (pretty p) </> d ])
       g (DHInstallCabalExecTo p n d) =
           Just (unlines [ "binary-fixup" </> show (pretty p) ++ "::"
-                        , "\tinstall -Dp " ++ build </> n </> n ++ " " ++ d ])
+                        , "\tinstall -Dp " ++ build </> n </> n ++ " " ++ "debian" </> show (pretty p) </> d ])
       g _ = Nothing
 
 compat :: [DebAtom] -> Int

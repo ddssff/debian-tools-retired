@@ -1,3 +1,10 @@
+haskell-cabal-debian (2.5.2) unstable; urgency=low
+
+  * Fix the path to where the DHInstallTo and DHInstallCabalExecTo
+    DebAtoms put their files.
+
+ -- David Fox <dsf@seereason.com>  Fri, 16 Nov 2012 18:11:45 -0800
+
 haskell-cabal-debian (2.5.1) unstable; urgency=low
 
   * Add a destName field to Executable so we can give installed
