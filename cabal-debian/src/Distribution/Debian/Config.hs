@@ -10,7 +10,7 @@ module Distribution.Debian.Config
 
 import qualified Data.Map as Map
 import Data.Version (Version)
-import Debian.Relation (PkgName(..), BinPkgName(..))
+import Debian.Relation (BinPkgName(..))
 import Distribution.Compiler (CompilerFlavor(..))
 import Distribution.Debian.DebHelper (DebAtom)
 import Distribution.Debian.PackageInfo (DebType)
@@ -148,4 +148,4 @@ defaultFlags =
     }
 
 missingDependencies' :: Flags -> [BinPkgName]
-missingDependencies' = map (BinPkgName . PkgName) . missingDependencies
+missingDependencies' = map BinPkgName . missingDependencies

@@ -49,12 +49,12 @@ buildDebVersionMap =
     return . either (const []) unControl . parseControl "/var/lib/dpkg/status" >>=
     mapM (\ p -> case (lookupP "Package" p, lookupP "Version" p) of
                    (Just (Field (_, name)), Just (Field (_, version))) ->
-                       return (Just (D.BinPkgName (D.PkgName (stripWS name)), Just (parseDebianVersion (stripWS version))))
+                       return (Just (D.BinPkgName (stripWS name), Just (parseDebianVersion (stripWS version))))
                    _ -> return Nothing) >>=
     return . Map.fromList . catMaybes
 
 (!) :: DebMap -> D.BinPkgName -> DebianVersion
-m ! k = maybe (error ("No version number for " ++ (show . D.prettyBinPkgName $ k) ++ " in " ++ show (Map.map (maybe Nothing (Just . prettyDebianVersion)) m))) id (Map.findWithDefault Nothing k m)
+m ! k = maybe (error ("No version number for " ++ (show . D.prettyPkgName $ k) ++ " in " ++ show (Map.map (maybe Nothing (Just . prettyDebianVersion)) m))) id (Map.findWithDefault Nothing k m)
 
 trim :: String -> String
 trim = dropWhile isSpace
@@ -118,7 +118,7 @@ dpkgFileMap =
       names <- getDirectoryContents fp >>= return . filter (isSuffixOf ".list")
       let paths = map (fp </>) names
       files <- mapM (strictReadF lines) paths
-      return $ Map.fromList $ zip (map dropExtension names) (map (Set.fromList . map (D.BinPkgName . D.PkgName)) $ files)
+      return $ Map.fromList $ zip (map dropExtension names) (map (Set.fromList . map D.BinPkgName) $ files)
 
 -- |Given a path, return the name of the package that owns it.
 debOfFile :: FilePath -> ReaderT (Map.Map FilePath (Set.Set D.BinPkgName)) IO (Maybe D.BinPkgName)

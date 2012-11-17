@@ -27,9 +27,9 @@ data DebType = Dev | Prof | Doc deriving (Eq, Read, Show)
 debName :: Control' String -> DebType -> Maybe D.BinPkgName
 debName control debType =
     case debType of
-      Dev -> fmap (D.BinPkgName . D.PkgName) $ listToMaybe (filter (isSuffixOf "-dev") debNames)
-      Prof -> fmap (D.BinPkgName . D.PkgName) $ listToMaybe (filter (isSuffixOf "-prof") debNames)
-      Doc -> fmap (D.BinPkgName . D.PkgName) $ listToMaybe (filter (isSuffixOf "-doc") debNames)
+      Dev -> fmap D.BinPkgName $ listToMaybe (filter (isSuffixOf "-dev") debNames)
+      Prof -> fmap D.BinPkgName $ listToMaybe (filter (isSuffixOf "-prof") debNames)
+      Doc -> fmap D.BinPkgName $ listToMaybe (filter (isSuffixOf "-doc") debNames)
     where
       debNames = map (\ (Field (_, s)) -> stripWS s) (catMaybes (map (lookupP "Package") (tail (unControl control))))
 

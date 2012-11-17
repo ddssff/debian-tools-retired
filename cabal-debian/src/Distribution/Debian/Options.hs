@@ -12,7 +12,7 @@ import Control.Monad (when)
 import Data.Char (toLower, isDigit, ord)
 import qualified Data.Map as Map
 import Data.Version (parseVersion)
-import Debian.Relation (PkgName(..), BinPkgName(..))
+import Debian.Relation (BinPkgName(..))
 import Distribution.Compiler (CompilerFlavor(..))
 import Distribution.Debian.Config (Flags(..), DebAction(Usage, Debianize, SubstVar), defaultFlags)
 import Distribution.Debian.Server (Executable(..))
@@ -160,4 +160,4 @@ printHelp h = do
     hPutStrLn h (usageInfo info options)
 
 b :: String -> BinPkgName
-b = BinPkgName . PkgName
+b = BinPkgName

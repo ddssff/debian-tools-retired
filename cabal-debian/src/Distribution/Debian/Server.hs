@@ -20,7 +20,7 @@ module Distribution.Debian.Server
        ) where
 
 import Data.Maybe (isJust, fromMaybe)
-import Debian.Relation (BinPkgName(BinPkgName), PkgName(PkgName))
+import Debian.Relation (BinPkgName(BinPkgName))
 import Distribution.Debian.DebHelper (DebAtom(..))
 import System.FilePath ((</>), takeFileName, takeDirectory)
 import System.Process (showCommandForUser)
@@ -44,7 +44,7 @@ execAtoms e@(Executable {}) =
             (Nothing, False) -> DHInstallCabalExecTo b (execName e) (d </> destName e)
             (Just s, False) -> DHInstallTo b s (d </> destName e)
       d = fromMaybe "usr/bin" (destDir e)
-      b = BinPkgName (PkgName (debName e))
+      b = BinPkgName (debName e)
 
 -- | Does this package require an apache site file?
 needsApacheSite :: Server -> Bool

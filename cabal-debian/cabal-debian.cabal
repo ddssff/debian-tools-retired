@@ -36,6 +36,7 @@ Library
    Distribution.Debian.PackageInfo
    Distribution.Debian.Relations
    Distribution.Debian.Server
+   Distribution.Debian.Splits
    Distribution.Debian.SubstVars
    Distribution.Debian.Utility
    Distribution.Version.Invert

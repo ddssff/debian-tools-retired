@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, StandaloneDeriving #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -Wall -Wwarn -fno-warn-name-shadowing -fno-warn-orphans #-}
 module Distribution.Debian.Dependencies
     ( PackageType(..)
@@ -21,7 +21,7 @@ import Data.List (intersperse, minimumBy)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import Data.Version (showVersion)
-import Debian.Relation (Relations, Relation, BinPkgName(BinPkgName), PkgName(PkgName), VersionReq(..), SrcPkgName(..))
+import Debian.Relation (Relations, Relation, BinPkgName, PkgName(pkgNameFromString), VersionReq(..), SrcPkgName(..))
 import qualified Debian.Relation as D
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Distribution.Debian.Bundled (ghcBuiltIn)
@@ -37,14 +37,20 @@ import Text.PrettyPrint.ANSI.Leijen (text, hcat , (<>), empty, Pretty(pretty))
 
 data PackageType = Source | Development | Profiling | Documentation | Utilities | Extra deriving (Eq, Show)
 
-data VersionSplits
+{-
+instance PkgName String where
+    prettyPkgName = text
+    pkgNameFromString = id
+-}
+
+data VersionSplits name
     = VersionSplits {
         packageName :: PackageName
-      , oldestPackage :: PkgName
-      , splits :: [(Version, PkgName)] -- Assumed to be in version number order
+      , oldestPackage :: name
+      , splits :: [(Version, name)] -- Assumed to be in version number order
       }
 
-instance Interspersed VersionSplits PkgName Version where
+instance PkgName name => Interspersed (VersionSplits name) name Version where
     leftmost (VersionSplits {splits = []}) = error "Empty Interspersed instance"
     leftmost (VersionSplits {oldestPackage = p}) = p
     pairs (VersionSplits {splits = xs}) = xs
@@ -52,8 +58,8 @@ instance Interspersed VersionSplits PkgName Version where
 -- | Turn a cabal dependency into debian dependencies.  The result
 -- needs to correspond to a single debian package to be installed,
 -- so we will return just an OrRelation.
-dependencies :: Map.Map PackageName Int -> Compiler -> (PackageType -> [VersionSplits]) -> PackageType -> PackageName -> VersionRange -> Relations
-dependencies epochMap compiler versionSplits typ name@(PackageName string) cabalRange =
+dependencies :: Map.Map PackageName Int -> Compiler -> (PackageType -> [VersionSplits BinPkgName]) -> PackageType -> PackageName -> VersionRange -> Relations
+dependencies epochMap compiler splits typ name@(PackageName string) cabalRange =
     map doBundled $ convert' (canonical (Or (catMaybes (map convert alts))))
     where
 
@@ -61,27 +67,26 @@ dependencies epochMap compiler versionSplits typ name@(PackageName string) cabal
       -- satisfying a cabal dependency.  The only caveat is that
       -- we may need to distribute any "and" dependencies implied
       -- by a version range over these "or" dependences.
-      alts :: [(PkgName, VersionRange)]
-      alts = case Map.lookup name (packageSplits versionSplits typ) of
+      alts :: [(BinPkgName, VersionRange)]
+      alts = case Map.lookup name (packageSplits splits typ) of
                -- If there are no splits for this package just return the single dependency for the package
                Nothing -> [(mkPkgName string typ, cabalRange')]
                -- If there are splits create a list of (debian package name, VersionRange) pairs
-               Just splits -> packageRangesFromVersionSplits splits
+               Just splits' -> packageRangesFromVersionSplits splits'
 
-      convert :: (PkgName, VersionRange) -> Maybe (Rels Relation)
+      convert :: (BinPkgName, VersionRange) -> Maybe (Rels Relation)
       convert (dname, range) =
-          let dname' = BinPkgName dname in
           if isNoVersion range'''
           then Nothing
           else Just $
                foldVersionRange'
-                 (Rel (D.Rel dname' Nothing Nothing))
-                 (\ v -> Rel (D.Rel dname' (Just (D.EEQ (dv v))) Nothing))
-                 (\ v -> Rel (D.Rel dname' (Just (D.SGR (dv v))) Nothing))
-                 (\ v -> Rel (D.Rel dname' (Just (D.SLT (dv v))) Nothing))
-                 (\ v -> Rel (D.Rel dname' (Just (D.GRE (dv v))) Nothing))
-                 (\ v -> Rel (D.Rel dname' (Just (D.LTE (dv v))) Nothing))
-                 (\ x y -> And [Rel (D.Rel dname' (Just (D.GRE (dv x))) Nothing), Rel (D.Rel dname' (Just (D.SLT (dv y))) Nothing)])
+                 (Rel (D.Rel dname Nothing Nothing))
+                 (\ v -> Rel (D.Rel dname (Just (D.EEQ (dv v))) Nothing))
+                 (\ v -> Rel (D.Rel dname (Just (D.SGR (dv v))) Nothing))
+                 (\ v -> Rel (D.Rel dname (Just (D.SLT (dv v))) Nothing))
+                 (\ v -> Rel (D.Rel dname (Just (D.GRE (dv v))) Nothing))
+                 (\ v -> Rel (D.Rel dname (Just (D.LTE (dv v))) Nothing))
+                 (\ x y -> And [Rel (D.Rel dname (Just (D.GRE (dv x))) Nothing), Rel (D.Rel dname (Just (D.SLT (dv y))) Nothing)])
                  (\ x y -> Or [x, y])
                  (\ x y -> And [x, y])
                  id
@@ -123,10 +128,10 @@ dependencies epochMap compiler versionSplits typ name@(PackageName string) cabal
       doBundled rels | ghcBuiltIn compiler name = rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
       doBundled rels = rels
 
-      compilerPackageName Documentation = D.BinPkgName (D.PkgName "ghc-doc")
-      compilerPackageName Profiling = D.BinPkgName (D.PkgName "ghc-prof")
-      compilerPackageName Development = D.BinPkgName (D.PkgName "ghc")
-      compilerPackageName _ = D.BinPkgName (D.PkgName "ghc") -- whatevs
+      compilerPackageName Documentation = D.BinPkgName "ghc-doc"
+      compilerPackageName Profiling = D.BinPkgName "ghc-prof"
+      compilerPackageName Development = D.BinPkgName "ghc"
+      compilerPackageName _ = D.BinPkgName "ghc" -- whatevs
 
 data Rels a = And {unAnd :: [Rels a]} | Or {unOr :: [Rels a]} | Rel {unRel :: a} deriving Show
 
@@ -139,16 +144,17 @@ canonical (Or rels) = And . map Or $ sequence $ map (concat . map unOr . unAnd .
 convert' :: Rels a -> [[a]]
 convert' = map (map unRel . unOr) . unAnd . canonical
 
-packageSplits :: (PackageType -> [VersionSplits]) -> PackageType -> Map.Map PackageName VersionSplits
-packageSplits versionSplits typ =
-    foldr (\ splits mp -> Map.insertWith multipleSplitsError (packageName splits) splits mp)
+packageSplits :: (PackageType -> [VersionSplits BinPkgName]) -> PackageType -> Map.Map PackageName (VersionSplits BinPkgName)
+packageSplits splits typ =
+    foldr (\ splits' mp -> Map.insertWith multipleSplitsError (packageName splits') splits' mp)
           Map.empty
-          (versionSplits typ)
+          (splits typ)
     where
+      multipleSplitsError :: VersionSplits BinPkgName -> a -> b
       multipleSplitsError (VersionSplits {packageName = PackageName p}) _s2 =
           error ("Multiple splits for package " ++ show p)
 
-packageRangesFromVersionSplits :: VersionSplits -> [(PkgName, VersionRange)]
+packageRangesFromVersionSplits :: (PkgName name) => VersionSplits name -> [(name, VersionRange)]
 packageRangesFromVersionSplits splits =
     foldInverted (\ older dname newer more ->
                       (dname, intersectVersionRanges (maybe anyVersion orLaterVersion older) (maybe anyVersion earlierVersion newer)) : more)
@@ -200,32 +206,32 @@ deriving instance Show VersionReq
 instance Show DebianVersion where
     show = show . prettyDebianVersion
 
-debianSourcePackageName :: (PackageType -> [VersionSplits]) -> PackageName -> Maybe VersionReq -> SrcPkgName
-debianSourcePackageName versionSplits name version = SrcPkgName (debianName Source versionSplits name version)
+debianSourcePackageName :: (PackageType -> [VersionSplits SrcPkgName]) -> PackageName -> Maybe VersionReq -> SrcPkgName
+debianSourcePackageName splits name version = debianName Source splits name version
 
-debianDevPackageName :: (PackageType -> [VersionSplits]) -> PackageName -> Maybe VersionReq -> BinPkgName
-debianDevPackageName versionSplits name version = BinPkgName (debianName Development versionSplits name version)
+debianDevPackageName :: (PackageType -> [VersionSplits BinPkgName]) -> PackageName -> Maybe VersionReq -> BinPkgName
+debianDevPackageName splits name version = debianName Development splits name version
 
-debianProfPackageName :: (PackageType -> [VersionSplits]) -> PackageName -> Maybe VersionReq -> BinPkgName
-debianProfPackageName versionSplits name version = BinPkgName (debianName Profiling versionSplits name version)
+debianProfPackageName :: (PackageType -> [VersionSplits BinPkgName]) -> PackageName -> Maybe VersionReq -> BinPkgName
+debianProfPackageName splits name version = debianName Profiling splits name version
 
-debianDocPackageName :: (PackageType -> [VersionSplits]) -> PackageName -> Maybe VersionReq -> BinPkgName
-debianDocPackageName versionSplits name version = BinPkgName (debianName Documentation versionSplits name version)
+debianDocPackageName :: (PackageType -> [VersionSplits BinPkgName]) -> PackageName -> Maybe VersionReq -> BinPkgName
+debianDocPackageName splits name version = debianName Documentation splits name version
 
 type DebianBinPackageName = PackageName -> Maybe VersionReq -> BinPkgName
 
-debianExtraPackageName :: (PackageType -> [VersionSplits]) -> PackageName -> Maybe VersionReq -> BinPkgName
-debianExtraPackageName versionSplits name version = BinPkgName (debianName Extra versionSplits name version)
+debianExtraPackageName :: (PackageType -> [VersionSplits BinPkgName]) -> PackageName -> Maybe VersionReq -> BinPkgName
+debianExtraPackageName splits name version = debianName Extra splits name version
 
-debianUtilsPackageName :: (PackageType -> [VersionSplits]) -> PackageName -> Maybe VersionReq -> BinPkgName
-debianUtilsPackageName versionSplits name version = BinPkgName (debianName Utilities versionSplits name version)
+debianUtilsPackageName :: (PackageType -> [VersionSplits BinPkgName]) -> PackageName -> Maybe VersionReq -> BinPkgName
+debianUtilsPackageName splits name version = debianName Utilities splits name version
 
--- | Return the basename of the debian package for a given version
--- relation.  If the version split happens at v, this will return the
--- ltName if < v and the geName if the relation is >= v.
-debianName :: PackageType -> (PackageType -> [VersionSplits]) -> PackageName -> Maybe VersionReq -> PkgName
-debianName typ versionSplits pname@(PackageName name) version =
-    case filter (\ x -> pname == packageName x) (versionSplits typ) of
+-- | Return a debian package for a given version relation.  If the
+-- version split happens at v, this will return the ltName if < v and
+-- the geName if the relation is >= v.
+debianName :: PkgName name => PackageType -> (PackageType -> [VersionSplits name]) -> PackageName -> Maybe VersionReq -> name
+debianName typ splits pname@(PackageName name) version =
+    case filter (\ x -> pname == packageName x) (splits typ) of
       [] -> def
       [splits] ->
           foldTriples' (\ ltName v geName debName ->
@@ -245,16 +251,19 @@ debianName typ versionSplits pname@(PackageName name) version =
                        splits
       _ -> error $ "Multiple splits for cabal package " ++ name
     where
-      foldTriples' :: (PkgName -> Version -> PkgName -> PkgName -> PkgName) -> PkgName -> VersionSplits -> PkgName
+      foldTriples' :: (PkgName name) => (name -> Version -> name -> name -> name) -> name -> VersionSplits name -> name
       foldTriples' = foldTriples
       def = mkPkgName name typ
 
 
 -- | Build a debian package name from a cabal package name and a
--- debian package type.
-mkPkgName :: String -> PackageType -> PkgName
+-- debian package type.  Unfortunately, this does not enforce the
+-- correspondence between the PackageType value and the name type, so
+-- it can return nonsense like (SrcPkgName "libghc-debian-dev").
+mkPkgName :: PkgName name => String -> PackageType -> name
 mkPkgName name typ =
-    PkgName $ case typ of
+    pkgNameFromString $
+             case typ of
                 Source -> "haskell-" ++ base ++ ""
                 Documentation -> "libghc-" ++ base ++ "-doc"
                 Development -> "libghc-" ++ base ++ "-dev"

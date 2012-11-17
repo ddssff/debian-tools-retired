@@ -11,7 +11,7 @@ import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import Debian.Changes (ChangeLogEntry(..), prettyEntry)
 import Debian.Control
-import Debian.Relation (BinPkgName(BinPkgName), PkgName(PkgName), SrcPkgName(SrcPkgName))
+import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName))
 import Prelude hiding (catch, init)
 import System.FilePath ((</>), makeRelative)
 import Text.PrettyPrint.ANSI.Leijen (text, Pretty(pretty))
@@ -21,9 +21,6 @@ instance Pretty SrcPkgName where
 
 instance Pretty BinPkgName where
     pretty (BinPkgName x) = pretty x
-
-instance Pretty PkgName where
-    pretty (PkgName x) = text x
 
 -- | The smallest pieces of debhelper information.
 data DebAtom

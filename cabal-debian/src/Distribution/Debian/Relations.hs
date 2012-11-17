@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, FlexibleInstances, MultiParamTypeClasses, PackageImports, ScopedTypeVariables,
-             StandaloneDeriving, TupleSections, TypeSynonymInstances #-}
+             StandaloneDeriving, TupleSections, TypeFamilies, TypeSynonymInstances #-}
 {-# OPTIONS -Wall -fno-warn-orphans #-}
 
 -- | Support for generating Debianization from Cabal data.
@@ -9,7 +9,6 @@ module Distribution.Debian.Relations
     , buildDependencies
     , docDependencies
     , cabalDependencies
-    , versionSplits
     , extraDebianLibs
     ) where
 
@@ -17,9 +16,9 @@ import Data.Char (isSpace)
 import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
-import Data.Version (Version(Version))
 import qualified Debian.Relation as D
-import Distribution.Debian.Dependencies (PackageType(..), VersionSplits(..), dependencies, mkPkgName)
+import Distribution.Debian.Dependencies (PackageType(..), dependencies)
+import Distribution.Debian.Splits (versionSplits)
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Package (PackageName(..), Dependency(..))
 import Distribution.PackageDescription (PackageDescription(..), allBuildInfo, buildTools, pkgconfigDepends, extraLibs)
@@ -53,14 +52,14 @@ allBuildDepends extraLibMap pkgDesc =
                   map (map ExtraLibs . (fixDeps . extraLibs)) (allBuildInfo pkgDesc))
     where
       fixDeps :: [String] -> [D.BinPkgName]
-      fixDeps xs = concatMap (\ cab -> fromMaybe [D.BinPkgName (D.PkgName ("lib" ++ cab ++ "-dev"))] (Map.lookup cab extraLibMap)) xs
+      fixDeps xs = concatMap (\ cab -> fromMaybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] (Map.lookup cab extraLibMap)) xs
 
 extraDebianLibs :: Map.Map String [D.BinPkgName] -> PackageDescription -> D.Relations
 extraDebianLibs extraLibMap pkgDesc =
     map anyrel $ fixDeps $ nub $ concatMap extraLibs $ allBuildInfo $ pkgDesc
     where
       fixDeps :: [String] -> [D.BinPkgName]
-      fixDeps xs = concatMap (\ cab -> fromMaybe [D.BinPkgName (D.PkgName ("lib" ++ cab ++ "-dev"))] (Map.lookup cab extraLibMap)) xs
+      fixDeps xs = concatMap (\ cab -> fromMaybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] (Map.lookup cab extraLibMap)) xs
 
 -- | The Debian build dependencies for a package include the profiling
 -- libraries and the documentation packages, used for creating cross
@@ -87,7 +86,7 @@ adapt execMap (PkgConfigDepends (Dependency (PackageName pkg) _)) =
 adapt execMap (BuildTools (Dependency (PackageName pkg) _)) =
     maybe (aptFile pkg) (: []) (Map.lookup pkg execMap)
 adapt _flags (ExtraLibs x) = [x]
-adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [D.BinPkgName (D.PkgName pkg)]
+adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [D.BinPkgName pkg]
 
 -- There are two reasons this may not work, or may work
 -- incorrectly: (1) the build environment may be a different
@@ -101,7 +100,7 @@ aptFile pkg =
     unsafePerformIO $
     do ret <- readProcessWithExitCode "apt-file" ["-l", "search", pkg ++ ".pc"] ""
        return $ case ret of
-                  (ExitSuccess, out, _) -> [D.BinPkgName (D.PkgName (takeWhile (not . isSpace) out))]
+                  (ExitSuccess, out, _) -> [D.BinPkgName (takeWhile (not . isSpace) out)]
                   _ -> []
 
 -- | The documentation dependencies for a package include the
@@ -111,19 +110,6 @@ docDependencies :: Map.Map PackageName Int -> Compiler -> Dependency_ -> D.Relat
 docDependencies epochMap compiler (BuildDepends (Dependency name ranges)) =
     dependencies epochMap compiler versionSplits Documentation name ranges
 docDependencies _ _ _ = []
-
--- | These are the instances of debian names changing that we know about.
-versionSplits :: PackageType -> [VersionSplits]
-versionSplits typ =
-    [ VersionSplits {
-        packageName = PackageName "parsec"
-      , oldestPackage = mkPkgName "parsec2" typ
-      , splits = [(Version [3] [], mkPkgName "parsec3" typ)] }
-    , VersionSplits {
-        packageName = PackageName "QuickCheck"
-      , oldestPackage = mkPkgName "quickcheck1" typ
-      , splits = [(Version [2] [], mkPkgName "quickcheck2" typ)] }
-    ]
 
 anyrel :: D.BinPkgName -> [D.Relation]
 anyrel x = [D.Rel x Nothing Nothing]

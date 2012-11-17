@@ -68,7 +68,7 @@ substvars' flags pkgDesc _compiler _debVersions debType cabalPackages control =
                                        (\ diff -> if dryRun flags then putStr diff else replaceFile path' new)
       ([], Nothing) -> return ()
       (missing, _) ->
-          die ("These debian packages need to be added to the build dependency list so the required cabal packages are available:\n  " ++ intercalate "\n  " (map (show . D.prettyBinPkgName . fst) missing) ++
+          die ("These debian packages need to be added to the build dependency list so the required cabal packages are available:\n  " ++ intercalate "\n  " (map (show . D.prettyPkgName . fst) missing) ++
                "\nIf this is an obsolete package you may need to withdraw the old versions from the\n" ++
                "upstream repository, and uninstall and purge it from your local system.")
     where
@@ -79,7 +79,7 @@ substvars' flags pkgDesc _compiler _debVersions debType cabalPackages control =
                 case deps of
                   [] -> unlines (hdeps ++ more)
                   _ -> unlines (map (++ (", " ++ showDeps (filterMissing (missingDependencies' flags) deps))) hdeps ++ more)
-      path = fmap (\ (D.BinPkgName (D.PkgName x)) -> "debian/" ++ x ++ ".substvars") name
+      path = fmap (\ (D.BinPkgName x) -> "debian/" ++ x ++ ".substvars") name
       name = debName control debType
       deps = debDeps debType (extraLibMap flags) cabalPackages pkgDesc control
       -- We must have build dependencies on the profiling and documentation packages

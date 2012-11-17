@@ -40,8 +40,9 @@ import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName
                                          debianDocPackageName, debianDevPackageName, debianProfPackageName)
 import Distribution.Debian.Options (compileArgs)
 import Distribution.Debian.PackageDescription (withSimplePackageDescription)
-import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, versionSplits, extraDebianLibs)
+import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, extraDebianLibs)
 import Distribution.Debian.Server (execAtoms, Executable(..))
+import Distribution.Debian.Splits (versionSplits)
 import Distribution.Debian.Utility
 import Distribution.License (License(..))
 import Distribution.Package (PackageIdentifier(..), PackageName(..))
@@ -212,7 +213,7 @@ updateChangelog flags debianMaintainer pkgDesc date oldEntries =
       entry@(Entry {logVersion = d}) : older | d == logVersion newEntry -> merge entry newEntry : older
       entries -> newEntry : entries
     where
-      newEntry = Entry { logPackage = show (D.prettySrcPkgName (debianSourcePackageName' pkgDesc))
+      newEntry = Entry { logPackage = show (D.prettyPkgName (debianSourcePackageName' pkgDesc))
                        , logVersion = updateOriginal f $ debianVersionNumber pkgDesc
                        , logDists = [parseReleaseName "unstable"]
                        , logUrgency = "low"
@@ -322,7 +323,7 @@ cdbsRules pkgDesc =
            -- "-dev", so no underscores and no capital letters.  In
            -- hlibrary.mk there is a python expression that looks like
            -- it would do this for us.
-           "DEB_CABAL_PACKAGE = " ++ show (D.prettyBinPkgName (debianExtraPackageName' pkgDesc)),
+           "DEB_CABAL_PACKAGE = " ++ show (D.prettyPkgName (debianExtraPackageName' pkgDesc)),
            "",
            "include /usr/share/cdbs/1/rules/debhelper.mk",
            "include /usr/share/cdbs/1/class/hlibrary.mk",
@@ -387,7 +388,7 @@ control flags compiler maint pkgDesc =
 
       sourceSpec =
           Paragraph
-          ([Field ("Source", " " ++ show (D.prettySrcPkgName (debianSourcePackageName' pkgDesc))),
+          ([Field ("Source", " " ++ show (D.prettyPkgName (debianSourcePackageName' pkgDesc))),
             -- See http://www.debian.org/doc/debian-policy/ch-archive.html#s-priorities
             Field ("Priority", " " ++ "optional"),
             -- See http://www.debian.org/doc/debian-policy/ch-archive.html#s-subsections
@@ -406,7 +407,7 @@ control flags compiler maint pkgDesc =
 
       librarySpec arch typ debianName =
           Paragraph
-          [Field ("Package", " " ++ show (D.prettyBinPkgName (debianName pkgDesc))),
+          [Field ("Package", " " ++ show (D.prettyPkgName (debianName pkgDesc))),
            Field ("Architecture", " " ++ arch),
            Field ("Depends", " " ++ showDeps' "Depends:" (filterMissing (missingDependencies' flags) (
                      (if typ == Development
@@ -423,7 +424,7 @@ control flags compiler maint pkgDesc =
 
       docSpecsParagraph =
           Paragraph
-          [Field ("Package", " " ++ show (D.prettyBinPkgName (debianDocPackageName' pkgDesc))),
+          [Field ("Package", " " ++ show (D.prettyPkgName (debianDocPackageName' pkgDesc))),
            Field ("Architecture", " " ++ "all"),
            Field ("Section", " " ++ "doc"),
            Field ("Depends", " " ++ showDeps' "Depends:" (filterMissing (missingDependencies' flags)
@@ -438,8 +439,8 @@ control flags compiler maint pkgDesc =
       debianBuildDeps :: D.Relations
       debianBuildDeps =
           nub $
-          [[D.Rel (D.BinPkgName (D.PkgName "debhelper")) (Just (D.GRE (parseDebianVersion "7.0"))) Nothing],
-           [D.Rel (D.BinPkgName (D.PkgName "haskell-devscripts")) (Just (D.GRE (parseDebianVersion "0.8"))) Nothing],
+          [[D.Rel (D.BinPkgName "debhelper") (Just (D.GRE (parseDebianVersion "7.0"))) Nothing],
+           [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion "0.8"))) Nothing],
            anyrel "cdbs",
            anyrel "ghc"] ++
           (map anyrel (buildDeps flags)) ++
@@ -478,11 +479,11 @@ execAndUtilSpecs flags pkgDesc debianDescription =
            ([Field ("Package", " " ++ debName p),
              Field ("Architecture", " " ++ "any"),
              Field ("Section", " " ++ "misc"),
-             Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (D.BinPkgName (D.PkgName (debName p))) (binaryPackageDeps flags)))),
+             Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (D.BinPkgName (debName p)) (binaryPackageDeps flags)))),
              Field ("Description", " " ++ maybe debianDescription (const executableDescription) (library pkgDesc))] ++
             conflicts (filterMissing (missingDependencies' flags) (extraDeps (b p) (binaryPackageConflicts flags)))),
            [DebRules ("build" </> debName p ++ ":: build-ghc-stamp")])
-      b p = D.BinPkgName (D.PkgName (debName p))
+      b p = D.BinPkgName (debName p)
       executableDescription = " " ++ "An executable built from the " ++ display (pkgName (package pkgDesc)) ++ " package."
       makeUtilsPackage =
           case (bundledExecutables, dataFiles pkgDesc) of
@@ -490,7 +491,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                 []
             _ ->
                 let p = debianUtilsPackageName' pkgDesc
-                    p' = show (D.prettyBinPkgName p)
+                    p' = show (D.prettyPkgName p)
                     -- s = debianSourcePackageName' pkgDesc
                     -- s' = show (D.prettySrcPkgName s)
                     c = package pkgDesc
@@ -523,7 +524,7 @@ extraDeps p deps =
     where mkDep name = [D.Rel name Nothing Nothing]
 
 anyrel :: String -> [D.Relation]
-anyrel x = [D.Rel (D.BinPkgName (D.PkgName x)) Nothing Nothing]
+anyrel x = [D.Rel (D.BinPkgName x) Nothing Nothing]
 
 -- generated with:
 -- apt-cache show ghc \
