@@ -19,7 +19,7 @@ import Data.Time.LocalTime ()
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Changes (ChangeLogEntry(..), parseLog, parseEntry)
+import Debian.Changes (ChangeLogEntry(..), parseEntries, parseEntry)
 import Debian.Repo (DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub)
 import Debian.Version
 import Extra.Files (replaceFile)
@@ -176,7 +176,7 @@ partitionFailing (x : xs) =
 -- lots of bizarre formats in the older entries that we can't parse.
 mergeChangelogs :: String -> String -> Either String String
 mergeChangelogs baseText patchText =
-    case partitionEithers (parseLog patchText) of
+    case partitionEithers (parseEntries patchText) of
       ([], patchEntries) ->
           let patchEntries' = map Patch patchEntries in
           let oldest = zonedTimeToUTC . myParseTimeRFC822 . logDate . getEntry . head . reverse $ patchEntries' in
