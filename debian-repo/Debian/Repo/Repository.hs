@@ -18,7 +18,7 @@ import Data.List ( sortBy, groupBy, intercalate, isSuffixOf )
 import Data.Maybe ( catMaybes, fromJust )
 import Data.Time ( NominalDiffTime )
 import qualified Data.Set as Set ( member, fromList )
-import Debian.Changes ( ChangesFile(changeDir, changePackage, changeRelease, changeVersion), prettyChangesFile )
+import Debian.Changes ( ChangesFile(changeDir, changePackage, changeRelease, changeVersion) )
 import qualified Debian.Control.ByteString as B ( Paragraph, Control'(Control), ControlFunctions(parseControl), fieldValue )
 import qualified Debian.Control.String as S ( Paragraph', Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
 import Debian.Relation (BinPkgName(..))
@@ -44,6 +44,7 @@ import System.Process (shell, readProcessWithExitCode, showCommandForUser)
 --import System.Unix.LazyProcess (Output)
 --import System.Unix.Outputs (checkResult)
 import System.Process.Progress (Output, foldOutputsL, timeTask, runProcessV, quieter, qPutStrLn, qPutStr)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Regex ( matchRegex, mkRegex )
 import qualified Tmp.File as F ( File(..), Source(RemotePath) )
 
@@ -214,7 +215,7 @@ uploadRemote repo uri =
        -- Find the changes files
        changesFiles <- findChangesFiles (outsidePath root)
        -- Check that they have not yet been uploaded
-       let changesFiles' = map (\ f -> if notUploaded uploaded f then Success f else Failure ["Already uploaded: " ++ show (prettyChangesFile f)]) changesFiles
+       let changesFiles' = map (\ f -> if notUploaded uploaded f then Success f else Failure ["Already uploaded: " ++ show (pretty f)]) changesFiles
        -- Create groups of common name and dist, and sort so latest version appears first.
        let changesFileGroups = map (sortBy compareVersions) . groupByNameAndDist $ changesFiles'
        let changesFiles'' = concatMap keepNewest changesFileGroups
@@ -229,7 +230,7 @@ uploadRemote repo uri =
       -- partitionFailing = foldr f ([], []) where f (Failure ms) (msgs, xs) = (ms : msgs, xs)
       --                                           f (Success x) (msgs, xs) = (msgs, x : xs)
       tooOld (Failure x) = Failure x
-      tooOld (Success x) = Failure ["Not the newest version in incoming: " ++ show (prettyChangesFile x)]
+      tooOld (Success x) = Failure ["Not the newest version in incoming: " ++ show (pretty x)]
       successes (Success x : xs) = x : successes xs
       successes (Failure _ : xs) = successes xs
       successes [] = []

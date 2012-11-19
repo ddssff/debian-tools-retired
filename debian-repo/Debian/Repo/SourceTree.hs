@@ -31,7 +31,7 @@ import Control.Monad.Trans ( MonadIO(..) )
 import qualified Data.ByteString.Lazy.Char8 as L ( empty )
 import Data.List ( nubBy, sortBy, intercalate )
 import Data.Time ( NominalDiffTime )
-import Debian.Changes ( ChangeLogEntry(..), parseLog, ChangesFile(..), prettyChangesFile, prettyEntry )
+import Debian.Changes ( ChangeLogEntry(..), parseLog, ChangesFile(..) )
 import Debian.Control.String ( Field'(Comment), Paragraph'(..), Control'(Control), ControlFunctions(parseControl), Control )
 import Debian.Relation (BinPkgName)
 import Debian.Repo.Changes ( findChangesFiles )
@@ -49,6 +49,7 @@ import System.Environment (getEnvironment)
 import System.Process (CreateProcess(cwd, env, cmdspec), proc, shell, CmdSpec(..), showCommandForUser)
 import System.Process.Progress (runProcess, runProcessF, timeTask, noisier, keepResult)
 import System.Unix.Chroot ( useEnv )
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- |Any directory containing source code.
 class SourceTreeC t where
@@ -115,13 +116,13 @@ findChanges tree =
        case result of
          [cf] -> return cf
          [] -> fail ("Couldn't find .changes file in " ++ dir)
-         lst -> fail ("Multiple .changes files in " ++ dir ++ ": " ++ intercalate ", " (map (show . prettyChangesFile) lst))
+         lst -> fail ("Multiple .changes files in " ++ dir ++ ": " ++ intercalate ", " (map (show . pretty) lst))
 
 -- |Rewrite the changelog with an added entry.
 addLogEntry :: DebianSourceTreeC t => ChangeLogEntry -> t -> IO ()
 addLogEntry entry debtree =
--- readFile changelogPath >>= replaceFile changelogPath . ((show (prettyEntry entry)) ++)
-  withFile changelogPath ReadMode (\ handle -> hGetContents handle >>= replaceFile changelogPath . ((show (prettyEntry entry)) ++))
+-- readFile changelogPath >>= replaceFile changelogPath . ((show (pretty entry)) ++)
+  withFile changelogPath ReadMode (\ handle -> hGetContents handle >>= replaceFile changelogPath . ((show (pretty entry)) ++))
     where
       changelogPath = (debdir debtree) ++ "/debian/changelog"
 

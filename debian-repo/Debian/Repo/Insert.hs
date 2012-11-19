@@ -21,7 +21,7 @@ import Data.Either ( partitionEithers, rights )
 import Data.List ( group, sort, intercalate, sortBy, groupBy, isSuffixOf, partition )
 import Data.Maybe ( catMaybes )
 import qualified Data.Set as Set
-import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName, prettyChangesFile )
+import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName )
 import Debian.Control ( formatControl )
 import qualified Debian.Control.ByteString as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(parseControlFromHandle), Control,
                                                   appendFields, fieldValue, modifyField, raiseFields, renameField )
@@ -52,7 +52,7 @@ import System.Posix.Types ( FileOffset )
 import System.Process ( runInteractiveCommand, waitForProcess )
 import System.Process.Progress (quieter, qPutStr, qPutStrLn)
 import qualified Text.Format as F ( Pretty(..) )
-import Text.PrettyPrint.ANSI.Leijen (text, cat)
+import Text.PrettyPrint.ANSI.Leijen (text, cat, pretty)
 
 data InstallResult 
     = Ok
@@ -154,7 +154,7 @@ scanIncoming createSections keyname repo@(LocalRepository root _ _) =
        changes <- liftIO (findChangesFiles (outsidePath root </> "incoming"))
        case changes of
          [] -> qPutStrLn "Nothing to install."
-         _ -> qPutStrLn ("To install:\n  " ++ (intercalate "\n  " . map (show . prettyChangesFile) $ changes))
+         _ -> qPutStrLn ("To install:\n  " ++ (intercalate "\n  " . map (show . pretty) $ changes))
        results <- installPackages createSections keyname repo releases changes
        case results of
          [] -> return ()

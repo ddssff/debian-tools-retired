@@ -32,7 +32,7 @@ module Debian.Repo.Changes
 import "mtl" Control.Monad.Trans ( MonadIO(..) )
 import Data.List ( isSuffixOf )
 import Data.Maybe ( catMaybes )
-import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName, parseChanges, prettyChanges )
+import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName, parseChanges )
 import qualified Debian.Control.String as S ( Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue, modifyField, Paragraph )
 import Debian.Release (SubSection(section), Arch(Binary), archName, parseReleaseName, parseSection)
 import Debian.Repo.LocalRepository ( poolDir )
@@ -288,7 +288,7 @@ parseChecksums text =
       w = "[ \t]+"
 
 showFileList :: [ChangedFileSpec] -> String
-showFileList files = concat (map (("\n " ++) . show . prettyChanges) files)
+showFileList files = concat (map (("\n " ++) . show . pretty) files)
 
 showSHA1List :: [ChangedFileSpec] -> String
 showSHA1List files = concat (map (("\n " ++) . showSHA1) files)
