@@ -22,7 +22,6 @@ import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
-import Data.Either (partitionEithers)
 import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
@@ -30,7 +29,7 @@ import Data.Version (showVersion)
 import Debian.Control
 import qualified Debian.Relation as D
 import Debian.Release (parseReleaseName)
-import Debian.Changes (ChangeLogEntry(..), parseChangeLog)
+import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseChangeLog)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Debian.Version.String
@@ -143,8 +142,8 @@ debianize flags0 =
       -- configuration.
       case () of
         _ | (validate flags') ->
-              do let oldVersion = logVersion (head (changeLog old))
-                     newVersion = logVersion (head (changeLog new))
+              do let oldVersion = logVersion (head (unChangeLog (changeLog old)))
+                     newVersion = logVersion (head (unChangeLog (changeLog new)))
                      oldSource = fromJust (lookupP "Source" (head (unControl (controlFile old))))
                      newSource = fromJust (lookupP "Source" (head (unControl (controlFile new))))
                      oldPackages = catMaybes (map (lookupP "Package") (tail (unControl (controlFile old))))
@@ -156,6 +155,9 @@ debianize flags0 =
                      | True -> return ()
           | dryRun flags' -> putStrLn "Debianization (dry run):" >> describeDebianization flags new >>= putStr
           | True -> writeDebianization flags new
+
+unChangeLog :: ChangeLog -> [ChangeLogEntry]
+unChangeLog (ChangeLog x) = x
 
 -- | Turn the DHFile atoms into DHInstal atoms, and create the file
 -- they are supposed to install.  These files are part of the
@@ -207,11 +209,11 @@ debianization flags pkgDesc compiler oldDeb =
 -- | This is the only file I am confident I can merge with an existing
 -- file, since the entries are dated and marked with well understood
 -- version numbers.
-updateChangelog :: Flags -> String -> PackageDescription -> String -> [ChangeLogEntry] -> [ChangeLogEntry]
-updateChangelog flags debianMaintainer pkgDesc date oldEntries =
+updateChangelog :: Flags -> String -> PackageDescription -> String -> ChangeLog -> ChangeLog
+updateChangelog flags debianMaintainer pkgDesc date (ChangeLog oldEntries) =
     case dropWhile (\ entry -> logVersion entry > logVersion newEntry) oldEntries of
-      entry@(Entry {logVersion = d}) : older | d == logVersion newEntry -> merge entry newEntry : older
-      entries -> newEntry : entries
+      entry@(Entry {logVersion = d}) : older | d == logVersion newEntry -> ChangeLog (merge entry newEntry : older)
+      entries -> ChangeLog (newEntry : entries)
     where
       newEntry = Entry { logPackage = show (D.prettyPkgName (debianSourcePackageName' pkgDesc))
                        , logVersion = updateOriginal f $ debianVersionNumber pkgDesc
