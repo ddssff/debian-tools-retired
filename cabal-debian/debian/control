@@ -17,8 +17,8 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-bytestring-prof | ghc-prof
                , libghc-containers-dev | ghc
                , libghc-containers-prof | ghc-prof
-               , libghc-debian-dev (>= 3.65)
-               , libghc-debian-prof (>= 3.65)
+               , libghc-debian-dev (>= 3.68)
+               , libghc-debian-prof (>= 3.68)
                , libghc-directory-dev | ghc
                , libghc-directory-prof | ghc-prof
                , libghc-filepath-dev | ghc
@@ -45,7 +45,7 @@ Build-Depends-Indep: ghc-doc
                      , libghc-base-doc (<< 5) | ghc-doc
                      , libghc-bytestring-doc | ghc-doc
                      , libghc-containers-doc | ghc-doc
-                     , libghc-debian-doc (>= 3.65)
+                     , libghc-debian-doc (>= 3.68)
                      , libghc-directory-doc | ghc-doc
                      , libghc-filepath-doc | ghc-doc
                      , libghc-mtl-doc

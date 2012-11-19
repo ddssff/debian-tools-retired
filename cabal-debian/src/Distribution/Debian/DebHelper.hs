@@ -9,7 +9,7 @@ module Distribution.Debian.DebHelper
 
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
-import Debian.Changes (ChangeLogEntry(..), prettyEntry)
+import Debian.Changes (ChangeLogEntry(..))
 import Debian.Control
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName))
 import Prelude hiding (catch, init)
@@ -224,7 +224,7 @@ toFiles build d =
     Map.toList $
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
       [("debian/control", show (pretty (controlFile d))),
-       ("debian/changelog", concatMap (show . prettyEntry) (changeLog d)),
+       ("debian/changelog", concatMap (show . pretty) (changeLog d)),
        ("debian/rules", unlines (rules build d)),
        ("debian/compat", show (compat d) ++ "\n"),
        ("debian/copyright", copyright d),
