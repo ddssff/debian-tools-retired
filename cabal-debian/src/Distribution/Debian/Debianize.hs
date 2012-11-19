@@ -30,7 +30,7 @@ import Data.Version (showVersion)
 import Debian.Control
 import qualified Debian.Relation as D
 import Debian.Release (parseReleaseName)
-import Debian.Changes (ChangeLogEntry(..), parseLog)
+import Debian.Changes (ChangeLogEntry(..), parseChangeLog)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Debian.Version.String
@@ -173,7 +173,7 @@ prepareAtom _ x = return [x]
 
 readDebianization :: IO Debianization
 readDebianization = do
-  oldLog <- (readFile "debian/changelog" >>= return . (: []) . DebChangelog . snd . partitionEithers . parseLog) `catch` handleDoesNotExist :: IO [DebAtom]
+  oldLog <- (readFile "debian/changelog" >>= return . (: []) . DebChangelog . parseChangeLog) `catch` handleDoesNotExist :: IO [DebAtom]
   oldControl <- (parseControlFromFile "debian/control" >>= return . either (error . show) ((: []) . DebControl)) `catch` handleDoesNotExist :: IO [DebAtom]
   return $ oldLog ++ oldControl
   -- let oldControl' = either (\ (e :: SomeException) -> []) (either (\ _ -> []) (\ c -> [DebControl c])) oldControl

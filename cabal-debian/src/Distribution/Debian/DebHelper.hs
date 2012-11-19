@@ -9,7 +9,7 @@ module Distribution.Debian.DebHelper
 
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
-import Debian.Changes (ChangeLogEntry(..))
+import Debian.Changes (ChangeLog(..))
 import Debian.Control
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName))
 import Prelude hiding (catch, init)
@@ -25,7 +25,7 @@ instance Pretty BinPkgName where
 -- | The smallest pieces of debhelper information.
 data DebAtom
     = DebControl (Control' String)                -- ^ Write the control file (required)
-    | DebChangelog [ChangeLogEntry]               -- ^ Write the changelog (required)
+    | DebChangelog ChangeLog                      -- ^ Write the changelog (required)
     | DebRulesHead String                         -- ^ The beginning of debian/rules
     | DebRules String                             -- ^ A Fragment of debian/rules
     | DebCompat Int                               -- ^ Write debian/compat (required?)
@@ -50,17 +50,17 @@ data DebAtom
 instance Show (Control' String) where
     show _ = "<control file>"
 
-instance Show ChangeLogEntry where
+instance Show ChangeLog where
     show _ = "<log entry>"
 
-changeLog :: [DebAtom] -> [ChangeLogEntry]
+changeLog :: [DebAtom] -> ChangeLog
 changeLog xs =
     case mapMaybe f xs of
       [x] -> x
       [] -> []
       _ -> error "Multiple debian/changelog files"
     where
-      f :: DebAtom -> Maybe [ChangeLogEntry]
+      f :: DebAtom -> Maybe ChangeLog
       f (DebChangelog x) = Just x
       f _ = Nothing
 

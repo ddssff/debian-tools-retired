@@ -31,7 +31,7 @@ import Control.Monad.Trans ( MonadIO(..) )
 import qualified Data.ByteString.Lazy.Char8 as L ( empty )
 import Data.List ( nubBy, sortBy, intercalate )
 import Data.Time ( NominalDiffTime )
-import Debian.Changes ( ChangeLogEntry(..), parseLog, ChangesFile(..) )
+import Debian.Changes ( ChangeLogEntry(..), parseEntries, ChangesFile(..) )
 import Debian.Control.String ( Field'(Comment), Paragraph'(..), Control'(Control), ControlFunctions(parseControl), Control )
 import Debian.Relation (BinPkgName)
 import Debian.Repo.Changes ( findChangesFiles )
@@ -231,7 +231,7 @@ findDebianSourceTree path0 =
     withFile changelogPath ReadMode
       (\ handle ->
         hGetContents handle >>= \ log ->
-        case parseLog log of
+        case parseEntries log of
           (Right entry : _) ->
             -- ePutStrLn ("findDebianSourceTree " ++ show path0 ++ " -> " ++ topdir tree) >>
             return (DebianSourceTree tree control entry)
