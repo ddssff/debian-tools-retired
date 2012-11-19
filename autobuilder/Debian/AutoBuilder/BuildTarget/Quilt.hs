@@ -19,7 +19,7 @@ import Data.Time.LocalTime ()
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Changes (ChangeLogEntry(..), prettyEntry, parseLog, parseEntry)
+import Debian.Changes (ChangeLogEntry(..), parseLog, parseEntry)
 import Debian.Repo (DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub)
 import Debian.Version
 import Extra.Files (replaceFile)
@@ -29,6 +29,7 @@ import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
 import System.Process (shell)
 import System.Process.Progress (unpackOutputs, mergeToStderr, runProcessF, runProcess, qPutStrLn, quieter)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Regex
 
 qMessage s x = qPutStrLn s >> return x
@@ -186,7 +187,7 @@ mergeChangelogs baseText patchText =
             True ->
                 let baseEntries' = map Base baseEntries in
                 let mergedEntries = third . appendVersionNumbers . sortBy compareDate $ baseEntries' ++ patchEntries' in
-                Right $ (intercalate "\n" (map (show . prettyEntry) mergedEntries)) ++ baseText'
+                Right $ (intercalate "\n" (map (show . pretty) mergedEntries)) ++ baseText'
             False ->
                 Left $ "Package name mismatch between base and patch changelogs: " ++
                        maybe "?" id basePackage ++ " /= " ++ maybe "?" id patchPackage

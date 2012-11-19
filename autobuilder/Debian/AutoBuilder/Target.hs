@@ -34,7 +34,7 @@ import Debian.AutoBuilder.Types.Fingerprint (Fingerprint, packageFingerprint, sh
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
-import Debian.Changes (prettyChanges, ChangesFile(changeRelease, changeInfo, changeFiles, changeDir),
+import Debian.Changes (ChangesFile(changeRelease, changeInfo, changeFiles, changeDir),
                        ChangedFileSpec(changedFileSize, changedFileName, changedFileMD5sum, changedFileSHA1sum, changedFileSHA256sum),
                        ChangeLogEntry(logWho, logVersion, logDists, logDate, logComments))
 import Debian.Control
@@ -830,7 +830,7 @@ setRevisionInfo fingerprint changes {- @(Changes dir name version arch fields fi
               e -> error (show e)
       -- A binary only build will have no .dsc file
       ([], _) -> return changes
-      (several, _) -> error ("Multiple .dsc files found in source package: " ++ intercalate ", " (map (show . prettyChanges) several))
+      (several, _) -> error ("Multiple .dsc files found in source package: " ++ intercalate ", " (map (show . pretty) several))
     where
       addField (Control (Paragraph sourceInfo : binaryInfo)) =
           Control (newSourceInfo : binaryInfo)
