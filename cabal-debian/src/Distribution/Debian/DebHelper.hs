@@ -224,7 +224,7 @@ toFiles build d =
     Map.toList $
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
       [("debian/control", show (pretty (controlFile d))),
-       ("debian/changelog", pretty (changeLog d)),
+       ("debian/changelog", show (pretty (changeLog d))),
        ("debian/rules", unlines (rules build d)),
        ("debian/compat", show (compat d) ++ "\n"),
        ("debian/copyright", copyright d),
