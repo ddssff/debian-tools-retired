@@ -236,6 +236,8 @@ apacheSite b e server =
               , "                Allow from all"
               , "    </Proxy>"
               , ""
+              , "    SetEnv proxy-sendcl 1"
+              , ""
               , "    ProxyPass / http://127.0.0.1:" ++ show (port server) ++ "/ nocanon"
               , "    ProxyPassReverse / http://127.0.0.1:" ++ show (port server) ++ "/"
               , "</VirtualHost>" ])

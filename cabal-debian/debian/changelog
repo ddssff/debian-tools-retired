@@ -1,3 +1,9 @@
+haskell-cabal-debian (2.5.4) unstable; urgency=low
+
+  * Insert "SetEnv proxy-sendcl 1" line into Apache config.
+
+ -- David Fox <dsf@seereason.com>  Tue, 20 Nov 2012 13:43:54 -0800
+
 haskell-cabal-debian (2.5.3) unstable; urgency=low
 
   * Remove extra copy of binary from the executable debs
