@@ -41,10 +41,9 @@ import System.FilePath ( (</>), splitFileName )
 import System.Directory ( createDirectoryIfMissing, doesFileExist, removeFile, renameFile )
 import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
-import qualified System.IO as IO ( stderr, hPutStrLn, hPutStr )
 import System.Posix.Files ( createLink )
 import System.Process (readProcess, shell, proc)
-import System.Process.Progress (ePutStr, ePutStrLn, readProcessChunks, doOutput,
+import System.Process.Progress (ePutStr, ePutStrLn, qPutStr, qPutStrLn, readProcessChunks, doOutput,
                                 runProcess, runProcessF, timeTask, unpackOutputs, oneResult, quieter, foldOutputsL, keepResult)
 import System.Unix.Chroot ( useEnv )
 import System.Unix.Directory (removeRecursiveSafely)
@@ -414,7 +413,7 @@ syncEnv src dst =
     where
       mkdir = createDirectoryIfMissing True (rootPath (osRoot dst) ++ "/work")
       umount =
-          do ePutStrLn "syncEnv: umount"
+          do qPutStrLn "syncEnv: umount"
              srcResult <- umountBelow False (rootPath (osRoot src))
              dstResult <- umountBelow False (rootPath (osRoot dst))
              case filter (\ (_, (code, _, _)) -> code /= ExitSuccess) (srcResult ++ dstResult) of
@@ -499,7 +498,7 @@ neuterFile os (file, mustExist) =
 restoreEnv :: OSImage -> IO OSImage
 restoreEnv os =
     do
-      IO.hPutStr IO.stderr "De-neutering OS image..."
+      qPutStr "De-neutering OS image..."
       result <- try $ mapM_ (restoreFile os) neuterFiles
       either (\ (e :: SomeException) -> error $ "damaged environment " ++ rootPath root ++ ": " ++ show e ++ "\n  please remove it.")
                  (\ _ -> return os) result
@@ -540,7 +539,7 @@ restoreFile os (file, mustExist) =
 -- the OSImage.
 buildEssential :: OSImage -> IO Relations
 buildEssential os =
-    (\ x -> ePutStrLn "Computing build essentials" >> quieter 2 x) $
+    (\ x -> qPutStrLn "Computing build essentials" >> quieter 2 x) $
     do
       essential <-
           readFile (rootPath root ++ "/usr/share/build-essential/essential-packages-list") >>=
@@ -567,9 +566,9 @@ buildEssential os =
 removeEnv :: OSImage -> IO ()
 removeEnv os =
     do
-      IO.hPutStr IO.stderr "Removing build environment..."
+      ePutStr "Removing build environment..."
       removeRecursiveSafely (rootPath root)
-      IO.hPutStrLn IO.stderr "done."
+      ePutStrLn "done."
     where
       root = osRoot os
 
@@ -581,7 +580,7 @@ syncPool os =
     case osLocalRepoMaster os of
       Nothing -> return os
       Just repo ->
-          ePutStrLn ("Syncing local pool from " ++ outsidePath (repoRoot repo) ++ " -> " ++ rootPath root) >>
+          qPutStrLn ("Syncing local pool from " ++ outsidePath (repoRoot repo) ++ " -> " ++ rootPath root) >>
           try (createDirectoryIfMissing True (rootPath root ++ "/work")) >>=
           either (\ (e :: SomeException) -> return . Left . show $ e) (const (rsync' repo)) >>=
           -- either (return . Left) (const (updateLists os)) >>=
@@ -596,8 +595,8 @@ syncPool os =
 
 updateLists :: OSImage -> IO NominalDiffTime
 updateLists os =
-    withProc os $ do
-      ePutStrLn ("Updating OSImage " ++ root)
+    withProc os $ quieter 1 $ do
+      qPutStrLn ("Updating OSImage " ++ root)
       out <- useEnv root forceList (runProcess update L.empty)
       case keepResult out of
         [ExitFailure _] ->

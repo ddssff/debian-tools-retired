@@ -67,10 +67,10 @@ runProcessF p input = liftIO $
       _ -> runProcessVF p input
 
 qPutStrLn :: MonadIO m => String -> m ()
-qPutStrLn s = verbosity >>= \ v -> when (v > 1) (ePutStrLn s)
+qPutStrLn s = verbosity >>= \ v -> when (v >= 0) (ePutStrLn s)
 
 qPutStr :: MonadIO m => String -> m ()
-qPutStr s = verbosity >>= \ v -> when (v > 1) (ePutStr s)
+qPutStr s = verbosity >>= \ v -> when (v >= 0) (ePutStr s)
 
 qMessage :: MonadIO m => String -> a -> m a
 qMessage s x = qPutStr s >> return x
