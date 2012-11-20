@@ -57,7 +57,7 @@ changeLog :: [DebAtom] -> ChangeLog
 changeLog xs =
     case mapMaybe f xs of
       [x] -> x
-      [] -> error "No debian/changelog"
+      [] -> ChangeLog []
       _ -> error "Multiple debian/changelog files"
     where
       f :: DebAtom -> Maybe ChangeLog
