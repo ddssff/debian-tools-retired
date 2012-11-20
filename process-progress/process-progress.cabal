@@ -21,6 +21,7 @@ Library
   ghc-options:      -Wall -O2 -threaded
 
   Exposed-modules:
+    System.Posix.EnvPlus
     System.Process.Progress
     System.Process.Read.Compat
     System.Process.Read.Convenience

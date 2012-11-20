@@ -11,7 +11,9 @@ module System.Process.Read.Verbosity
 
 import Control.Monad (when)
 import Control.Monad.Trans (MonadIO, liftIO)
-import System.Posix.Env (getEnv, setEnv, unsetEnv)
+import System.Process (CreateProcess)
+import System.Posix.EnvPlus (getEnv, modifyEnv)
+import System.Process.Read.Chunks (Output, NonBlocking)
 import System.Process.Read.Convenience (ePutStr, ePutStrLn)
 
 quieter :: MonadIO m => Int -> m a -> m a
