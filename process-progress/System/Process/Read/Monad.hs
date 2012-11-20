@@ -16,9 +16,6 @@ module System.Process.Read.Monad
     , runProcessSE
     , runProcessQE
     , runProcessDE
-    -- * Process feedback managed by the VERBOSITY environment variable
-    , runProcess
-    , runProcessF
     ) where
 
 import Control.Monad (when, unless)
@@ -31,7 +28,6 @@ import System.Process (CreateProcess(cmdspec), CmdSpec(RawCommand, ShellCommand)
 import qualified System.Process.Read.Chars as P
 import qualified System.Process.Read.Chunks as P
 import qualified System.Process.Read.Convenience as P
-import System.Process.Read.Verbosity (verbosity)
 
 -- | The state we need when running processes
 data RunState c
@@ -169,24 +165,3 @@ runProcessDE p input =
 showCommand :: CmdSpec -> String
 showCommand (RawCommand cmd args) = showCommandForUser cmd args
 showCommand (ShellCommand cmd) = cmd
-
--- | Select from the other runProcess* functions based on a verbosity level
-runProcess :: (P.NonBlocking c, MonadIO m) => CreateProcess -> c -> m [P.Output c]
-runProcess p input = liftIO $ 
-    verbosity >>= \ v ->
-    case v of
-      _ | v <= 0 -> runProcessS p input
-      1 -> runProcessQ p input
-      2 -> runProcessD p input
-      _ -> runProcessV p input
-
--- | A version of 'runProcess' that throws an exception on failure.
-runProcessF :: (P.NonBlocking c, MonadIO m) => CreateProcess -> c -> m [P.Output c]
-runProcessF p input = liftIO $
-    verbosity >>= \ v ->
-    case v of
-      _ | v < 0 -> runProcessSF p input
-      0 -> runProcessSE p input
-      1 -> runProcessQE p input
-      2 -> runProcessDE p input
-      _ -> runProcessVF p input
