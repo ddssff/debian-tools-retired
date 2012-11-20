@@ -17,6 +17,7 @@ import Distribution.Debian.PackageInfo (DebType)
 import Distribution.Debian.Server (Executable(..))
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
+import System.Process.Progress (defaultVerbosity)
 
 -- | This record supplies the information we use to generate a
 -- debianization from a cabal package.
@@ -124,7 +125,7 @@ defaultFlags =
     , missingDependencies = []
     , help = False
     , debLibProf = True
-    , verbosity = 1
+    , verbosity = defaultVerbosity
     , debAction = Usage
     , buildDeps = []
     , extraDevDeps = []

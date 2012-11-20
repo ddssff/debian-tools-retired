@@ -2,6 +2,7 @@ module System.Process.Read.Verbosity
     ( quieter
     , noisier
     , withModifiedVerbosity
+    , defaultVerbosity
     , verbosity
     , qPutStr
     , qPutStrLn
@@ -28,6 +29,9 @@ withModifiedVerbosity f action =
     action >>= \ result ->
     liftIO (modifyEnv "VERBOSITY" (const (Just (show v)))) >>
     return result
+
+defaultVerbosity :: Int
+defaultVerbosity = 1
 
 verbosity :: MonadIO m => m Int
 verbosity = liftIO $ getEnv "VERBOSITY" >>= return . maybe 1 read

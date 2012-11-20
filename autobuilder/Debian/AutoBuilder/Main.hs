@@ -59,7 +59,7 @@ import System.Exit(ExitCode(..), exitWith)
 import qualified System.IO as IO
 import System.IO.Error(isDoesNotExistError)
 import System.Process (shell)
-import System.Process.Progress (Output, timeTask, runProcessF, withModifiedVerbosity, quieter, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
+import System.Process.Progress (Output, timeTask, defaultVerbosity, runProcessF, withModifiedVerbosity, quieter, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -137,8 +137,8 @@ runParameterSet cache =
     do
       top <- askTop
       liftIO doRequiredVersion
-      when (P.showParams params) (withModifiedVerbosity (const 1) (liftIO doShowParams))
-      when (P.showSources params) (withModifiedVerbosity (const 1) (liftIO doShowSources))
+      when (P.showParams params) (withModifiedVerbosity (const defaultVerbosity) (liftIO doShowParams))
+      when (P.showSources params) (withModifiedVerbosity (const defaultVerbosity) (liftIO doShowSources))
       when (P.flushAll params) (liftIO $ doFlush top)
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
