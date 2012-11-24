@@ -64,6 +64,7 @@ data RetrieveMethod
     | DebDir RetrieveMethod RetrieveMethod   -- ^ Combine the upstream download with a download for a debian directory
     | Debianize RetrieveMethod               -- ^ Retrieve a cabal package from Hackage and use cabal-debian to debianize it
     | Dir FilePath                           -- ^ Retrieve the source code from a directory on a local machine
+    | Git String                             -- ^ Download from a Git repository
     | Hackage String                         -- ^ Download a cabal package from hackage
     | Hg String                              -- ^ Download from a Mercurial repository
     | Patch RetrieveMethod String            -- ^ Apply the patch given in the string text to the target

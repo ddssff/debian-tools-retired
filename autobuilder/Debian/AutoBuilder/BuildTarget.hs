@@ -13,7 +13,7 @@ import qualified Debian.AutoBuilder.BuildTarget.Cd as Cd
 import qualified Debian.AutoBuilder.BuildTarget.Darcs as Darcs
 import qualified Debian.AutoBuilder.BuildTarget.DebDir as DebDir
 import qualified Debian.AutoBuilder.BuildTarget.Debianize as Debianize
---import qualified Debian.AutoBuilder.BuildTarget.Dir as Dir
+import qualified Debian.AutoBuilder.BuildTarget.Git as Git
 import qualified Debian.AutoBuilder.BuildTarget.Hackage as Hackage
 import qualified Debian.AutoBuilder.BuildTarget.Hg as Hg
 import qualified Debian.AutoBuilder.BuildTarget.Proc as Proc
@@ -85,6 +85,7 @@ retrieve buildOS cache target =
                                  , T.buildWrapper = id
                                  }
 
+      P.Git uri -> Git.prepare cache target uri
       P.Hackage package -> Hackage.prepare cache target package
       P.Hg string -> Hg.prepare cache target string
       P.Patch base patch ->

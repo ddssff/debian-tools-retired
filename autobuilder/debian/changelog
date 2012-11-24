@@ -1,3 +1,9 @@
+autobuilder (6.45) unstable; urgency=low
+
+  * Working Git target support.
+
+ -- David Fox <dsf@seereason.com>  Sat, 24 Nov 2012 06:12:25 -0800
+
 autobuilder (6.44) unstable; urgency=low
 
   * Move some debianization code into cabal-debian.
