@@ -14,25 +14,30 @@
 -- To see what your debianization would produce, or how it differs
 -- from the debianization already present:
 -- 
--- > % CABALDEBIAN='["-n"]' ghc -e 'Distribution.Debian.debianize Distribution.Debian.defaultFlags'
+-- > % ghc -e 'Distribution.Debian.callDebianize ["-n"]'
 -- 
--- To actually create or update the debianization
+-- To actually create the debianization and then build the debs,
 -- 
--- > % ghc -e 'Distribution.Debian.debianize Distribution.Debian.defaultFlags'
+-- > % ghc -e 'Distribution.Debian.callDebianize []'
 -- > % sudo dpkg-buildpackage
 -- 
 -- At this point you may need to modify Cabal.defaultFlags to achieve
 -- specific packaging goals.  Create a module for this in debian/Debianize.hs:
 -- 
 -- > import Distribution.Debian (Flags(..), defaultFlags)
--- > main = debianize (defaultFlags { selfDepend = True -- Add a build dependency on libghc-cabal-debian-dev to the debianization
--- >                                , extraDevDeps = "haskell-hsx-utils" : extraDevDeps defaultFlags})
+-- > main = debianize (defaultFlags { extraDevDeps = "haskell-hsx-utils" : extraDevDeps defaultFlags})
 -- 
--- And then to run it,
+-- And then to test it,
 -- 
--- > 
+-- > % ghc -e 'Distribution.Debian.runDebianize ["-n"]'
+-- 
+-- And to run it
+-- 
+-- > % ghc -e 'Distribution.Debian.runDebianize []'
 module Distribution.Debian
     ( debianize
+    , callDebianize
+    , runDebianize
     , withEnvironmentArgs
     , withEnvironmentFlags
     , putEnvironmentArgs
