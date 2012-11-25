@@ -1,3 +1,10 @@
+haskell-debian-repo (5.39) unstable; urgency=low
+
+  * Split up the SourceTree classes and types, make the class interface
+    more general and consistent and understandable.
+
+ -- David Fox <dsf@seereason.com>  Sun, 25 Nov 2012 14:39:33 -0800
+
 haskell-debian-repo (5.38) unstable; urgency=low
 
   * Run dpkg --configure -a if apt-get update fails.
