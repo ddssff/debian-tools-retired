@@ -16,7 +16,7 @@ module Distribution.Debian.Debianize
 import Codec.Binary.UTF8.String (decodeString)
 import Control.Applicative ((<$>))
 import Control.Arrow (second)
-import Control.Exception (SomeException, catch, throw)
+import Control.Exception (SomeException, try, catch, throw)
 import Control.Monad (mplus)
 import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy as L
@@ -93,27 +93,29 @@ putEnvironmentArgs flags = setEnv "CABALDEBIAN" (show flags) True
 ePutStrLn :: String -> IO ()
 ePutStrLn = hPutStrLn stderr
 
--- | Try to run the custom script in debian/Debianize.hs.
+-- | Try to run the custom script in debian/Debianize.hs to create the
+-- debianization.  This can first put some extra arguments into the
+-- @CABALDEBIAN@ environment variable.  Often this is used to set the
+-- dryRun option by passing @["-n"]@.
 runDebianize :: [String] -> IO Bool
 runDebianize args =
-    do exists <- doesFileExist "debian/Debianize.hs"
-       case exists of
-         True ->
-             do result <- run `catch` (\ (e :: SomeException) -> ePutStrLn ("runDebianize failed: " ++ show e) >> return False)
-                if result then ePutStrLn "runDebianize succeeded" else ePutStrLn "runDebianize failed:"
-                return result
-         False ->
-             do ePutStrLn "No custom debianization"
-                return False
-    where
-      run =
-          do putEnvironmentArgs args
-             (code, _out, _err) <- readProcessWithExitCode "runhaskell" ("debian/Debianize.hs" : args) ""
-             return (code == ExitSuccess)
-       -- foldFailure (\ n -> error "Setup.debianize failed") out
-       -- exists <- doesFileExist "debian/compat" `catch` (\ (_ :: IOError) -> return False)
-       -- unless exists (error "debian/compat was not created")
+    doesFileExist "debian/Debianize.hs" >>= \ exists ->
+    case exists of
+      False -> return False
+      True ->
+          try (putEnvironmentArgs args >> readProcessWithExitCode "runhaskell" ("debian/Debianize.hs" : args) "") >>= \ result ->
+          case result of
+            Left (e :: SomeException) ->
+              ePutStrLn ("runDebianize failed: " ++ show e) >> return False
+            Right (ExitSuccess, _, _) ->
+              ePutStrLn "runDebianize succeeded" >> return True
+            Right (code, out, err) ->
+              ePutStrLn (unlines ["runDebianize failed with " ++ show code ++ ":", " stdout: " ++ show out, " stderr: " ++ show err]) >> return False
 
+-- | Run the debianize function with arguments pulled out of the
+-- @CABALDEBIAN@ environment variable, with the build directory set to
+-- match what dpkg-buildpackage will use later when it uses the
+-- resulting debianization.
 callDebianize :: [String] -> IO ()
 callDebianize args =
     debianize ((compileArgs args defaultFlags) {buildDir = "dist-ghc/build"})
@@ -129,8 +131,7 @@ debianize flags0 =
     withEnvironmentFlags flags0 $ \ flags ->
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
       old <- readDebianization
-      let flags' = flags {buildDeps = buildDeps flags ++ if selfDepend flags then ["libghc-cabal-debian-dev"] else []}
-      new <- (modifyAtoms flags <$> debianization flags' pkgDesc compiler old) >>= mapM (prepareAtom flags) >>= return . concat
+      new <- (modifyAtoms flags <$> debianization flags pkgDesc compiler old) >>= mapM (prepareAtom flags) >>= return . concat
       -- It is imperitive that during the time that dpkg-buildpackage
       -- runs the version number in the changelog and the source and
       -- package names in the control file do not change, or the bulid
@@ -141,7 +142,7 @@ debianize flags0 =
       -- storing them apart from the package in the autobuilder
       -- configuration.
       case () of
-        _ | (validate flags') ->
+        _ | (validate flags) ->
               do let oldVersion = logVersion (head (unChangeLog (changeLog old)))
                      newVersion = logVersion (head (unChangeLog (changeLog new)))
                      oldSource = fromJust (lookupP "Source" (head (unControl (controlFile old))))
@@ -153,7 +154,7 @@ debianize flags0 =
                      | oldSource /= newSource -> error ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource))
                      | oldPackages /= newPackages -> error ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages))
                      | True -> return ()
-          | dryRun flags' -> putStrLn "Debianization (dry run):" >> describeDebianization flags new >>= putStr
+          | dryRun flags -> putStrLn "Debianization (dry run):" >> describeDebianization flags new >>= putStr
           | True -> writeDebianization flags new
 
 unChangeLog :: ChangeLog -> [ChangeLogEntry]

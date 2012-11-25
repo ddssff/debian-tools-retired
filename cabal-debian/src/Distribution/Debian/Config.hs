@@ -71,13 +71,6 @@ data Flags = Flags
     -- e.g. Map.insert "trhsx" "haskell-hsx-utils"
     , omitLTDeps :: Bool
     -- ^ Don't generate the << dependency when we see a cabal equals dependency.
-    , selfDepend :: Bool
-    -- ^ Add a build dependency in the generated debianization on this
-    -- library, libghc-cabal-debian-dev.  This means any change to
-    -- cabal-debian will trigger a rebuild of all packages debianized
-    -- by it, (and for us that is many,) so while technically this
-    -- should always be true we make it an option and default it to
-    -- false.
     , sourceFormat :: String
     -- ^ The string to write into the debian/source/format file, default
     -- '3.0 (quilt)'.
@@ -137,7 +130,6 @@ defaultFlags =
     , revision = "-1~hackage1"
     , execMap = Map.empty
     , omitLTDeps = False
-    , selfDepend = False
     , sourceFormat = "3.0 (native)"
     , dryRun = False
     , validate = False

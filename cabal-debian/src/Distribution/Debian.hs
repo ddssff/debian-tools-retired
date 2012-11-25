@@ -4,23 +4,21 @@
 -- level functions that cabal-debian calls: 'debianize' and
 -- 'substvar'.
 -- 
--- QUICK START: You can either call the cabal-debian executable, which
--- is how the autobuilder debianizes library packages, or you can
--- add a function named debianize to your package's Setup.hs file.  This
--- function should construct a 'Flags' record and call 'Distribution.Debian.debianize'
+-- QUICK START: You can either call the cabal-debian executable, or
+-- for more power and flexibility you can construct a
+-- 'Distribution.Debian.Flags' record and pass it to the
+-- 'Distribution.Debian.debianize' function file.  The 'Distribution.Debian.Debianize.callDebianize' function
+-- retrieves extra arguments from the @CABALDEBIAN@ environment variable and calls 'Distribution.Debian.debianize'
+-- with the build directory set as it would be when the packages is built by @dpkg-buildpackage@.
 -- 
 -- To see what your debianization would produce, or how it differs
 -- from the debianization already present:
 -- 
--- > % ghci
--- > > :m +Distribution.Debian
--- > > :m +Posix.System.Env
--- > > setEnv "CABALDEBIAN" (show ["-n"]) True >> debianize defaultFlags
+-- > % CABALDEBIAN='["-n"]' ghc -e 'Distribution.Debian.debianize Distribution.Debian.defaultFlags'
 -- 
 -- To actually create or update the debianization
 -- 
--- > > unsetEnv "CABALDEBIAN" >> debianize defaultFlags
--- > > :quit
+-- > % ghc -e 'Distribution.Debian.debianize Distribution.Debian.defaultFlags'
 -- > % sudo dpkg-buildpackage
 -- 
 -- At this point you may need to modify Cabal.defaultFlags to achieve
@@ -30,6 +28,9 @@
 -- > main = debianize (defaultFlags { selfDepend = True -- Add a build dependency on libghc-cabal-debian-dev to the debianization
 -- >                                , extraDevDeps = "haskell-hsx-utils" : extraDevDeps defaultFlags})
 -- 
+-- And then to run it,
+-- 
+-- > 
 module Distribution.Debian
     ( debianize
     , withEnvironmentArgs

@@ -29,8 +29,6 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-parsec3-prof (>= 3)
                , libghc-pretty-dev | ghc
                , libghc-pretty-prof | ghc-prof
-               , libghc-pretty-class-dev
-               , libghc-pretty-class-prof
                , libghc-process-dev | ghc
                , libghc-process-prof | ghc-prof
                , libghc-regex-tdfa-dev
@@ -51,7 +49,6 @@ Build-Depends-Indep: ghc-doc
                      , libghc-mtl-doc
                      , libghc-parsec3-doc (>= 3)
                      , libghc-pretty-doc | ghc-doc
-                     , libghc-pretty-class-doc
                      , libghc-process-doc | ghc-doc
                      , libghc-regex-tdfa-doc
                      , libghc-unix-doc | ghc-doc

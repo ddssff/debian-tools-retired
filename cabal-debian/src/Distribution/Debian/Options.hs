@@ -122,8 +122,6 @@ options =
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
       Option "" ["omit-lt-deps"] (NoArg (\x -> x { omitLTDeps = True }))
              "Don't generate the << dependency when we see a cabal equals dependency.",
-      Option "" ["self-depend"] (NoArg (\ x -> x {selfDepend = True}))
-             "Add a build dependency on libghc-cabal-debian-dev (this library.)",
       Option "" ["quilt"] (NoArg (\ x -> x {sourceFormat = "3.0 (quilt)"}))
              "The package has an upstream tarball, write '3.0 (quilt)' into source/format.",
       Option "n" ["dry-run", "compare"] (NoArg (\ x -> x {dryRun = True}))
