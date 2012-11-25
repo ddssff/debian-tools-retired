@@ -27,13 +27,13 @@
 -- > import Distribution.Debian (Flags(..), defaultFlags)
 -- > main = debianize (defaultFlags { extraDevDeps = "haskell-hsx-utils" : extraDevDeps defaultFlags})
 -- 
--- And then to test it,
+-- Then to test it,
 -- 
--- > % ghc -e 'Distribution.Debian.runDebianize ["-n"]'
+-- > % CABALDEBIAN='["-n"]' runhaskell debian/Debianize.hs
 -- 
--- And to run it
+-- and to run it
 -- 
--- > % ghc -e 'Distribution.Debian.runDebianize []'
+-- > % runhaskell debian/Debianize.hs
 module Distribution.Debian
     ( debianize
     , callDebianize

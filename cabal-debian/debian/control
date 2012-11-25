@@ -1,5 +1,5 @@
 Source: haskell-cabal-debian
-Priority: extra
+Priority: optional
 Section: haskell
 Maintainer: David Fox <dsf@seereason.com>
 Build-Depends: debhelper (>= 7.0)
@@ -11,26 +11,36 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-cabal-prof (>= 1.9) | ghc-prof
                , libghc-unixutils-dev (>= 1.50)
                , libghc-unixutils-prof (>= 1.50)
+               , libghc-ansi-wl-pprint-dev
+               , libghc-ansi-wl-pprint-prof
+               , libghc-applicative-extras-dev
+               , libghc-applicative-extras-prof
                , libghc-base-dev (<< 5) | ghc
                , libghc-base-prof (<< 5) | ghc-prof
                , libghc-bytestring-dev | ghc
                , libghc-bytestring-prof | ghc-prof
                , libghc-containers-dev | ghc
                , libghc-containers-prof | ghc-prof
-               , libghc-debian-dev (>= 3.68)
-               , libghc-debian-prof (>= 3.68)
+               , libghc-debian-dev (>= 3.69)
+               , libghc-debian-prof (>= 3.69)
                , libghc-directory-dev | ghc
                , libghc-directory-prof | ghc-prof
                , libghc-filepath-dev | ghc
                , libghc-filepath-prof | ghc-prof
                , libghc-mtl-dev
                , libghc-mtl-prof
+               , libghc-network-dev
+               , libghc-network-prof
                , libghc-parsec3-dev (>= 3)
                , libghc-parsec3-prof (>= 3)
                , libghc-pretty-dev | ghc
                , libghc-pretty-prof | ghc-prof
                , libghc-process-dev | ghc
                , libghc-process-prof | ghc-prof
+               , libghc-process-progress-dev
+               , libghc-process-progress-prof
+               , libghc-puremd5-dev
+               , libghc-puremd5-prof
                , libghc-regex-tdfa-dev
                , libghc-regex-tdfa-prof
                , libghc-unix-dev | ghc
@@ -40,16 +50,21 @@ Build-Depends: debhelper (>= 7.0)
 Build-Depends-Indep: ghc-doc
                      , libghc-cabal-doc (>= 1.9) | ghc-doc
                      , libghc-unixutils-doc (>= 1.50)
+                     , libghc-ansi-wl-pprint-doc
+                     , libghc-applicative-extras-doc
                      , libghc-base-doc (<< 5) | ghc-doc
                      , libghc-bytestring-doc | ghc-doc
                      , libghc-containers-doc | ghc-doc
-                     , libghc-debian-doc (>= 3.68)
+                     , libghc-debian-doc (>= 3.69)
                      , libghc-directory-doc | ghc-doc
                      , libghc-filepath-doc | ghc-doc
                      , libghc-mtl-doc
+                     , libghc-network-doc
                      , libghc-parsec3-doc (>= 3)
                      , libghc-pretty-doc | ghc-doc
                      , libghc-process-doc | ghc-doc
+                     , libghc-process-progress-doc
+                     , libghc-puremd5-doc
                      , libghc-regex-tdfa-doc
                      , libghc-unix-doc | ghc-doc
                      , libghc-utf8-string-doc
