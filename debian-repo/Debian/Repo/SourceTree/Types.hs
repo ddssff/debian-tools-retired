@@ -87,7 +87,7 @@ instance SourceTreeC DebianBuildTree where
     copySourceTree tree dest =
         copySource >>= copyTarball
         where
-          copySource = DebianBuildTree <$> pure (topdir' tree) <*> pure (subdir' tree) <*> copySourceTree (debTree' tree) (dest </> subdir' tree)
+          copySource = DebianBuildTree <$> pure dest <*> pure (subdir' tree) <*> copySourceTree (debTree' tree) (dest </> subdir' tree)
           copyTarball copy =
               do exists <- liftIO $ doesFileExist origPath
                  case exists of
