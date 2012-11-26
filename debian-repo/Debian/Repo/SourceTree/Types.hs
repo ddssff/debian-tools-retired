@@ -84,20 +84,23 @@ instance DebianSourceTreeC DebianSourceTree where
 
 instance SourceTreeC DebianBuildTree where
     topdir = topdir'
-    copySourceTree tree dest =
-        copySource >>= copyTarball
+    copySourceTree build dest =
+        copySource >> copyTarball >> return moveBuild
         where
-          copySource = DebianBuildTree <$> pure dest <*> pure (subdir' tree) <*> copySourceTree (debTree' tree) (dest </> subdir' tree)
-          copyTarball copy =
+          moveBuild = build {topdir' = dest, debTree' = moveSource (debTree' build)}
+          moveSource source = source {tree' = SourceTree {dir' = dest </> subdir build}}
+          copySource = rsync [] (topdir' build) dest
+          -- copySource = DebianBuildTree <$> pure dest <*> pure (subdir' tree) <*> copySourceTree (debTree' tree) (dest </> subdir' tree)
+          copyTarball =
               do exists <- liftIO $ doesFileExist origPath
                  case exists of
-                   False -> return copy
-                   True -> runProcess (proc "cp" ["-p", origPath, dest ++ "/"]) L.empty >> return copy
+                   False -> return []
+                   True -> runProcess (proc "cp" ["-p", origPath, dest ++ "/"]) L.empty
               where
-                origPath = topdir tree </> orig
+                origPath = topdir build </> orig
                 orig = name ++ "_" ++ version ++ ".orig.tar.gz"
-                name = logPackage . entry $ tree
-                version = V.version . logVersion . entry $ tree
+                name = logPackage . entry $ build
+                version = V.version . logVersion . entry $ build
     findSourceTree path =
         do trees <- findDebianBuildTrees path
            case nubBy eqNames trees of
