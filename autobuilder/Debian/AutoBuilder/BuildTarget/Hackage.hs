@@ -48,7 +48,7 @@ prepare cache package name =
        unp <- unpacked name version'
        liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely tar)
        download cache name version'
-       tree <- liftIO $ findSourceTree unp
+       tree <- liftIO $ (findSourceTree unp :: IO SourceTree)
        return $ T.Download { T.package = package
                            , T.getTop = topdir tree
                            , T.logText =  "Built from hackage, revision: " ++ show (P.spec package)

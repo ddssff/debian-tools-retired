@@ -13,7 +13,7 @@ import Debian.Repo
 -- of BuildTarget.
 prepare :: MonadApt m => P.CacheRec -> P.Packages -> FilePath -> m T.Download
 prepare _cache package path =
-    do tree <- liftIO (findSourceTree path)
+    do tree <- liftIO (findSourceTree path :: IO SourceTree)
        return $ T.Download { T.package = package
                            , T.getTop = topdir tree
                            , T.logText =  "Built from local directory " ++ show (P.spec package)

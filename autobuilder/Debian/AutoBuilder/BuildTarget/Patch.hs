@@ -11,7 +11,7 @@ import Data.Digest.Pure.MD5 (md5)
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Repo (OSImage, findSourceTree, copySourceTree, SourceTree(dir'), findDebianSourceTrees, sub)
+import Debian.Repo (OSImage, findSourceTree, copySourceTree, SourceTree(dir'), DebianSourceTree, findDebianSourceTrees, sub)
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
@@ -77,7 +77,7 @@ findSource :: P.RetrieveMethod -> FilePath -> IO FilePath
 findSource (P.Patch (P.Apt _dist _name) _) copyDir =
   try (findDebianSourceTrees (D.trace ("findDebianSourceTree " ++ show copyDir) copyDir)) >>=
   return . either (\ (e :: SomeException) -> D.trace (" -> " ++ show e) copyDir)
-           (\ ts ->
+           (\ (ts :: [(FilePath, DebianSourceTree)]) ->
              case ts of
                [(subdir, _)] -> D.trace (" -> " ++ show (copyDir </> subdir)) (copyDir </> subdir)
                [] -> error "findSource: Internal error"

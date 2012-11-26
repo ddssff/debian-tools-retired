@@ -49,10 +49,10 @@ prepare cache package archive =
 
       updateSource dir =
           runProcessF (shell ("cd " ++ dir ++ " && hg pull -u")) empty >>
-          findSourceTree dir
+          findSourceTree dir :: IO SourceTree
 
       createSource dir =
           let (parent, _) = splitFileName dir in
           liftIO (createDirectoryIfMissing True parent) >>
           runProcessF (shell ("hg clone " ++ archive ++ " " ++ dir)) empty >>
-          findSourceTree dir
+          findSourceTree dir :: IO SourceTree

@@ -58,7 +58,7 @@ prepare cache package version =
         mergeSource dir =
             runProcessF (shell cmd) L.empty >>= \ b ->
             if isInfixOf "Nothing to do." (L.unpack (L.concat (keepOutput b)))
-            then findSourceTree dir
+            then findSourceTree dir :: IO SourceTree
             else commitSource dir
             where
                 cmd   = "cd " ++ dir ++ " && bzr merge"
@@ -81,7 +81,7 @@ prepare cache package version =
             let (parent, _) = splitFileName dir
             createDirectoryIfMissing True parent
             _output <- runProcessF (shell cmd) L.empty
-            findSourceTree dir
+            findSourceTree dir :: IO SourceTree
             where
                 cmd   = "bzr branch " ++ version ++ " " ++ dir
                 -- style = (setStart (Just ("Retrieving Bazzar source for " ++ version)) .

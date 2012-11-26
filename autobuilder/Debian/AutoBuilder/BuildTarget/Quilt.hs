@@ -20,7 +20,7 @@ import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (ChangeLogEntry(..), parseEntries, parseEntry)
-import Debian.Repo (DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub)
+import Debian.Repo (DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub)
 import Debian.Version
 import Extra.Files (replaceFile)
 import "Extra" Extra.List ()
@@ -57,11 +57,11 @@ makeQuiltTree m base patch =
        quilt <- sub "quilt"
        liftIO (createDirectoryIfMissing True quilt)
        baseTree <- liftIO $ findSourceTree (T.getTop base)
-       patchTree <- liftIO $ findSourceTree (T.getTop patch)
+       patchTree <- liftIO $ (findSourceTree (T.getTop patch) :: IO SourceTree)
        copyTree <- liftIO $ copySourceTree baseTree copyDir
        -- If this is already a DebianBuildTree we need to apply
        -- the patch to the subdirectory containing the DebianSourceTree.
-       debTree <- liftIO $ findOneDebianBuildTree copyDir
+       debTree <- liftIO (findOneDebianBuildTree copyDir :: IO (Maybe DebianBuildTree))
        -- Compute the directory where the patches will be applied
        let quiltDir = maybe copyDir debdir debTree
        qPutStrLn $ "copyDir: " ++ copyDir
@@ -123,7 +123,7 @@ prepare package base patch =
                                 do result3 <- liftIO (runProcess (shell cmd3) L.empty) >>= qMessage "Cleaning Quilt target" . unpackOutputs
                                    case result3 of
                                      ([ExitSuccess], _, _, _) ->
-                                         do tree <- findSourceTree (topdir quiltTree)
+                                         do tree <- findSourceTree (topdir quiltTree) :: IO SourceTree
                                             -- return $ Quilt base patch tree m
                                             return $ T.Download {
                                                          T.package = package

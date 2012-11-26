@@ -29,7 +29,7 @@ prepare package upstream debian =
     liftIO (createDirectoryIfMissing True dir) >>
     rsync [] (T.getTop upstream) dest >>
     rsync [] (T.getTop debian </> "debian") (dest </> "debian") >>
-    liftIO (findDebianSourceTree dest) >>= \ tree ->
+    liftIO (findSourceTree dest :: IO DebianSourceTree) >>= \ tree ->
     let tgt = T.Download {
                 T.package = package
               , T.getTop = topdir tree

@@ -61,8 +61,8 @@ retrieve buildOS cache target =
       P.DataFiles base files loc ->
           do base' <- retrieve buildOS cache (target {P.spec = base})
              files' <- retrieve buildOS cache (target {P.spec = files})
-             baseTree <- liftIO $ findSourceTree (T.getTop base')
-             filesTree <- liftIO $ findSourceTree (T.getTop files')
+             baseTree <- liftIO (findSourceTree (T.getTop base') :: IO SourceTree)
+             filesTree <- liftIO (findSourceTree (T.getTop files') :: IO SourceTree)
              _ <- liftIO $ copySourceTree filesTree (dir' baseTree </> loc)
              return base'
 
@@ -75,7 +75,7 @@ retrieve buildOS cache target =
           Debianize.prepare cache target
 
       P.Dir path ->
-          do tree <- liftIO (findSourceTree path)
+          do tree <- liftIO (findSourceTree path :: IO SourceTree)
              return $ T.Download { T.package = target
                                  , T.getTop = topdir tree
                                  , T.logText =  "Built from local directory " ++ show (P.spec target)

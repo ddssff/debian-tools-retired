@@ -55,7 +55,7 @@ import Debian.Repo.Insert (scanIncoming, showErrors)
 import Debian.Repo.OSImage (OSImage, updateLists)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.SourceTree (SourceTreeC(..), DebianSourceTreeC(..),
-                               DebianBuildTree, addLogEntry, copyDebianBuildTree,
+                               DebianBuildTree, addLogEntry, copySourceTree,
                                findChanges, findOneDebianBuildTree, SourcePackageStatus(..))
 import Debian.Repo.Types (SourcePackage(sourceParagraph, sourcePackageID),
                           AptCache(rootDir, aptBinaryPackages), EnvRoot(rootPath),
@@ -489,7 +489,7 @@ prepareBuildImage cache cleanOS sourceFingerprint buildOS target | P.strictness 
       prepareTree False _ =
           (\ x -> qPutStrLn "Copying build tree..." >> quieter 1 x) $
           Debian.Repo.syncEnv cleanOS buildOS >>
-          copyDebianBuildTree (cleanSource target) newPath
+          copySourceTree (cleanSource target) newPath
       buildDepends = (P.buildDepends (P.params cache))
       noClean = P.noClean (P.params cache)
       newPath = rootPath (rootDir buildOS) ++ fromJust (dropPrefix (rootPath (rootDir cleanOS)) oldPath)
@@ -504,7 +504,7 @@ prepareBuildImage cache cleanOS sourceFingerprint buildOS target =
       -- findTree :: Bool -> IO (Failing DebianBuildTree)
       findTree False =
           (\ x -> qPutStrLn "Finding build tree" >> quieter 1 x) $
-              copyDebianBuildTree (cleanSource target) newPath
+              copySourceTree (cleanSource target) newPath
       findTree True =
           findOneDebianBuildTree newPath >>=
           maybe (error ("prepareBuildImage: could not find build tree in " ++ newPath)) return

@@ -53,7 +53,7 @@ prepare cache package version =
              -- going to assume that the "clean" copies in the cache
              -- directory are clean, since some of the other target
              -- types have no way of doing this reversion.
-          findSourceTree dir
+          findSourceTree dir :: IO SourceTree
 
       createSource dir =
           do

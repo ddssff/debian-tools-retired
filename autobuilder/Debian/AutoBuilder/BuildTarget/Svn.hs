@@ -80,7 +80,7 @@ prepare cache package uri =
           let (parent, _) = splitFileName dir in
           liftIO (createDirectoryIfMissing True parent) >>
           checkout dir >>
-          findSourceTree dir
+          findSourceTree dir :: IO SourceTree
       checkout :: FilePath -> IO (Either String [Output L.ByteString])
       --checkout = svn createStyle args 
       checkout dir = runProcess (proc "svn" args) L.empty >>= return . finish

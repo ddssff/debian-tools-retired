@@ -33,8 +33,8 @@ import qualified Debian.GenBuildDeps as G
 import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
 import Debian.Repo.OSImage (OSImage)
-import Debian.Repo.SourceTree (DebianBuildTree(..), control, entry, subdir, debdir, findDebianBuildTrees, findDebianBuildTree, copyDebianBuildTree,
-                               DebianSourceTree(..), findDebianSourceTree, copyDebianSourceTree {-, SourceTree(dir')-})
+import Debian.Repo.SourceTree (DebianBuildTree(..), control, entry, subdir, debdir, findDebianBuildTrees, findBuildTree, copySourceTree,
+                               DebianSourceTree(..), findSourceTree {-, SourceTree(dir')-})
 import Debian.Repo.Types (AptCache(rootDir), EnvRoot(rootPath))
 import qualified Debian.Version
 import Prelude hiding (catch)
@@ -74,7 +74,7 @@ data Buildable
 -- exception if we can't find any, or we find too many.
 asBuildable :: Download -> IO Buildable
 asBuildable download =
-    try (findDebianSourceTree (getTop download)) >>=
+    try (findSourceTree (getTop download)) >>=
             either (\ (_ :: SomeException) ->
                         -- qPutStrLn ("No source tree found in " ++ getTop download ++ " (" ++ show e ++ ")") >>
                         findDebianBuildTrees (getTop download) >>= \ trees ->
@@ -140,7 +140,7 @@ targetControl = control . cleanSource
 -- sure that debian\/rules is executable.
 prepareBuild :: C.CacheRec -> OSImage -> T.Download -> IO DebianBuildTree
 prepareBuild _cache os target =
-    try (findDebianSourceTree (T.getTop target)) >>=
+    try (findSourceTree (T.getTop target)) >>=
     either (\ (_ :: SomeException) ->
                 qPutStrLn ("Failed to find source tree in " ++ T.getTop target ++ ", trying build trees.") >>
                 findDebianBuildTrees (T.getTop target) >>= \ trees ->
@@ -162,11 +162,11 @@ prepareBuild _cache os target =
                  ver = Debian.Version.version . logVersion . entry $ debSource
                  newdir = escapeForBuild $ name ++ "-" ++ ver
              -- ePutStrLn ("copySource " ++ dir' (tree' debSource) ++ " -> " ++ dest ++ ", tarball=" ++ show (T.origTarball target))
-             _copy <- copyDebianSourceTree debSource (dest </> newdir)
+             _copy <- copySourceTree debSource (dest </> newdir)
              -- Clean the revision control files for this target out of the copy of the source tree
              (_out, _time) <- T.cleanTarget target (dest </> newdir)
              maybe (return ()) (liftIO . copyOrigTarball dest name ver) (T.origTarball target)
-             findDebianBuildTree dest newdir
+             findBuildTree dest newdir
 
       copyBuild :: DebianBuildTree -> IO DebianBuildTree
       copyBuild debBuild =
@@ -175,11 +175,11 @@ prepareBuild _cache os target =
                  ver = Debian.Version.version . logVersion . entry $ debBuild
                  newdir = escapeForBuild $ name ++ "-" ++ ver
              -- ePutStrLn ("copyBuild " ++ topdir' debBuild ++ " -> " ++ dest ++ ", tarball=" ++ show (T.origTarball target))
-             _copy <- copyDebianBuildTree debBuild dest
+             _copy <- copySourceTree debBuild dest
              (_output, _time) <- T.cleanTarget target (dest </> newdir)
              when (newdir /= (subdir debBuild))
                       (liftIO $ renameDirectory (dest ++ "/" ++ subdir debBuild) (dest ++ "/" ++ newdir))
-             findDebianBuildTree dest newdir
+             findBuildTree dest newdir
 
       copyOrigTarball dest name ver src =
           qPutStrLn ("forceLink " ++ src ++ " " ++ dest ++ "/" ++ name ++ "-" ++ ver ++ ".orig.tar" ++ takeExtension src) >>

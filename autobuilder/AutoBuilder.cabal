@@ -37,7 +37,7 @@ Library
       Build-Depends: debian >= 3.68
       Hs-Source-Dirs: ., ../debian-repo
   else
-    Build-Depends: debian-repo >= 5.32, debian >= 3.68
+    Build-Depends: debian-repo >= 5.39, debian >= 3.68
 
   Build-Depends:
         ansi-wl-pprint
