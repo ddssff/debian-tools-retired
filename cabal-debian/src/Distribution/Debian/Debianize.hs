@@ -413,6 +413,7 @@ control flags compiler maint pkgDesc =
                       else []) ++
                      ([anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
                       extraDeps (debianName pkgDesc) (binaryPackageDeps flags))))),
+           Field ("Conflicts", " " ++ "${haskell:Conflicts}"),
            Field ("Recommends", " " ++ "${haskell:Recommends}"),
            Field ("Suggests", " " ++ "${haskell:Suggests}"),
            Field ("Provides", " " ++ "${haskell:Provides}"),
@@ -426,6 +427,7 @@ control flags compiler maint pkgDesc =
            Field ("Depends", " " ++ showDeps' "Depends:" (filterMissing (missingDependencies' flags)
                                                           ([anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
                                                            extraDeps (debianDocPackageName' pkgDesc) (binaryPackageDeps flags)))),
+           Field ("Conflicts", " " ++ "${haskell:Conflicts}"),
            Field ("Recommends", " " ++ "${haskell:Recommends}"),
            Field ("Suggests", " " ++ "${haskell:Suggests}"),
            Field ("Description", " " ++ libraryDescription Documentation)]
@@ -476,6 +478,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
              Field ("Architecture", " " ++ "any"),
              Field ("Section", " " ++ "misc"),
              Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (D.BinPkgName (debName p)) (binaryPackageDeps flags)))),
+             Field ("Conflicts", " " ++ "${haskell:Conflicts}"),
              Field ("Description", " " ++ maybe debianDescription (const executableDescription) (library pkgDesc))] ++
             conflicts (filterMissing (missingDependencies' flags) (extraDeps (b p) (binaryPackageConflicts flags)))),
            [DebRules ("build" </> debName p ++ ":: build-ghc-stamp")])
@@ -497,6 +500,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                     Field ("Architecture", " " ++ "any"),
                     Field ("Section", " " ++ "misc"),
                     Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps p (binaryPackageDeps flags)))),
+                    Field ("Conflicts", " " ++ "${haskell:Conflicts}"),
                     Field ("Description", " " ++ maybe debianDescription (const utilsDescription) (library pkgDesc))] ++
                    conflicts (extraDeps p (binaryPackageConflicts flags))),
                   (map (\ e -> DHInstallCabalExec p (exeName e) "usr/bin") bundledExecutables ++
