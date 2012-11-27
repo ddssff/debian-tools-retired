@@ -328,13 +328,16 @@ dh_movefiles (1)     - move files out of debian/tmp into subpackages (use dh_ins
 -- | For each pair (A, B) return a rule that ensures that the package
 -- requires the same exact version of package B as the version of A
 -- currently installed during the build.
-tightDependencyFixup :: BinPkgName -> [(String, String)] -> DebAtom
-tightDependencyFixup package pairs =
-    let name = show (pretty package) in
-    DebRules
+tightDependencyFixup :: BinPkgName -> [(String, String)] -> [DebAtom]
+tightDependencyFixup _ [] = []
+tightDependencyFixup package (hd : tl) =
+    let name = show (pretty package)
+        -- We need to separate the entries with a comma
+        pairs = hd : map (\ (installed, dependent) -> (installed, ", " ++ dependent)) tl in
+    [DebRules
       (unlines
        ([ "binary-fixup/" ++ name ++ "::"
         , "\techo -n 'haskell:Depends=' >> debian/" ++ name ++ ".substvars" ] ++
-        map (\ (installed, dependent) -> "\tdpkg-query -W -f='" ++ dependent ++ " (=$${Version})' " ++ installed ++ " >> debian/" ++ name ++ ".substvars") pairs ++
+        map (\ (installed, dependent) -> "\tdpkg-query -W -f='" ++ dependent ++ " (=$${Version})' " ++ installed ++ " >> debian/" ++ name ++ ".substvars") pairs' ++
         [ "\techo -n 'haskell:Conflicts=' >> debian/" ++ name ++ ".substvars" ] ++
-        map (\ (installed, dependent) -> "\tdpkg-query -W -f='" ++ dependent ++ " (>>$${Version})' " ++ installed ++ " >> debian/" ++ name ++ ".substvars") pairs))
+        map (\ (installed, dependent) -> "\tdpkg-query -W -f='" ++ dependent ++ " (>>$${Version})' " ++ installed ++ " >> debian/" ++ name ++ ".substvars") pairs'))]
