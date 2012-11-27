@@ -54,7 +54,6 @@ import System.Directory
 import System.Environment
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>), takeDirectory, splitFileName)
-import System.IO (hPutStrLn, stderr)
 import System.Posix.Env (setEnv)
 import System.Process (readProcessWithExitCode)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -90,9 +89,6 @@ withEnvironmentFlags flags0 f =
 putEnvironmentArgs :: [String] -> IO ()
 putEnvironmentArgs flags = setEnv "CABALDEBIAN" (show flags) True
 
-ePutStrLn :: String -> IO ()
-ePutStrLn = hPutStrLn stderr
-
 -- | Try to run the custom script in debian/Debianize.hs to create the
 -- debianization.  This can first put some extra arguments into the
 -- @CABALDEBIAN@ environment variable.  Often this is used to set the
@@ -105,8 +101,7 @@ runDebianize args =
       True ->
           putEnvironmentArgs args >> readProcessWithExitCode "runhaskell" ("debian/Debianize.hs" : args) "" >>= \ result ->
           case result of
-            (ExitSuccess, _, _) ->
-              ePutStrLn "runDebianize succeeded" >> return True
+            (ExitSuccess, _, _) -> return True
             (code, out, err) ->
               error ("runDebianize failed with " ++ show code ++ ":\n stdout: " ++ show out ++"\n stderr: " ++ show err)
 

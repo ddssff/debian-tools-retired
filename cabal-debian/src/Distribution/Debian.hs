@@ -48,10 +48,11 @@ module Distribution.Debian
     , compileArgs
     , DebType
     , DebAtom(..)
+    , tightDependencyFixup
     , module Distribution.Debian.Server
     ) where
 
-import Distribution.Debian.DebHelper (DebAtom(..))
+import Distribution.Debian.DebHelper (DebAtom(..), tightDependencyFixup)
 import Distribution.Debian.Debianize (debianize, callDebianize, runDebianize, withEnvironmentArgs, withEnvironmentFlags, putEnvironmentArgs)
 import Distribution.Debian.Config (Flags(..), DebAction(..), defaultFlags)
 import Distribution.Debian.Options (compileArgs)

@@ -5,6 +5,7 @@ module Distribution.Debian.DebHelper
     , changeLog
     , controlFile
     , toFiles
+    , tightDependencyFixup
     ) where
 
 import qualified Data.Map as Map
@@ -323,3 +324,17 @@ dh_usrlocal (1)      - migrate usr/local directories to maintainer scripts
 dh_movefiles (1)     - move files out of debian/tmp into subpackages (use dh_install)
 
 -}
+
+-- | For each pair (A, B) return a rule that ensures that the package
+-- requires the same exact version of package B as the version of A
+-- currently installed during the build.
+tightDependencyFixup :: BinPkgName -> [(String, String)] -> DebAtom
+tightDependencyFixup package pairs =
+    let name = show (pretty package) in
+    DebRules
+      (unlines
+       ([ "binary-fixup/" ++ name ++ "::"
+        , "\techo -n 'haskell:Depends=' >> debian/" ++ name ++ ".substvars" ] ++
+        map (\ (installed, dependent) -> "\tdpkg-query -W -f='" ++ dependent ++ " (=$${Version})' " ++ installed ++ " >> debian/" ++ name ++ ".substvars") pairs ++
+        [ "\techo -n 'haskell:Conflicts=' >> debian/" ++ name ++ ".substvars" ] ++
+        map (\ (installed, dependent) -> "\tdpkg-query -W -f='" ++ dependent ++ " (>>$${Version})' " ++ installed ++ " >> debian/" ++ name ++ ".substvars") pairs))
