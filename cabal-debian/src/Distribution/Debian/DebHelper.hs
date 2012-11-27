@@ -338,6 +338,6 @@ tightDependencyFixup package (hd : tl) =
       (unlines
        ([ "binary-fixup/" ++ name ++ "::"
         , "\techo -n 'haskell:Depends=' >> debian/" ++ name ++ ".substvars" ] ++
-        map (\ (installed, dependent) -> "\tdpkg-query -W -f='" ++ dependent ++ " (=$${Version})' " ++ installed ++ " >> debian/" ++ name ++ ".substvars") pairs' ++
+        map (\ (installed, dependent) -> "\tdpkg-query -W -f='" ++ dependent ++ " (=$${Version})' " ++ installed ++ " >> debian/" ++ name ++ ".substvars") pairs ++
         [ "\techo -n 'haskell:Conflicts=' >> debian/" ++ name ++ ".substvars" ] ++
-        map (\ (installed, dependent) -> "\tdpkg-query -W -f='" ++ dependent ++ " (>>$${Version})' " ++ installed ++ " >> debian/" ++ name ++ ".substvars") pairs'))]
+        map (\ (installed, dependent) -> "\tdpkg-query -W -f='" ++ dependent ++ " (>>$${Version})' " ++ installed ++ " >> debian/" ++ name ++ ".substvars") pairs))]
