@@ -20,7 +20,6 @@ import Debian.Relation (BinPkgName(unBinPkgName))
 import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
 import qualified Distribution.Debian as Cabal
-import qualified Distribution.Debian.Debianize as Cabal
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..) {-, PackageName(..)-})
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
@@ -62,16 +61,14 @@ withCurrentDirectory :: MonadCatchIO m => FilePath -> m a -> m a
 withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old -> liftIO (setCurrentDirectory new) >> return old) (liftIO . setCurrentDirectory) (\ _ -> action)
 
 -- | Run cabal-debian on the given directory, creating or updating the
--- debian subdirectory.
+-- debian subdirectory.  If the script in debian/Debianize.hs fails this
+-- will throw an exception.
 autobuilderDebianize :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
 autobuilderDebianize cache pflags currentDirectory =
     withCurrentDirectory currentDirectory $
     do args <- collectPackageFlags cache pflags
-       -- Set the build directory to indicate that we are running from inside dpkg-buildpackage.
        done <- Cabal.runDebianize args
        when (not done) (Cabal.callDebianize args)
-       when (not done) (let flags = (Cabal.compileArgs args Cabal.defaultFlags) {Cabal.buildDir = "dist-ghc/build"} in
-                        Cabal.debianize flags)
 
 collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> IO [String]
 collectPackageFlags cache pflags =
