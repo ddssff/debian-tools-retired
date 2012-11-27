@@ -1,3 +1,11 @@
+haskell-cabal-debian (2.5.6) unstable; urgency=low
+
+  * Don't add --base-uri and --http-port arguments automatically, they can be
+    computed by calling the oldClckwrksFlags function and adding the value to
+    the flags field.  Clckwrks-0.3 no longer needs the --base-uri argument.
+
+ -- David Fox <dsf@seereason.com>  Tue, 27 Nov 2012 13:34:31 -0800
+
 haskell-cabal-debian (2.5.5) unstable; urgency=low
 
   * Have the debianize function return False if there is no debian/Debianize.hs file,

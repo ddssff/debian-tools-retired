@@ -17,6 +17,7 @@ module Distribution.Debian.Server
        , apacheAccessLog
        , serverAppLog
        , serverAccessLog
+       , oldClckwrksFlags
        ) where
 
 import Data.Maybe (isJust, fromMaybe)
@@ -189,9 +190,13 @@ debianInit b e spec@(Server{..}) =
     commonOptions = ["--pidfile", "/var/run/" ++ destName e]
     startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory e, "--exec", "/usr/bin" </> destName e]
     stopOptions = ["--stop", "--oknodo"] ++ if retry /= "" then ["--retry=" ++ retry] else []
-    serverOptions = baseURI ++ ["--http-port", show port] ++ flags
-    -- According to the happstack-server documentation this needs a trailing slash.
-    baseURI = ["--base-uri", "http://" ++ maybe (hostname ++ ":" ++ show port) domain site ++ "/"]
+    serverOptions = flags
+
+oldClckwrksFlags :: Server -> [String]
+oldClckwrksFlags (Server{..}) =
+    [ -- According to the happstack-server documentation this needs a trailing slash.
+      "--base-uri", "http://" ++ maybe (hostname ++ ":" ++ show port) domain site ++ "/"
+    , "--http-port", show port]
 
 -- | An apache site configuration file.  This is installed via a line
 -- in debianFiles.
