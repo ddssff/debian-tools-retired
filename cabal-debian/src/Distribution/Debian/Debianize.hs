@@ -16,7 +16,7 @@ module Distribution.Debian.Debianize
 import Codec.Binary.UTF8.String (decodeString)
 import Control.Applicative ((<$>))
 import Control.Arrow (second)
-import Control.Exception (SomeException, try, catch, throw)
+import Control.Exception (SomeException, catch, throw)
 import Control.Monad (mplus)
 import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy as L
@@ -103,14 +103,12 @@ runDebianize args =
     case exists of
       False -> return False
       True ->
-          try (putEnvironmentArgs args >> readProcessWithExitCode "runhaskell" ("debian/Debianize.hs" : args) "") >>= \ result ->
+          putEnvironmentArgs args >> readProcessWithExitCode "runhaskell" ("debian/Debianize.hs" : args) "" >>= \ result ->
           case result of
-            Left (e :: SomeException) ->
-              ePutStrLn ("runDebianize failed: " ++ show e) >> return False
-            Right (ExitSuccess, _, _) ->
+            (ExitSuccess, _, _) ->
               ePutStrLn "runDebianize succeeded" >> return True
-            Right (code, out, err) ->
-              ePutStrLn (unlines ["runDebianize failed with " ++ show code ++ ":", " stdout: " ++ show out, " stderr: " ++ show err]) >> return False
+            (code, out, err) ->
+              error ("runDebianize failed with " ++ show code ++ ":\n stdout: " ++ show out ++"\n stderr: " ++ show err)
 
 -- | Run the debianize function with arguments pulled out of the
 -- @CABALDEBIAN@ environment variable, with the build directory set to

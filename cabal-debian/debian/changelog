@@ -1,3 +1,10 @@
+haskell-cabal-debian (2.5.5) unstable; urgency=low
+
+  * Have the debianize function return False if there is no debian/Debianize.hs file,
+    but throw an exception if running it failed, so we notice bad debianization code.
+
+ -- David Fox <dsf@seereason.com>  Tue, 27 Nov 2012 07:34:51 -0800
+
 haskell-cabal-debian (2.5.4) unstable; urgency=low
 
   * Insert "SetEnv proxy-sendcl 1" line into Apache config.
