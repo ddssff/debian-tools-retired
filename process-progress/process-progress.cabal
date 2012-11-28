@@ -1,5 +1,5 @@
 Name:               process-progress
-Version:            0.4.7
+Version:            0.5
 Synopsis:           Run a process and do reportsing on its progress.
 Description:        Function to run a process and wrappers to provide different
                     types of feedback while it executes.
@@ -23,6 +23,7 @@ Library
   Exposed-modules:
     System.Posix.EnvPlus
     System.Process.Progress
+    System.Process.Read.Chunks
     System.Process.Read.Compat
     System.Process.Read.Convenience
     System.Process.Read.Monad
@@ -31,10 +32,11 @@ Library
   Build-depends:
     base >= 4 && < 5,
     process,
-    process-extras >= 0.5,
+    process-extras >= 0.6,
     bytestring,
     deepseq,
     HUnit,
+    ListLike,
     mtl,
     process,
     text,

@@ -11,7 +11,7 @@ import Control.Exception (evaluate)
 import Data.Time (NominalDiffTime, getCurrentTime, diffUTCTime)
 import System.Exit (ExitCode(..))
 import System.Process (CmdSpec(..), showCommandForUser)
-import System.Process.Read.Chars (Chars)
+import System.Process.Read.Chars (ListLikePlus)
 import System.Process.Read.Convenience (ePutStrLn, keepResult)
 import System.Process.Read.Chunks (Output(..))
 
@@ -19,7 +19,7 @@ echo :: CmdSpec -> IO () -> IO ()
 echo (RawCommand cmd args) io = ePutStrLn ("-> " ++ showCommandForUser cmd args) >> io
 echo (ShellCommand cmd) io = ePutStrLn ("-> " ++ cmd) >> io
 
-oneResult :: Chars a => [Output a] -> ExitCode
+oneResult :: ListLikePlus a c => [Output a] -> ExitCode
 oneResult xs =
     case keepResult xs of
       [code] -> code

@@ -1,3 +1,9 @@
+haskell-process-progress (0.5) unstable; urgency=low
+
+  * Changes for process-extras-0.6.
+
+ -- David Fox <dsf@seereason.com>  Wed, 28 Nov 2012 09:59:27 -0800
+
 haskell-process-progress (0.4.7) unstable; urgency=low
 
   * Bring over changes from retired darcs repository.
