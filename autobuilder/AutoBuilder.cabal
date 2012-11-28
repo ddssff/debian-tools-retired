@@ -53,6 +53,8 @@ Library
       , filepath
       , happstack-util
       , HaXml >= 1.22.5
+      , ListLike
+      , listlike-instances
       , magic
       , MIME >= 1.1
       , mtl
@@ -62,8 +64,8 @@ Library
       , old-time
       , parsec
       , process
-      , process-extras
-      , process-progress
+      , process-extras >= 0.6
+      , process-progress >= 0.5
       , pureMD5
       , regex-compat
       , regex-posix

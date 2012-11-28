@@ -11,7 +11,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.Version (Version)
 import Debian.AutoBuilder.Types.Packages (Packages, PackageFlag, RetrieveMethod(..))
 import qualified Debian.AutoBuilder.Types.Packages as P
-import System.Process.Read (Output)
+import System.Process.Read.Chunks (Output)
 
 data Download
     = Download

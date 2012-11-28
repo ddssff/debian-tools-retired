@@ -8,6 +8,7 @@ module Debian.AutoBuilder.Target
     ( changelogText	-- Tgt -> Maybe String -> [PkgVersion] -> String
     , buildTargets
     , showTargets
+    , decode
     ) where
 
 import Control.Arrow (second)
@@ -18,6 +19,7 @@ import Control.Monad.CatchIO (catch)
 import Control.Monad.RWS(MonadIO, liftIO, when)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
+import qualified Data.ByteString.UTF8 as UTF8
 import Data.Either (partitionEithers)
 import Data.Function (on)
 import Data.List(intersperse, intercalate, intersect, isSuffixOf,
@@ -74,16 +76,19 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files(fileSize, getFileStatus)
 import System.Unix.Chroot (useEnv)
-import System.Process (proc, shell, CreateProcess(cwd))
-import System.Process.Progress (unpackOutputs, mergeToStdout, keepStdout, keepResult, collectOutputs,
+import System.Process (proc, shell, CreateProcess(cwd), readProcessWithExitCode, showCommandForUser)
+import System.Process.Progress (mergeToStdout, keepStdout, keepResult, collectOutputs,
                                 keepResult, runProcessF, runProcess, quieter, noisier, qPutStrLn, ePutStr, ePutStrLn)
-import System.Process.Read (Chars(toString), readModifiedProcess)
+import System.Process.Read (readModifiedProcess)
 import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), pretty)
 import Text.Printf(printf)
 import Text.Regex(matchRegex, mkRegex)
 
 instance Ord Target where
     compare = compare `on` debianSourcePackageName
+
+decode :: L.ByteString -> String
+decode = UTF8.toString . B.concat . L.toChunks
 
 prettySimpleRelation :: Maybe PkgVersion -> Doc
 prettySimpleRelation rel = maybe (text "Nothing") (\ v -> prettyPkgName (getName v) <> text "=" <> prettyDebianVersion (getVersion v)) rel
@@ -762,10 +767,11 @@ downloadDependencies os source extra sourceFingerprint =
        quieter 1 $ qPutStrLn $ "Dependency package versions:\n " ++ intercalate "\n  " (showDependencies sourceFingerprint)
        qPutStrLn ("Downloading build dependencies into " ++ rootPath (rootDir os))
        (code, out, _, _) <- useEnv' (rootPath root) forceList (runProcess (shell command) L.empty) >>=
-                            return . unpackOutputs . mergeToStdout
+                            return . collectOutputs . mergeToStdout
+       let out' = decode out
        case code of
-         [ExitSuccess] -> return out
-         code -> error ("FAILURE: " ++ command ++ " -> " ++ show code ++ "\nOutput:\n" ++ out)
+         [ExitSuccess] -> return out'
+         code -> error ("FAILURE: " ++ command ++ " -> " ++ show code ++ "\nOutput:\n" ++ out')
     where
       command = ("export DEBIAN_FRONTEND=noninteractive; " ++
                  (if True then aptGetCommand else pbuilderCommand))
@@ -787,7 +793,7 @@ installDependencies os source extra sourceFingerprint =
                             return . collectOutputs . mergeToStdout
        case code of
          [ExitSuccess] -> return out
-         code -> ePutStrLn ("FAILURE: " ++ command ++ " -> " ++ show code ++ "\n" ++ toString out) >>
+         code -> ePutStrLn ("FAILURE: " ++ command ++ " -> " ++ show code ++ "\n" ++ decode out) >>
                  error ("FAILURE: " ++ command ++ " -> " ++ show code)
     where
       command = ("export DEBIAN_FRONTEND=noninteractive; " ++
@@ -840,9 +846,15 @@ setRevisionInfo fingerprint changes {- @(Changes dir name version arch fields fi
 -- | Run a checksum command on a file, return the resulting checksum as text.
 doChecksum :: String -> (String -> String) -> FilePath -> IO (Failing String)
 doChecksum cmd f path =
-    runProcess (proc cmd' [path]) L.empty >>=
-    return . either (doError (cmd' ++ " " ++ path)) (Success . f) . toEither . unpackOutputs
-    where cmd' = "/usr/bin/" ++ cmd
+    doChecksum' `catch` (\ (e :: IOError) -> return (Failure ["Error running " ++ cmd'' ++ ": " ++ show e]))
+    where
+      doChecksum' =
+          do result <- readProcessWithExitCode cmd' [path] ""
+             case result of
+               (ExitFailure n, _, _) -> return $ Failure ["Error " ++ show n ++ " running " ++ cmd'']
+               (_, out, _) -> return (Success (f out))
+      cmd' = "/usr/bin/" ++ cmd
+      cmd'' = showCommandForUser cmd' [path]
 
 md5sum :: FilePath -> IO (Failing String)
 md5sum = doChecksum "md5sum" (take 32)
@@ -850,14 +862,6 @@ sha1sum :: FilePath -> IO (Failing String)
 sha1sum = doChecksum "sha1sum" (take 40)
 sha256sum :: FilePath -> IO (Failing String)
 sha256sum = doChecksum "sha256sum" (take 64)
-
-toEither :: ([ExitCode], a, String, [IOError]) -> Either ([ExitCode], a, String, [IOError]) a
-toEither ([ExitSuccess], text, "", _) = Right text
-toEither x = Left x
-
-doError :: Show a => String -> ([ExitCode], t, a, [IOError]) -> Failing a
-doError cmd ([ExitFailure n], _, _, _) = Failure ["Error " ++ show n ++ " running '" ++ cmd ++ "'"]
-doError cmd (_, _, s, _) = Failure ["Unexpected error output from " ++ cmd ++ ": " ++ show s]
 
 forceList :: [a] -> IO [a]
 forceList output = evaluate (length output) >> return output
