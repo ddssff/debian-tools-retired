@@ -74,7 +74,7 @@ echoOutput x = modifyRunState (\ s -> s {echo = x})
 setPrefixes :: (P.ListLikePlus s c, MonadIO m) => Maybe (s, s) -> RunT s m ()
 setPrefixes x = modifyRunState (\ s -> s {prefixes = x})
 
-runProcessM :: forall s m. (P.NonBlocking s Char, MonadIO m) => CreateProcess -> s -> RunT s m [P.Output s]
+runProcessM :: forall s c m. (P.NonBlocking s c, MonadIO m) => CreateProcess -> s -> RunT s m [P.Output s]
 runProcessM p input =
     do s <- get
        liftIO $ do
@@ -88,8 +88,9 @@ runProcessM p input =
                                                                              doOutput (prefixes s) out5 >> return (P.Result (ExitFailure n))) else return) out6
          return out7
 
-doOutput :: P.ListLikePlus a Char => Maybe (a, a) -> [P.Output a] -> IO [P.Output a]
-doOutput prefixes out = maybe (P.doOutput out) (\ (sout, serr) -> P.prefixed sout serr out) prefixes >> return out
+doOutput :: P.ListLikePlus a c => Maybe (a, a) -> [P.Output a] -> IO [P.Output a]
+-- doOutput prefixes out = maybe (P.doOutput out) (\ (sout, serr) -> P.prefixed sout serr out) prefixes >> return out
+doOutput prefixes out = P.doOutput out >> return out
 
 s :: MonadIO m => RunT s m ()
 s = echoCommand False
@@ -97,8 +98,8 @@ s = echoCommand False
 c :: MonadIO m => RunT s m ()
 c = echoCommand True
 
-v :: (P.ListLikePlus s Char, MonadIO m) => RunT s m ()
-v = echoOutput True >> setPrefixes (Just (P.fromList " 1> ", P.fromList " 2> ")) >> echoOnFailure False
+v :: (P.ListLikePlus s c, MonadIO m) => RunT s m ()
+v = echoOutput True >> {- setPrefixes (Just (P.fromList " 1> ", P.fromList " 2> ")) >> -} echoOnFailure False
 
 d :: MonadIO m => RunT s m ()
 d = charsPerDot 50 >> echoOutput False
@@ -106,60 +107,60 @@ d = charsPerDot 50 >> echoOutput False
 f :: MonadIO m => RunT s m ()
 f = exceptionOnFailure True
 
-e :: (P.ListLikePlus s Char, MonadIO m) => RunT s m ()
-e = echoOnFailure True >> setPrefixes (Just (P.fromList " 1> ", P.fromList " 2> ")) >> exceptionOnFailure True >> echoOutput False
+e :: (P.ListLikePlus s c, MonadIO m) => RunT s m ()
+e = echoOnFailure True >> {- setPrefixes (Just (P.fromList " 1> ", P.fromList " 2> ")) >> -} exceptionOnFailure True >> echoOutput False
 
 -- | No output.
-runProcessS :: (P.NonBlocking a Char, MonadIO m) => CreateProcess -> a -> m [P.Output a]
+runProcessS :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
 runProcessS p input = withRunState defaultRunState (s >> runProcessM p input)
 
 -- | Command line trace only.
-runProcessQ :: (P.NonBlocking a Char, MonadIO m) => CreateProcess -> a -> m [P.Output a]
+runProcessQ :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
 runProcessQ p input = withRunState defaultRunState (runProcessM p input)
 
 -- | Dot output
-runProcessD :: (P.NonBlocking a Char, MonadIO m) => CreateProcess -> a -> m [P.Output a]
+runProcessD :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
 runProcessD p input =
     withRunState defaultRunState (c >> d >> runProcessM p input)
 
 -- | Echo output
-runProcessV :: (P.NonBlocking a Char, MonadIO m) => CreateProcess -> a -> m [P.Output a]
+runProcessV :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
 runProcessV p input =
     withRunState defaultRunState (c >> v >> runProcessM p input)
 
 -- | Exception on failure
-runProcessSF :: (P.NonBlocking a Char, MonadIO m) => CreateProcess -> a -> m [P.Output a]
+runProcessSF :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
 runProcessSF p input =
     withRunState defaultRunState (s >> f >> runProcessM p input)
 
-runProcessQF :: (P.NonBlocking a Char, MonadIO m) => CreateProcess -> a -> m [P.Output a]
+runProcessQF :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
 runProcessQF p input =
     withRunState defaultRunState (c >> f >> runProcessM p input)
 
 -- | Dot output and exception on failure
-runProcessDF :: (P.NonBlocking a Char, MonadIO m) => CreateProcess -> a -> m [P.Output a]
+runProcessDF :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
 runProcessDF p input =
     withRunState defaultRunState (c >> d >> f >> runProcessM p input)
 
 -- | Echo output and exception on failure
-runProcessVF :: (P.NonBlocking a Char, MonadIO m) => CreateProcess -> a -> m [P.Output a]
+runProcessVF :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
 runProcessVF p input =
     withRunState defaultRunState (c >> v >> f >> runProcessM p input)
 
 -- | Exception and echo on failure
-runProcessSE :: (P.NonBlocking a Char, MonadIO m) => CreateProcess -> a -> m [P.Output a]
+runProcessSE :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
 runProcessSE p input =
     withRunState defaultRunState (s >> e >> runProcessM p input)
 
 -- | Exception and echo on failure
-runProcessQE :: (P.NonBlocking a Char, MonadIO m) => CreateProcess -> a -> m [P.Output a]
+runProcessQE :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
 runProcessQE p input =
     withRunState defaultRunState (c >> e >> runProcessM p input)
 
 -- | Dot output, exception on failure, echo on failure.  Note that
 -- runProcessVE isn't a useful option, you get the output twice.  VF
 -- makes more sense.
-runProcessDE :: (P.NonBlocking a Char, MonadIO m) => CreateProcess -> a -> m [P.Output a]
+runProcessDE :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
 runProcessDE p input =
     withRunState defaultRunState (c >> d >> e >> runProcessM p input)
 

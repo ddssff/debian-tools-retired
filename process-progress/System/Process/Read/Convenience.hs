@@ -49,7 +49,7 @@ module System.Process.Read.Convenience
     , doAll
 
     , dots
-    , prefixed
+    -- , prefixed
     ) where
 
 import Control.Exception (throw)
@@ -202,16 +202,17 @@ dots charsPerDot nDots outputs =
              xs' <- dots' rem' xs
              return (x : xs')
 
+{-
 -- | Output the stream with a prefix added at the beginning of each
 -- line of stdout and stderr.
-prefixed :: forall a. ListLikePlus a Char => a -> a -> [Output a] -> IO [Output a]
+prefixed :: forall a c. (ListLikePlus a c, UTF8.UTF8Bytes a (LengthType a)) => a -> a -> [Output a] -> IO [Output a]
 prefixed opre epre output =
     mapM (\ (old, new) -> doOutput [new] >> return old) (prefixes opre epre output)
 
 -- | Return the original stream of outputs zipped with one that has
 -- had prefixes for stdout and stderr inserted.  For the prefixed
 -- stream only, apply @map snd@.
-prefixes :: forall a. ListLikePlus a Char => a -> a -> [Output a] -> [(Output a, Output a)]
+prefixes :: forall a c. (ListLikePlus a c, UTF8.UTF8Bytes a (LengthType a)) => a -> a -> [Output a] -> [(Output a, Output a)]
 prefixes opre epre output =
     loop True output
     where
@@ -234,3 +235,4 @@ prefixes opre epre output =
           else let x = (if bol then append pre a else a)
                    (s', bol') = step False pre b in
                (append x s', bol')
+-}

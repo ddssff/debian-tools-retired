@@ -3,7 +3,7 @@
 -- Output.  Unlike readProcessWithExitCode, this preserves the order
 -- in which the chunks of text were written by the process.
 
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables, TypeSynonymInstances #-}
 module System.Process.Read.Chunks (
   NonBlocking(..),
   Output(..),
