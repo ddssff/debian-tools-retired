@@ -44,7 +44,7 @@ import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.Posix.Files ( createLink )
 import System.Process (readProcess, shell, proc)
 import System.Process.Progress (ePutStr, ePutStrLn, qPutStr, qPutStrLn, readProcessChunks, doOutput,
-                                runProcess, runProcessF, timeTask, unpackOutputs, oneResult, quieter, foldOutputsL, keepResult)
+                                runProcess, runProcessF, timeTask, collectOutputs, oneResult, quieter, foldOutputsL, keepResult)
 import System.Unix.Chroot ( useEnv )
 import System.Unix.Directory (removeRecursiveSafely)
 import System.Unix.Mount ( umountBelow )
@@ -424,7 +424,7 @@ localeGen :: String -> OSImage -> IO OSImage
 localeGen locale os =
     do
       ePutStr ("Generating locale " ++  locale ++ " (" ++ stripDist (rootPath root) ++ ")...")
-      result <- try $ useEnv (rootPath root) forceList (runProcess (shell cmd) L.empty) >>= return . unpackOutputs
+      result <- try $ useEnv (rootPath root) forceList (runProcess (shell cmd) L.empty) >>= return . collectOutputs
       either (\ (e :: SomeException) -> error $ "Failed to generate locale " ++ rootPath root ++ ": " ++ show e)
              (\ _ -> return os)
              result

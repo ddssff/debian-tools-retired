@@ -25,7 +25,9 @@ module Debian.Repo.Cache
 
 import Control.Exception (evaluate)
 import "mtl" Control.Monad.Trans ( MonadIO(..) )
-import qualified Data.ByteString.Lazy.Char8 as L ( empty )
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy.Char8 as L
+import qualified Data.ByteString.UTF8 as UTF8
 import Data.Data (Data)
 import Data.List ( sortBy, intercalate )
 import Data.Typeable (Typeable)
@@ -46,7 +48,7 @@ import System.IO ( stdin, hGetLine )
 import System.Unix.Chroot ( useEnv )
 import System.Unix.Directory ( removeRecursiveSafely )
 import System.Process (shell)
-import System.Process.Progress (readProcessChunks, ePutStrLn, ePutStr, runProcess, unpackOutputs, quieter, qPutStrLn)
+import System.Process.Progress (readProcessChunks, ePutStrLn, ePutStr, runProcess, collectOutputs, quieter, qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 forceList :: [a] -> IO [a]
@@ -185,10 +187,10 @@ archFiles' deb =
 
 buildArchOfEnv :: EnvRoot -> IO Arch
 buildArchOfEnv (EnvRoot root)  =
-    do (code, out, err, _) <- useEnv root forceList (readProcessChunks (shell cmd) L.empty) >>= return . unpackOutputs
+    do (code, out, err, _) <- useEnv root forceList (readProcessChunks (shell cmd) L.empty) >>= return . collectOutputs
        case code of
          (ExitSuccess : _) ->
-             case words out of
+             case words (UTF8.toString (B.concat (L.toChunks out))) of
                [] -> error $ "Invalid output from " ++ cmd
                (arch : _) -> return (Binary arch)
          _ -> error $ "Failure: " ++ cmd ++ " -> " ++ show code ++ "\n\nstdout:\n\n" ++ show out ++ "\n\nstderr:\n\n" ++ show err
@@ -197,10 +199,10 @@ buildArchOfEnv (EnvRoot root)  =
 
 buildArchOfRoot :: IO Arch
 buildArchOfRoot =
-    do (code, out, err, _) <- runProcess (shell cmd) L.empty >>= return . unpackOutputs
+    do (code, out, err, _) <- runProcess (shell cmd) L.empty >>= return . collectOutputs
        case code of
          (ExitSuccess : _) ->
-             case words out of
+             case words (UTF8.toString (B.concat (L.toChunks out))) of
                [] -> error $ "Invalid output from " ++ cmd
                (arch : _) -> return (Binary arch)
          _ -> error $ "Failure: " ++ cmd ++ " -> " ++ show code ++ "\n\nstdout:\n\n" ++ show out ++ "\n\nstderr:\n\n" ++ show err
