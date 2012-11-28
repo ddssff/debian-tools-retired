@@ -48,7 +48,7 @@ verbosity = liftIO $ getEnv "VERBOSITY" >>= return . maybe 1 read
 
 -- | Select from the runProcess* functions in Monad based on a verbosity level.
 runProcess :: (NonBlocking s Char, MonadIO m) => CreateProcess -> s -> m [Output s]
-runProcess p input = liftIO $ 
+runProcess p input = liftIO $
     verbosity >>= \ v ->
     case v of
       _ | v <= 0 -> runProcessS p input

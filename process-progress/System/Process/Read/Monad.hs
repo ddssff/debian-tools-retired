@@ -24,7 +24,7 @@ import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ListLike as P
 import Prelude hiding (print)
 import System.Exit (ExitCode(ExitFailure))
-import System.IO (hPutStrLn, stderr)
+import System.IO (hPutStrLn, hPutStr, stderr)
 import System.Process (CreateProcess(cmdspec), CmdSpec(RawCommand, ShellCommand), showCommandForUser)
 import qualified System.Process.Read.Chars as P
 import qualified System.Process.Read.Chunks as P
@@ -80,7 +80,7 @@ runProcessM p input =
        liftIO $ do
          when (trace s) (hPutStrLn stderr ("-> " ++ showCommand (cmdspec p)))
          (out1 :: [P.Output s]) <- P.readProcessChunks p input
-         (out2 :: [P.Output s]) <- if cpd s > 0 then P.dots (fromIntegral (cpd s)) (\ n -> P.hPutStr stderr (P.fromList (replicate (fromIntegral n) '.') :: s)) out1 else return out1
+         (out2 :: [P.Output s]) <- if cpd s > 0 then P.dots (fromIntegral (cpd s)) (\ n -> hPutStr stderr (replicate (fromIntegral n) '.')) out1 else return out1
          (out3 :: [P.Output s]) <- if echo s then doOutput (prefixes s) out2 else return out2
          (out5 :: [P.Output s]) <- (if failExit s then P.foldFailure (\ n -> error (showCommand (cmdspec p) ++ " -> ExitFailure " ++ show n)) else return) out3
          (out6 :: [P.Output s]) <- (if trace s then  P.foldResult (\ ec -> hPutStrLn stderr ("<- " ++ showCommand (cmdspec p) ++ ": " ++ show ec) >> return (P.Result ec)) else return) out5
