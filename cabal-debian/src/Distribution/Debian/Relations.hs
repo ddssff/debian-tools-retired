@@ -5,7 +5,8 @@
 -- | Support for generating Debianization from Cabal data.
 
 module Distribution.Debian.Relations
-    ( allBuildDepends
+    ( selfDependency
+    , allBuildDepends
     , buildDependencies
     , docDependencies
     , cabalDependencies
@@ -20,7 +21,7 @@ import qualified Debian.Relation as D
 import Distribution.Debian.Dependencies (PackageType(..), dependencies)
 import Distribution.Debian.Splits (versionSplits)
 import Distribution.Simple.Compiler (Compiler(..))
-import Distribution.Package (PackageName(..), Dependency(..))
+import Distribution.Package (PackageIdentifier(..), PackageName(..), Dependency(..))
 import Distribution.PackageDescription (PackageDescription(..), allBuildInfo, buildTools, pkgconfigDepends, extraLibs)
 import System.Exit (ExitCode(ExitSuccess))
 import System.IO.Unsafe (unsafePerformIO)
@@ -32,6 +33,14 @@ data Dependency_
   | PkgConfigDepends Dependency
   | ExtraLibs D.BinPkgName
     deriving (Eq, Show)
+
+-- | In cabal a self dependency probably means the library is needed
+-- while building the executables.  In debian it would mean that the
+-- package needs an earlier version of itself to build, so we use this
+-- to filter such dependencies out.
+selfDependency :: PackageDescription -> Dependency_ -> Bool
+selfDependency pkgDesc (BuildDepends (Dependency name _)) = name == pkgName (package pkgDesc)
+selfDependency _ _ = False
 
 unboxDependency :: Dependency_ -> Maybe Dependency
 unboxDependency (BuildDepends d) = Just d

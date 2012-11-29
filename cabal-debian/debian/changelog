@@ -1,3 +1,12 @@
+haskell-cabal-debian (2.5.7) unstable; urgency=low
+
+  * Filter out cabal self-dependencies before building the debian
+    dependencies.  In cabal a self dependency means you need the library
+    to build an executable, while in debian it means you need an older
+    version installed to build the current version.
+
+ -- David Fox <dsf@seereason.com>  Thu, 29 Nov 2012 08:42:30 -0800
+
 haskell-cabal-debian (2.5.6) unstable; urgency=low
 
   * Don't add --base-uri and --http-port arguments automatically, they can be

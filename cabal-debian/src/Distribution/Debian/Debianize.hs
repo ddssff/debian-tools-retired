@@ -39,7 +39,7 @@ import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName
                                          debianDocPackageName, debianDevPackageName, debianProfPackageName)
 import Distribution.Debian.Options (compileArgs)
 import Distribution.Debian.PackageDescription (withSimplePackageDescription)
-import Distribution.Debian.Relations (buildDependencies, docDependencies, allBuildDepends, extraDebianLibs)
+import Distribution.Debian.Relations (selfDependency, buildDependencies, docDependencies, allBuildDepends, extraDebianLibs)
 import Distribution.Debian.Server (execAtoms, Executable(..))
 import Distribution.Debian.Splits (versionSplits)
 import Distribution.Debian.Utility
@@ -443,7 +443,7 @@ control flags compiler maint pkgDesc =
            anyrel "ghc"] ++
           (map anyrel (buildDeps flags)) ++
           (if debLibProf flags then [anyrel "ghc-prof"] else []) ++
-          (concat . map (buildDependencies (epochMap flags) (execMap flags) compiler) . allBuildDepends (extraLibMap flags) $ pkgDesc)
+          (concat . map (buildDependencies (epochMap flags) (execMap flags) compiler) . filter (not . selfDependency pkgDesc) . allBuildDepends (extraLibMap flags) $ pkgDesc)
       debianBuildDepsIndep :: D.Relations
       debianBuildDepsIndep =
           nub $
