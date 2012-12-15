@@ -1,5 +1,5 @@
 Name:           AutoBuilder
-Version:        6.45
+Version:        6.46
 License:        BSD3
 Author:         David Fox
 Synopsis:       Build Debian source packages in suitable environments.
@@ -50,6 +50,7 @@ Library
       , containers
       , directory
       , Extra
+      , file-embed
       , filepath
       , happstack-util
       , HaXml >= 1.22.5

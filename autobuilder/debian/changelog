@@ -1,3 +1,13 @@
+autobuilder (6.46) unstable; urgency=low
+
+  * CD to ~/.autobuilder.d so we can find files in the config directory,
+    specifically patches that we fileEmbed in the target list.  This also
+    keeps it from seeing random haskell modules in pwd while running.
+  * Add file-embed to build dependencies so libghc-file-embed-dev is
+    available while autobuilder is running.
+
+ -- David Fox <dsf@seereason.com>  Sat, 15 Dec 2012 11:41:57 -0800
+
 autobuilder (6.45) unstable; urgency=low
 
   * Working Git target support.

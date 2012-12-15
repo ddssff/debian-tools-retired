@@ -19,4 +19,4 @@ CONFIGFILE=$CONFIGDIR/autobuilder.hs
     echo "  darcs get http://seereason.com/autobuilder-config $CONFIGDIR"
     exit 1
 }
-sudo HOME=${HOME} runhaskell -i$CONFIGDIR $CONFIGFILE $*
+cd $CONFIGDIR && sudo HOME=${HOME} runhaskell autobuilder.hs $*
