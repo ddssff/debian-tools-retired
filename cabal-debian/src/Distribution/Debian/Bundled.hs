@@ -29,19 +29,22 @@ type Bundled = (CompilerFlavor, Version, [PackageIdentifier])
 ghcBuiltIns :: Compiler -> Bundled
 ghcBuiltIns (Compiler {compilerId = CompilerId GHC compilerVersion}) =
     case Map.lookup compilerVersion
-             (Map.fromList [ (Version [7,4,1] [], (GHC, Version [7,4,1] [], ghc741BuiltIns))
-                           , (Version [7,4,0,20111219] [], (GHC, Version [7,4,0,20111219] [], ghc740BuiltIns))
-                           , (Version [7,4,0,20120108] [], (GHC, Version [7,4,0,20120108] [], ghc740BuiltIns))
-                           , (Version [7,2,2] [], (GHC, Version [7,2,2] [], ghc721BuiltIns))
-                           , (Version [7,2,1] [], (GHC, Version [7,2,1] [], ghc721BuiltIns))
-                           , (Version [7,0,4] [], (GHC, Version [7,0,4] [], ghc701BuiltIns))
-                           , (Version [7,0,3] [], (GHC, Version [7,0,3] [], ghc701BuiltIns))
-                           , (Version [7,0,1] [], (GHC, Version [7,0,1] [], ghc701BuiltIns))
-                           , (Version [6,8,3] [], (GHC, Version [6,8,3] [], ghc683BuiltIns))
-                           , (Version [6,8,2] [], (GHC, Version [6,8,2] [], ghc682BuiltIns))
-                           , (Version [6,8,1] [], (GHC, Version [6,8,1] [], ghc681BuiltIns))
-                           , (Version [6,6,1] [], (GHC, Version [6,6,1] [], ghc661BuiltIns))
-                           , (Version [6,6] [], (GHC, Version [6,6] [], ghc66BuiltIns)) ]) of
+             (Map.fromList (map (\ (cmp, ver, lst) -> (ver, (cmp, ver, lst)))
+                            [ (GHC, Version [7,6,1] [], ghc761BuiltIns)
+                            , (GHC, Version [7,6,1,20121207] [], ghc761BuiltIns)
+                            , (GHC, Version [7,4,1] [], ghc741BuiltIns)
+                            , (GHC, Version [7,4,0,20111219] [], ghc740BuiltIns)
+                            , (GHC, Version [7,4,0,20120108] [], ghc740BuiltIns)
+                            , (GHC, Version [7,2,2] [], ghc721BuiltIns)
+                            , (GHC, Version [7,2,1] [], ghc721BuiltIns)
+                            , (GHC, Version [7,0,4] [], ghc701BuiltIns)
+                            , (GHC, Version [7,0,3] [], ghc701BuiltIns)
+                            , (GHC, Version [7,0,1] [], ghc701BuiltIns)
+                            , (GHC, Version [6,8,3] [], ghc683BuiltIns)
+                            , (GHC, Version [6,8,2] [], ghc682BuiltIns)
+                            , (GHC, Version [6,8,1] [], ghc681BuiltIns)
+                            , (GHC, Version [6,6,1] [], ghc661BuiltIns)
+                            , (GHC, Version [6,6] [], ghc66BuiltIns) ])) of
       Nothing -> error $ "cabal-debian: No bundled package list for ghc " ++ show compilerVersion
       Just x -> x
 ghcBuiltIns (Compiler {compilerId = _}) = error "ghcBuiltIns: Only GHC is supported"
@@ -56,6 +59,35 @@ ghcBuiltIn compiler package =
 
 v :: String -> [Int] -> PackageIdentifier
 v n x = PackageIdentifier (PackageName n) (Version x [])
+
+-- Removed: rts, extensible-exceptions
+ghc761BuiltIns :: [PackageIdentifier]
+ghc761BuiltIns = [
+    v "array" [0,4,0,1],
+    v "base" [4,6,0,1],
+    v "binary" [0,5,1,1],
+    v "bin-package-db" [0,0,0,0],
+    v "bytestring" [0,10,0,2],
+    v "Cabal" [1,16,0],
+    v "containers" [0,5,0,0],
+    v "deepseq" [1,3,0,1],
+    v "directory" [1,2,0,1],
+    v "filepath" [1,3,0,1],
+    v "ghc" [7,6,1,20121207],
+    v "ghc-prim" [0,3,0,0],
+    v "haskell2010" [1,1,1,0],
+    v "haskell98" [2,0,0,2],
+    v "hoopl" [3,9,0,0],
+    v "hpc" [0,6,0,0],
+    v "integer-gmp" [0,5,0,0],
+    v "old-locale" [1,0,0,5],
+    v "old-time" [1,1,0,1],
+    v "pretty" [1,1,1,0],
+    v "process" [1,1,0,2],
+    v "template-haskell" [2,8,0,0],
+    v "time" [1,4,0,1],
+    v "unix" [2,6,0,1]
+    ]
 
 -- | Packages bundled with 7.4.0.20111219-2.
 ghc741BuiltIns :: [PackageIdentifier]

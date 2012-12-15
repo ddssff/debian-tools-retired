@@ -1,3 +1,9 @@
+haskell-cabal-debian (2.5.8) unstable; urgency=low
+
+  * Add a builtin list for ghc-7.6.1.
+
+ -- David Fox <dsf@seereason.com>  Sat, 15 Dec 2012 07:04:49 -0800
+
 haskell-cabal-debian (2.5.7) unstable; urgency=low
 
   * Filter out cabal self-dependencies before building the debian
