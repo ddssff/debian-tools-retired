@@ -190,7 +190,9 @@ debianInit b e spec@(Server{..}) =
     commonOptions = ["--pidfile", "/var/run/" ++ destName e]
     startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory e, "--exec", "/usr/bin" </> destName e]
     stopOptions = ["--stop", "--oknodo"] ++ if retry /= "" then ["--retry=" ++ retry] else []
-    serverOptions = flags
+    serverOptions = flags ++ commonServerOptions
+    -- Without these, happstack servers chew up CPU even when idle
+    commonServerOptions = ["+RTS", "-IO", "-RTS"]
 
 oldClckwrksFlags :: Server -> [String]
 oldClckwrksFlags (Server{..}) =

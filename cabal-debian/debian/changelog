@@ -1,3 +1,9 @@
+haskell-cabal-debian (2.5.9) unstable; urgency=low
+
+  * Always add +RTS -IO -RTS to server flags.
+
+ -- David Fox <dsf@seereason.com>  Sun, 16 Dec 2012 10:40:52 -0800
+
 haskell-cabal-debian (2.5.8) unstable; urgency=low
 
   * Add a builtin list for ghc-7.6.1.
