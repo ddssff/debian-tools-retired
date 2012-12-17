@@ -16,9 +16,10 @@ import Debian.Repo.SourceTree.Classes (SourceTreeC(..), DebianSourceTreeC(..), D
 import Debian.Repo.Sync (rsync)
 import qualified Debian.Version as V ( version )
 import System.Directory ( createDirectoryIfMissing, doesDirectoryExist, doesFileExist )
+import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.IO (withFile, IOMode(ReadMode), hGetContents)
 import System.FilePath ((</>))
-import System.Process (proc)
+import System.Process (proc, readProcessWithExitCode)
 import System.Process.Progress (runProcess)
 
 -- |Any directory containing source code.
@@ -85,22 +86,23 @@ instance DebianSourceTreeC DebianSourceTree where
 instance SourceTreeC DebianBuildTree where
     topdir = topdir'
     copySourceTree build dest =
-        copySource >> copyTarball >> return moveBuild
+        copySource >>= copyTarball >>= return . moveBuild
         where
-          moveBuild = build {topdir' = dest, debTree' = moveSource (debTree' build)}
-          moveSource source = source {tree' = SourceTree {dir' = dest </> subdir build}}
           copySource = rsync [] (topdir' build) dest
           -- copySource = DebianBuildTree <$> pure dest <*> pure (subdir' tree) <*> copySourceTree (debTree' tree) (dest </> subdir' tree)
-          copyTarball =
+          copyTarball (ExitFailure n) = error $ "Failed to copy source tree: " ++ topdir' build ++ " -> " ++ dest
+          copyTarball ExitSuccess =
               do exists <- liftIO $ doesFileExist origPath
                  case exists of
-                   False -> return []
-                   True -> runProcess (proc "cp" ["-p", origPath, dest ++ "/"]) L.empty
-              where
-                origPath = topdir build </> orig
-                orig = name ++ "_" ++ version ++ ".orig.tar.gz"
-                name = logPackage . entry $ build
-                version = V.version . logVersion . entry $ build
+                   False -> return (ExitSuccess, "", "")
+                   True -> liftIO $ readProcessWithExitCode "cp" ["-p", origPath, dest ++ "/"] ""
+          moveBuild (ExitFailure 1, _, _) = error $ "Failed to copy Tarball: " ++ origPath ++ " -> " ++ dest ++ "/"
+          moveBuild (ExitSuccess, _, _) = build {topdir' = dest, debTree' = moveSource (debTree' build)}
+          moveSource source = source {tree' = SourceTree {dir' = dest </> subdir build}}
+          origPath = topdir build </> orig
+          orig = name ++ "_" ++ version ++ ".orig.tar.gz"
+          name = logPackage . entry $ build
+          version = V.version . logVersion . entry $ build
     findSourceTree path =
         do trees <- findDebianBuildTrees path
            case nubBy eqNames trees of
