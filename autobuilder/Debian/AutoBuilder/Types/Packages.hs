@@ -9,6 +9,7 @@ module Debian.AutoBuilder.Types.Packages
     , relaxInfo
     ) where
 
+import Data.ByteString (ByteString)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.Set (Set, empty, union)
 import Debian.Relation (BinPkgName)
@@ -67,7 +68,7 @@ data RetrieveMethod
     | Git String                             -- ^ Download from a Git repository
     | Hackage String                         -- ^ Download a cabal package from hackage
     | Hg String                              -- ^ Download from a Mercurial repository
-    | Patch RetrieveMethod String            -- ^ Apply the patch given in the string text to the target
+    | Patch RetrieveMethod ByteString        -- ^ Apply the patch given in the string text to the target
     | Proc RetrieveMethod                    -- ^ Mount proc during the build (this should be a PackageFlag.)
     | Quilt RetrieveMethod RetrieveMethod    -- ^ Combine a download with a download of a patch directory to be applied by quilt
     | SourceDeb RetrieveMethod               -- ^ Download and unpack a source deb - a .dsc, a .tar.gz, and a .diff.gz file.

@@ -1,3 +1,10 @@
+autobuilder (6.47) unstable; urgency=low
+
+  * Change the data type used to hold a patch from String to ByteString,
+    because this is what embedFile returns.
+
+ -- David Fox <dsf@seereason.com>  Sun, 16 Dec 2012 14:59:34 -0800
+
 autobuilder (6.46) unstable; urgency=low
 
   * CD to ~/.autobuilder.d so we can find files in the config directory,

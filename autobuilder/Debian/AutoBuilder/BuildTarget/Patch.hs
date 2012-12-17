@@ -6,7 +6,8 @@ import qualified Debug.Trace as D
 
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans (liftIO)
-import qualified Data.ByteString.Lazy.Char8 as B
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5 (md5)
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -41,20 +42,20 @@ instance Show Patch where
 documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
-prepare :: MonadDeb m => P.Packages -> OSImage -> String -> T.Download -> m T.Download
+prepare :: MonadDeb m => P.Packages -> OSImage -> B.ByteString -> T.Download -> m T.Download
 prepare package _buildOS patch base =
-    do copyDir <- sub ("quilt" </> show (md5 (B.pack (show (P.spec package)))))
+    do copyDir <- sub ("quilt" </> show (md5 (L.pack (show (P.spec package)))))
        baseTree <- liftIO $ findSourceTree (T.getTop base)
        liftIO $ createDirectoryIfMissing True copyDir
        tree <- liftIO $ copySourceTree baseTree copyDir
        subDir <- liftIO $ findSource (P.spec package) copyDir
-       (res, out, err) <- liftIO $ readModifiedProcessWithExitCode ((proc cmd args) {cwd = Just subDir}) (B.pack patch)
+       (res, out, err) <- liftIO $ readModifiedProcessWithExitCode ((proc cmd args) {cwd = Just subDir}) patch
        case res of
          ExitFailure _ -> error (showCommandForUser cmd args ++ " -> " ++ show res ++
                                  "\ncwd:" ++ subDir ++
                                  "\nstdout:\n" ++ indent (B.unpack out) ++
                                  "\nstderr:\n" ++ indent (B.unpack err) ++
-                                 "\npatch:\n" ++ indent patch)
+                                 "\npatch:\n" ++ indent (B.unpack patch))
          ExitSuccess ->
              return $ T.Download {
                           T.package = package
