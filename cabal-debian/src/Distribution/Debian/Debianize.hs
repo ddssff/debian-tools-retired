@@ -448,7 +448,7 @@ control flags compiler maint pkgDesc =
       debianBuildDepsIndep =
           nub $
           [anyrel "ghc-doc"] ++
-          (concat . map (docDependencies (epochMap flags) compiler) . allBuildDepends (extraLibMap flags) $ pkgDesc)
+          (concat . map (docDependencies (epochMap flags) compiler) . filter (not . selfDependency pkgDesc) . allBuildDepends (extraLibMap flags) $ pkgDesc)
       debianDescription =
           (unwords . words . synopsis $ pkgDesc) ++
           case description pkgDesc of
