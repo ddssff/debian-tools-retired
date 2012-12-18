@@ -595,7 +595,7 @@ syncPool os =
 
 updateLists :: OSImage -> IO NominalDiffTime
 updateLists os =
-    withProc os $ quieter 1 $ do
+    withProc os $ quieter 2 $ do
       qPutStrLn ("Updating OSImage " ++ root)
       out <- useEnv root forceList (runProcess update L.empty)
       case keepResult out of

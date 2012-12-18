@@ -1,9 +1,9 @@
+{-# LANGUAGE PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
+{-# OPTIONS -Wall -fwarn-unused-imports -fno-warn-name-shadowing -fno-warn-orphans #-}
 -- |A Target represents a particular set of source code and the
 -- methods to retrieve and update it.
 -- 
 -- Author: David Fox <ddssff@gmail.com>
-{-# LANGUAGE PackageImports, ScopedTypeVariables, StandaloneDeriving #-}
-{-# OPTIONS -Wall -fwarn-unused-imports -fno-warn-name-shadowing -fno-warn-orphans #-}
 module Debian.AutoBuilder.Target
     ( changelogText	-- Tgt -> Maybe String -> [PkgVersion] -> String
     , buildTargets
