@@ -33,10 +33,9 @@ withSimplePackageDescription :: Flags -> (PackageDescription -> Compiler -> IO (
 withSimplePackageDescription flags action = do
   descPath <- liftIO $ defaultPackageDesc (intToVerbosity' (verbosity flags))
   genPkgDesc <- liftIO $ readPackageDescription (intToVerbosity' (verbosity flags)) descPath
-  when (compilerFlavor flags /= GHC) (error "Only the GHC compiler is supported.")
-  (compiler', _) <- liftIO $ configCompiler (Just (compilerFlavor flags)) Nothing Nothing defaultProgramConfiguration (intToVerbosity' (verbosity flags))
-  let compiler = case (compilerVersion flags, compilerFlavor flags) of
-                   (Just v, ghc) -> compiler' {compilerId = CompilerId ghc v}
+  (compiler', _) <- liftIO $ configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration (intToVerbosity' (verbosity flags))
+  let compiler = case compilerVersion flags of
+                   (Just v) -> compiler' {compilerId = CompilerId GHC v}
                    _ -> compiler'
   pkgDesc <- case finalizePackageDescription (configurationsFlags flags) (const True) (Platform buildArch buildOS) (compilerId compiler) [] genPkgDesc of
                Left e -> error $ "finalize failed: " ++ show e

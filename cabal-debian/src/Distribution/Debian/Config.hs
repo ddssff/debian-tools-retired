@@ -11,7 +11,6 @@ module Distribution.Debian.Config
 import qualified Data.Map as Map
 import Data.Version (Version)
 import Debian.Relation (BinPkgName(..))
-import Distribution.Compiler (CompilerFlavor(..))
 import Distribution.Debian.DebHelper (DebAtom)
 import Distribution.Debian.PackageInfo (DebType)
 import Distribution.Debian.Server (Executable(..))
@@ -165,8 +164,7 @@ data DebAction = Usage | Debianize | SubstVar DebType deriving (Eq, Show)
 defaultFlags :: Flags
 defaultFlags =
     Flags {
-      compilerFlavor = GHC
-    , compilerVersion = Nothing
+      compilerVersion = Nothing
     , configurationsFlags = []
     , haddock = True
     , missingDependencies = []

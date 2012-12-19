@@ -13,7 +13,6 @@ import Data.Char (toLower, isDigit, ord)
 import qualified Data.Map as Map
 import Data.Version (parseVersion)
 import Debian.Relation (BinPkgName(..))
-import Distribution.Compiler (CompilerFlavor(..))
 import Distribution.Debian.Config (Flags(..), DebAction(Usage, Debianize, SubstVar), defaultFlags)
 import Distribution.Debian.Server (Executable(..))
 import Distribution.PackageDescription (FlagName(..))
@@ -63,14 +62,6 @@ options =
                                                                      , execServer = Nothing
                                                                      , debName = name } : executablePackages x }) "SOURCEPATH or SOURCEPATH:DESTDIR")
              "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
-      Option "" ["ghc"] (NoArg (\x -> x { compilerFlavor = GHC }))
-             "Compile with GHC",
-      Option "" ["hugs"] (NoArg (\x -> x { compilerFlavor = Hugs }))
-             "Compile with Hugs",
-      Option "" ["jhc"] (NoArg (\x -> x { compilerFlavor = JHC }))
-             "Compile with JHC",
-      Option "" ["nhc"] (NoArg (\x -> x { compilerFlavor = NHC }))
-             "Compile with NHC",
       Option "h?" ["help"] (NoArg (\x -> x { help = True }))
              "Show this help text",
       Option "" ["ghc-version"] (ReqArg (\ ver x -> x { compilerVersion = Just (last (map fst (readP_to_S parseVersion ver)))}) "VERSION")
