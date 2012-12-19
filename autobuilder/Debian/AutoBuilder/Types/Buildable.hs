@@ -25,6 +25,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Download as T
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Packages as P
+import qualified Debian.AutoBuilder.Types.ParamRec as R
 import Debian.AutoBuilder.Types.Packages (foldPackages)
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Changes (logVersion, ChangeLogEntry(..))
@@ -92,9 +93,9 @@ asBuildable download =
 -- is rebuilt, don't rebuild hscolour even though ghc6 is one of
 -- its build dependencies.\"
 relaxDepends :: C.CacheRec -> Buildable -> G.OldRelaxInfo
-relaxDepends cache@(C.CacheRec {C.packages = s}) tgt =
+relaxDepends cache@(C.CacheRec {C.params = p}) tgt =
     G.RelaxInfo $ map (\ target -> (BinPkgName target, Nothing)) (globalRelaxInfo (C.params cache)) ++
-                  foldPackages (\ _ _spec flags xs -> xs ++ map (\ binPkg -> (BinPkgName binPkg, Just (srcPkgName tgt))) (P.relaxInfo flags)) s []
+                  foldPackages (\ _ _spec flags xs -> xs ++ map (\ binPkg -> (BinPkgName binPkg, Just (srcPkgName tgt))) (P.relaxInfo flags)) (R.packages p) []
 
 _makeRelaxInfo :: G.OldRelaxInfo -> G.RelaxInfo
 _makeRelaxInfo (G.RelaxInfo xs) srcPkgName binPkgName =

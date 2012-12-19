@@ -66,7 +66,7 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | Called from the configuration script, this processes a list of
 -- parameter sets.
-main :: [(P.ParamRec, P.Packages)] -> IO ()
+main :: [P.ParamRec] -> IO ()
 main [] = error "No parameter sets"
 main paramSets = do
   -- Do parameter sets until there is a failure.
@@ -92,15 +92,15 @@ main paramSets = do
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: MonadApt m => [Failing ([Output L.ByteString], NominalDiffTime)] -> (P.ParamRec, P.Packages) -> m [Failing ([Output L.ByteString], NominalDiffTime)]
-doParameterSet results (params, packages) =
+doParameterSet :: MonadApt m => [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
+doParameterSet results params =
     if any isFailure results
     then return results
     else
         noisier (P.verbosity params)
           (do top <- liftIO $ P.computeTopDir params
               withLock (top ++ "/lockfile")
-                (runTopT top (quieter 2 (P.buildCache params packages) >>= runParameterSet)))
+                (runTopT top (quieter 2 (P.buildCache params) >>= runParameterSet)))
           `catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
         (\ result -> return (result : results))
     where
@@ -236,7 +236,7 @@ runParameterSet cache =
                                    (show (P.spec target), (Right <$> retrieve buildOS cache target) `catch` handleRetrieveException target))
                               (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
           where
-            allTargets = C.packages cache
+            allTargets = P.packages (C.params cache)
             handleRetrieveException :: MonadDeb m => P.Packages -> SomeException -> m (Either String Download)
             handleRetrieveException target e =
                 case (fromException (toException e) :: Maybe AsyncException) of
@@ -313,7 +313,7 @@ doReport =
     where
       doReport' :: P.Packages -> [String]
       doReport' P.NoPackage = []
-      doReport' p@(P.Packages {}) = concatMap doReport' (P.packages p)
+      doReport' p@(P.Packages {}) = concatMap doReport' (P.list p)
       doReport' p@(P.Package {}) =
           patched (P.spec p) ++ pinned (P.flags p)
           where

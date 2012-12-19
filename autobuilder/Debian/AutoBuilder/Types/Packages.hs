@@ -29,7 +29,7 @@ data Packages
       }
     | Packages
       { group :: Set String
-      , packages :: [Packages]
+      , list :: [Packages]
       }
     deriving (Show, Eq, Ord)
 
@@ -38,16 +38,16 @@ instance Monoid Packages where
     mappend NoPackage y = y
     mappend x NoPackage = x
     mappend x@(Package {}) y@(Package {}) = Packages empty [x, y]
-    mappend x@(Package {}) y@(Packages {}) = y {packages = [x] ++ packages y}
-    mappend x@(Packages {}) y@(Package {}) = x {packages = packages x ++ [y]}
+    mappend x@(Package {}) y@(Packages {}) = y {list = [x] ++ list y}
+    mappend x@(Packages {}) y@(Package {}) = x {list = list x ++ [y]}
     mappend x@(Packages {}) y@(Packages {}) =
         Packages { group = union (group x) (group y)
-                 , packages = packages x ++ packages y }
+                 , list = list x ++ list y }
 
 foldPackages :: (String -> RetrieveMethod -> [PackageFlag] -> r -> r) -> Packages -> r -> r
 foldPackages _ NoPackage r = r
 foldPackages f x@(Package {}) r = f (name x) (spec x) (flags x) r
-foldPackages f x@(Packages {}) r = foldr (foldPackages f) r (packages x)
+foldPackages f x@(Packages {}) r = foldr (foldPackages f) r (list x)
 
 packageCount :: Packages -> Int
 packageCount ps = foldPackages (\ _ _ _ n -> n + 1) ps 0
