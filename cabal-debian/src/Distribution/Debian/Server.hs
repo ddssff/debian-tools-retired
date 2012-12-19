@@ -94,7 +94,7 @@ data Server
       , headerMessage :: String -- ^ A comment that will be inserted to
                                 -- explain how the file was generated
       , retry :: String         -- ^ start-stop-daemon --retry argument
-      , flags :: [String]   -- ^ Extra flags to pass to the server via the init script
+      , serverFlags :: [String] -- ^ Extra flags to pass to the server via the init script
       } deriving (Read, Show, Eq)
 
 data Site
@@ -190,7 +190,7 @@ debianInit b e spec@(Server{..}) =
     commonOptions = ["--pidfile", "/var/run/" ++ destName e]
     startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory e, "--exec", "/usr/bin" </> destName e]
     stopOptions = ["--stop", "--oknodo"] ++ if retry /= "" then ["--retry=" ++ retry] else []
-    serverOptions = flags ++ commonServerOptions
+    serverOptions = serverFlags ++ commonServerOptions
     -- Without these, happstack servers chew up CPU even when idle
     commonServerOptions = ["+RTS", "-IO", "-RTS"]
 

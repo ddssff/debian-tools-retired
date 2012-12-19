@@ -33,7 +33,7 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseChangeLog)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Debian.Version.String
-import Distribution.Debian.Config (Flags(..), defaultFlags, missingDependencies')
+import Distribution.Debian.Config (Flags(..), Config(..), defaultFlags, defaultConfig, missingDependencies')
 import Distribution.Debian.DebHelper (DebAtom(..), controlFile, changeLog, toFiles)
 import Distribution.Debian.Dependencies (PackageType(..), debianExtraPackageName, debianUtilsPackageName, debianSourcePackageName,
                                          debianDocPackageName, debianDevPackageName, debianProfPackageName)
@@ -74,11 +74,11 @@ withEnvironmentArgs f =
 -- | Read the value of $CABALDEBIAN as a list of command line
 -- arguments, construct a ('Flags' -> 'Flags') function from them, and
 -- compose it with a function that takes a 'Flags' record.
-withEnvironmentFlags :: Flags -> (Flags -> IO a) -> IO a
-withEnvironmentFlags flags0 f =
+withEnvironmentFlags :: Config -> (Config -> IO a) -> IO a
+withEnvironmentFlags config0 f =
   (getEnv "CABALDEBIAN" >>= return . compileArgs . read) `catch` handle >>= \ ff ->
-  let flags = ff flags0 in
-  f flags
+  let config = config0 {flags = ff (flags config0)} in
+  f config
   where
     handle :: IOError -> IO (Flags -> Flags)
     handle _ = return id
@@ -109,9 +109,9 @@ runDebianize args =
 -- @CABALDEBIAN@ environment variable, with the build directory set to
 -- match what dpkg-buildpackage will use later when it uses the
 -- resulting debianization.
-callDebianize :: ([DebAtom] -> [DebAtom]) -> [String] -> IO ()
-callDebianize modifyAtoms args =
-    debianize modifyAtoms ((compileArgs args defaultFlags) {buildDir = "dist-ghc/build"})
+callDebianize :: [String] -> IO ()
+callDebianize args =
+    debianize (defaultConfig (compileArgs args defaultFlags))
 
 -- | Generate a debianization for the cabal package in the current
 -- directory using information from the .cabal file and from the
@@ -119,12 +119,12 @@ callDebianize modifyAtoms args =
 -- for the debian/changelog file.  A new entry changelog is generated,
 -- and any entries already there that look older than the new one are
 -- preserved.
-debianize :: ([DebAtom] -> [DebAtom]) -> Flags -> IO ()
-debianize modifyAtoms flags0 =
-    withEnvironmentFlags flags0 $ \ flags ->
-    withSimplePackageDescription flags $ \ pkgDesc compiler -> do
+debianize :: Config -> IO ()
+debianize config0 =
+    withEnvironmentFlags config0 $ \ config ->
+    withSimplePackageDescription config $ \ pkgDesc compiler -> do
       old <- readDebianization
-      new <- (modifyAtoms <$> debianization flags pkgDesc compiler old) >>= mapM (prepareAtom flags) >>= return . concat
+      new <- (modifyAtoms config <$> debianization config pkgDesc compiler old) >>= mapM (prepareAtom config) >>= return . concat
       -- It is imperitive that during the time that dpkg-buildpackage
       -- runs the version number in the changelog and the source and
       -- package names in the control file do not change, or the bulid
@@ -135,7 +135,7 @@ debianize modifyAtoms flags0 =
       -- storing them apart from the package in the autobuilder
       -- configuration.
       case () of
-        _ | (validate flags) ->
+        _ | (validate (flags config)) ->
               do let oldVersion = logVersion (head (unChangeLog (changeLog old)))
                      newVersion = logVersion (head (unChangeLog (changeLog new)))
                      oldSource = fromJust (lookupP "Source" (head (unControl (controlFile old))))
@@ -147,8 +147,8 @@ debianize modifyAtoms flags0 =
                      | oldSource /= newSource -> error ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource))
                      | oldPackages /= newPackages -> error ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages))
                      | True -> return ()
-          | dryRun flags -> putStrLn "Debianization (dry run):" >> describeDebianization flags new >>= putStr
-          | True -> writeDebianization flags new
+          | dryRun (flags config) -> putStrLn "Debianization (dry run):" >> describeDebianization (flags config) new >>= putStr
+          | True -> writeDebianization (flags config) new
 
 unChangeLog :: ChangeLog -> [ChangeLogEntry]
 unChangeLog (ChangeLog x) = x
@@ -157,8 +157,8 @@ unChangeLog (ChangeLog x) = x
 -- they are supposed to install.  These files are part of the
 -- debianization, and they need to go somewhere they won't be removed
 -- by dh_clean.
-prepareAtom :: Flags -> DebAtom -> IO [DebAtom]
-prepareAtom _flags (DHFile b path s) =
+prepareAtom :: Config -> DebAtom -> IO [DebAtom]
+prepareAtom _config (DHFile b path s) =
     do let s' = fromString s
            (destDir, destName) = splitFileName path
            tmpDir = "debian/cabalInstall" </> show (md5 s')
@@ -179,24 +179,24 @@ handleDoesNotExist :: IOError -> IO Debianization
 handleDoesNotExist e | ioe_type e == NoSuchThing = return []
 handleDoesNotExist e = throw e
 
-debianization :: Flags		 -- ^ command line flags
+debianization :: Config		     -- ^ configuration info
               -> PackageDescription  -- ^ info from the .cabal file
               -> Compiler            -- ^ compiler details
               -> Debianization
               -> IO Debianization
-debianization flags pkgDesc compiler oldDeb =
+debianization config pkgDesc compiler oldDeb =
     do date <- getCurrentLocalRFC822Time
        copyright <- readFile' (licenseFile pkgDesc) `catch` (\ (_ :: SomeException) -> return . showLicense . license $ pkgDesc)
-       maint <- getMaintainer flags pkgDesc >>= maybe (error "Missing value for --maintainer") return
-       let newLog = updateChangelog flags maint pkgDesc date (changeLog oldDeb)
-       return $ control flags compiler maint pkgDesc ++
+       maint <- getMaintainer (flags config) pkgDesc >>= maybe (error "Missing value for --maintainer") return
+       let newLog = updateChangelog (flags config) maint pkgDesc date (changeLog oldDeb)
+       return $ control (flags config) compiler maint pkgDesc ++
                    [ cdbsRules pkgDesc
                    , DebChangelog newLog
                    , DebCompat 7 -- should this be hardcoded, or automatically read from /var/lib/dpkg/status?
                    , DebCopyright copyright
-                   , DebSourceFormat (sourceFormat flags ++ "\n")
+                   , DebSourceFormat (sourceFormat (flags config) ++ "\n")
                    , watch pkgname ] ++
-                   concatMap execAtoms (executablePackages flags)
+                   concatMap execAtoms (executablePackages (flags config))
     where
         PackageName pkgname = pkgName . package $ pkgDesc
 

@@ -8,7 +8,7 @@ import Control.Monad (when)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List
 import Data.Maybe
-import Distribution.Debian.Config (Flags(..))
+import Distribution.Debian.Config (Config(..), Flags(..))
 import Distribution.Simple.Compiler (CompilerFlavor(..), Compiler(..))
 import Distribution.Package (Package(..))
 import Distribution.PackageDescription (PackageDescription(..))
@@ -29,20 +29,22 @@ import System.Posix.Files (setFileCreationMask)
 intToVerbosity' :: Int -> Verbosity
 intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
 
-withSimplePackageDescription :: Flags -> (PackageDescription -> Compiler -> IO ()) -> IO ()
-withSimplePackageDescription flags action = do
-  descPath <- liftIO $ defaultPackageDesc (intToVerbosity' (verbosity flags))
-  genPkgDesc <- liftIO $ readPackageDescription (intToVerbosity' (verbosity flags)) descPath
-  (compiler', _) <- liftIO $ configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration (intToVerbosity' (verbosity flags))
-  let compiler = case compilerVersion flags of
-                   (Just v) -> compiler' {compilerId = CompilerId GHC v}
+withSimplePackageDescription :: Config -> (PackageDescription -> Compiler -> IO ()) -> IO ()
+withSimplePackageDescription config action = do
+  descPath <- liftIO $ defaultPackageDesc (intToVerbosity' vb)
+  genPkgDesc <- liftIO $ readPackageDescription (intToVerbosity' vb) descPath
+  (compiler', _) <- liftIO $ configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration (intToVerbosity' vb)
+  let compiler = case compilerVersion (flags config) of
+                   (Just ver) -> compiler' {compilerId = CompilerId GHC ver}
                    _ -> compiler'
-  pkgDesc <- case finalizePackageDescription (configurationsFlags flags) (const True) (Platform buildArch buildOS) (compilerId compiler) [] genPkgDesc of
+  pkgDesc <- case finalizePackageDescription (configurationsFlags (flags config)) (const True) (Platform buildArch buildOS) (compilerId compiler) [] genPkgDesc of
                Left e -> error $ "finalize failed: " ++ show e
                Right (pd, _) -> return pd
   --lbi <- localBuildInfo pkgDesc flags
-  liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> do autoreconf (intToVerbosity' (verbosity flags)) pkgDesc
+  liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> do autoreconf (intToVerbosity' vb) pkgDesc
                                                                                action pkgDesc compiler
+      where
+        vb = verbosity (flags config)
 
 -- | Run the package's configuration script.
 autoreconf :: Verbosity -> PackageDescription -> IO ()

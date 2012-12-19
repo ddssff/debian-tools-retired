@@ -1,4 +1,4 @@
-import Distribution.Debian.Config (Flags(..), DebAction(..))
+import Distribution.Debian.Config (Flags(..), Config(..), DebAction(..))
 import Distribution.Debian.Debianize (debianize)
 import Distribution.Debian.Options (withFlags)
 import Distribution.Debian.SubstVars (substvars)
@@ -12,8 +12,9 @@ import Prelude hiding (catch)
 -- be accessed using the command line interface.
 main :: IO ()
 main =
-  withFlags $ \ flags ->
-      case debAction flags of
-        SubstVar debType -> substvars flags debType
-        Debianize -> debianize id flags
+  withFlags $ \ fs ->
+      let config = Config {flags = fs, modifyAtoms = id} in
+      case debAction fs of
+        SubstVar debType -> substvars config debType
+        Debianize -> debianize config
         Usage -> error "Unexpected debAction: usage" -- this should have happened in withFlags

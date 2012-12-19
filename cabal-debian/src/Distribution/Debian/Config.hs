@@ -7,12 +7,15 @@ module Distribution.Debian.Config
     ( Flags(..)
     , DebAction(..)
     , defaultFlags
+    , Config(..)
+    , defaultConfig
     , missingDependencies'
     ) where
 
 import qualified Data.Map as Map
 import Data.Version (Version)
 import Debian.Relation (BinPkgName(..))
+import Distribution.Debian.DebHelper (DebAtom)
 import Distribution.Debian.PackageInfo (DebType)
 import Distribution.Debian.Server (Executable(..))
 import Distribution.PackageDescription (FlagName(..))
@@ -203,6 +206,15 @@ defaultFlags =
     -- , modifyAtoms = id
     , buildDir = "dist-ghc/build"
     }
+
+data Config
+    = Config
+      { flags :: Flags
+      , modifyAtoms :: [DebAtom] -> [DebAtom]
+      }
+
+defaultConfig :: Flags -> Config
+defaultConfig fs = Config {flags = fs, modifyAtoms = id}
 
 missingDependencies' :: Flags -> [BinPkgName]
 missingDependencies' = map BinPkgName . missingDependencies

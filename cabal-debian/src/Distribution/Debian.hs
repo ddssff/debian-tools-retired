@@ -44,7 +44,9 @@ module Distribution.Debian
     , substvars
     , Flags(..)
     , DebAction(..)
+    , Config(..)
     , defaultFlags
+    , defaultConfig
     , compileArgs
     , DebType
     , DebAtom(..)
@@ -54,7 +56,7 @@ module Distribution.Debian
 
 import Distribution.Debian.DebHelper (DebAtom(..), tightDependencyFixup)
 import Distribution.Debian.Debianize (debianize, callDebianize, runDebianize, withEnvironmentArgs, withEnvironmentFlags, putEnvironmentArgs)
-import Distribution.Debian.Config (Flags(..), DebAction(..), defaultFlags)
+import Distribution.Debian.Config (Flags(..), DebAction(..), defaultFlags, Config(..), defaultConfig)
 import Distribution.Debian.Options (compileArgs)
 import Distribution.Debian.PackageInfo (DebType)
 import Distribution.Debian.Server
