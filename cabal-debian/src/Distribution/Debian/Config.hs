@@ -33,7 +33,9 @@ data Flags = Flags
     -- with the compiler and their version numbers.  (This could
     -- certainly be done in a more beautiful way.)
 
-    -- *** Modes of Operation ***
+    -------------------------
+    -- Modes of Operation ---
+    -------------------------
     , help :: Bool
     -- ^ Print a help message and exit.
     , verbosity :: Int
@@ -59,7 +61,9 @@ data Flags = Flags
     -- Setup script.  The --builddir option appends the "/build" to
     -- the value it receives, so, yes, try not to get confused.
 
-    -- *** Version Numbers ***
+    -------------------------
+    -- Version Numbers
+    -------------------------
     , epochMap :: Map.Map PackageName Int
     -- ^ Specify epoch numbers for the debian package generated from a
     -- cabal package.  Example: @Map.insert epochMap "HTTP" 1@. 
@@ -76,8 +80,10 @@ data Flags = Flags
     -- debVersion="0.3.0.0-1build3" or the version we produce will
     -- look older than the one already available upstream.
 
-    -- *** Build Dependencies - Controling the Build-Depends and
+    ---------------------------------------------------------------------------
+    -- Build Dependencies - Controling the Build-Depends and
     -- Build-Depends-Indep fields of the debian source package.
+    ---------------------------------------------------------------------------
     , buildDeps :: [String]
     -- ^ Add a debian binary package to the debianization's list of
     -- build dependencies.  These will be in addition to dependencies
@@ -104,8 +110,10 @@ data Flags = Flags
     -- ^ Don't generate the << dependency when we see a cabal equals
     -- dependency.
 
-    -- *** Install Dependencies - controlling the Depends, Conflicts,
+    ---------------------------------------------------------------------------
+    -- Install Dependencies - controlling the Depends, Conflicts,
     -- Provides, and Replaces fields of the debian binary packages.
+    ---------------------------------------------------------------------------
     , extraDevDeps :: [String]
     -- ^ Add a debian binary package to the list of dependencies of
     -- the libghc-foo-dev package produced by the debianization.
@@ -123,8 +131,10 @@ data Flags = Flags
     -- that libghc-quickcheck1-doc conflicts with
     -- libghc-quickcheck2-doc, and vice versa.
 
-    -- *** Debian Binary Packages - Controlling which debian binary
-    -- packages will be created.
+    ---------------------------------------------------------------
+    -- Debian Binary Packages - Controlling which debian binary ---
+    -- packages will be created.                                ---
+    ---------------------------------------------------------------
     , debLibProf :: Bool
     -- ^ Don't generate profiling libraries.  May be needed to work
     -- around a compiler bug.
@@ -136,12 +146,16 @@ data Flags = Flags
     -- haskell-sourcepackage-utils, this lets you split some of them
     -- out into individual debian binary packages.
 
-    -- *** Cabal Options ***
+    -------------------------
+    -- Cabal Options
+    -------------------------
     , configurationsFlags :: [(FlagName, Bool)]
     -- ^ Flags to pass to Cabal function finalizePackageDescription, this
     -- can be used to control the flags in the cabal file.
 
-    -- *** Debian Package Configuration ***
+    --------------------------------------------------
+    -- Debian Package Configuration
+    --------------------------------------------------
     , sourcePackageName :: Maybe String
     -- ^ Name to give the debian source package.  If none is given it
     -- is constructed from the cabal package name.
@@ -155,12 +169,6 @@ data Flags = Flags
     -- obtained from the cabal file, and if it is not there then from
     -- the environment.  As a last resort, there is a hard coded
     -- string in here somewhere.
-{-
-    -- *** 
-    , modifyAtoms :: [DebAtom] -> [DebAtom]
-    -- ^ Function to modify the final list of DebAtom before they
-    -- are turned into a debianization.
--}
     } deriving (Read, Show, Eq)
 
 data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq)
