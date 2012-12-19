@@ -109,9 +109,9 @@ runDebianize args =
 -- @CABALDEBIAN@ environment variable, with the build directory set to
 -- match what dpkg-buildpackage will use later when it uses the
 -- resulting debianization.
-callDebianize :: [String] -> IO ()
-callDebianize args =
-    debianize ((compileArgs args defaultFlags) {buildDir = "dist-ghc/build"})
+callDebianize :: ([DebAtom] -> [DebAtom]) -> [String] -> IO ()
+callDebianize modifyAtoms args =
+    debianize modifyAtoms ((compileArgs args defaultFlags) {buildDir = "dist-ghc/build"})
 
 -- | Generate a debianization for the cabal package in the current
 -- directory using information from the .cabal file and from the
@@ -119,12 +119,12 @@ callDebianize args =
 -- for the debian/changelog file.  A new entry changelog is generated,
 -- and any entries already there that look older than the new one are
 -- preserved.
-debianize :: Flags -> IO ()
-debianize flags0 =
+debianize :: ([DebAtom] -> [DebAtom]) -> Flags -> IO ()
+debianize modifyAtoms flags0 =
     withEnvironmentFlags flags0 $ \ flags ->
     withSimplePackageDescription flags $ \ pkgDesc compiler -> do
       old <- readDebianization
-      new <- (modifyAtoms flags <$> debianization flags pkgDesc compiler old) >>= mapM (prepareAtom flags) >>= return . concat
+      new <- (modifyAtoms <$> debianization flags pkgDesc compiler old) >>= mapM (prepareAtom flags) >>= return . concat
       -- It is imperitive that during the time that dpkg-buildpackage
       -- runs the version number in the changelog and the source and
       -- package names in the control file do not change, or the bulid

@@ -1,3 +1,11 @@
+haskell-cabal-debian (2.6.1) unstable; urgency=low
+
+  * Remove the modifyAtoms field from the Flags record, we want to
+    be able to create instances like Read and Show for this type.
+    The modifyAtoms function is now passed separately to debianize.
+
+ -- David Fox <dsf@seereason.com>  Wed, 19 Dec 2012 09:45:22 -0800
+
 haskell-cabal-debian (2.5.10) unstable; urgency=low
 
   * Filter cabal self dependencies out before generating

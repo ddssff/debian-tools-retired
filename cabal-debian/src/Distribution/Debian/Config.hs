@@ -152,11 +152,12 @@ data Flags = Flags
     -- obtained from the cabal file, and if it is not there then from
     -- the environment.  As a last resort, there is a hard coded
     -- string in here somewhere.
-
+{-
     -- *** 
     , modifyAtoms :: [DebAtom] -> [DebAtom]
     -- ^ Function to modify the final list of DebAtom before they
     -- are turned into a debianization.
+-}
     }
 
 data DebAction = Usage | Debianize | SubstVar DebType deriving (Eq, Show)
@@ -179,7 +180,7 @@ defaultFlags =
     , binaryPackageConflicts = []
     , epochMap = Map.empty
     , debVersion = Nothing
-    , revision = "-1~hackage1"
+    , revision = "-1~hackage1" -- This default produces a version number that is slightly older looking than an initial version from debian, which will have revision @-1@.
     , execMap = Map.empty
     , omitLTDeps = False
     , sourceFormat = "3.0 (native)"
@@ -188,7 +189,7 @@ defaultFlags =
     , executablePackages = []
     , sourcePackageName = Nothing
     , debMaintainer = Nothing
-    , modifyAtoms = id
+    -- , modifyAtoms = id
     , buildDir = "dist-ghc/build"
     }
 
