@@ -1,3 +1,5 @@
+{-# LANGUAGE StandaloneDeriving #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 -- | Command line option processing for building (formerly RPM, now)
 -- Debian packages.
 
@@ -11,12 +13,13 @@ module Distribution.Debian.Config
 import qualified Data.Map as Map
 import Data.Version (Version)
 import Debian.Relation (BinPkgName(..))
-import Distribution.Debian.DebHelper (DebAtom)
 import Distribution.Debian.PackageInfo (DebType)
 import Distribution.Debian.Server (Executable(..))
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
 import System.Process.Progress (defaultVerbosity)
+
+deriving instance Read BinPkgName
 
 -- | This record supplies the information we use to generate a
 -- debianization from a cabal package.
@@ -158,9 +161,9 @@ data Flags = Flags
     -- ^ Function to modify the final list of DebAtom before they
     -- are turned into a debianization.
 -}
-    }
+    } deriving (Read, Show, Eq)
 
-data DebAction = Usage | Debianize | SubstVar DebType deriving (Eq, Show)
+data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq)
 
 defaultFlags :: Flags
 defaultFlags =

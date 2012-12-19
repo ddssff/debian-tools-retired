@@ -62,7 +62,7 @@ data Executable
       , destName :: String  -- ^ name to give installed executable
       , execServer :: Maybe Server -- ^ Information about servers - hostname, port, start and stop info, etc.
       , debName :: String -- ^ Name of the debian binary package
-      } deriving (Eq, Show)
+      } deriving (Read, Show, Eq)
 
 cabal :: String -> Executable
 cabal name =
@@ -95,7 +95,7 @@ data Server
                                 -- explain how the file was generated
       , retry :: String         -- ^ start-stop-daemon --retry argument
       , flags :: [String]   -- ^ Extra flags to pass to the server via the init script
-      } deriving (Eq, Show)
+      } deriving (Read, Show, Eq)
 
 data Site
     = Site
@@ -103,7 +103,7 @@ data Site
                            -- An apache configuration will be generated to
                            -- redirect requests from this domain to hostname:port
       , serverAdmin :: String   -- ^ Apache ServerAdmin parameter
-      } deriving (Eq, Show)
+      } deriving (Read, Show, Eq)
 
 
 serviceName :: Executable -> String
