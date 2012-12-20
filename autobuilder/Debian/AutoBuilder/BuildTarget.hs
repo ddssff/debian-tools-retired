@@ -74,6 +74,11 @@ retrieve buildOS cache target =
           retrieve buildOS cache (target {P.spec = package}) >>=
           Debianize.prepare target
 
+      -- Dir is a simple instance of BuildTarget representing building the
+      -- debian source in a local directory.  This type of target is used
+      -- for testing, and is also returned by the clean method when the
+      -- source control information has been stripped out of some other type
+      -- of BuildTarget.
       P.Dir path ->
           do tree <- liftIO (findSourceTree path :: IO SourceTree)
              return $ T.Download { T.package = target
