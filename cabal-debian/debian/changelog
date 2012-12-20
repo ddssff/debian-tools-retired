@@ -1,3 +1,10 @@
+haskell-cabal-debian (2.6.2) unstable; urgency=low
+
+  * Fix a bug constructing the destination pathnames that was dropping
+    files that were supposed to be installed into packages.
+
+ -- David Fox <dsf@seereason.com>  Thu, 20 Dec 2012 06:49:25 -0800
+
 haskell-cabal-debian (2.6.1) unstable; urgency=low
 
   * Remove the modifyAtoms field from the Flags record, we want to
