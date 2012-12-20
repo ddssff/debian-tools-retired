@@ -1,3 +1,15 @@
+autobuilder (6.48) unstable; urgency=low
+
+  * New PackageFlag: ModifyAtoms, takes a function [DebAtom] -> [DebAtom].
+    This is used to modify the debianization in arbitrary ways, such as
+    adding data files to a binary package.
+  * Don't route all arguments to callDebianize through the command line
+    parser, convert PackageFlags directory to cabal-debian flags.  This
+    gives us more flexibility, specifically enabling using ModifyAtoms
+    flag in the autobuilder configuration file.
+
+ -- David Fox <dsf@seereason.com>  Thu, 20 Dec 2012 06:42:52 -0800
+
 autobuilder (6.47) unstable; urgency=low
 
   * Change the data type used to hold a patch from String to ByteString,
