@@ -1,0 +1,9 @@
+#!/bin/sh
+
+AUTOBUILDER=${PWD}
+CABALDEBIAN=${PWD}/../cabal-debian/src
+CONFIGDIR=${HOME}/.autobuilder.d
+AUTOGEN=${AUTOBUILDER}/dist/build/autogen
+
+cd ${CONFIGDIR}
+sudo runhaskell -i${AUTOGEN}:${CONFIGDIR}:${AUTOBUILDER}:${CABALDEBIAN} ${CONFIGDIR}/autobuilder.hs $*
