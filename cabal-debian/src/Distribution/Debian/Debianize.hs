@@ -463,9 +463,22 @@ control flags compiler maint pkgDesc =
                             list "" ("\n Url: " ++) (pkgUrl pkgDesc) in
                 "\n " ++ (trim . intercalate "\n " . map addDot . lines $ text')
       addDot line = if all (flip elem " \t") line then "." else line
-      libraryDescription Profiling = debianDescription ++ "\n .\n This package contains the libraries compiled with profiling enabled."
-      libraryDescription Development = debianDescription ++ "\n .\n This package contains the normal library files."
-      libraryDescription Documentation = debianDescription ++ "\n .\n This package contains the documentation files."
+      libraryDescription Profiling =
+          debianDescription ++ "\n" ++
+          unlines [" .",
+                   " This package provides a library for the Haskell programming language, compiled",
+                   " for profiling.  See http:///www.haskell.org/ for more information on Haskell."]
+      libraryDescription Development =
+          debianDescription ++ "\n" ++
+          unlines [" .",
+                   " This package provides a library for the Haskell programming language.",
+                   " See http:///www.haskell.org/ for more information on Haskell."]
+      libraryDescription Documentation =
+          debianDescription ++ "\n" ++
+          unlines [" .",
+                   " This package provides the documentation for a library for the Haskell",
+                   " programming language.",
+                   " See http:///www.haskell.org/ for more information on Haskell." ]
       libraryDescription x = error $ "Unexpected library package name suffix: " ++ show x
 
       list :: b -> ([a] -> b) -> [a] -> b
@@ -487,7 +500,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
              Field ("Description", " " ++ maybe debianDescription (const executableDescription) (library pkgDesc))] ++
             conflicts (filterMissing (missingDependencies' flags) (extraDeps (b p) (binaryPackageConflicts flags)))),
            [DebRules ("build" </> debName p ++ ":: build-ghc-stamp")])
-      executableDescription = " " ++ "An executable built from the " ++ display (pkgName (package pkgDesc)) ++ " package."
+      executableDescription = " An executable built from the " ++ display (pkgName (package pkgDesc)) ++ " package."
       makeUtilsPackage =
           case (bundledExecutables, dataFiles pkgDesc) of
             ([], []) ->
