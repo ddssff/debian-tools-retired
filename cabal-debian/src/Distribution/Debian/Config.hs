@@ -194,7 +194,11 @@ defaultFlags =
     , binaryPackageConflicts = []
     , epochMap = Map.empty
     , debVersion = Nothing
-    , revision = "-1~hackage1" -- This default produces a version number that is slightly older looking than an initial version from debian, which will have revision @-1@.
+    -- This default produces a version number that is slightly older
+    -- looking than an initial version from debian, which will have
+    -- revision @-1@.  However, it really ought to be a site policy.
+    -- , revision = "-1~hackage1"
+    , revision = ""
     , execMap = Map.empty
     , omitLTDeps = False
     , sourceFormat = "3.0 (native)"

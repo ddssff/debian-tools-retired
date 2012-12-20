@@ -7,17 +7,17 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
-import Control.Monad (when)
+-- import Control.Monad (when)
 import Control.Monad.CatchIO (MonadCatchIO, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (isSuffixOf)
 import qualified Data.Map as Map
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
-import qualified Debian.AutoBuilder.Types.CacheRec as P
+--import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import qualified Debian.AutoBuilder.Types.ParamRec as P
-import Debian.Relation (BinPkgName(unBinPkgName))
+--import qualified Debian.AutoBuilder.Types.ParamRec as P
+-- import Debian.Relation (BinPkgName(unBinPkgName))
 import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
 import qualified Distribution.Debian as Cabal
@@ -28,7 +28,7 @@ import Distribution.PackageDescription.Parse (readPackageDescription)
 import Prelude hiding (catch)
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>), takeFileName)
-import System.Process.Progress (verbosity)
+-- import System.Process.Progress (verbosity)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
