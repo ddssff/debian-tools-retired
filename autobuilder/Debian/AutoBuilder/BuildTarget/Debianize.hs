@@ -11,6 +11,7 @@ import Control.Monad (when)
 import Control.Monad.CatchIO (MonadCatchIO, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (isSuffixOf)
+import qualified Data.Map as Map
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -21,7 +22,7 @@ import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
 import qualified Distribution.Debian as Cabal
 import Distribution.Verbosity (normal)
-import Distribution.Package (PackageIdentifier(..) {-, PackageName(..)-})
+import Distribution.Package (PackageIdentifier(..), PackageName(..))
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Prelude hiding (catch)
@@ -34,11 +35,11 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: MonadDeb m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
-prepare cache package' cabal =
-    do dir <- sub ("debianize" </> takeFileName (T.getTop cabal))
+prepare :: MonadDeb m => P.Packages -> T.Download -> m T.Download
+prepare package' target =
+    do dir <- sub ("debianize" </> takeFileName (T.getTop target))
        liftIO $ createDirectoryIfMissing True dir
-       _ <- rsync [] (T.getTop cabal) dir
+       _ <- rsync [] (T.getTop target) dir
        cabfiles <- liftIO $ getDirectoryContents dir >>= return . filter (isSuffixOf ".cabal")
        case cabfiles of
          [cabfile] ->
@@ -47,19 +48,20 @@ prepare cache package' cabal =
                 let version = pkgVersion . package . packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderDebianize cache (P.flags package') dir
+                liftIO $ autobuilderCabal (P.flags package') dir Cabal.defaultFlags
                 return $ T.Download { T.package = package'
                                     , T.getTop = dir
                                     , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
                                     , T.mVersion = Just version
-                                    , T.origTarball = T.origTarball cabal
-                                    , T.cleanTarget = \ top -> T.cleanTarget cabal top
+                                    , T.origTarball = T.origTarball target
+                                    , T.cleanTarget = \ top -> T.cleanTarget target top
                                     , T.buildWrapper = id }
          _ -> error $ "Download at " ++ dir ++ ": missing or multiple cabal files"
 
 withCurrentDirectory :: MonadCatchIO m => FilePath -> m a -> m a
 withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old -> liftIO (setCurrentDirectory new) >> return old) (liftIO . setCurrentDirectory) (\ _ -> action)
 
+{-
 -- | Run cabal-debian on the given directory, creating or updating the
 -- debian subdirectory.  If the script in debian/Debianize.hs fails this
 -- will throw an exception.
@@ -70,6 +72,9 @@ autobuilderDebianize cache pflags currentDirectory =
        done <- Cabal.runDebianize args
        when (not done) (Cabal.callDebianize args)
 
+-- | Convert a set of package flags into the corresponding
+-- cabal-debian command line options.  (Is this really in the IO monad
+-- for a good reason?)
 collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> IO [String]
 collectPackageFlags cache pflags =
     do v <- verbosity
@@ -89,3 +94,37 @@ collectPackageFlags cache pflags =
       pflag _ = []
 
       ver = P.ghcVersion (P.params cache)
+-}
+
+autobuilderCabal :: [P.PackageFlag] -> FilePath -> Cabal.Flags -> IO ()
+autobuilderCabal pflags currentDirectory flags =
+    withCurrentDirectory currentDirectory $
+    Cabal.debianize (foldr applyPackageFlag (Cabal.Config {Cabal.modifyAtoms = id, Cabal.flags = flags}) pflags)
+
+-- | Apply a set of package flags to a cabal-debian configuration record.
+applyPackageFlag :: P.PackageFlag -> Cabal.Config -> Cabal.Config
+applyPackageFlag x config@(Cabal.Config {Cabal.flags = fs, Cabal.modifyAtoms = fn}) =
+    case x of
+      P.Maintainer s -> config {Cabal.flags = fs {Cabal.debMaintainer = Just s}}
+      P.ExtraDep s -> config {Cabal.flags = fs {Cabal.buildDeps = s : Cabal.buildDeps fs}}
+      P.ExtraDevDep s -> config {Cabal.flags = fs {Cabal.extraDevDeps = s : Cabal.extraDevDeps fs}}
+      P.NoDoc -> config {Cabal.flags = fs {Cabal.haddock = False}}
+      P.MapDep c d -> config {Cabal.flags = fs {Cabal.extraLibMap = Map.insertWith (++) c [d] (Cabal.extraLibMap fs)}}
+      P.DebVersion s -> config {Cabal.flags = fs {Cabal.debVersion = Just s}}
+      P.Revision s -> config {Cabal.flags = fs {Cabal.revision = s}}
+      P.Epoch name d -> config {Cabal.flags = fs {Cabal.epochMap = if d >= 1 && d <= 9
+                                                                   then Map.insert (PackageName name) d (Cabal.epochMap fs)
+                                                                   else Cabal.epochMap fs}}
+      P.CabalDebian ss -> config {Cabal.flags = Cabal.compileArgs ss fs}
+      -- Compose a modifyAtoms argument with the current value
+      P.ModifyAtoms fn' -> config {Cabal.modifyAtoms = fn' . fn}
+
+      -- Flags that do not affect cabal-debian
+      P.RelaxDep _ -> config
+      P.UDeb _ -> config
+      P.OmitLTDeps -> config
+      P.AptPin _ -> config
+      P.CabalPin _ -> config
+      P.DarcsTag _ -> config
+      P.GitBranch _ -> config
+

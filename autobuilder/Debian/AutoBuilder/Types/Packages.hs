@@ -13,6 +13,7 @@ import Data.ByteString (ByteString)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.Set (Set, empty, union)
 import Debian.Relation (BinPkgName)
+import qualified Distribution.Debian as CD
 
 data Packages
     = NoPackage
@@ -31,7 +32,16 @@ data Packages
       { group :: Set String
       , list :: [Packages]
       }
-    deriving (Show, Eq, Ord)
+    -- deriving (Show, Eq, Ord)
+
+instance Eq Packages where
+    (Package {name = n1, spec = s1}) == (Package {name = n2, spec = s2}) = n1 == n2 && s1 == s2
+    (Packages {group = g1, list = l1}) == (Packages {group = g2, list = l2}) = g1 == g2 && l1 == l2
+    NoPackage == NoPackage = True
+    _ == _ = False
+
+instance Show Packages where
+    show _ = "<Packages>"
 
 instance Monoid Packages where
     mempty = NoPackage
@@ -76,7 +86,7 @@ data RetrieveMethod
     | Tla String                             -- ^ Download from a TLA repository
     | Twice RetrieveMethod                   -- ^ Perform the build twice (should be a package flag)
     | Uri String String                      -- ^ Download a tarball from the URI.  The checksum is used to implement caching.
-    deriving (Read, Show, Eq, Ord)
+    deriving (Read, Show, Eq)
 
 -- | Flags that are applicable to any debianized package, which means
 -- any package because this autobuilder only builds debs.
@@ -112,6 +122,8 @@ data PackageFlag
     -- bugs.
     | CabalDebian [String]
     -- ^ Pass some arbitrary arguments to cabal-debian
+    | ModifyAtoms ([CD.DebAtom] -> [CD.DebAtom])
+    -- ^ Modify the cabal-debian configuration in a fully general way
     | MapDep String BinPkgName
     -- ^ Tell cabal-debian to map the first argument (a name that
     -- appears in Extra-Libraries field of the cabal file) to the
@@ -134,7 +146,6 @@ data PackageFlag
     -- ^ When doing a darcs get pass this string to darcs via the --tag flag.
     | GitBranch String
     -- ^ When doing a 'git clone' pass this string to darcs via the --branch flag.
-    deriving (Show, Eq, Ord)
 
 relaxInfo :: [PackageFlag] -> [String]
 relaxInfo flags =

@@ -26,7 +26,7 @@ import qualified Debian.AutoBuilder.BuildTarget.Bzr as Bzr
 import qualified Debian.AutoBuilder.BuildTarget.Uri as Uri
 import qualified Debian.AutoBuilder.BuildTarget.Twice as Twice
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
-import qualified Debian.AutoBuilder.Types.CacheRec as P
+import qualified Debian.AutoBuilder.Types.CacheRec as C
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -38,7 +38,7 @@ import System.Process (proc)
 import System.Process.Progress (runProcessF, qPutStrLn, quieter)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
-retrieve :: MonadDeb m => OSImage -> P.CacheRec -> P.Packages -> m Download
+retrieve :: MonadDeb m => OSImage -> C.CacheRec -> P.Packages -> m Download
 retrieve buildOS cache target =
     (\ x -> qPutStrLn (" " ++ show (P.spec target)) >> x) $
      case P.spec target of
@@ -72,7 +72,7 @@ retrieve buildOS cache target =
              DebDir.prepare target upstream' debian'
       P.Debianize package ->
           retrieve buildOS cache (target {P.spec = package}) >>=
-          Debianize.prepare cache target
+          Debianize.prepare target
 
       P.Dir path ->
           do tree <- liftIO (findSourceTree path :: IO SourceTree)
