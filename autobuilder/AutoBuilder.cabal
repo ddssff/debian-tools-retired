@@ -112,3 +112,4 @@ Library
     Debian.AutoBuilder.Types.ParamRec
     Debian.AutoBuilder.Types.RetrieveMethodOld,
     Debian.AutoBuilder.Version
+    Paths_AutoBuilder
