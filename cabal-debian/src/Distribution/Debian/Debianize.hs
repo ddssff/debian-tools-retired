@@ -272,7 +272,8 @@ getMaintainer flags pkgDesc =
        return $ case (debMaintainer flags, cabalMaintainer, debianMaintainer) of
                   (Just x, _, _) -> Just x
                   (_, Just x, _) -> Just x
-                  (_, _, x) -> x
+                  (_, _, Just x) -> Just x
+                  _ -> Just "Debian Haskell Group <pkg-haskell-maintainers@lists.alioth.debian.org>"
     where
       cabalMaintainer =
           case maintainer pkgDesc of
