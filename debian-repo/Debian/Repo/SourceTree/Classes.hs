@@ -1,5 +1,5 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables #-}
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wall -fno-warn-name-shadowing #-}
 module Debian.Repo.SourceTree.Classes 
     ( SourceTreeC(..)
     , DebianSourceTreeC(..)

@@ -471,6 +471,8 @@ control flags compiler maint pkgDesc =
       list :: b -> ([a] -> b) -> [a] -> b
       list d f l = case l of [] -> d; _ -> f l
 
+-- | Generate the control file sections and other debhelper atoms for
+-- the executable and utiltity packages.
 execAndUtilSpecs :: Flags -> PackageDescription -> String -> [(Paragraph' String, [DebAtom])] -- [(Paragraph' String, (FilePath, String), [String])]
 execAndUtilSpecs flags pkgDesc debianDescription =
     map makeExecutablePackage (executablePackages flags) ++ makeUtilsPackage
@@ -485,7 +487,6 @@ execAndUtilSpecs flags pkgDesc debianDescription =
              Field ("Description", " " ++ maybe debianDescription (const executableDescription) (library pkgDesc))] ++
             conflicts (filterMissing (missingDependencies' flags) (extraDeps (b p) (binaryPackageConflicts flags)))),
            [DebRules ("build" </> debName p ++ ":: build-ghc-stamp")])
-      b p = D.BinPkgName (debName p)
       executableDescription = " " ++ "An executable built from the " ++ display (pkgName (package pkgDesc)) ++ " package."
       makeUtilsPackage =
           case (bundledExecutables, dataFiles pkgDesc) of
@@ -511,8 +512,11 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                    [DebRules ("build" </> p' ++ ":: build-ghc-stamp")])
                  )]
       utilsDescription = " " ++ "Utility files associated with the " ++ display (package pkgDesc) ++ " package."
-      bundledExecutables = filter (\ p -> not (elem (exeName p) (map execName (executablePackages flags))))
-                                  (filter (buildable . buildInfo) (executables pkgDesc))
+      bundledExecutables = filter nopackage (filter (buildable . buildInfo) (executables pkgDesc))
+      nopackage p = not (elem (exeName p) (map execName (executablePackages flags)))
+
+b :: Distribution.Debian.Server.Executable -> D.BinPkgName
+b p = D.BinPkgName (debName p)
 
 conflicts :: [[D.Relation]] -> [Field' String]
 conflicts [] = []
