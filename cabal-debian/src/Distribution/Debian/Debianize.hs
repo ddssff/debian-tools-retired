@@ -14,7 +14,6 @@ module Distribution.Debian.Debianize
     ) where
 
 import Codec.Binary.UTF8.String (decodeString)
-import Control.Applicative ((<$>))
 import Control.Arrow (second)
 import Control.Exception (SomeException, catch, throw)
 import Control.Monad (mplus)
@@ -53,7 +52,7 @@ import Prelude hiding (catch, writeFile)
 import System.Directory
 import System.Environment
 import System.Exit (ExitCode(ExitSuccess))
-import System.FilePath ((</>), takeDirectory, splitFileName)
+import System.FilePath ((</>), takeDirectory, splitFileName, makeRelative)
 import System.Posix.Env (setEnv)
 import System.Process (readProcessWithExitCode)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -124,7 +123,7 @@ debianize config0 =
     withEnvironmentFlags config0 $ \ config ->
     withSimplePackageDescription config $ \ pkgDesc compiler -> do
       old <- readDebianization
-      new <- (modifyAtoms config <$> debianization config pkgDesc compiler old) >>= mapM (prepareAtom config) >>= return . concat
+      new <- debianization config pkgDesc compiler old >>= mapM (prepareAtom config) >>= return . concat
       -- It is imperitive that during the time that dpkg-buildpackage
       -- runs the version number in the changelog and the source and
       -- package names in the control file do not change, or the bulid
@@ -189,7 +188,7 @@ debianization config pkgDesc compiler oldDeb =
        copyright <- readFile' (licenseFile pkgDesc) `catch` (\ (_ :: SomeException) -> return . showLicense . license $ pkgDesc)
        maint <- getMaintainer (flags config) pkgDesc >>= maybe (error "Missing value for --maintainer") return
        let newLog = updateChangelog (flags config) maint pkgDesc date (changeLog oldDeb)
-       return $ control (flags config) compiler maint pkgDesc ++
+           atoms = control (flags config) compiler maint pkgDesc ++
                    [ cdbsRules pkgDesc
                    , DebChangelog newLog
                    , DebCompat 7 -- should this be hardcoded, or automatically read from /var/lib/dpkg/status?
@@ -197,8 +196,12 @@ debianization config pkgDesc compiler oldDeb =
                    , DebSourceFormat (sourceFormat (flags config) ++ "\n")
                    , watch pkgname ] ++
                    concatMap execAtoms (executablePackages (flags config))
+       return $ map fixups $ modifyAtoms config $ atoms
     where
-        PackageName pkgname = pkgName . package $ pkgDesc
+      -- Turn the DHInstallData directives into DHInstallTo
+      fixups (DHInstallData p s d) = DHInstallTo p s ("usr/share" </> (pkgname ++ "-" ++ (showVersion . pkgVersion . package $ pkgDesc)) </> makeRelative "/" d)
+      fixups x = x
+      PackageName pkgname = pkgName . package $ pkgDesc
 
 -- | This is the only file I am confident I can merge with an existing
 -- file, since the entries are dated and marked with well understood

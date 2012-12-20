@@ -35,6 +35,7 @@ data DebAtom
     | DebWatch String                             -- ^ Write debian/watch
     | DHInstall BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package
     | DHInstallTo BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package at an exact location
+    | DHInstallData BinPkgName FilePath FilePath  -- ^ DHInstallTo the package's data directory: /usr/share/package-version/
     | DHFile BinPkgName FilePath String           -- ^ Create a file with the given text at the given path
     | DHInstallCabalExec BinPkgName String FilePath -- ^ Install a cabal executable into the binary package
     | DHInstallCabalExecTo BinPkgName String FilePath -- ^ Install a cabal executable into the binary package at an exact location
