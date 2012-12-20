@@ -87,10 +87,11 @@ rules build xs =
       g (DebRules x) = Just x
       g (DHInstallTo p s d) =
           Just (unlines [ "binary-fixup" </> show (pretty p) ++ "::"
-                        , "\tinstall -Dp " ++ s ++ " " ++ "debian" </> show (pretty p) </> d ])
+                        , "\tinstall -Dp " ++ s ++ " " ++ "debian" </> show (pretty p) </> makeRelative "/" d ])
+      g (DHInstallData p s d) = error "DHInstallData should have been turned into a DHInstallTo"
       g (DHInstallCabalExecTo p n d) =
           Just (unlines [ "binary-fixup" </> show (pretty p) ++ "::"
-                        , "\tinstall -Dp " ++ build </> n </> n ++ " " ++ "debian" </> show (pretty p) </> d ])
+                        , "\tinstall -Dp " ++ build </> n </> n ++ " " ++ "debian" </> show (pretty p) </> makeRelative "/" d ])
       g _ = Nothing
 
 compat :: [DebAtom] -> Int
