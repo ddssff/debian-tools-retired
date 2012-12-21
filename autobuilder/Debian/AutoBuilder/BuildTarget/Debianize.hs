@@ -7,17 +7,17 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
--- import Control.Monad (when)
+import Control.Monad (when)
 import Control.Monad.CatchIO (MonadCatchIO, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (isSuffixOf)
 import qualified Data.Map as Map
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
---import qualified Debian.AutoBuilder.Types.CacheRec as P
+import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
---import qualified Debian.AutoBuilder.Types.ParamRec as P
--- import Debian.Relation (BinPkgName(unBinPkgName))
+import qualified Debian.AutoBuilder.Types.ParamRec as P
+import Debian.Relation (BinPkgName(unBinPkgName))
 import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
 import qualified Distribution.Debian as Cabal
@@ -28,15 +28,15 @@ import Distribution.PackageDescription.Parse (readPackageDescription)
 import Prelude hiding (catch)
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>), takeFileName)
--- import System.Process.Progress (verbosity)
+import System.Process.Progress (verbosity)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: MonadDeb m => P.Packages -> T.Download -> m T.Download
-prepare package' target =
+prepare :: MonadDeb m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
+prepare cache package' target =
     do dir <- sub ("debianize" </> takeFileName (T.getTop target))
        liftIO $ createDirectoryIfMissing True dir
        _ <- rsync [] (T.getTop target) dir
@@ -48,7 +48,7 @@ prepare package' target =
                 let version = pkgVersion . package . packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderCabal (P.flags package') dir Cabal.defaultFlags
+                liftIO $ autobuilderCabal cache (P.flags package') dir Cabal.defaultFlags
                 return $ T.Download { T.package = package'
                                     , T.getTop = dir
                                     , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
@@ -71,6 +71,7 @@ autobuilderDebianize cache pflags currentDirectory =
     do args <- collectPackageFlags cache pflags
        done <- Cabal.runDebianize args
        when (not done) (Cabal.callDebianize args)
+-}
 
 -- | Convert a set of package flags into the corresponding
 -- cabal-debian command line options.  (Is this really in the IO monad
@@ -94,12 +95,13 @@ collectPackageFlags cache pflags =
       pflag _ = []
 
       ver = P.ghcVersion (P.params cache)
--}
 
-autobuilderCabal :: [P.PackageFlag] -> FilePath -> Cabal.Flags -> IO ()
-autobuilderCabal pflags currentDirectory flags =
+autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> Cabal.Flags -> IO ()
+autobuilderCabal cache pflags currentDirectory flags =
     withCurrentDirectory currentDirectory $
-    Cabal.debianize (foldr applyPackageFlag (Cabal.Config {Cabal.modifyAtoms = id, Cabal.flags = flags}) pflags)
+    do args <- collectPackageFlags cache pflags
+       done <- Cabal.runDebianize args
+       when (not done) (Cabal.debianize (foldr applyPackageFlag (Cabal.Config {Cabal.modifyAtoms = id, Cabal.flags = flags}) pflags))
 
 -- | Apply a set of package flags to a cabal-debian configuration record.
 applyPackageFlag :: P.PackageFlag -> Cabal.Config -> Cabal.Config
@@ -127,4 +129,3 @@ applyPackageFlag x config@(Cabal.Config {Cabal.flags = fs, Cabal.modifyAtoms = f
       P.CabalPin _ -> config
       P.DarcsTag _ -> config
       P.GitBranch _ -> config
-

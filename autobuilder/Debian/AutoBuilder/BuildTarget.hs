@@ -72,7 +72,7 @@ retrieve buildOS cache target =
              DebDir.prepare target upstream' debian'
       P.Debianize package ->
           retrieve buildOS cache (target {P.spec = package}) >>=
-          Debianize.prepare target
+          Debianize.prepare cache target
 
       -- Dir is a simple instance of BuildTarget representing building the
       -- debian source in a local directory.  This type of target is used

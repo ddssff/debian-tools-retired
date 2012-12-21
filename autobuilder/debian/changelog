@@ -1,3 +1,10 @@
+autobuilder (6.48.1) unstable; urgency=low
+
+  * Restore the code to first try running debian/Debianize.hs before
+    calling the debianize function directly
+
+ -- David Fox <dsf@seereason.com>  Fri, 21 Dec 2012 10:52:10 -0800
+
 autobuilder (6.48) unstable; urgency=low
 
   * New PackageFlag: ModifyAtoms, takes a function [DebAtom] -> [DebAtom].
