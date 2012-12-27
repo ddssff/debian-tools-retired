@@ -51,7 +51,7 @@ module Debian.Repo.Types
 import qualified Data.ByteString.Char8 as B ( ByteString )
 import qualified Debian.Control.ByteString as B ( Paragraph )
 import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
-import Debian.Relation (BinPkgName(..), SrcPkgName(..), prettyPkgName)
+import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.URI ( URI(uriPath), URIString, fileFromURI, parseURI )
 import Debian.Release (Section(..), ReleaseName(..), Arch(..))
 import Debian.Sources ( SliceName(..), DebSource(..) )
@@ -187,7 +187,7 @@ instance PackageVersion PkgVersion where
     pkgVersion = getVersion
 
 prettyPkgVersion :: PkgVersion -> Doc
-prettyPkgVersion v = prettyPkgName (getName v) <> text "=" <> prettyDebianVersion (getVersion v)
+prettyPkgVersion v = pretty (getName v) <> text "=" <> prettyDebianVersion (getVersion v)
 
 -------------------- RELEASE --------------------
 
@@ -319,7 +319,7 @@ data PackageIndex
 type PackageIndexLocal = PackageIndex
 
 prettyBinaryPackage :: BinaryPackage -> Doc
-prettyBinaryPackage p = prettyPkgName (pkgName p) <> text "-" <> prettyDebianVersion (pkgVersion p)
+prettyBinaryPackage p = pretty (pkgName p) <> text "-" <> prettyDebianVersion (pkgVersion p)
 
 makeBinaryPackageID :: PackageIndex -> String -> DebianVersion -> PackageID BinPkgName
 makeBinaryPackageID i n v = PackageID i (BinPkgName n) v
@@ -348,7 +348,7 @@ sourcePackageName :: SourcePackage -> SrcPkgName
 sourcePackageName = packageName . sourcePackageID
 
 prettyPackageID :: B.PkgName n => PackageID n -> Doc
-prettyPackageID p = prettyPkgName (packageName p) <> text "=" <> prettyDebianVersion (packageVersion p)
+prettyPackageID p = pretty (packageName p) <> text "=" <> prettyDebianVersion (packageVersion p)
 
 -- | The 'BinaryPackage' type adds to the 'PackageID' type the control
 -- information obtained from the package index.

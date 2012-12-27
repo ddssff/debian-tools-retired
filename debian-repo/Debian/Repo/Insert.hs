@@ -26,7 +26,7 @@ import Debian.Control ( formatControl )
 import qualified Debian.Control.ByteString as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(parseControlFromHandle), Control,
                                                   appendFields, fieldValue, modifyField, raiseFields, renameField )
 import qualified Debian.Control.String as S ( Control'(Control), ControlFunctions(parseControlFromFile) )
-import Debian.Relation (BinPkgName, PkgName(prettyPkgName))
+import Debian.Relation (BinPkgName, PkgName)
 import Debian.Repo.Changes ( findChangesFiles, poolDir', name, path )
 import Debian.Repo.Monads.Apt (MonadApt)
 import qualified Debian.Repo.Package as DRP ( sourceFilePaths, toBinaryPackage, binaryPackageSourceID, getPackages, releaseSourcePackages, releaseBinaryPackages, putPackages )
@@ -634,12 +634,12 @@ findLive repo@(LocalRepository root (Just layout) _) =
       changesFilePaths root Pool releases package =
           map ((outsidePath root ++ "/installed/") ++) . changesFileNames releases $ package
       changesFileNames releases package = 
-          map (\ arch -> intercalate "_" [show (prettyPkgName (sourcePackageName package)),
+          map (\ arch -> intercalate "_" [show (pretty (sourcePackageName package)),
                                           show . prettyDebianVersion . packageVersion . sourcePackageID $ package,
                                           archName arch] ++ ".changes") (nub (concat (architectures releases)))
       uploadFilePaths root releases package = map ((outsidePath root ++ "/") ++) . uploadFileNames releases $ package
       uploadFileNames releases package =
-          map (\ arch -> intercalate "_" [show (prettyPkgName (sourcePackageName package)),
+          map (\ arch -> intercalate "_" [show (pretty (sourcePackageName package)),
                                           show . prettyDebianVersion . packageVersion . sourcePackageID $ package,
                                           archName arch] ++ ".upload") (nub (concat (architectures releases)))
       architectures releases = map head . group . sort . map releaseArchitectures $ releases

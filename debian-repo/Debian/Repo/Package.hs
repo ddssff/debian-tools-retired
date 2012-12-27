@@ -21,7 +21,7 @@ module Debian.Repo.Package
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
-import Control.Exception ( SomeException(..), catch, try, ErrorCall(..) )
+import Control.Exception as E ( SomeException(..), catch, try, ErrorCall(..) )
 import Data.Either ( partitionEithers )
 import Debian.Apt.Index ( Compression(..), controlFromIndex )
 import Debian.Control ( Paragraph', ControlFunctions(asString, stripWS), fieldValue, formatParagraph )
@@ -45,7 +45,6 @@ import Data.List ( intersperse, intercalate, partition )
 import Data.Maybe ( catMaybes, fromMaybe )
 import qualified Extra.Files as EF ( writeAndZipFileWithBackup )
 import Network.URI ( URI(..), URIAuth(..), escapeURIString, uriToString )
-import Prelude hiding (catch)
 import System.FilePath ((</>), takeDirectory)
 import System.IO.Unsafe ( unsafeInterleaveIO )
 import System.Posix ( getFileStatus )
@@ -248,7 +247,7 @@ sourcePackagesOfIndex' :: (AptCache a, MonadApt m) => a -> PackageIndex -> m [So
 sourcePackagesOfIndex' cache index =
     do state <- getApt
        let cached = lookupSourcePackages path state
-       status <- liftIO $ getFileStatus path `catch` (\ (_ :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory (rootPath (rootDir cache)) ++ " and try again - sorry about that.")
+       status <- liftIO $ getFileStatus path `E.catch` (\ (_ :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory (rootPath (rootDir cache)) ++ " and try again - sorry about that.")
        case cached of
          Just (status', packages) | status == status' -> return packages
          _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)

@@ -32,7 +32,7 @@ module Debian.Repo.Monads.Apt
     , countTasks
     ) where
 
-import Control.Exception (Exception, tryJust)
+import Control.Exception as E (Exception, tryJust)
 import Control.Monad.CatchIO (MonadCatchIO)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.State (get, put)
@@ -44,7 +44,6 @@ import Control.Exception ( try )
 import Control.Monad.State ( MonadTrans(..), MonadIO(..), StateT(runStateT), mapStateT )
 import qualified Data.Map as Map ( insert, Map, empty, findWithDefault )
 import Debian.URI ( URI )
-import Prelude hiding (catch)
 import qualified System.IO as IO ( IOMode(ReadMode), hClose, openBinaryFile )
 import System.Posix.Files ( FileStatus, deviceID, fileID, modificationTime )
 import System.Process.Progress (ePutStrLn)

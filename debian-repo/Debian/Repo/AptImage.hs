@@ -176,8 +176,8 @@ runAptGet os dir command packages =
     createDirectoryIfMissing True dir >> runProcessF (shell cmd) L.empty >> return ()
     where
       cmd = (intercalate " " ("cd" : dir : "&&" : "apt-get" : aptOpts os : command : map formatPackage packages))
-      formatPackage (name, Nothing) = show (prettyPkgName name)
-      formatPackage (name, Just version) = show (prettyPkgName name) ++ "=" ++ show (prettyDebianVersion version)
+      formatPackage (name, Nothing) = show (pretty name)
+      formatPackage (name, Just version) = show (pretty name) ++ "=" ++ show (prettyDebianVersion version)
 
 aptOpts :: AptCache t => t -> String
 aptOpts os =

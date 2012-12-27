@@ -31,7 +31,7 @@ Library
   if flag(local-debian)
     Hs-Source-Dirs: ., ../haskell-debian
   else
-    Build-Depends: debian >= 3.69
+    Build-Depends: debian >= 3.70
 
   Build-Depends:
         ansi-wl-pprint, base, bytestring, Cabal, containers, directory, Extra >= 1.43, filepath, MonadCatchIO-mtl,
@@ -70,7 +70,7 @@ Executable debian-versions
   if flag(local-debian)
     Hs-Source-Dirs: ., ../haskell-debian
   else
-    Build-Depends: debian >= 3.69
+    Build-Depends: debian >= 3.70
 
 Executable newdist
   Main-is: Debian/NewDist/Main.hs
@@ -78,4 +78,4 @@ Executable newdist
   if flag(local-debian)
     Hs-Source-Dirs: ., ../haskell-debian
   else
-    Build-Depends: debian >= 3.69
+    Build-Depends: debian >= 3.70
