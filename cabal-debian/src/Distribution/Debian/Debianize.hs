@@ -212,7 +212,7 @@ updateChangelog flags debianMaintainer pkgDesc date (ChangeLog oldEntries) =
       entry@(Entry {logVersion = d}) : older | d == logVersion newEntry -> ChangeLog (merge entry newEntry : older)
       entries -> ChangeLog (newEntry : entries)
     where
-      newEntry = Entry { logPackage = show (D.prettyPkgName (debianSourcePackageName' pkgDesc))
+      newEntry = Entry { logPackage = show (pretty (debianSourcePackageName' pkgDesc))
                        , logVersion = updateOriginal f $ debianVersionNumber pkgDesc
                        , logDists = [parseReleaseName "unstable"]
                        , logUrgency = "low"
@@ -323,7 +323,7 @@ cdbsRules pkgDesc =
            -- "-dev", so no underscores and no capital letters.  In
            -- hlibrary.mk there is a python expression that looks like
            -- it would do this for us.
-           "DEB_CABAL_PACKAGE = " ++ show (D.prettyPkgName (debianExtraPackageName' pkgDesc)),
+           "DEB_CABAL_PACKAGE = " ++ show (pretty (debianExtraPackageName' pkgDesc)),
            "",
            "include /usr/share/cdbs/1/rules/debhelper.mk",
            "include /usr/share/cdbs/1/class/hlibrary.mk",
@@ -388,7 +388,7 @@ control flags compiler maint pkgDesc =
 
       sourceSpec =
           Paragraph
-          ([Field ("Source", " " ++ show (D.prettyPkgName (debianSourcePackageName' pkgDesc))),
+          ([Field ("Source", " " ++ show (pretty (debianSourcePackageName' pkgDesc))),
             -- See http://www.debian.org/doc/debian-policy/ch-archive.html#s-priorities
             Field ("Priority", " " ++ "optional"),
             -- See http://www.debian.org/doc/debian-policy/ch-archive.html#s-subsections
@@ -407,7 +407,7 @@ control flags compiler maint pkgDesc =
 
       librarySpec arch typ debianName =
           Paragraph
-          [Field ("Package", " " ++ show (D.prettyPkgName (debianName pkgDesc))),
+          [Field ("Package", " " ++ show (pretty (debianName pkgDesc))),
            Field ("Architecture", " " ++ arch),
            Field ("Depends", " " ++ showDeps' "Depends:" (filterMissing (missingDependencies' flags) (
                      (if typ == Development
@@ -425,7 +425,7 @@ control flags compiler maint pkgDesc =
 
       docSpecsParagraph =
           Paragraph
-          [Field ("Package", " " ++ show (D.prettyPkgName (debianDocPackageName' pkgDesc))),
+          [Field ("Package", " " ++ show (pretty (debianDocPackageName' pkgDesc))),
            Field ("Architecture", " " ++ "all"),
            Field ("Section", " " ++ "doc"),
            Field ("Depends", " " ++ showDeps' "Depends:" (filterMissing (missingDependencies' flags)
@@ -508,7 +508,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                 []
             _ ->
                 let p = debianUtilsPackageName' pkgDesc
-                    p' = show (D.prettyPkgName p)
+                    p' = show (pretty p)
                     -- s = debianSourcePackageName' pkgDesc
                     -- s' = show (D.prettySrcPkgName s)
                     c = package pkgDesc

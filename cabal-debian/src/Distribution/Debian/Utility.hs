@@ -40,6 +40,7 @@ import System.FilePath ((</>), dropExtension)
 import System.IO (IOMode (ReadMode), hGetContents, withFile, openFile, hSetBinaryMode, hGetContents)
 import System.IO.Error (isDoesNotExistError)
 import System.Process (readProcessWithExitCode, showCommandForUser)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 type DebMap = Map.Map D.BinPkgName (Maybe DebianVersion)
 
@@ -54,7 +55,7 @@ buildDebVersionMap =
     return . Map.fromList . catMaybes
 
 (!) :: DebMap -> D.BinPkgName -> DebianVersion
-m ! k = maybe (error ("No version number for " ++ (show . D.prettyPkgName $ k) ++ " in " ++ show (Map.map (maybe Nothing (Just . prettyDebianVersion)) m))) id (Map.findWithDefault Nothing k m)
+m ! k = maybe (error ("No version number for " ++ (show . pretty $ k) ++ " in " ++ show (Map.map (maybe Nothing (Just . prettyDebianVersion)) m))) id (Map.findWithDefault Nothing k m)
 
 trim :: String -> String
 trim = dropWhile isSpace
@@ -149,16 +150,10 @@ filterMissing missing rels =
     filter (/= []) (map (filter (\ (D.Rel name _ _) -> not (elem name missing))) rels)
 
 showDeps :: [[D.Relation]] -> String
-showDeps xss = intercalate ", " (map (intercalate " | " . map (show . D.prettyRelation)) xss)
+showDeps = show . pretty
 
-{-
+-- The extra space after prefix' is here for historical reasons(?)
 showDeps' :: [a] -> [[D.Relation]] -> String
 showDeps' prefix xss =
-    intercalate (",\n " ++ prefix') (map (intercalate " | " . map (show . D.prettyRelation)) xss)
-    where prefix' = map (\ _ -> ' ') prefix
--}
-
-showDeps' :: [a] -> [[D.Relation]] -> String
-showDeps' prefix xss =
-    intercalate ("\n" ++ prefix' ++ " , ") (map (intercalate " | " . map (show . D.prettyRelation)) xss)
+    intercalate  ("\n" ++ prefix' ++ " ") . lines . show . pretty $ xss
     where prefix' = map (\ _ -> ' ') prefix

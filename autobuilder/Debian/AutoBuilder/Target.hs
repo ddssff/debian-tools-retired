@@ -42,7 +42,7 @@ import Debian.Changes (ChangesFile(changeRelease, changeInfo, changeFiles, chang
 import Debian.Control
 -- import Debian.Control
 import qualified Debian.GenBuildDeps as G
-import Debian.Relation (BinPkgName(..), SrcPkgName(..), PkgName(..), prettyRelation, prettyPkgName)
+import Debian.Relation (BinPkgName(..), SrcPkgName(..), PkgName(..))
 import Debian.Relation.ByteString(Relations, Relation(..))
 import Debian.Release (Arch, releaseName')
 import Debian.Repo.Monads.Apt (MonadApt)
@@ -91,7 +91,7 @@ decode :: L.ByteString -> String
 decode = UTF8.toString . B.concat . L.toChunks
 
 prettySimpleRelation :: Maybe PkgVersion -> Doc
-prettySimpleRelation rel = maybe (text "Nothing") (\ v -> prettyPkgName (getName v) <> text "=" <> prettyDebianVersion (getVersion v)) rel
+prettySimpleRelation rel = maybe (text "Nothing") (\ v -> pretty (getName v) <> text "=" <> prettyDebianVersion (getVersion v)) rel
 
 -- |Generate the details section of the package's new changelog entry
 -- based on the target type and version info.  This includes the
@@ -673,7 +673,7 @@ buildDepSolutions' arch preferred os globalBuildDeps debianControl =
       packages = aptBinaryPackages os
       message relations' relations'' =
           "Build dependency relations:\n " ++
-          concat (intersperse "\n " (map (\ (a, b) -> show (map prettyRelation a) ++ " -> " ++ show (map prettySimpleRelation b))
+          concat (intersperse "\n " (map (\ (a, b) -> show (map pretty a) ++ " -> " ++ show (map prettySimpleRelation b))
                                               (zip relations' relations'')))
       -- Group and merge the relations by package.  This can only be done
       -- to AND relations that include a single OR element, but these are

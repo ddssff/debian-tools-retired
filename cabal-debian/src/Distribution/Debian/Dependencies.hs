@@ -179,21 +179,6 @@ instance Pretty VersionRange where
 instance Pretty Version where
     pretty = text . showVersion
 
-instance Pretty D.Relation where
-    pretty (D.Rel name ver arch) =
-        pretty name <> maybe empty pretty ver <> maybe empty pretty arch
-
-instance Pretty D.VersionReq where
-    pretty (D.EEQ v) = text "=" <> pretty v
-    pretty (D.SLT v) = text "<" <> pretty v
-    pretty (D.LTE v) = text "<=" <> pretty v
-    pretty (D.GRE v) = text ">=" <> pretty v
-    pretty (D.SGR v) = text ">" <> pretty v
-
-instance Pretty D.ArchitectureReq where
-    pretty (D.ArchOnly ss) = text "[" <> hcat (intersperse (text ",") (map text ss)) <> text "]"
-    pretty (D.ArchExcept ss) = text "[!" <> hcat (intersperse (text ",") (map text ss)) <> text "]"
-
 instance Pretty DebianVersion where
     pretty = text . show
 

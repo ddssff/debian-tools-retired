@@ -17,12 +17,6 @@ import Prelude hiding (catch, init)
 import System.FilePath ((</>), makeRelative)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
-instance Pretty SrcPkgName where
-    pretty (SrcPkgName x) = pretty x
-
-instance Pretty BinPkgName where
-    pretty (BinPkgName x) = pretty x
-
 -- | The smallest pieces of debhelper information.
 data DebAtom
     = DebControl (Control' String)                -- ^ Write the control file (required)

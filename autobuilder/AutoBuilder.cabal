@@ -34,10 +34,10 @@ Library
     if flag(local-debian)
       Hs-Source-Dirs: ., ../../haskell-debian, ../debian-repo
     else
-      Build-Depends: debian >= 3.68
+      Build-Depends: debian >= 3.70
       Hs-Source-Dirs: ., ../debian-repo
   else
-    Build-Depends: debian-repo >= 5.39, debian >= 3.68
+    Build-Depends: debian-repo >= 5.39, debian >= 3.70
 
   Build-Depends:
         ansi-wl-pprint
