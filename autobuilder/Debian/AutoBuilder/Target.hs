@@ -445,7 +445,7 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog ta
                       logDists = [P.buildRelease (P.params cache)],
                       logWho = P.autobuilderEmail (P.params cache),
                       logDate = date,
-                      logComments = init (logComments sourceLog) ++ changelogText (tgt target) oldFingerprint newFingerprint }
+                      logComments = init (logComments sourceLog) ++ "\n" ++ changelogText (tgt target) oldFingerprint newFingerprint }
       setDistribution name changes =
           let (Paragraph fields) = changeInfo changes in
           let info' = map (setDist name) fields in
