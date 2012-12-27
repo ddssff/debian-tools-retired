@@ -1,3 +1,10 @@
+haskell-debian-repo (5.40) unstable; urgency=low
+
+  * Fix the formatting of new log entries - a newline was missing after
+    the signature line, and an extra was inserted before it.
+
+ -- David Fox <dsf@seereason.com>  Wed, 26 Dec 2012 15:59:44 -0800
+
 haskell-debian-repo (5.39) unstable; urgency=low
 
   * Split up the SourceTree classes and types, make the class interface
