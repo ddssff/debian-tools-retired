@@ -1,3 +1,12 @@
+haskell-cabal-debian (2.6.3) unstable; urgency=low
+
+  * Fix pretty printing of Relations (i.e. dependency lists.)  There
+    is an instance for printing lists in ansi-wl-pprint which prevents
+    us from writing customized Pretty instances for type aliases like
+    Relations, AndRelation, and OrRelation.
+
+ -- David Fox <dsf@seereason.com>  Fri, 04 Jan 2013 09:30:48 -0800
+
 haskell-cabal-debian (2.6.2) unstable; urgency=low
 
   * Fix a bug constructing the destination pathnames that was dropping

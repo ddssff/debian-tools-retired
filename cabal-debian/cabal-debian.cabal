@@ -1,6 +1,6 @@
 Name:           cabal-debian
-Version:        2.6.2
-License:        BSD3
+Version:        2.6.3
+License:        BSD
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>
 Category:       Debian, Distribution, System

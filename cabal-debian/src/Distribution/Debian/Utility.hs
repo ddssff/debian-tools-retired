@@ -150,10 +150,10 @@ filterMissing missing rels =
     filter (/= []) (map (filter (\ (D.Rel name _ _) -> not (elem name missing))) rels)
 
 showDeps :: [[D.Relation]] -> String
-showDeps = show . pretty
+showDeps = show . D.prettyRelations
 
 -- The extra space after prefix' is here for historical reasons(?)
 showDeps' :: [a] -> [[D.Relation]] -> String
 showDeps' prefix xss =
-    intercalate  ("\n" ++ prefix' ++ " ") . lines . show . pretty $ xss
+    intercalate  ("\n" ++ prefix' ++ " ") . lines . show . D.prettyRelations $ xss
     where prefix' = map (\ _ -> ' ') prefix
