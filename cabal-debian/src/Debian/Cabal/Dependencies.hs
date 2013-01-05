@@ -27,7 +27,7 @@ import Data.Version (showVersion)
 import Debian.Cabal.Bundled (ghcBuiltIn)
 import Debian.Control
 import Debian.Debianize.Interspersed (Interspersed(foldInverted, leftmost, pairs), foldTriples)
-import Debian.Debianize.Types.Debianization as Debian (DebType(Dev, Prof, Doc))
+import Debian.Debianize.Types.Debianization as Debian (Debianization, DebType(Dev, Prof, Doc), noProfilingLibrary, noDocumentationLibrary)
 import Debian.Relation (Relations, Relation, BinPkgName, PkgName(pkgNameFromString))
 import qualified Debian.Relation as D
 import Debian.Version (DebianVersion, parseDebianVersion)
@@ -100,6 +100,7 @@ data DependencyHints
       -- Debian Binary Packages - Controlling which debian binary ---
       -- packages will be created.                                ---
       ---------------------------------------------------------------
+{-
       , debLibProf :: Bool
       -- ^ Should we generate? profiling libraries.  At certain times it
       -- was necessary to turn this off to work around compiler bugs.
@@ -107,6 +108,7 @@ data DependencyHints
       -- ^ Should we generate the library documentation package?  Also
       -- used at times to avoid haddock bugs or, as the case may be,
       -- bugs in the haddock markup of some packages.
+-}
 
       -------------------------
       -- Version Numbers
@@ -135,9 +137,11 @@ data DependencyHints
 defaultDependencyHints :: DependencyHints
 defaultDependencyHints =
     DependencyHints
-    { haddock = True
-    , missingDependencies = []
+    { missingDependencies = []
+{-
     , debLibProf = True
+    , haddock = True
+-}
     , extraDevDeps = []
     , extraLibMap = Map.empty
     , binaryPackageDeps = []
@@ -489,22 +493,24 @@ anyrel' x = [D.Rel x Nothing Nothing]
 
 -- The haskell-cdbs package contains the hlibrary.mk file with
 -- the rules for building haskell packages.
-debianBuildDeps :: DependencyHints -> Compiler -> PackageDescription -> D.Relations
-debianBuildDeps hints compiler pkgDesc =
+debianBuildDeps :: DependencyHints -> Compiler -> PackageDescription -> Debianization -> D.Relations
+debianBuildDeps hints compiler pkgDesc deb =
           nub $
           [[D.Rel (D.BinPkgName "debhelper") (Just (D.GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
            [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
            anyrel "cdbs",
            anyrel "ghc"] ++
           (map anyrel' (buildDeps hints)) ++
-          (if debLibProf hints then [anyrel "ghc-prof"] else []) ++
+          (if noProfilingLibrary deb then [] else [anyrel "ghc-prof"]) ++
           (concat $ map (buildDependencies hints compiler)
                   $ filter (not . selfDependency (Cabal.package pkgDesc))
                   $ allBuildDepends hints (Cabal.buildDepends pkgDesc) (concatMap buildTools . allBuildInfo $ pkgDesc) (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc) (concatMap extraLibs . allBuildInfo $ pkgDesc))
 
-debianBuildDepsIndep :: DependencyHints -> Compiler -> PackageDescription -> D.Relations
-debianBuildDepsIndep hints compiler pkgDesc =
-          nub $
+debianBuildDepsIndep :: DependencyHints -> Compiler -> PackageDescription -> Debianization -> D.Relations
+debianBuildDepsIndep hints compiler pkgDesc deb =
+    if noDocumentationLibrary deb
+    then []
+    else nub $
           [anyrel "ghc-doc"] ++
           (concat . map (docDependencies hints compiler)
                       $ filter (not . selfDependency (Cabal.package pkgDesc))

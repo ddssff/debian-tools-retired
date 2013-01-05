@@ -10,9 +10,11 @@ import Control.Exception (bracket)
 import Control.Monad (when)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Maybe
+import Data.Set (Set)
 import Data.Text (Text, pack)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
-import Data.Version (Version, showVersion)
+import Data.Version (showVersion)
+import Debian.Debianize.Types.Debianization (SourceDebAtom, compilerVersion')
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
 import Distribution.Package (Package(packageId), PackageIdentifier(pkgName, pkgVersion), PackageName(PackageName))
@@ -36,18 +38,18 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 intToVerbosity' :: Int -> Verbosity
 intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
 
-withSimplePackageDescription :: FilePath -> Int -> Maybe Version -> [(FlagName, Bool)] -> (PackageDescription -> Compiler -> IO a) -> IO a
-withSimplePackageDescription top vb compilerVersion cabalFlagAssignments action =
-    do (pkgDesc, compiler) <- getSimplePackageDescription top vb compilerVersion cabalFlagAssignments
+withSimplePackageDescription :: FilePath -> Int -> Set SourceDebAtom -> [(FlagName, Bool)] -> (PackageDescription -> Compiler -> IO a) -> IO a
+withSimplePackageDescription top vb srcAtoms cabalFlagAssignments action =
+    do (pkgDesc, compiler) <- getSimplePackageDescription top vb srcAtoms cabalFlagAssignments
        action pkgDesc compiler
 
-getSimplePackageDescription :: FilePath -> Int -> Maybe Version -> [(FlagName, Bool)] -> IO (PackageDescription, Compiler)
-getSimplePackageDescription top vb compilerVersion cabalFlagAssignments =
+getSimplePackageDescription :: FilePath -> Int -> Set SourceDebAtom -> [(FlagName, Bool)] -> IO (PackageDescription, Compiler)
+getSimplePackageDescription top vb srcAtoms cabalFlagAssignments =
     withCurrentDirectory top $ do
       descPath <- defaultPackageDesc (intToVerbosity' vb)
       genPkgDesc <- readPackageDescription (intToVerbosity' vb) descPath
       (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration (intToVerbosity' vb)
-      let compiler = case compilerVersion of
+      let compiler = case compilerVersion' srcAtoms of
                        (Just ver) -> compiler' {compilerId = CompilerId GHC ver}
                        _ -> compiler'
       pkgDesc <- case finalizePackageDescription cabalFlagAssignments (const True) (Platform buildArch buildOS) (compilerId compiler) [] genPkgDesc of

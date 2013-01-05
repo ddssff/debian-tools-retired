@@ -9,11 +9,11 @@ module Debian.Cabal.Debianize
     ) where
 
 import Data.Maybe
-import Data.Version (Version)
+import Data.Set (Set)
 import Debian.Cabal.Dependencies (DependencyHints)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (debianization)
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..))
+import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), SourceDebAtom)
 import Debian.Debianize.Types.PackageHints (PackageHints)
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (SourceFormat)

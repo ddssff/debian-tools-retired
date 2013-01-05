@@ -13,13 +13,13 @@ import Control.Monad.Trans (lift)
 import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (pack)
-import Data.Version (Version)
 import Debian.Cabal.Dependencies (DependencyHints, filterMissing', cabalDependencies, PackageInfo(..), debNameFromType, debDeps)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription)
 import Debian.Control
-import Debian.Debianize.Types.Debianization (DebType)
+import Debian.Debianize.Types.Debianization (DebType, SourceDebAtom)
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps,
                                     dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
 import qualified Debian.Relation as D
@@ -45,13 +45,13 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- documentation package name.
 substvars :: Bool
           -> Int
-          -> Maybe Version
+          -> Set SourceDebAtom
           -> [(FlagName, Bool)]
           -> DependencyHints
           -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> IO ()
-substvars dryRun vb compilerVersion cabalFlagAssignments hints debType =
-    withSimplePackageDescription "." vb compilerVersion cabalFlagAssignments $ \ pkgDesc compiler -> do
+substvars dryRun vb srcAtoms cabalFlagAssignments hints debType =
+    withSimplePackageDescription "." vb srcAtoms cabalFlagAssignments $ \ pkgDesc compiler -> do
       debVersions <- buildDebVersionMap
       cabalPackages <- libPaths compiler debVersions >>= return . Map.fromList . map (\ p -> (cabalName p, p))
       control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"

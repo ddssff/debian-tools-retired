@@ -11,6 +11,6 @@ main :: IO ()
 main =
   withFlags $ \ fs ->
       case debAction fs of
-        SubstVar debType -> substvars (dryRun fs) (verbosity fs) (compilerVersion fs) (cabalFlagAssignments fs) (dependencyHints fs) debType
+        SubstVar debType -> substvars (dryRun fs) (verbosity fs) (srcAtoms fs) (cabalFlagAssignments fs) (dependencyHints fs) debType
         Debianize -> debianize "." fs
         Usage -> error "Unexpected debAction: usage" -- this should have happened in withFlags

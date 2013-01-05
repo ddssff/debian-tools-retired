@@ -5,7 +5,6 @@ module Debian.Debianize.Default
     ) where
 
 import Data.Monoid (mempty)
-import Data.Map as Map
 import Data.Set as Set (empty)
 import Data.Text (Text, pack)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
@@ -33,8 +32,8 @@ newDebianization entry@(Entry {}) copy level standards =
                                    , "" ]
       , compat = level
       , copyright = copy
-      , srcAtoms = Set.empty
-      , debAtoms = Map.empty
+      , srcAtoms = mempty
+      , debAtoms = mempty
       , atoms = mempty }
 
 newSourceDebDescription :: SrcPkgName -> NameAddr -> StandardsVersion -> SourceDebDescription

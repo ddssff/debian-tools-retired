@@ -29,12 +29,12 @@ import Data.Monoid ((<>))
 import Data.Text as Text (Text, pack, intercalate, unpack, unlines)
 import qualified Debian.Relation as D
 import Debian.Cabal.Dependencies (PackageType(Development, Profiling, Documentation, Exec, Utilities, Source, Extra),
-                                  DependencyHints (binaryPackageDeps, debLibProf, haddock, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap, revision, debVersion, missingDependencies),
+                                  DependencyHints (binaryPackageDeps, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap, revision, debVersion, missingDependencies),
                                   debianName, debianBuildDeps, debianBuildDepsIndep)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Paths (apacheLogDirectory)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), DebAtom(..), BinaryDebDescription(..), PackageRelations(..))
+import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), DebAtom(..), BinaryDebDescription(..), PackageRelations(..), noProfilingLibrary, noDocumentationLibrary)
 import Debian.Debianize.Types.PackageHints (PackageHints, PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (trim)
 import Debian.Policy (StandardsVersion, SourceFormat, PackagePriority(Optional), PackageArchitectures(Any, All), Section(..))
@@ -246,8 +246,8 @@ control dependencyHints packageHints compiler pkgDesc deb =
 
 buildDeps :: DependencyHints -> Compiler -> PackageDescription -> Debianization -> Debianization
 buildDeps hints compiler pkgDesc deb =
-    deb { sourceDebDescription = (sourceDebDescription deb) { Debian.buildDepends = debianBuildDeps hints compiler pkgDesc
-                                                            , buildDependsIndep = debianBuildDepsIndep hints compiler pkgDesc } }
+    deb { sourceDebDescription = (sourceDebDescription deb) { Debian.buildDepends = debianBuildDeps hints compiler pkgDesc deb
+                                                            , buildDependsIndep = debianBuildDepsIndep hints compiler pkgDesc deb } }
 
 -- debLibProf haddock binaryPackageDeps extraDevDeps extraLibMap
 librarySpecs :: DependencyHints -> PackageDescription -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
@@ -257,8 +257,8 @@ librarySpecs hints pkgDesc describe deb =
               { binaryPackages =
                     maybe []
                           (const ([librarySpec hints Any Development (Cabal.package pkgDesc) describe] ++
-                                  if debLibProf hints then [librarySpec hints Any Profiling (Cabal.package pkgDesc) describe] else [] ++
-                                  if haddock hints then [docSpecsParagraph hints (Cabal.package pkgDesc) describe] else []))
+                                  if noProfilingLibrary deb then [] else [librarySpec hints Any Profiling (Cabal.package pkgDesc) describe] ++
+                                  if noDocumentationLibrary deb then [] else [docSpecsParagraph hints (Cabal.package pkgDesc) describe]))
                           (Cabal.library pkgDesc) ++
                     binaryPackages (sourceDebDescription deb) } }
 

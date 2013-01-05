@@ -4,14 +4,14 @@ module Debian.Cabal.Tests
     ( tests
     ) where
 
-import CabalDebian.Flags (Flags(..), defaultFlags)
+import qualified CabalDebian.Flags as Flags (Flags(..), defaultFlags)
 
 import Data.Map (insert)
 import Data.Monoid (mempty)
 import Data.Set as Set (fromList)
 import qualified Data.Text as T
 import Debian.Cabal.Debianize (debianizationWithIO)
-import Debian.Cabal.Dependencies (DependencyHints (missingDependencies, haddock, execMap, revision, extraDevDeps))
+import Debian.Cabal.Dependencies (DependencyHints (missingDependencies, execMap, revision, extraDevDeps))
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Combinators (tightDependencyFixup, deSugarDebianization, buildDeps, setSourcePackageName, setChangelog, control)
@@ -127,7 +127,7 @@ test4 =
     TestLabel "Convert clckwrks-dot-com" $
     TestCase (do oldlog <- inputChangeLog "test-data/clckwrks-dot-com/input/debian"
                  old <- inputDebianization "test-data/clckwrks-dot-com/output" >>= \ x -> return (x {changelog = oldlog})
-                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (verbosity flags) (compilerVersion flags) (cabalFlagAssignments flags) (debMaintainer flags) (dependencyHints flags) (sourceFormat flags) (executablePackages flags) old
+                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity flags) (Flags.srcAtoms flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.sourceFormat flags) (Flags.executablePackages flags) old
                  assertEqual "Convert clckwrks-dot-com" [] (gdiff (dropFirstLogEntry old) (dropRulesAtoms (dropFirstLogEntry (deSugarDebianization "dist-ghc/build" dataDir (fixRules (tight new)))))))
     where
       -- A log entry gets added when the Debianization is generated,
@@ -136,11 +136,10 @@ test4 =
           deb {atoms = filter (not . isRulesAtom) xs}
           where isRulesAtom (DebRulesFragment _) = True
                 isRulesAtom _ = False
-      flags = defaultFlags
-              { dependencyHints = (dependencyHints defaultFlags) { missingDependencies = [BinPkgName "libghc-clckwrks-theme-clckwrks-doc"]
-                                                                 , haddock             = True
-                                                                 , revision            = "" }
-              , executablePackages  = map theSite serverNames ++ [backups] }
+      flags = Flags.defaultFlags
+              { Flags.dependencyHints = (Flags.dependencyHints Flags.defaultFlags) { missingDependencies = [BinPkgName "libghc-clckwrks-theme-clckwrks-doc"]
+                                                                       , revision            = "" }
+              , Flags.executablePackages  = map theSite serverNames ++ [backups] }
       serverNames = map BinPkgName ["clckwrks-dot-com-production"] -- , "clckwrks-dot-com-staging", "clckwrks-dot-com-development"]
       -- Insert a line just above the debhelper.mk include
       fixRules deb = deb {rulesHead = T.unlines $ concat $ map (\ line -> if line == "include /usr/share/cdbs/1/rules/debhelper.mk"
@@ -211,17 +210,17 @@ test5 =
     TestLabel "Convert creativeprompts" $
     TestCase (     do oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" >>= \ x -> return (x {changelog = oldlog})
-                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (verbosity flags) (compilerVersion flags) (cabalFlagAssignments flags) (debMaintainer flags) (dependencyHints flags) (sourceFormat flags) (executablePackages flags) old
-                      desc <- describeDebianization (buildDir flags) "test-data/creativeprompts/output" dataDir new
+                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity flags) (Flags.srcAtoms flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.sourceFormat flags) (Flags.executablePackages flags) old
+                      desc <- describeDebianization (Flags.buildDir flags) "test-data/creativeprompts/output" dataDir new
                       writeFile "/tmp/foo" desc
                       -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (deSugarDebianization "dist-ghc/build" dataDir new))))
                       assertEqual "Convert creativeprompts" "" desc
              )
     where
-      flags = defaultFlags { dependencyHints = (dependencyHints defaultFlags) {execMap = insert "trhsx" (BinPkgName "haskell-hsx-utils") (execMap (dependencyHints defaultFlags))}
-                           , executablePackages = (InstallFileHint (BinPkgName "creativeprompts-server") $ InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server") :
+      flags = Flags.defaultFlags { Flags.dependencyHints = (Flags.dependencyHints Flags.defaultFlags) {execMap = insert "trhsx" (BinPkgName "haskell-hsx-utils") (execMap (Flags.dependencyHints Flags.defaultFlags))}
+                           , Flags.executablePackages = (InstallFileHint (BinPkgName "creativeprompts-server") $ InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server") :
                                                   (InstallFileHint (BinPkgName "creativeprompts-development") $ InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") :
-                                                  executablePackages defaultFlags }
+                                                  Flags.executablePackages Flags.defaultFlags }
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
       addMarkdownDependency :: Debianization -> Debianization
@@ -237,7 +236,7 @@ test6 :: Test
 test6 =
     TestLabel "Convert creativeprompts 2" $
     TestCase ( do (Debianization {changelog = oldLog@(ChangeLog (entry : _))}) <- inputDebianization "test-data/creativeprompts/output"
-                  withSimplePackageDescription "test-data/creativeprompts/input" 0 Nothing [] $ \ pkgDesc compiler ->
+                  withSimplePackageDescription "test-data/creativeprompts/input" 0 mempty [] $ \ pkgDesc compiler ->
                       do -- compat <- getDebhelperCompatLevel
                          let compat' = 7
                          -- standards <- getDebianStandardsVersion
@@ -260,8 +259,8 @@ test6 =
                          assertEqual "Convert creativeprompts 2" "" desc
              )
     where
-      hints = (dependencyHints defaultFlags) { execMap = insert "trhsx" (BinPkgName "haskell-hsx-utils") (execMap (dependencyHints defaultFlags))
-                                             , extraDevDeps = BinPkgName "markdown" : extraDevDeps (dependencyHints defaultFlags) }
+      hints = (Flags.dependencyHints Flags.defaultFlags) { execMap = insert "trhsx" (BinPkgName "haskell-hsx-utils") (execMap (Flags.dependencyHints Flags.defaultFlags))
+                                             , extraDevDeps = BinPkgName "markdown" : extraDevDeps (Flags.dependencyHints Flags.defaultFlags) }
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
       -- dropFirstLogEntry (deb@(Debianization {changelog = ChangeLog (_ : tl)})) = deb {changelog = ChangeLog tl}

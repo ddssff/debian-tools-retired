@@ -1,6 +1,7 @@
 -- | Some generic operations with specializations to avoid broken Data
 -- instances in types like Text and Set.
 {-# LANGUAGE  DeriveDataTypeable, RankNTypes, StandaloneDeriving #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Debianize.Generic
     ( geq
     , gdiff
@@ -8,7 +9,7 @@ module Debian.Debianize.Generic
     ) where
 
 import Prelude hiding (GT)
-import Data.Generics (Data, Typeable, GenericQ, toConstr, showConstr, gzipWithQ, extQ, ext1Q, {- ext2Q, Typeable2, -} gmapQ, Constr, dataTypeName, dataTypeOf)
+import Data.Generics (Data, Typeable, GenericQ, toConstr, showConstr, gzipWithQ, extQ, ext1Q, gmapQ, Constr {- , ext2Q, Typeable2, dataTypeName, dataTypeOf-})
 import Data.List (sort)
 import Data.Map (Map)
 import qualified Data.Text as T
@@ -18,6 +19,7 @@ import Debian.Debianize.Utility (showDeps)
 import Debian.Relation (Relation, BinPkgName)
 import Triplets (mkQ2, extQ2)
 
+-- These instances are only used here, to create debugging messages.
 deriving instance Typeable Debianization
 deriving instance Typeable SourceDebAtom
 deriving instance Typeable BinaryDebAtom
