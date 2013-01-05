@@ -9,10 +9,13 @@ module Debian.Debianize.Types.Debianization
     , BinaryDebDescription(..)
     , PackageRelations(..)
     , DebAtom(..)
+    , SourceDebAtom(..)
+    , BinaryDebAtom(..)
     , DebType(..)
     ) where
 
 import Data.Generics (Data, Typeable)
+import Data.Map (Map)
 import Data.Set (Set)
 import Data.Text (Text)
 import Debian.Changes (ChangeLog(..))
@@ -42,6 +45,14 @@ data Debianization
       , copyright :: Either License Text
       -- ^ Copyright information, either as a Cabal License value or
       -- the full text.
+      , srcAtoms :: Set SourceDebAtom
+      -- ^ Information about the source package that will be transformed
+      -- into values for the fields that represent the actual
+      -- debianization files.
+      , debAtoms :: Map BinPkgName (Set BinaryDebAtom)
+      -- ^ Information about the binary packages that will be
+      -- transformed into values for the fields that represent the
+      -- actual debianization files.
       , atoms :: [DebAtom]
       -- ^ All the additional non-manditory debianization information.
       -- It is possible to construct a set with multiple conflicting
@@ -49,7 +60,17 @@ data Debianization
       -- constructors, which makes it unclear what the resulting
       -- debianization should be.  Perhaps a clever Eq instance for
       -- DebAtom would help this situation.
-      } deriving (Eq, Show, Data, Typeable)
+      } deriving (Eq, Show)
+
+data SourceDebAtom
+    = NoDocumentationLibrary -- replaces haddock
+    | NoProfilingLibrary     -- replaces debLibProf
+    deriving (Eq, Ord, Show)
+
+data BinaryDebAtom
+    = Depends BinPkgName     -- replaces extraDevDeps and binaryPackageDeps
+    | Conflicts BinPkgName   -- replaces binaryPackageConflicts
+    deriving (Eq, Ord, Show)
 
 -- | This type represents the debian/control file, which is the core
 -- of the source package debianization.  It includes the information
@@ -150,11 +171,12 @@ data DebAtom
     = DebRulesFragment Text                       -- ^ A Fragment of debian/rules
     | DebSourceFormat Text                        -- ^ Write debian/source/format
     | DebWatch Text                               -- ^ Write debian/watch
+    | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
+
     | DHInstall BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package
     | DHInstallTo BinPkgName FilePath FilePath    -- ^ Install a build file into the binary package at an exact location
     | DHInstallData BinPkgName FilePath FilePath  -- ^ DHInstallTo the package's data directory: /usr/share/package-version/
     | DHFile BinPkgName FilePath Text             -- ^ Create a file with the given text at the given path
-    | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
     | DHInstallCabalExec BinPkgName String FilePath -- ^ Install a cabal executable into the binary package
     | DHInstallCabalExecTo BinPkgName String FilePath -- ^ Install a cabal executable into the binary package at an exact location
     | DHInstallDir BinPkgName FilePath            -- ^ Create a directory in the binary package

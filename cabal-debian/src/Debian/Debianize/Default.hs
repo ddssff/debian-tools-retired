@@ -5,7 +5,8 @@ module Debian.Debianize.Default
     ) where
 
 import Data.Monoid (mempty)
-import Data.Set (empty)
+import Data.Map as Map
+import Data.Set as Set (empty)
 import Data.Text (Text, pack)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
@@ -32,6 +33,8 @@ newDebianization entry@(Entry {}) copy level standards =
                                    , "" ]
       , compat = level
       , copyright = copy
+      , srcAtoms = Set.empty
+      , debAtoms = Map.empty
       , atoms = mempty }
 
 newSourceDebDescription :: SrcPkgName -> NameAddr -> StandardsVersion -> SourceDebDescription
@@ -49,8 +52,8 @@ newSourceDebDescription src who standards =
       , buildDependsIndep  = []
       , buildConflictsIndep  = []
       , standardsVersion = standards
-      , vcsFields = empty
-      , xFields = empty
+      , vcsFields = Set.empty
+      , xFields = Set.empty
       , binaryPackages = [] }
 
 newBinaryDebDescription :: BinPkgName -> PackageArchitectures -> BinaryDebDescription

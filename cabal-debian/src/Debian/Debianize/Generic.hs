@@ -1,6 +1,6 @@
 -- | Some generic operations with specializations to avoid broken Data
 -- instances in types like Text and Set.
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE  DeriveDataTypeable, RankNTypes, StandaloneDeriving #-}
 module Debian.Debianize.Generic
     ( geq
     , gdiff
@@ -8,22 +8,30 @@ module Debian.Debianize.Generic
     ) where
 
 import Prelude hiding (GT)
-import Data.Generics (Data, GenericQ, toConstr, showConstr, gzipWithQ, extQ, ext1Q, {- ext2Q, Typeable2, -} gmapQ, Constr)
+import Data.Generics (Data, Typeable, GenericQ, toConstr, showConstr, gzipWithQ, extQ, ext1Q, {- ext2Q, Typeable2, -} gmapQ, Constr, dataTypeName, dataTypeOf)
 import Data.List (sort)
+import Data.Map (Map)
 import qualified Data.Text as T
 import Data.Set as Set (Set, toList, fromList, difference)
-import Debian.Debianize.Types.Debianization (VersionControlSpec, XField, DebAtom)
+import Debian.Debianize.Types.Debianization (Debianization(..), VersionControlSpec, XField, DebAtom, SourceDebAtom(..), BinaryDebAtom(..))
 import Debian.Debianize.Utility (showDeps)
-import Debian.Relation (Relation)
+import Debian.Relation (Relation, BinPkgName)
 import Triplets (mkQ2, extQ2)
+
+deriving instance Typeable Debianization
+deriving instance Typeable SourceDebAtom
+deriving instance Typeable BinaryDebAtom
+
+deriving instance Data Debianization
+deriving instance Data SourceDebAtom
+deriving instance Data BinaryDebAtom
 
 -- ext2Q' :: (Data d, Typeable2 t) => (d -> q) -> (forall d1 d2. (Data d1, Data d2) => t d1 d2 -> q) -> d -> q
 -- ext2Q' = ext2Q
 
--- Example implementation of the eq argument to combine3.
 geq :: GenericQ (GenericQ Bool)
 geq x y =
-    (geq' `mkQ2` stringEq `extQ2` textEq `extQ2` setEq1 `extQ2` setEq2) x y
+    (geq' `mkQ2` stringEq `extQ2` textEq `extQ2` setEq1 `extQ2` setEq2 `extQ2` setEq3 `extQ2` setEq4 `extQ2` mapEq1) x y
     where
       -- If the specialized eqs don't work, use the generic.  This
       -- will throw an exception if it encounters something with a
@@ -38,16 +46,21 @@ geq x y =
       setEq1 a b = toList a == toList b
       setEq2 :: Set XField -> Set XField -> Bool
       setEq2 a b = toList a == toList b
+      setEq3 :: Set SourceDebAtom -> Set SourceDebAtom -> Bool
+      setEq3 a b = (a == b)
+      setEq4 :: Set BinaryDebAtom -> Set BinaryDebAtom -> Bool
+      setEq4 a b = (a == b)
+      mapEq1 :: Map BinPkgName (Set BinaryDebAtom) -> Map BinPkgName (Set BinaryDebAtom) -> Bool
+      mapEq1 a b = (a == b)
 
 data Diff
     = Diff { stack :: [Constr], expected :: String, actual :: String }
     | SetDiff { stack :: [Constr], expected :: String, missing :: String, extra :: String }
     deriving (Eq, Show)
 
--- Example implementation of the eq argument to combine3.
 gdiff :: GenericQ (GenericQ [Diff])
 gdiff x y =
-    (gdiff' `mkQ2` stringEq `extQ2` textEq `extQ2` setEq1 `extQ2` setEq2 `extQ2` atomsEq `extQ2` relEq) x y
+    (gdiff' `mkQ2` stringEq `extQ2` textEq `extQ2` setEq1 `extQ2` setEq2 `extQ2` setEq3 `extQ2` setEq4 `extQ2` mapEq1 `extQ2` atomsEq `extQ2` relEq) x y
     where
       -- If the specialized eqs don't work, use the generic.  This
       -- will throw an exception if it encounters something with a
@@ -64,7 +77,13 @@ gdiff x y =
       setEq1 :: Set VersionControlSpec -> Set VersionControlSpec -> [Diff]
       setEq1 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
       setEq2 :: Set XField -> Set XField -> [Diff]
-      setEq2 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show a}]
+      setEq2 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
+      setEq3 :: Set SourceDebAtom -> Set SourceDebAtom -> [Diff]
+      setEq3 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
+      setEq4 :: Set BinaryDebAtom -> Set BinaryDebAtom -> [Diff]
+      setEq4 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
+      mapEq1 :: Map BinPkgName (Set BinaryDebAtom) -> Map BinPkgName (Set BinaryDebAtom) -> [Diff]
+      mapEq1 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
       atomsEq :: [DebAtom] -> [DebAtom] -> [Diff]
       atomsEq a b = if fromList a == fromList b
                     then []

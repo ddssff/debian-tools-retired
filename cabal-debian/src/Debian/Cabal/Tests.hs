@@ -7,6 +7,7 @@ module Debian.Cabal.Tests
 import CabalDebian.Flags (Flags(..), defaultFlags)
 
 import Data.Map (insert)
+import Data.Monoid (mempty)
 import Data.Set as Set (fromList)
 import qualified Data.Text as T
 import Debian.Cabal.Debianize (debianizationWithIO)
@@ -89,6 +90,8 @@ test2a =
                            ""],
             compat = 9,
             copyright = Left BSD3,
+            srcAtoms = mempty,
+            debAtoms = mempty,
             atoms = []}
 
 test2b :: Test
@@ -321,6 +324,8 @@ testDeb1 =
                               , "" ]
         , compat = 9 -- This will change as new version of debhelper are released
         , copyright = Left BSD3
+        , srcAtoms = mempty
+        , debAtoms = mempty
         , atoms = [] }
 
 testDeb2 :: Debianization
@@ -396,6 +401,8 @@ testDeb2 =
     , rulesHead = "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n"
     , compat = 7
     , copyright = Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n"
+    , srcAtoms = mempty
+    , debAtoms = mempty
     , atoms = [DebSourceFormat "3.0 (native)\n"] }
 
 {-

@@ -8,7 +8,7 @@ module Debian.Debianize.Input
 
 import Debug.Trace (trace)
 
-import Control.Applicative ((<$>), (<*>))
+import Control.Applicative (pure, (<$>), (<*>))
 import Control.Exception (SomeException, catch)
 import Data.Char (isSpace)
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -36,6 +36,8 @@ inputDebianization top =
                   <*> inputRulesFile debian
                   <*> inputCompat debian
                   <*> (Right <$> inputCopyright debian)
+                  <*> pure mempty
+                  <*> pure mempty
                   <*> (inputAtomsFromDirectory debian `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e)))
     where
       debian = top </> "debian"
