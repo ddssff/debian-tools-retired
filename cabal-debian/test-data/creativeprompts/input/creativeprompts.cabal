@@ -1,7 +1,7 @@
 Name: creativeprompts
 Version: 1.5.2
 License: AllRightsReserved
-License-Files: debian/copyright
+License-File: debian/copyright
 Copyright: (c) 2010-2011 SeeReason Partners LLC
 Author: Jeremy Shaw <jeremy@seereason.com>
 Maintainer: Jeremy Shaw <jeremy@seereason.com>

@@ -9,19 +9,16 @@ module Debian.Cabal.Debianize
     ) where
 
 import Data.Maybe
-import Data.Text as Text (Text)
 import Data.Version (Version)
-import Debian.Cabal.Dependencies (DependencyHints (missingDependencies))
+import Debian.Cabal.Dependencies (DependencyHints)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory, inputCopyright, inputMaintainer)
-import Debian.Debianize.Combinators (debianization, sourceFormatAtom, watchAtom, versionInfo, cdbsRules, putCopyright, control, filterMissing, addExtraLibDependencies)
+import Debian.Debianize.Combinators (debianization)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..))
 import Debian.Debianize.Types.PackageHints (PackageHints)
 import Debian.Debianize.Utility (withCurrentDirectory)
-import Debian.Policy (StandardsVersion, SourceFormat)
+import Debian.Policy (SourceFormat)
 import Debian.Time (getCurrentLocalRFC822Time)
-import Distribution.Package (PackageIdentifier(..))
-import Distribution.PackageDescription as Cabal (PackageDescription(package), FlagName)
-import Distribution.Simple.Compiler (Compiler(..))
+import Distribution.PackageDescription as Cabal (FlagName)
 import Prelude hiding (writeFile, unlines)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 

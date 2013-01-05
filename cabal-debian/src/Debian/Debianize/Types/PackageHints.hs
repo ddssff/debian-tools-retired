@@ -8,7 +8,7 @@ module Debian.Debianize.Types.PackageHints
     ) where
 
 import Data.Text (Text)
-import Debian.Debianize.Types.Debianization (PackageRelations)
+--import Debian.Debianize.Types.Debianization (PackageRelations)
 import Debian.Policy (PackagePriority, Section, PackageArchitectures)
 import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Orphans ()

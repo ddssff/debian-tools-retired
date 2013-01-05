@@ -43,7 +43,7 @@ import Debian.Release (parseReleaseName)
 import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
 import Distribution.License (License)
 import Distribution.Package (PackageIdentifier(..), PackageName(..))
-import Distribution.PackageDescription as Cabal (PackageDescription(package, library, homepage, synopsis, description, maintainer, dataFiles, executables, author, pkgUrl),
+import Distribution.PackageDescription as Cabal (PackageDescription(package, library, {-homepage,-} synopsis, description, maintainer, dataFiles, executables, author, pkgUrl),
                                                  BuildInfo(buildable, extraLibs), Executable(exeName, buildInfo), allBuildInfo)
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Text (display)
@@ -64,10 +64,10 @@ debianization :: DependencyHints
               -> StandardsVersion
               -> Debianization       -- ^ Existing debianization
               -> Debianization       -- ^ New debianization
-debianization hints sourceFormat execs pkgDesc compiler date copyright maint standards oldDeb =
+debianization hints sourceFormat execs pkgDesc compiler date copyright' maint standards oldDeb =
     sourceFormatAtom sourceFormat $
     watchAtom (pkgName . Cabal.package $ pkgDesc)  $
-    putCopyright copyright $
+    putCopyright copyright' $
     putStandards standards $
     filterMissing (missingDependencies hints) $
     versionInfo hints (Cabal.package pkgDesc) maint date $
@@ -94,10 +94,10 @@ tightDependencyFixup pairs p deb =
                 , "\techo -n 'haskell:Conflicts=' >> debian/" <> name <> ".substvars" ] ++
                 intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (map newer pairs) ++
                 [ "\techo '' >> debian/" <> name <> ".substvars" ]))
-      equals (installed, dependent) = "\tdpkg-query -W -f='" <> display dependent <> " (=$${Version})' " <>  display installed <> " >> debian/" <> name <> ".substvars"
-      newer  (installed, dependent) = "\tdpkg-query -W -f='" <> display dependent <> " (>>$${Version})' " <> display installed <> " >> debian/" <> name <> ".substvars"
-      name = display p
-      display = pack . show . pretty
+      equals (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (=$${Version})' " <>  display' installed <> " >> debian/" <> name <> ".substvars"
+      newer  (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (>>$${Version})' " <> display' installed <> " >> debian/" <> name <> ".substvars"
+      name = display' p
+      display' = pack . show . pretty
 
 -- | Eliminate atoms that can be expressed as simpler ones now that we
 -- know the build directory, and merge the text of all the atoms that
@@ -113,15 +113,15 @@ deSugarDebianization build datadir deb =
       deSugarAtom (DHInstallCabalExec pkg name dst) = [DHInstall pkg (build </> name </> name) dst]
       deSugarAtom (DHInstallCabalExecTo {}) = [] -- This becomes a rule in rulesAtomText
       deSugarAtom (DHInstallData p s d) = [DHInstallTo p s (datadir </> makeRelative "/" d)]
-      deSugarAtom (DHApacheSite b domain logdir text) =
+      deSugarAtom (DHApacheSite b domain' logdir text) =
           [DHInstallDir b logdir, -- Server won't start if log directory doesn't exist
-           DHLink b ("/etc/apache2/sites-available/" ++ domain) ("/etc/apache2/sites-enabled/" ++ domain),
-           DHFile b ("/etc/apache2/sites-available" </> domain) text]
+           DHLink b ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain'),
+           DHFile b ("/etc/apache2/sites-available" </> domain') text]
       deSugarAtom (DHFile b path s) =
-          let (destDir, destName) = splitFileName path
+          let (destDir', destName') = splitFileName path
               tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
-              tmpPath = tmpDir </> destName in
-          [DHIntermediate tmpPath s, DHInstall b tmpPath destDir]
+              tmpPath = tmpDir </> destName' in
+          [DHIntermediate tmpPath s, DHInstall b tmpPath destDir']
       deSugarAtom x@(DHInstallLogrotate b _) = [x, DHInstallDir b (apacheLogDirectory b)]
       deSugarAtom x = [x]
       mergeRules :: Debianization -> Debianization
@@ -345,8 +345,8 @@ execAndUtilSpecs dependencyHints packageHints pkgDesc describe deb =
       -- If this package hint implies a new binary deb, create it
       packageHintDeb :: PackageHint -> [BinaryDebDescription]
       packageHintDeb (SiteHint debName site) = packageHintDeb (ServerHint debName (server site))
-      packageHintDeb (ServerHint debName server) = packageHintDeb (InstallFileHint debName (installFile server))
-      packageHintDeb (InstallFileHint debName p) =
+      packageHintDeb (ServerHint debName server') = packageHintDeb (InstallFileHint debName (installFile server'))
+      packageHintDeb (InstallFileHint debName _p) =
           [BinaryDebDescription
              { Debian.package = debName
              , architecture = Any
@@ -373,9 +373,9 @@ execAndUtilSpecs dependencyHints packageHints pkgDesc describe deb =
           siteAtoms debName (sourceDir (installFile (server site))) (execName (installFile (server site))) (destDir (installFile (server site))) (destName (installFile (server site)))
                     (retry (server site)) (port (server site)) (serverFlags (server site))
                     (domain site) (serverAdmin site)
-      packageHintAtoms (ServerHint debName server) =
-          serverAtoms debName (sourceDir (installFile server)) (execName (installFile server)) (destDir (installFile server)) (destName (installFile server))
-                      (retry server) (port server) (serverFlags server) False
+      packageHintAtoms (ServerHint debName server') =
+          serverAtoms debName (sourceDir (installFile server')) (execName (installFile server')) (destDir (installFile server')) (destName (installFile server'))
+                      (retry server') (port server') (serverFlags server') False
       packageHintAtoms (InstallFileHint debName e) =
           execAtoms debName (sourceDir e) (execName e) (destDir e) (destName e)
       packageHintAtoms _ = []
@@ -383,8 +383,8 @@ execAndUtilSpecs dependencyHints packageHints pkgDesc describe deb =
       -- Create a package to hold any executables and data files not
       -- assigned to some other package.
       makeUtilsPackage :: [FilePath] -> [BinaryDebDescription]
-      makeUtilsPackage dataFiles =
-          case (bundledExecutables packageHints pkgDesc, dataFiles) of
+      makeUtilsPackage dataFiles' =
+          case (bundledExecutables packageHints pkgDesc, dataFiles') of
             ([], []) ->
                 []
             _ ->
@@ -435,6 +435,7 @@ makeUtilsAtoms dependencyHints packageHints pkgDesc =
           [DebRulesFragment (pack ("build" </> p' ++ ":: build-ghc-stamp"))]
 
 -- | The list of executables without a corresponding cabal package to put them into
+bundledExecutables :: [PackageHint] -> PackageDescription -> [Executable]
 bundledExecutables packageHints pkgDesc =
     filter nopackage (filter (buildable . buildInfo) (Cabal.executables pkgDesc))
     where
@@ -445,8 +446,8 @@ bundledExecutables packageHints pkgDesc =
       execNameOfHint _ = Nothing
 
 debianDescription :: String -> String -> String -> String -> String -> PackageType -> PackageIdentifier -> Text
-debianDescription synopsis description author maintainer url typ pkgId =
-    debianDescriptionBase synopsis description author maintainer url <> "\n" <>
+debianDescription synopsis' description' author' maintainer' url typ pkgId =
+    debianDescriptionBase synopsis' description' author' maintainer' url <> "\n" <>
     case typ of
       Profiling ->
           Text.intercalate "\n"
@@ -484,14 +485,14 @@ debianDescription synopsis description author maintainer url typ pkgId =
 -- each binary package.  So the cabal description forms the base
 -- of the debian description, each of which is amended.
 debianDescriptionBase :: String -> String -> String -> String -> String -> Text
-debianDescriptionBase synopsis description author maintainer url =
-    (pack . unwords . words $ synopsis) <>
-    case description of
+debianDescriptionBase synopsis' description' author' maintainer' url =
+    (pack . unwords . words $ synopsis') <>
+    case description' of
       "" -> ""
       text ->
           let text' = text ++ "\n" ++
-                      list "" ("\n Author: " ++) author ++
-                      list "" ("\n Upstream-Maintainer: " ++) maintainer ++
+                      list "" ("\n Author: " ++) author' ++
+                      list "" ("\n Upstream-Maintainer: " ++) maintainer' ++
                       list "" ("\n Url: " ++) url in
           "\n " <> (pack . trim . List.intercalate "\n " . map addDot . lines $ text')
     where
@@ -542,4 +543,4 @@ setSourcePackageName name@(SrcPkgName string) deb@(Debianization {changelog = Ch
         , changelog = ChangeLog (newest {logPackage = string} : older)}
 
 setChangelog :: ChangeLog -> Debianization -> Debianization
-setChangelog log deb = deb { changelog = log }
+setChangelog log' deb = deb { changelog = log' }
