@@ -37,7 +37,6 @@ inputDebianization top =
                   <*> inputCompat debian
                   <*> (Right <$> inputCopyright debian)
                   <*> pure mempty
-                  <*> pure mempty
                   <*> (inputAtomsFromDirectory debian `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e)))
     where
       debian = top </> "debian"

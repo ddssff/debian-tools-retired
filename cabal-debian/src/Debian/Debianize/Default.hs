@@ -32,7 +32,6 @@ newDebianization entry@(Entry {}) copy level standards =
                                    , "" ]
       , compat = level
       , copyright = copy
-      , srcAtoms = mempty
       , debAtoms = mempty
       , atoms = mempty }
 

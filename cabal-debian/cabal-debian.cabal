@@ -63,8 +63,9 @@ Library
    Debian.Debianize.Output
    Debian.Debianize.Paths
    Debian.Debianize.Server
-   Debian.Debianize.Types.PackageHints
+   Debian.Debianize.Types.Atoms
    Debian.Debianize.Types.Debianization
+   Debian.Debianize.Types.PackageHints
    Debian.Debianize.Utility
    Debian.Orphans
    Debian.Policy

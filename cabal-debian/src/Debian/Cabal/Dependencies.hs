@@ -23,18 +23,19 @@ import Data.Function (on)
 import Data.List (nub, minimumBy, isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
-import Data.Version (showVersion)
+import Data.Version (Version(Version), showVersion)
 import Debian.Cabal.Bundled (ghcBuiltIn)
 import Debian.Control
 import Debian.Debianize.Interspersed (Interspersed(foldInverted, leftmost, pairs), foldTriples)
-import Debian.Debianize.Types.Debianization as Debian (Debianization, DebType(Dev, Prof, Doc), noProfilingLibrary, noDocumentationLibrary)
+import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary)
+import Debian.Debianize.Types.Debianization as Debian (Debianization, DebType(Dev, Prof, Doc))
 import Debian.Relation (Relations, Relation, BinPkgName, PkgName(pkgNameFromString))
 import qualified Debian.Relation as D
 import Debian.Version (DebianVersion, parseDebianVersion)
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..), Dependency(..))
 import Distribution.PackageDescription as Cabal (PackageDescription(..), allBuildInfo, buildTools, pkgconfigDepends, extraLibs)
 import Distribution.Simple.Compiler (Compiler)
-import Distribution.Version (Version(Version), VersionRange, anyVersion, foldVersionRange', intersectVersionRanges, unionVersionRanges,
+import Distribution.Version (VersionRange, anyVersion, foldVersionRange', intersectVersionRanges, unionVersionRanges,
                              laterVersion, orLaterVersion, earlierVersion, orEarlierVersion, fromVersionIntervals, toVersionIntervals, withinVersion,
                              isNoVersion, asVersionIntervals)
 import Distribution.Version.Invert (invertVersionRange)

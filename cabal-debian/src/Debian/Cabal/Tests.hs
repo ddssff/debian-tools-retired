@@ -21,6 +21,7 @@ import Debian.Debianize.Generic (gdiff)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
+import Debian.Debianize.Types.Atoms (compilerVersion)
 import Debian.Debianize.Types.Debianization (Debianization(..), DebAtom(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Policy (StandardsVersion(StandardsVersion), getDebhelperCompatLevel, getDebianStandardsVersion,
@@ -90,7 +91,6 @@ test2a =
                            ""],
             compat = 9,
             copyright = Left BSD3,
-            srcAtoms = mempty,
             debAtoms = mempty,
             atoms = []}
 
@@ -127,7 +127,7 @@ test4 =
     TestLabel "Convert clckwrks-dot-com" $
     TestCase (do oldlog <- inputChangeLog "test-data/clckwrks-dot-com/input/debian"
                  old <- inputDebianization "test-data/clckwrks-dot-com/output" >>= \ x -> return (x {changelog = oldlog})
-                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity flags) (Flags.srcAtoms flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.sourceFormat flags) (Flags.executablePackages flags) old
+                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.sourceFormat flags) (Flags.executablePackages flags) old
                  assertEqual "Convert clckwrks-dot-com" [] (gdiff (dropFirstLogEntry old) (dropRulesAtoms (dropFirstLogEntry (deSugarDebianization "dist-ghc/build" dataDir (fixRules (tight new)))))))
     where
       -- A log entry gets added when the Debianization is generated,
@@ -210,7 +210,7 @@ test5 =
     TestLabel "Convert creativeprompts" $
     TestCase (     do oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" >>= \ x -> return (x {changelog = oldlog})
-                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity flags) (Flags.srcAtoms flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.sourceFormat flags) (Flags.executablePackages flags) old
+                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.sourceFormat flags) (Flags.executablePackages flags) old
                       desc <- describeDebianization (Flags.buildDir flags) "test-data/creativeprompts/output" dataDir new
                       writeFile "/tmp/foo" desc
                       -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (deSugarDebianization "dist-ghc/build" dataDir new))))
@@ -236,7 +236,7 @@ test6 :: Test
 test6 =
     TestLabel "Convert creativeprompts 2" $
     TestCase ( do (Debianization {changelog = oldLog@(ChangeLog (entry : _))}) <- inputDebianization "test-data/creativeprompts/output"
-                  withSimplePackageDescription "test-data/creativeprompts/input" 0 mempty [] $ \ pkgDesc compiler ->
+                  withSimplePackageDescription "test-data/creativeprompts/input" 0 Nothing [] $ \ pkgDesc compiler ->
                       do -- compat <- getDebhelperCompatLevel
                          let compat' = 7
                          -- standards <- getDebianStandardsVersion
@@ -323,7 +323,6 @@ testDeb1 =
                               , "" ]
         , compat = 9 -- This will change as new version of debhelper are released
         , copyright = Left BSD3
-        , srcAtoms = mempty
         , debAtoms = mempty
         , atoms = [] }
 
@@ -400,7 +399,6 @@ testDeb2 =
     , rulesHead = "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n"
     , compat = 7
     , copyright = Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n"
-    , srcAtoms = mempty
     , debAtoms = mempty
     , atoms = [DebSourceFormat "3.0 (native)\n"] }
 

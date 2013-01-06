@@ -9,30 +9,20 @@ module Debian.Debianize.Types.Debianization
     , BinaryDebDescription(..)
     , PackageRelations(..)
     , DebAtom(..)
-    , SourceDebAtom(..)
-    , BinaryDebAtom(..)
     , DebType(..)
-    -- * Atom set lookup functions
-    , compiler
-    , compilerVersion
-    , compilerVersion'
-    , noProfilingLibrary
-    , noDocumentationLibrary
     ) where
 
 import Data.Generics (Data, Typeable)
-import Data.Maybe (mapMaybe)
-import Data.Map (Map)
-import Data.Set as Set (Set, maxView, toList, fromList, filter, null)
+import Data.Map as Map (Map)
+import Data.Set as Set (Set)
 import Data.Text (Text)
-import Data.Version (Version)
 import Debian.Changes (ChangeLog(..))
+import Debian.Debianize.Types.Atoms (NewDebAtom, HasAtoms(..))
 import Debian.Orphans ()
 import Debian.Orphans ()
 import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures, Section)
 import Debian.Relation (Relations, SrcPkgName, BinPkgName)
 import Distribution.License (License)
-import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
@@ -54,14 +44,12 @@ data Debianization
       , copyright :: Either License Text
       -- ^ Copyright information, either as a Cabal License value or
       -- the full text.
-      , srcAtoms :: Set SourceDebAtom
-      -- ^ Information about the source package that will be transformed
-      -- into values for the fields that represent the actual
-      -- debianization files.
-      , debAtoms :: Map BinPkgName (Set BinaryDebAtom)
-      -- ^ Information about the binary packages that will be
-      -- transformed into values for the fields that represent the
-      -- actual debianization files.
+      , debAtoms :: Map (Maybe BinPkgName) (Set NewDebAtom)
+      -- ^ Information about the source and binary packages that will
+      -- be transformed into values for the fields that represent the
+      -- actual debianization files.  Binary values are associated
+      -- with a BinPkgName, the Nothing entries in the map represent
+      -- source values.
       , atoms :: [DebAtom]
       -- ^ All the additional non-manditory debianization information.
       -- It is possible to construct a set with multiple conflicting
@@ -71,74 +59,9 @@ data Debianization
       -- DebAtom would help this situation.
       } deriving (Eq, Show)
 
-data SourceDebAtom
-    = NoDocumentationLibrary -- replaces haddock
-    | NoProfilingLibrary     -- replaces debLibProf
-    | Compiler Compiler
-    | CompilerVersion Version
-      -- ^ Specify the version number of the GHC compiler in the build
-      -- environment.  The default is to assume that version is the same
-      -- as the one in the environment where cabal-debian is running.
-      -- This is used to look up hard coded lists of packages bundled
-      -- with the compiler and their version numbers.  (This could
-      -- certainly be done in a more beautiful way.)
-    deriving (Eq, Ord, Show)
-
-lookupAtom :: (Show a, Ord a) => (SourceDebAtom -> Maybe a) -> Debianization -> Maybe a
-lookupAtom from deb = lookupAtom' from (srcAtoms deb)
-
-lookupAtom' :: (Show a, Ord a) => (SourceDebAtom -> Maybe a) -> Set SourceDebAtom -> Maybe a
-lookupAtom' from atoms =
-    case maxView (lookupAtoms' from atoms) of
-      Nothing -> Nothing
-      Just (x, s) | Set.null s -> Just x
-      Just (x, s) -> error $ "lookupAtom - multiple: " ++ show (x : toList s)
-
--- lookupAtoms :: (Show a, Ord a) => (SourceDebAtom -> Maybe a) -> Debianization -> Set a
--- lookupAtoms from deb = lookupAtoms' from (srcAtoms deb)
-
-lookupAtoms' :: (Show a, Ord a) => (SourceDebAtom -> Maybe a) -> Set SourceDebAtom -> Set a
-lookupAtoms' from atoms = setMapMaybe from atoms
-
-setMapMaybe :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
-setMapMaybe p = fromList . mapMaybe p . toList
-
-compiler :: Debianization -> Maybe Compiler
-compiler deb =
-    lookupAtom fromCompiler deb
-    where fromCompiler (Compiler x) = Just x
-          fromCompiler _ = Nothing
-
-compilerVersion :: Debianization -> Maybe Version
-compilerVersion deb =
-    lookupAtom from deb
-    where from (CompilerVersion x) = Just x
-          from _ = Nothing
-
-compilerVersion' :: Set SourceDebAtom -> Maybe Version
-compilerVersion' atoms =
-    lookupAtom' from atoms
-    where from (CompilerVersion x) = Just x
-          from _ = Nothing
-
-noProfilingLibrary :: Debianization -> Bool
-noProfilingLibrary deb =
-    not . Set.null . Set.filter isNoProfilingLibrary . srcAtoms $ deb
-    where
-      isNoProfilingLibrary NoProfilingLibrary = True
-      isNoProfilingLibrary _ = False
-
-noDocumentationLibrary :: Debianization -> Bool
-noDocumentationLibrary deb =
-    not . Set.null . Set.filter isNoDocumentationLibrary . srcAtoms $ deb
-    where
-      isNoDocumentationLibrary NoDocumentationLibrary = True
-      isNoDocumentationLibrary _ = False
-
-data BinaryDebAtom
-    = Depends BinPkgName     -- replaces extraDevDeps and binaryPackageDeps
-    | Conflicts BinPkgName   -- replaces binaryPackageConflicts
-    deriving (Eq, Ord, Show)
+instance HasAtoms Debianization where
+    getAtoms = debAtoms
+    putAtoms atoms x = x {debAtoms = atoms}
 
 -- | This type represents the debian/control file, which is the core
 -- of the source package debianization.  It includes the information

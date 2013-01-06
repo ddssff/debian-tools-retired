@@ -27,6 +27,7 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid ((<>))
 import Data.Text as Text (Text, pack, intercalate, unpack, unlines)
+import Data.Version (Version)
 import qualified Debian.Relation as D
 import Debian.Cabal.Dependencies (PackageType(Development, Profiling, Documentation, Exec, Utilities, Source, Extra),
                                   DependencyHints (binaryPackageDeps, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap, revision, debVersion, missingDependencies),
@@ -34,7 +35,8 @@ import Debian.Cabal.Dependencies (PackageType(Development, Profiling, Documentat
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Paths (apacheLogDirectory)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), DebAtom(..), BinaryDebDescription(..), PackageRelations(..), noProfilingLibrary, noDocumentationLibrary)
+import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary)
+import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), DebAtom(..), BinaryDebDescription(..), PackageRelations(..))
 import Debian.Debianize.Types.PackageHints (PackageHints, PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (trim)
 import Debian.Policy (StandardsVersion, SourceFormat, PackagePriority(Optional), PackageArchitectures(Any, All), Section(..))
@@ -47,7 +49,6 @@ import Distribution.PackageDescription as Cabal (PackageDescription(package, lib
                                                  BuildInfo(buildable, extraLibs), Executable(exeName, buildInfo), allBuildInfo)
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Text (display)
-import Distribution.Version (Version)
 import Prelude hiding (writeFile, init, unlines)
 import System.FilePath ((</>), takeDirectory, makeRelative, splitFileName)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)

@@ -14,9 +14,10 @@ module CabalDebian.Flags
 
 import Data.Map (Map)
 import Data.Monoid (mempty)
-import Data.Set (Set, insert)
+import Data.Set (Set)
 import Debian.Cabal.Dependencies (DependencyHints, defaultDependencyHints)
-import Debian.Debianize.Types.Debianization (DebType, SourceDebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion), BinaryDebAtom)
+import Debian.Debianize.Types.Atoms (HasAtoms(..), NewDebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion), insertAtom, compilerVersion)
+import Debian.Debianize.Types.Debianization (DebType)
 import Debian.Debianize.Types.PackageHints (PackageHints)
 import Debian.Policy (SourceFormat(Native3, Quilt3))
 import Distribution.PackageDescription as Cabal (FlagName)
@@ -119,11 +120,13 @@ data Flags = Flags
     -- obtained from the cabal file, and if it is not there then from
     -- the environment.  As a last resort, there is a hard coded
     -- string in here somewhere.
-    , srcAtoms :: Set SourceDebAtom
-    -- ^ Preliminary value of corresponding Debianization field
-    , debAtoms :: Map BinPkgName (Set BinaryDebAtom)
+    , debAtoms :: Map (Maybe BinPkgName) (Set NewDebAtom)
     -- ^ Preliminary value of corresponding Debianization field
     }
+
+instance HasAtoms Flags where
+    getAtoms = debAtoms
+    putAtoms x flags = flags {debAtoms = x}
 
 data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq)
 
@@ -143,7 +146,6 @@ defaultFlags =
     -- , modifyAtoms = id
     , buildDir = "dist-ghc/build"
     , dependencyHints = defaultDependencyHints
-    , srcAtoms = mempty
     , debAtoms = mempty
     }
 
@@ -175,15 +177,15 @@ options =
              "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
       Option "h?" ["help"] (NoArg (\x -> x { help = True }))
              "Show this help text",
-      Option "" ["ghc-version"] (ReqArg (\ ver x -> x { srcAtoms = insert (CompilerVersion (last (map fst (readP_to_S parseVersion ver)))) (srcAtoms x) }) "VERSION")
+      Option "" ["ghc-version"] (ReqArg (\ ver x -> insertAtom Nothing (CompilerVersion (last (map fst (readP_to_S parseVersion ver)))) x) "VERSION")
              "Version of GHC in build environment",
-      Option "" ["disable-haddock"] (NoArg (\x -> x { srcAtoms = insert NoDocumentationLibrary  (srcAtoms x) }))
+      Option "" ["disable-haddock"] (NoArg (\ x -> insertAtom Nothing NoDocumentationLibrary x))
              "Don't generate API documentation.  Use this if build is crashing due to a haddock error.",
       Option "" ["missing-dependency"] (ReqArg (\ name x -> x { dependencyHints = (dependencyHints x) {missingDependencies = b name : missingDependencies (dependencyHints x)}}) "DEB")
              "Mark a package missing, do not add it to any dependency lists in the debianization.",
       Option "" ["source-package-name"] (ReqArg (\ name x -> x {sourcePackageName = Just name}) "NAME")
              "Use this name for the debian source package.  Default is haskell-<cabalname>, where the cabal package name is downcased.",
-      Option "" ["disable-library-profiling"] (NoArg (\x -> x { srcAtoms = insert NoProfilingLibrary (srcAtoms x)}))
+      Option "" ["disable-library-profiling"] (NoArg (\ x -> insertAtom Nothing NoProfilingLibrary x))
              "Don't generate profiling libraries",
       Option "f" ["flags"] (ReqArg (\flags x -> x { cabalFlagAssignments = cabalFlagAssignments x ++ flagList flags }) "FLAGS")
              "Set given flags in Cabal conditionals",
@@ -324,5 +326,5 @@ debianize :: FilePath -> Flags -> IO ()
 debianize top flags =
     withEnvironmentFlags flags $ \ flags' ->
     do old <- inputDebianization "."
-       (new, dataDir) <- debianizationWithIO top (verbosity flags') (CabalDebian.Flags.srcAtoms flags') (cabalFlagAssignments flags') (debMaintainer flags') (dependencyHints flags') (sourceFormat flags') (executablePackages flags') old
+       (new, dataDir) <- debianizationWithIO top (verbosity flags') (compilerVersion flags') (cabalFlagAssignments flags') (debMaintainer flags') (dependencyHints flags') (sourceFormat flags') (executablePackages flags') old
        outputDebianization (dryRun flags') (validate flags') (buildDir flags') dataDir old new

@@ -1,5 +1,6 @@
 import CabalDebian.Flags (Flags(..), DebAction(..), withFlags, debianize)
 import CabalDebian.SubstVars (substvars)
+import Debian.Debianize.Types.Atoms (compilerVersion)
 
 -- | This is the main function of the cabal-debian executable.  This
 -- is generally run by the autobuilder to debianize packages that
@@ -11,6 +12,6 @@ main :: IO ()
 main =
   withFlags $ \ fs ->
       case debAction fs of
-        SubstVar debType -> substvars (dryRun fs) (verbosity fs) (srcAtoms fs) (cabalFlagAssignments fs) (dependencyHints fs) debType
+        SubstVar debType -> substvars (dryRun fs) (verbosity fs) (compilerVersion fs) (cabalFlagAssignments fs) (dependencyHints fs) debType
         Debianize -> debianize "." fs
         Usage -> error "Unexpected debAction: usage" -- this should have happened in withFlags
