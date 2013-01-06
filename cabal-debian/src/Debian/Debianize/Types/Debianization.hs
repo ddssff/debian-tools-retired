@@ -8,7 +8,6 @@ module Debian.Debianize.Types.Debianization
     , XFieldDest(..)
     , BinaryDebDescription(..)
     , PackageRelations(..)
-    , DebAtom(..)
     , DebType(..)
     ) where
 
@@ -17,7 +16,7 @@ import Data.Map as Map (Map)
 import Data.Set as Set (Set)
 import Data.Text (Text)
 import Debian.Changes (ChangeLog(..))
-import Debian.Debianize.Types.Atoms (NewDebAtom, HasAtoms(..))
+import Debian.Debianize.Types.Atoms (DebAtom, HasOldAtoms(..), NewDebAtom, HasAtoms(..))
 import Debian.Orphans ()
 import Debian.Orphans ()
 import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures, Section)
@@ -59,9 +58,13 @@ data Debianization
       -- DebAtom would help this situation.
       } deriving (Eq, Show)
 
+instance HasOldAtoms Debianization where
+    getOldAtoms = atoms
+    putOldAtoms ats x = x {atoms = ats}
+
 instance HasAtoms Debianization where
     getAtoms = debAtoms
-    putAtoms atoms x = x {debAtoms = atoms}
+    putAtoms ats x = x {debAtoms = ats}
 
 -- | This type represents the debian/control file, which is the core
 -- of the source package debianization.  It includes the information
@@ -153,32 +156,5 @@ data PackageRelations
       , replaces :: Relations
       , builtUsing :: Relations
       } deriving (Read, Eq, Show, Data, Typeable)
-
--- | The smallest pieces of debhelper information.  Some of these are
--- converted directly into files in the debian directory, others
--- become fragments of those files, and others are first converted
--- into different DebAtom values as new information becomes available.
-data DebAtom
-    = DebRulesFragment Text                       -- ^ A Fragment of debian/rules
-    | DebSourceFormat Text                        -- ^ Write debian/source/format
-    | DebWatch Text                               -- ^ Write debian/watch
-    | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
-
-    | DHInstall BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package
-    | DHInstallTo BinPkgName FilePath FilePath    -- ^ Install a build file into the binary package at an exact location
-    | DHInstallData BinPkgName FilePath FilePath  -- ^ DHInstallTo the package's data directory: /usr/share/package-version/
-    | DHFile BinPkgName FilePath Text             -- ^ Create a file with the given text at the given path
-    | DHInstallCabalExec BinPkgName String FilePath -- ^ Install a cabal executable into the binary package
-    | DHInstallCabalExecTo BinPkgName String FilePath -- ^ Install a cabal executable into the binary package at an exact location
-    | DHInstallDir BinPkgName FilePath            -- ^ Create a directory in the binary package
-    | DHInstallInit BinPkgName Text               -- ^ Add an init.d file to the binary package
-    | DHInstallLogrotate BinPkgName Text          -- ^ Add a logrotate file to the binary package
-    | DHLink BinPkgName FilePath FilePath         -- ^ Create a symbolic link in the binary package
-    | DHPostInst BinPkgName Text                  -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
-    | DHPostRm BinPkgName Text                    -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
-    | DHPreInst BinPkgName Text                   -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
-    | DHPreRm BinPkgName Text                     -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
-    | DHApacheSite BinPkgName String FilePath Text  -- ^ Have Apache configure a site using PACKAGE, DOMAIN, LOGDIR, and APACHECONFIGFILE
-    deriving (Eq, Ord, Show, Data, Typeable)
 
 data DebType = Dev | Prof | Doc deriving (Eq, Read, Show)

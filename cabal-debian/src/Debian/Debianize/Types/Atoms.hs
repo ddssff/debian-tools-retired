@@ -1,6 +1,9 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances #-}
 module Debian.Debianize.Types.Atoms
-    ( NewDebAtom(..)
+    ( DebAtom(..)
+    , HasOldAtoms(..)
+    , insertOldAtoms
+    , NewDebAtom(..)
     , HasAtoms(..)
     , insertAtom
     , lookupAtom
@@ -11,15 +14,44 @@ module Debian.Debianize.Types.Atoms
     , noDocumentationLibrary
     ) where
 
+import Data.Generics (Data, Typeable)
 import Data.Maybe (mapMaybe)
 import Data.Map as Map (Map, lookup, insertWith)
 import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton)
+import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Orphans ()
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName)
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init)
+
+-- | The smallest pieces of debhelper information.  Some of these are
+-- converted directly into files in the debian directory, others
+-- become fragments of those files, and others are first converted
+-- into different DebAtom values as new information becomes available.
+data DebAtom
+    = DebRulesFragment Text                       -- ^ A Fragment of debian/rules
+    | DebSourceFormat Text                        -- ^ Write debian/source/format
+    | DebWatch Text                               -- ^ Write debian/watch
+    | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
+
+    | DHInstall BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package
+    | DHInstallTo BinPkgName FilePath FilePath    -- ^ Install a build file into the binary package at an exact location
+    | DHInstallData BinPkgName FilePath FilePath  -- ^ DHInstallTo the package's data directory: /usr/share/package-version/
+    | DHFile BinPkgName FilePath Text             -- ^ Create a file with the given text at the given path
+    | DHInstallCabalExec BinPkgName String FilePath -- ^ Install a cabal executable into the binary package
+    | DHInstallCabalExecTo BinPkgName String FilePath -- ^ Install a cabal executable into the binary package at an exact location
+    | DHInstallDir BinPkgName FilePath            -- ^ Create a directory in the binary package
+    | DHInstallInit BinPkgName Text               -- ^ Add an init.d file to the binary package
+    | DHInstallLogrotate BinPkgName Text          -- ^ Add a logrotate file to the binary package
+    | DHLink BinPkgName FilePath FilePath         -- ^ Create a symbolic link in the binary package
+    | DHPostInst BinPkgName Text                  -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
+    | DHPostRm BinPkgName Text                    -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
+    | DHPreInst BinPkgName Text                   -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
+    | DHPreRm BinPkgName Text                     -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
+    | DHApacheSite BinPkgName String FilePath Text  -- ^ Have Apache configure a site using PACKAGE, DOMAIN, LOGDIR, and APACHECONFIGFILE
+    deriving (Eq, Ord, Show, Data, Typeable)
 
 data NewDebAtom
     = NoDocumentationLibrary -- replaces haddock
@@ -33,6 +65,17 @@ data NewDebAtom
       -- with the compiler and their version numbers.  (This could
       -- certainly be done in a more beautiful way.)
     deriving (Eq, Ord, Show)
+
+class HasOldAtoms atoms where
+    getOldAtoms :: atoms -> [DebAtom]
+    putOldAtoms :: [DebAtom] -> atoms -> atoms
+
+instance HasOldAtoms [DebAtom] where
+    getOldAtoms x = x
+    putOldAtoms _ x = x
+
+insertOldAtoms :: HasOldAtoms atoms => [DebAtom] -> atoms -> atoms
+insertOldAtoms xs ats = putOldAtoms (xs ++ getOldAtoms ats) ats
 
 class HasAtoms atoms where
     getAtoms :: atoms -> Map (Maybe BinPkgName) (Set NewDebAtom)

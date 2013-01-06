@@ -19,7 +19,8 @@ import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import Debian.Debianize.Default (newSourceDebDescription, newBinaryDebDescription)
-import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), DebAtom(..),
+import Debian.Debianize.Types.Atoms (DebAtom(..))
+import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                              VersionControlSpec(..), XField(..))
 import Debian.Orphans ()
 import Debian.Policy (parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer, parseUploaders)

@@ -11,7 +11,7 @@ module Debian.Debianize.Server
 import Data.Maybe (fromMaybe)
 import Data.Text (pack)
 import Debian.Debianize.Paths (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
-import Debian.Debianize.Types.Debianization (DebAtom(..))
+import Debian.Debianize.Types.Atoms (DebAtom(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), Server(..), Site(..))
 import Debian.Relation (BinPkgName)
 import System.FilePath ((</>))
