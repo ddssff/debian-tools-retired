@@ -35,7 +35,7 @@ import Debian.Cabal.Dependencies (PackageType(Development, Profiling, Documentat
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Paths (apacheLogDirectory)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
-import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtom(..))
+import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtom(..), HasOldAtoms(getOldAtoms, putOldAtoms), insertOldAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
 import Debian.Debianize.Types.PackageHints (PackageHints, PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (trim)
@@ -84,7 +84,7 @@ debianization hints sourceFormat execs pkgDesc compiler date copyright' maint st
 tightDependencyFixup :: [(BinPkgName, BinPkgName)] -> BinPkgName -> Debianization -> Debianization
 tightDependencyFixup [] _ deb = deb
 tightDependencyFixup pairs p deb =
-    deb {atoms = atom : atoms deb}
+    insertOldAtoms [atom] deb
     where
       atom = DebRulesFragment
               (unlines $
@@ -110,7 +110,7 @@ deSugarDebianization  :: FilePath -> FilePath -> Debianization -> Debianization
 deSugarDebianization build datadir deb =
     deSugarAtoms . mergeRules $ deb
     where
-      deSugarAtoms x = x {atoms = concatMap deSugarAtom (atoms x)}
+      deSugarAtoms x = putOldAtoms (concatMap deSugarAtom (getOldAtoms x)) x
       deSugarAtom (DHInstallCabalExec pkg name dst) = [DHInstall pkg (build </> name </> name) dst]
       deSugarAtom (DHInstallCabalExecTo {}) = [] -- This becomes a rule in rulesAtomText
       deSugarAtom (DHInstallData p s d) = [DHInstallTo p s (datadir </> makeRelative "/" d)]
@@ -126,7 +126,7 @@ deSugarDebianization build datadir deb =
       deSugarAtom x@(DHInstallLogrotate b _) = [x, DHInstallDir b (apacheLogDirectory b)]
       deSugarAtom x = [x]
       mergeRules :: Debianization -> Debianization
-      mergeRules x = x { rulesHead = rulesHead x <> Text.intercalate "\n" (mapMaybe rulesAtomText (atoms x)) }
+      mergeRules x = x { rulesHead = rulesHead x <> Text.intercalate "\n" (mapMaybe rulesAtomText (getOldAtoms x)) }
 
       rulesAtomText (DebRulesFragment x) = Just x
       rulesAtomText (DHInstallTo p s d) =
@@ -140,7 +140,7 @@ deSugarDebianization build datadir deb =
 
 watchAtom :: PackageName -> Debianization -> Debianization
 watchAtom (PackageName pkgname) deb =
-    deb {atoms = atom : atoms deb}
+    insertOldAtoms [atom] deb
     where
       atom =
           DebWatch . pack $
@@ -150,7 +150,7 @@ watchAtom (PackageName pkgname) deb =
 
 sourceFormatAtom :: SourceFormat -> Debianization -> Debianization
 sourceFormatAtom format deb =
-    deb {atoms = atom : atoms deb}
+    insertOldAtoms [atom] deb
     where
       atom = DebSourceFormat (pack (show (pretty format)))
 
@@ -333,10 +333,8 @@ docSpecsParagraph hints pkgId describe =
 -- the executable and utility packages.
 execAndUtilSpecs :: DependencyHints -> PackageHints -> PackageDescription -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
 execAndUtilSpecs dependencyHints packageHints pkgDesc describe deb =
-    deb { sourceDebDescription = (sourceDebDescription deb) { binaryPackages = map applyPackageHints (newBinaryPackageList (sourceDebDescription deb)) }
-        , atoms = concatMap packageHintAtoms packageHints ++
-                  makeUtilsAtoms dependencyHints packageHints pkgDesc ++
-                  atoms deb }
+    insertOldAtoms (concatMap packageHintAtoms packageHints ++ makeUtilsAtoms dependencyHints packageHints pkgDesc) $
+    deb { sourceDebDescription = (sourceDebDescription deb) { binaryPackages = map applyPackageHints (newBinaryPackageList (sourceDebDescription deb)) } }
     where
       newBinaryPackageList src=
           concatMap packageHintDeb packageHints ++

@@ -13,7 +13,7 @@ import Data.Set (toList)
 import Data.Text (Text, pack, unlines)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.Combinators (deSugarDebianization)
-import Debian.Debianize.Types.Atoms (DebAtom(..))
+import Debian.Debianize.Types.Atoms (DebAtom(..), HasOldAtoms(getOldAtoms))
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (BinPkgName, Relations)
@@ -23,7 +23,7 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 sourceFormat :: Debianization -> [(FilePath, Text)]
 sourceFormat deb =
-    case nub (mapMaybe f (atoms deb)) of
+    case nub (mapMaybe f (getOldAtoms deb)) of
       [x] -> [("debian/source/format", x)]
       [] -> []
       _ -> error "Multiple debian/source/format files"
@@ -34,7 +34,7 @@ sourceFormat deb =
 
 watch :: Debianization -> [(FilePath, Text)]
 watch deb =
-    case nub (mapMaybe f (atoms deb)) of
+    case nub (mapMaybe f (getOldAtoms deb)) of
       [x] -> [("debian/watch", x)]
       [] -> []
       _ -> error "Multiple debian/watch files"
@@ -45,7 +45,7 @@ watch deb =
 
 intermediate :: Debianization -> [(FilePath, Text)]
 intermediate deb =
-    mapMaybe atomf (atoms deb)
+    mapMaybe atomf (getOldAtoms deb)
     where
       atomf (DHIntermediate path text) = Just (path,  text)
       atomf _ = Nothing
@@ -55,13 +55,13 @@ intermediate deb =
 assemble :: (DebAtom -> Maybe (BinPkgName, [Text])) -> (BinPkgName -> FilePath) -> Debianization -> [(FilePath, Text)]
 assemble atomf pathf deb =
     map (\ (name, ts) -> (pathf name, unlines ts))
-        (Map.toList (Map.fromListWith (++) (mapMaybe atomf (atoms deb))))
+        (Map.toList (Map.fromListWith (++) (mapMaybe atomf (getOldAtoms deb))))
 
 -- | Assemble the atoms into per-package debianization files, allowing
 -- only one atom per package.
 assemble1 :: (DebAtom -> Maybe (BinPkgName, [Text])) -> (BinPkgName -> FilePath) -> Debianization -> [(FilePath, Text)]
 assemble1 atomf pathf deb =
-    map test (Map.toList (Map.fromListWith (++) (mapMaybe atomf (atoms deb))))
+    map test (Map.toList (Map.fromListWith (++) (mapMaybe atomf (getOldAtoms deb))))
     where
       test (name, [t]) = (pathf name, t)
       test (name, ts) = error $ "Multiple entries for " ++ show (pretty name) ++ ": " ++ show ts

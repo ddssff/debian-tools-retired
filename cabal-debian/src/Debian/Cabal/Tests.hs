@@ -21,7 +21,7 @@ import Debian.Debianize.Generic (gdiff)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
-import Debian.Debianize.Types.Atoms (compilerVersion, DebAtom(..))
+import Debian.Debianize.Types.Atoms (compilerVersion, DebAtom(..), HasOldAtoms(putOldAtoms, getOldAtoms), insertOldAtoms)
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Policy (StandardsVersion(StandardsVersion), getDebhelperCompatLevel, getDebianStandardsVersion,
@@ -92,7 +92,7 @@ test2a =
             compat = 9,
             copyright = Left BSD3,
             debAtoms = mempty,
-            atoms = []}
+            atoms = mempty}
 
 test2b :: Test
 test2b =
@@ -132,8 +132,8 @@ test4 =
     where
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
-      dropRulesAtoms (deb@(Debianization {atoms = xs})) =
-          deb {atoms = filter (not . isRulesAtom) xs}
+      dropRulesAtoms deb =
+          putOldAtoms (filter (not . isRulesAtom) (getOldAtoms deb)) deb
           where isRulesAtom (DebRulesFragment _) = True
                 isRulesAtom _ = False
       flags = Flags.defaultFlags
@@ -324,10 +324,11 @@ testDeb1 =
         , compat = 9 -- This will change as new version of debhelper are released
         , copyright = Left BSD3
         , debAtoms = mempty
-        , atoms = [] }
+        , atoms = mempty }
 
 testDeb2 :: Debianization
 testDeb2 =
+    insertOldAtoms [DebSourceFormat "3.0 (native)\n"] $
     Debianization
     { sourceDebDescription =
           SourceDebDescription
@@ -400,7 +401,7 @@ testDeb2 =
     , compat = 7
     , copyright = Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n"
     , debAtoms = mempty
-    , atoms = [DebSourceFormat "3.0 (native)\n"] }
+    , atoms = mempty }
 
 {-
 testDeb3 :: Debianization
