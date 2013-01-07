@@ -10,6 +10,7 @@ import Debug.Trace (trace)
 
 import Control.Applicative (pure, (<$>), (<*>))
 import Control.Exception (SomeException, catch)
+import Control.Monad (foldM, filterM)
 import Data.Char (isSpace)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid (mempty, mconcat)
@@ -19,9 +20,10 @@ import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import Debian.Debianize.Default (newSourceDebDescription, newBinaryDebDescription)
-import Debian.Debianize.Types.Atoms (DebAtom(..))
+import Debian.Debianize.Types.Atoms (DebAtom(..), HasOldAtoms, insertOldAtoms)
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                              VersionControlSpec(..), XField(..))
+import Debian.Debianize.Utility (getDirectoryContents')
 import Debian.Orphans ()
 import Debian.Policy (parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer, parseUploaders)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
@@ -32,13 +34,14 @@ import System.IO.Error (catchIOError)
 
 inputDebianization :: FilePath -> IO Debianization
 inputDebianization top =
-    Debianization <$> (fst <$> inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e)))
-                  <*> inputChangeLog debian `catchIOError` (\ e -> error ("Failure parsing changelog: " ++ show e))
-                  <*> inputRulesFile debian
-                  <*> inputCompat debian
-                  <*> (Right <$> inputCopyright debian)
-                  <*> pure mempty
-                  <*> (inputAtomsFromDirectory debian `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e)))
+    do xs <- Debianization <$> (fst <$> inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e)))
+                           <*> inputChangeLog debian `catchIOError` (\ e -> error ("Failure parsing changelog: " ++ show e))
+                           <*> inputRulesFile debian
+                           <*> inputCompat debian
+                           <*> (Right <$> inputCopyright debian)
+                           <*> pure mempty
+                           <*> pure mempty
+       inputAtomsFromDirectory debian xs `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
     where
       debian = top </> "debian"
 
@@ -157,51 +160,47 @@ inputCompat debian = read . unpack <$> readFile (debian </> "compat")
 inputCopyright :: FilePath -> IO Text
 inputCopyright debian = readFile (debian </> "copyright")
 
-inputAtomsFromDirectory :: FilePath -> IO [DebAtom] -- .install files, .init files, etc.
-inputAtomsFromDirectory debian =
-    (++) <$> debianFiles <*> intermediateFiles (debian </> "cabalInstall")
+inputAtomsFromDirectory :: HasOldAtoms atoms => FilePath -> atoms -> IO atoms -- .install files, .init files, etc.
+inputAtomsFromDirectory debian xs =
+    debianFiles xs >>= intermediateFiles (debian </> "cabalInstall")
     where
-      debianFiles =
+      debianFiles :: HasOldAtoms atoms => atoms -> IO atoms
+      debianFiles xs =
           getDirectoryContents' debian >>=
           return . (++ ["source/format"]) >>=
-          mapM doName >>=
-          return . mconcat
-      intermediateFiles tmp =
+          filterM (doesFileExist . (debian </>)) >>=
+          foldM (\ xs' name -> inputAtoms debian name xs') xs
+      intermediateFiles :: HasOldAtoms atoms => FilePath -> atoms -> IO atoms
+      intermediateFiles tmp xs =
           do sums <- getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
              paths <- mapM (\ sum -> getDirectoryContents' (tmp </> sum) >>= return . map (sum </>)) sums >>= return . concat
              files <- mapM (readFile . (tmp </>)) paths
-             return $ map (\ (path, file) -> DHIntermediate ("debian/cabalInstall" </> path) file) (zip paths files)
-      getDirectoryContents' dir = getDirectoryContents dir >>= return . filter (not . dotFile)
-      doName name = doesFileExist (debian </> name) >>= doFile name
-      doFile _ False = return mempty
-      doFile name True = inputAtoms debian name
-      dotFile "." = True
-      dotFile ".." = True
-      dotFile _ = False
+             foldM (\ xs' (path, file) -> return $ insertOldAtoms [DHIntermediate ("debian/cabalInstall" </> path) file] xs') xs (zip paths files)
+      doFile name = inputAtoms debian name
 
-inputAtoms :: FilePath -> FilePath -> IO [DebAtom]
-inputAtoms _ path | elem path ["changelog", "control", "compat", "copyright", "rules"] = return mempty
-inputAtoms debian name@"source/format" = (: []) . DebSourceFormat <$> readFile (debian </> name)
-inputAtoms debian name@"watch" = (: []) . DebWatch <$> readFile (debian </> name)
-inputAtoms debian name =
+inputAtoms :: HasOldAtoms atoms => FilePath -> FilePath -> atoms -> IO atoms
+inputAtoms _ path xs | elem path ["changelog", "control", "compat", "copyright", "rules"] = return xs
+inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ insertOldAtoms [DebSourceFormat text] xs
+inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ insertOldAtoms [DebWatch text] xs
+inputAtoms debian name xs =
     case (BinPkgName (dropExtension name), takeExtension name) of
-      (p, ".install") ->   mapMaybe (readInstall p) . lines   <$> readFile (debian </> name)
-      (p, ".dirs") ->      map (readDir p) . lines       <$> readFile (debian </> name)
-      (p, ".init") ->      (: []) . DHInstallInit p              <$> readFile (debian </> name)
-      (p, ".logrotate") -> (: []) . DHInstallLogrotate p         <$> readFile (debian </> name)
-      (p, ".links") ->     mapMaybe (readLink p) . lines <$> readFile (debian </> name)
-      (p, ".postinst") ->  (: []) . DHPostInst p                 <$> readFile (debian </> name)
-      (p, ".postrm") ->    (: []) . DHPostRm p                   <$> readFile (debian </> name)
-      (p, ".preinst") ->   (: []) . DHPreInst p                  <$> readFile (debian </> name)
-      (p, ".prerm") ->     (: []) . DHPreRm p                    <$> readFile (debian </> name)
-      (_, ".log") ->       return mempty -- Generated by debhelper
-      (_, ".debhelper") -> return mempty -- Generated by debhelper
-      (_, ".hs") ->        return mempty -- Code that uses this library
-      (_, ".setup") ->     return mempty -- Compiled Setup.hs file
-      (_, ".substvars") -> return mempty -- Unsupported
-      (_, "") ->           return mempty -- File with no extension
-      (_, x) | last x == '~' -> return mempty -- backup file
-      _ -> trace ("Ignored: " ++ debian </> name) (return mempty)
+      (p, ".install") ->   readFile (debian </> name) >>= \ text -> return $ insertOldAtoms (mapMaybe (readInstall p) (lines text)) xs
+      (p, ".dirs") ->      readFile (debian </> name) >>= \ text -> return $ insertOldAtoms (map (readDir p) (lines text)) xs
+      (p, ".init") ->      readFile (debian </> name) >>= \ text -> return $ insertOldAtoms [DHInstallInit p text] xs
+      (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> return $ insertOldAtoms [DHInstallLogrotate p text] xs
+      (p, ".links") ->     readFile (debian </> name) >>= \ text -> return $ insertOldAtoms (mapMaybe (readLink p) (lines text)) xs
+      (p, ".postinst") ->  readFile (debian </> name) >>= \ text -> return $ insertOldAtoms [DHPostInst p text] xs
+      (p, ".postrm") ->    readFile (debian </> name) >>= \ text -> return $ insertOldAtoms [DHPostRm p text] xs
+      (p, ".preinst") ->   readFile (debian </> name) >>= \ text -> return $ insertOldAtoms [DHPreInst p text] xs
+      (p, ".prerm") ->     readFile (debian </> name) >>= \ text -> return $ insertOldAtoms [DHPreRm p text] xs
+      (_, ".log") ->       return xs -- Generated by debhelper
+      (_, ".debhelper") -> return xs -- Generated by debhelper
+      (_, ".hs") ->        return xs -- Code that uses this library
+      (_, ".setup") ->     return xs -- Compiled Setup.hs file
+      (_, ".substvars") -> return xs -- Unsupported
+      (_, "") ->           return xs -- File with no extension
+      (_, x) | last x == '~' -> return xs -- backup file
+      _ -> trace ("Ignored: " ++ debian </> name) (return xs)
 
 readLink :: BinPkgName -> Text -> Maybe DebAtom
 readLink p line =

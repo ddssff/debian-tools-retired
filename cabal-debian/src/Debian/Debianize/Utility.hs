@@ -17,6 +17,7 @@ module Debian.Debianize.Utility
     , showDeps
     , showDeps'
     , withCurrentDirectory
+    , getDirectoryContents'
     ) where
 
 import Control.Exception as E (catch, try, bracket, IOException)
@@ -182,3 +183,10 @@ instance Exception SignalException where
    toException e = SomeException e
    fromException (SomeException e) = cast e
 -}
+
+getDirectoryContents' dir =
+    getDirectoryContents dir >>= return . filter (not . dotFile)
+    where
+      dotFile "." = True
+      dotFile ".." = True
+      dotFile _ = False
