@@ -14,7 +14,7 @@ import Data.List (sort)
 import Data.Map (Map)
 import qualified Data.Text as T
 import Data.Set as Set (Set, toList, fromList, difference)
-import Debian.Debianize.Types.Atoms (NewDebAtom(..))
+import Debian.Debianize.Types.Atoms (DebAtom(..))
 import Debian.Debianize.Types.Debianization (Debianization(..), VersionControlSpec, XField)
 import Debian.Debianize.Utility (showDeps)
 import Debian.Relation (Relation, BinPkgName)
@@ -22,10 +22,10 @@ import Triplets (mkQ2, extQ2)
 
 -- These instances are only used here, to create debugging messages.
 deriving instance Typeable Debianization
-deriving instance Typeable NewDebAtom
+deriving instance Typeable DebAtom
 
 deriving instance Data Debianization
-deriving instance Data NewDebAtom
+deriving instance Data DebAtom
 
 -- ext2Q' :: (Data d, Typeable2 t) => (d -> q) -> (forall d1 d2. (Data d1, Data d2) => t d1 d2 -> q) -> d -> q
 -- ext2Q' = ext2Q
@@ -47,7 +47,7 @@ geq x y =
       setEq1 a b = toList a == toList b
       setEq2 :: Set XField -> Set XField -> Bool
       setEq2 a b = toList a == toList b
-      mapEq1 :: Map (Maybe BinPkgName) (Set NewDebAtom) -> Map (Maybe BinPkgName) (Set NewDebAtom) -> Bool
+      mapEq1 :: Map (Maybe BinPkgName) (Set DebAtom) -> Map (Maybe BinPkgName) (Set DebAtom) -> Bool
       mapEq1 a b = (a == b)
 
 data Diff
@@ -75,7 +75,7 @@ gdiff x y =
       setEq1 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
       setEq2 :: Set XField -> Set XField -> [Diff]
       setEq2 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
-      mapEq1 :: Map (Maybe BinPkgName) (Set NewDebAtom) -> Map (Maybe BinPkgName) (Set NewDebAtom) -> [Diff]
+      mapEq1 :: Map (Maybe BinPkgName) (Set DebAtom) -> Map (Maybe BinPkgName) (Set DebAtom) -> [Diff]
       mapEq1 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
       relEq :: [[Relation]] -> [[Relation]] -> [Diff]
       relEq a b = if Set.fromList a == Set.fromList b

@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances #-}
 module Debian.Debianize.Types.Atoms
-    ( NewDebAtom(..)
+    ( DebAtom(..)
     , HasAtoms(..)
     , insertAtom
     , insertAtoms
@@ -31,7 +31,7 @@ import Prelude hiding (init)
 -- converted directly into files in the debian directory, others
 -- become fragments of those files, and others are first converted
 -- into different DebAtom values as new information becomes available.
-data NewDebAtom
+data DebAtom
     = NoDocumentationLibrary -- replaces haddock
     | NoProfilingLibrary     -- replaces debLibProf
     | Compiler Compiler
@@ -64,36 +64,36 @@ data NewDebAtom
     deriving (Eq, Ord, Show)
 
 class HasAtoms atoms where
-    getAtoms :: atoms -> Map (Maybe BinPkgName) (Set NewDebAtom)
-    putAtoms :: Map (Maybe BinPkgName) (Set NewDebAtom) -> atoms -> atoms
+    getAtoms :: atoms -> Map (Maybe BinPkgName) (Set DebAtom)
+    putAtoms :: Map (Maybe BinPkgName) (Set DebAtom) -> atoms -> atoms
 
-instance HasAtoms (Map (Maybe BinPkgName) (Set NewDebAtom)) where
+instance HasAtoms (Map (Maybe BinPkgName) (Set DebAtom)) where
     getAtoms x = x
     putAtoms _ x = x
 
-lookupAtom :: HasAtoms atoms => (Show a, Ord a) => Maybe BinPkgName -> (NewDebAtom -> Maybe a) -> atoms -> Maybe a
+lookupAtom :: HasAtoms atoms => (Show a, Ord a) => Maybe BinPkgName -> (DebAtom -> Maybe a) -> atoms -> Maybe a
 lookupAtom mbin from atoms =
     case maxView (lookupAtoms mbin from (getAtoms atoms)) of
       Nothing -> Nothing
       Just (x, s) | Set.null s -> Just x
       Just (x, s) -> error $ "lookupAtom - multiple: " ++ show (x : toList s)
 
-lookupAtoms :: HasAtoms atoms => (Show a, Ord a) => Maybe BinPkgName -> (NewDebAtom -> Maybe a) -> atoms -> Set a
+lookupAtoms :: HasAtoms atoms => (Show a, Ord a) => Maybe BinPkgName -> (DebAtom -> Maybe a) -> atoms -> Set a
 lookupAtoms mbin from x = maybe empty (setMapMaybe from) (Map.lookup mbin (getAtoms x))
 
-insertAtom :: HasAtoms atoms => Maybe BinPkgName -> NewDebAtom -> atoms -> atoms
+insertAtom :: HasAtoms atoms => Maybe BinPkgName -> DebAtom -> atoms -> atoms
 insertAtom mbin atom x = putAtoms (insertWith union mbin (singleton atom) (getAtoms x)) x
 
-insertAtoms :: HasAtoms atoms => Maybe BinPkgName -> Set NewDebAtom -> atoms -> atoms
+insertAtoms :: HasAtoms atoms => Maybe BinPkgName -> Set DebAtom -> atoms -> atoms
 insertAtoms mbin atoms x = putAtoms (insertWith union mbin atoms (getAtoms x)) x
 
-insertAtoms' :: HasAtoms atoms => Maybe BinPkgName -> [NewDebAtom] -> atoms -> atoms
+insertAtoms' :: HasAtoms atoms => Maybe BinPkgName -> [DebAtom] -> atoms -> atoms
 insertAtoms' mbin atoms x = insertAtoms mbin (fromList atoms) x
 
-foldAtoms :: HasAtoms atoms => (Maybe BinPkgName -> NewDebAtom -> r -> r) -> r -> atoms -> r
+foldAtoms :: HasAtoms atoms => (Maybe BinPkgName -> DebAtom -> r -> r) -> r -> atoms -> r
 foldAtoms f r0 xs = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (getAtoms xs)
 
-mapAtoms :: HasAtoms atoms => (Maybe BinPkgName -> NewDebAtom -> Set NewDebAtom) -> atoms -> atoms
+mapAtoms :: HasAtoms atoms => (Maybe BinPkgName -> DebAtom -> Set DebAtom) -> atoms -> atoms
 mapAtoms f xs = foldAtoms (\ k atom xs' -> insertAtoms k (f k atom) xs') (putAtoms mempty xs) (getAtoms xs)
 
 setMapMaybe :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b

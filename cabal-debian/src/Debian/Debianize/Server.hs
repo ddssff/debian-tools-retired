@@ -11,7 +11,7 @@ module Debian.Debianize.Server
 import Data.Maybe (fromMaybe)
 import Data.Text (pack)
 import Debian.Debianize.Paths (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
-import Debian.Debianize.Types.Atoms (HasAtoms, NewDebAtom(..), insertAtom, insertAtoms')
+import Debian.Debianize.Types.Atoms (HasAtoms, DebAtom(..), insertAtom, insertAtoms')
 import Debian.Debianize.Types.PackageHints (PackageHint(..), Server(..), Site(..))
 import Debian.Relation (BinPkgName)
 import System.FilePath ((</>))
@@ -71,7 +71,7 @@ script path =
     , destName = takeFileName path }
 -}
 
-debianPostinst :: BinPkgName -> Bool -> [NewDebAtom]
+debianPostinst :: BinPkgName -> Bool -> [DebAtom]
 debianPostinst b isSite =
     [DHPostInst
           (pack . unlines $
@@ -97,7 +97,7 @@ debianPostinst b isSite =
                , "    service apache2 restart" ]
           else []
 
-debianInit :: BinPkgName -> String -> String -> [String] -> NewDebAtom
+debianInit :: BinPkgName -> String -> String -> [String] -> DebAtom
 debianInit b destName retry flags =
     DHInstallInit
             (pack . unlines $
@@ -190,7 +190,7 @@ siteAtoms' b port domain serverAdmin xs =
 
 -- | A configuration file for the logrotate facility, installed via a line
 -- in debianFiles.
-logrotateConfig :: BinPkgName -> Bool -> NewDebAtom
+logrotateConfig :: BinPkgName -> Bool -> DebAtom
 logrotateConfig b isSite =
     DHInstallLogrotate (pack . unlines $ (apacheConfig ++ serverConfig))
      -- DHInstallDir b ("/var/log/apache2" </> show (pretty b))

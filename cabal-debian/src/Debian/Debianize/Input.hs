@@ -20,7 +20,7 @@ import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import Debian.Debianize.Default (newSourceDebDescription, newBinaryDebDescription)
-import Debian.Debianize.Types.Atoms (NewDebAtom(..), HasAtoms, insertAtom, insertAtoms')
+import Debian.Debianize.Types.Atoms (DebAtom(..), HasAtoms, insertAtom, insertAtoms')
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                              VersionControlSpec(..), XField(..))
 import Debian.Debianize.Utility (getDirectoryContents')
@@ -200,18 +200,18 @@ inputAtoms debian name xs =
       (_, x) | last x == '~' -> return xs -- backup file
       _ -> trace ("Ignored: " ++ debian </> name) (return xs)
 
-readLink :: Text -> Maybe NewDebAtom
+readLink :: Text -> Maybe DebAtom
 readLink line =
     case words line of
       [a, b] -> Just $ DHLink (unpack a) (unpack b)
       [] -> Nothing
       _ -> trace ("readLink: " ++ show line) Nothing
 
-readInstall :: BinPkgName -> Text -> Maybe NewDebAtom
+readInstall :: BinPkgName -> Text -> Maybe DebAtom
 readInstall name line =
     case break isSpace line of
       (_, b) | null b -> error $ "readInstall: syntax error in .install file for " ++ show name ++ ": " ++ show line
       (a, b) -> Just $ DHInstall (unpack (strip a)) (unpack (strip b))
 
-readDir :: Text -> NewDebAtom
+readDir :: Text -> DebAtom
 readDir line = DHInstallDir (unpack line)

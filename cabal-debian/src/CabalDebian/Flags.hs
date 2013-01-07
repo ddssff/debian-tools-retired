@@ -16,7 +16,7 @@ import Data.Map (Map)
 import Data.Monoid (mempty)
 import Data.Set (Set)
 import Debian.Cabal.Dependencies (DependencyHints, defaultDependencyHints)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), NewDebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion), insertAtom, compilerVersion)
+import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion), insertAtom, compilerVersion)
 import Debian.Debianize.Types.Debianization (DebType)
 import Debian.Debianize.Types.PackageHints (PackageHints)
 import Debian.Policy (SourceFormat(Native3, Quilt3))
@@ -120,7 +120,7 @@ data Flags = Flags
     -- obtained from the cabal file, and if it is not there then from
     -- the environment.  As a last resort, there is a hard coded
     -- string in here somewhere.
-    , debAtoms :: Map (Maybe BinPkgName) (Set NewDebAtom)
+    , debAtoms :: Map (Maybe BinPkgName) (Set DebAtom)
     -- ^ Preliminary value of corresponding Debianization field
     }
 
