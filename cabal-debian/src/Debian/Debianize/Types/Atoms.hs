@@ -36,8 +36,7 @@ import Prelude hiding (init)
 -- become fragments of those files, and others are first converted
 -- into different DebAtom values as new information becomes available.
 data DebAtom
-    = DebRulesFragment Text                       -- ^ A Fragment of debian/rules
-    | DHInstall BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package
+    = DHInstall BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package
     | DHInstallTo BinPkgName FilePath FilePath    -- ^ Install a build file into the binary package at an exact location
     | DHInstallData BinPkgName FilePath FilePath  -- ^ DHInstallTo the package's data directory: /usr/share/package-version/
     | DHFile BinPkgName FilePath Text             -- ^ Create a file with the given text at the given path
@@ -68,6 +67,7 @@ data NewDebAtom
     | DebSourceFormat Text                        -- ^ Write debian/source/format (FIXME: Use Debian.Policy.SourceFormat instead of Text)
     | DebWatch Text                               -- ^ Write debian/watch
     | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
+    | DebRulesFragment Text                       -- ^ A Fragment of debian/rules
     deriving (Eq, Ord, Show)
 
 class HasOldAtoms atoms where

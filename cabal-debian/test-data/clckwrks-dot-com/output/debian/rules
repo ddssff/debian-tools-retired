@@ -8,6 +8,11 @@ include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/hlibrary.mk
 
 binary-fixup/clckwrks-dot-com-production::
+	install -Dp dist-ghc/build/clckwrks-dot-com-server/clckwrks-dot-com-server debian/clckwrks-dot-com-production/usr/bin/clckwrks-dot-com-production
+
+build/clckwrks-dot-com-production:: build-ghc-stamp
+build/clckwrks-dot-com-backups:: build-ghc-stamp
+binary-fixup/clckwrks-dot-com-production::
 	echo -n 'haskell:Depends=' >> debian/clckwrks-dot-com-production.substvars
 	dpkg-query -W -f='haskell-clckwrks-theme-clckwrks-utils (=$${Version})' libghc-clckwrks-theme-clckwrks-dev >> debian/clckwrks-dot-com-production.substvars
 	echo -n ', ' >> debian/clckwrks-dot-com-production.substvars
@@ -26,9 +31,3 @@ binary-fixup/clckwrks-dot-com-production::
 	echo -n ', ' >> debian/clckwrks-dot-com-production.substvars
 	dpkg-query -W -f='haskell-clckwrks-utils (>>$${Version})' libghc-clckwrks-dev >> debian/clckwrks-dot-com-production.substvars
 	echo '' >> debian/clckwrks-dot-com-production.substvars
-
-build/clckwrks-dot-com-production:: build-ghc-stamp
-binary-fixup/clckwrks-dot-com-production::
-	install -Dp dist-ghc/build/clckwrks-dot-com-server/clckwrks-dot-com-server debian/clckwrks-dot-com-production/usr/bin/clckwrks-dot-com-production
-
-build/clckwrks-dot-com-backups:: build-ghc-stamp

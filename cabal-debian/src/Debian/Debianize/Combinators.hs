@@ -35,7 +35,7 @@ import Debian.Cabal.Dependencies (PackageType(Development, Profiling, Documentat
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Paths (apacheLogDirectory)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
-import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtom(..), NewDebAtom(..), HasOldAtoms(getOldAtoms, putOldAtoms), insertOldAtoms, insertAtom)
+import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtom(..), NewDebAtom(..), HasOldAtoms(getOldAtoms, putOldAtoms), insertOldAtoms, HasAtoms(getAtoms), insertAtom, foldAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
 import Debian.Debianize.Types.PackageHints (PackageHints, PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (trim)
@@ -84,7 +84,7 @@ debianization hints sourceFormat execs pkgDesc compiler date copyright' maint st
 tightDependencyFixup :: [(BinPkgName, BinPkgName)] -> BinPkgName -> Debianization -> Debianization
 tightDependencyFixup [] _ deb = deb
 tightDependencyFixup pairs p deb =
-    insertOldAtoms [atom] deb
+    insertAtom Nothing atom deb
     where
       atom = DebRulesFragment
               (unlines $
@@ -128,18 +128,19 @@ deSugarDebianization build datadir deb =
       deSugarAtom x@(DHInstallLogrotate b _) deb' = insertOldAtoms [x, DHInstallDir b (apacheLogDirectory b)] deb'
       deSugarAtom x deb' = insertOldAtoms [x] deb'
       mergeRules :: Debianization -> Debianization
-      mergeRules x = x { rulesHead = foldl mergeRulesAtom (rulesHead x) (getOldAtoms x) }
-      mergeRulesAtom text (DebRulesFragment x) = text <> "\n" <> x
-      mergeRulesAtom text (DHInstallTo p s d) =
+      mergeRules x = x { rulesHead = foldAtoms mergeRulesAtom (foldl mergeRulesOldAtom (rulesHead x) (getOldAtoms x)) (getAtoms x) }
+      mergeRulesAtom Nothing (DebRulesFragment x) text = text <> "\n" <> x
+      mergeRulesAtom _ _ text = text
+      mergeRulesOldAtom text (DHInstallTo p s d) =
           text <> "\n" <>
                unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
                        , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]
-      mergeRulesAtom _ (DHInstallData _ _ _) = error "DHInstallData should have been turned into a DHInstallTo"
-      mergeRulesAtom text (DHInstallCabalExecTo p n d) =
+      mergeRulesOldAtom _ (DHInstallData _ _ _) = error "DHInstallData should have been turned into a DHInstallTo"
+      mergeRulesOldAtom text (DHInstallCabalExecTo p n d) =
           text <> "\n" <>
                unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
                        , "\tinstall -Dp " <> pack (build </> n </> n) <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]
-      mergeRulesAtom text _ = text
+      mergeRulesOldAtom text _ = text
 
 watchAtom :: PackageName -> Debianization -> Debianization
 watchAtom (PackageName pkgname) deb =
@@ -430,10 +431,10 @@ makeUtilsAtoms dependencyHints packageHints pkgDesc deb =
                p' = show (pretty p)
                c = Cabal.package pkgDesc
                c' = display c in
+           insertAtom Nothing (DebRulesFragment (pack ("build" </> p' ++ ":: build-ghc-stamp\n"))) $
            insertOldAtoms
              (map (\ e -> DHInstallCabalExec p (exeName e) "usr/bin") (bundledExecutables packageHints pkgDesc) ++
-              map (\ f -> DHInstall p f (takeDirectory ("usr/share" </> c' </> f))) (Cabal.dataFiles pkgDesc) ++
-              [DebRulesFragment (pack ("build" </> p' ++ ":: build-ghc-stamp"))])
+              map (\ f -> DHInstall p f (takeDirectory ("usr/share" </> c' </> f))) (Cabal.dataFiles pkgDesc))
              deb
 
 -- | The list of executables without a corresponding cabal package to put them into

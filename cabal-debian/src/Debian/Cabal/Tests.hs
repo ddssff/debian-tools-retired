@@ -8,7 +8,7 @@ import qualified CabalDebian.Flags as Flags (Flags(..), defaultFlags)
 
 import Data.Map (insert)
 import Data.Monoid (mempty)
-import Data.Set as Set (fromList)
+import Data.Set as Set (fromList, singleton)
 import qualified Data.Text as T
 import Debian.Cabal.Debianize (debianizationWithIO)
 import Debian.Cabal.Dependencies (DependencyHints (missingDependencies, execMap, revision, extraDevDeps))
@@ -21,7 +21,7 @@ import Debian.Debianize.Generic (gdiff)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
-import Debian.Debianize.Types.Atoms (compilerVersion, DebAtom(..), HasOldAtoms(putOldAtoms, getOldAtoms), NewDebAtom(..), insertAtom)
+import Debian.Debianize.Types.Atoms (compilerVersion, NewDebAtom(..), insertAtom, mapAtoms)
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Policy (StandardsVersion(StandardsVersion), getDebhelperCompatLevel, getDebianStandardsVersion,
@@ -133,9 +133,10 @@ test4 =
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
       dropRulesAtoms deb =
-          putOldAtoms (filter (not . isRulesAtom) (getOldAtoms deb)) deb
-          where isRulesAtom (DebRulesFragment _) = True
-                isRulesAtom _ = False
+          mapAtoms omitRulesAtom deb
+          where
+            omitRulesAtom Nothing (DebRulesFragment _) = mempty
+            omitRulesAtom _ x = Set.singleton x
       flags = Flags.defaultFlags
               { Flags.dependencyHints = (Flags.dependencyHints Flags.defaultFlags) { missingDependencies = [BinPkgName "libghc-clckwrks-theme-clckwrks-doc"]
                                                                        , revision            = "" }
