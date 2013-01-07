@@ -6,6 +6,7 @@ module Debian.Debianize.Types.Atoms
     , NewDebAtom(..)
     , HasAtoms(..)
     , insertAtom
+    , insertAtoms
     , lookupAtom
     , lookupAtoms
     , compiler
@@ -32,8 +33,6 @@ import Prelude hiding (init)
 -- into different DebAtom values as new information becomes available.
 data DebAtom
     = DebRulesFragment Text                       -- ^ A Fragment of debian/rules
-    | DebSourceFormat Text                        -- ^ Write debian/source/format
-    | DebWatch Text                               -- ^ Write debian/watch
     | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
 
     | DHInstall BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package
@@ -64,6 +63,8 @@ data NewDebAtom
       -- This is used to look up hard coded lists of packages bundled
       -- with the compiler and their version numbers.  (This could
       -- certainly be done in a more beautiful way.)
+    | DebSourceFormat Text                        -- ^ Write debian/source/format (FIXME: Use Debian.Policy.SourceFormat instead of Text)
+    | DebWatch Text                               -- ^ Write debian/watch
     deriving (Eq, Ord, Show)
 
 class HasOldAtoms atoms where
@@ -97,6 +98,9 @@ lookupAtoms mbin from x = maybe empty (setMapMaybe from) (Map.lookup mbin (getAt
 
 insertAtom :: HasAtoms atoms => Maybe BinPkgName -> NewDebAtom -> atoms -> atoms
 insertAtom mbin atom x = putAtoms (insertWith union mbin (singleton atom) (getAtoms x)) x
+
+insertAtoms :: HasAtoms atoms => Maybe BinPkgName -> [NewDebAtom] -> atoms -> atoms
+insertAtoms mbin atoms x = putAtoms (insertWith union mbin (fromList atoms) (getAtoms x)) x
 
 setMapMaybe :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
 setMapMaybe p = fromList . mapMaybe p . toList

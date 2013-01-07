@@ -184,6 +184,7 @@ instance Exception SignalException where
    fromException (SomeException e) = cast e
 -}
 
+getDirectoryContents' :: FilePath -> IO [FilePath]
 getDirectoryContents' dir =
     getDirectoryContents dir >>= return . filter (not . dotFile)
     where

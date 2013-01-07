@@ -5,7 +5,6 @@ module Debian.Debianize.Files
     ( toFiles
     ) where
 
-import Data.List (nub)
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import Data.Monoid ((<>))
@@ -13,7 +12,7 @@ import Data.Set (toList)
 import Data.Text (Text, pack, unlines)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.Combinators (deSugarDebianization)
-import Debian.Debianize.Types.Atoms (DebAtom(..), HasOldAtoms(getOldAtoms))
+import Debian.Debianize.Types.Atoms (DebAtom(..), HasOldAtoms(getOldAtoms), NewDebAtom(..), lookupAtom)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (BinPkgName, Relations)
@@ -23,23 +22,15 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 sourceFormat :: Debianization -> [(FilePath, Text)]
 sourceFormat deb =
-    case nub (mapMaybe f (getOldAtoms deb)) of
-      [x] -> [("debian/source/format", x)]
-      [] -> []
-      _ -> error "Multiple debian/source/format files"
+    maybe [] (\ x -> [("debian/source/format", x)]) (lookupAtom Nothing f deb)
     where
-      f :: DebAtom -> Maybe Text
       f (DebSourceFormat x) = Just x
       f _ = Nothing
 
 watch :: Debianization -> [(FilePath, Text)]
 watch deb =
-    case nub (mapMaybe f (getOldAtoms deb)) of
-      [x] -> [("debian/watch", x)]
-      [] -> []
-      _ -> error "Multiple debian/watch files"
+    maybe [] (\ x -> [("debian/watch", x)]) (lookupAtom Nothing f deb)
     where
-      f :: DebAtom -> Maybe Text
       f (DebWatch x) = Just x
       f _ = Nothing
 

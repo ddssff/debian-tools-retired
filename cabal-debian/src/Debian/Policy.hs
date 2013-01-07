@@ -64,8 +64,8 @@ parseStandardsVersion s =
       _ -> error $ "Invalid Standards-Version string: " ++ show s
 
 data SourceFormat
-    = Quilt3
-    | Native3
+    = Native3
+    | Quilt3
     deriving (Eq, Show, Data, Typeable)
 
 instance Pretty SourceFormat where

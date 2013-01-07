@@ -21,7 +21,7 @@ import Debian.Debianize.Generic (gdiff)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
-import Debian.Debianize.Types.Atoms (compilerVersion, DebAtom(..), HasOldAtoms(putOldAtoms, getOldAtoms), insertOldAtoms)
+import Debian.Debianize.Types.Atoms (compilerVersion, DebAtom(..), HasOldAtoms(putOldAtoms, getOldAtoms), NewDebAtom(..), insertAtom)
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Policy (StandardsVersion(StandardsVersion), getDebhelperCompatLevel, getDebianStandardsVersion,
@@ -328,7 +328,7 @@ testDeb1 =
 
 testDeb2 :: Debianization
 testDeb2 =
-    insertOldAtoms [DebSourceFormat "3.0 (native)\n"] $
+    insertAtom Nothing (DebSourceFormat "3.0 (native)\n") $
     Debianization
     { sourceDebDescription =
           SourceDebDescription
