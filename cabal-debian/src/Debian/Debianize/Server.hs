@@ -11,7 +11,7 @@ module Debian.Debianize.Server
 import Data.Maybe (fromMaybe)
 import Data.Text (pack)
 import Debian.Debianize.Paths (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
-import Debian.Debianize.Types.Atoms (DebAtom(..), HasOldAtoms, insertOldAtoms, HasAtoms, NewDebAtom(..), insertAtom, insertAtoms')
+import Debian.Debianize.Types.Atoms (HasAtoms, NewDebAtom(..), insertAtom, insertAtoms')
 import Debian.Debianize.Types.PackageHints (PackageHint(..), Server(..), Site(..))
 import Debian.Relation (BinPkgName)
 import System.FilePath ((</>))
@@ -20,30 +20,31 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | Return a list of files to add to the debianization to manage the
 -- server or web site.
-siteAtoms :: (HasOldAtoms atoms, HasAtoms atoms) => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> String -> Int -> [String] -> String -> String -> atoms -> atoms
+siteAtoms :: HasAtoms atoms => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> String -> Int -> [String] -> String -> String -> atoms -> atoms
 siteAtoms b sourceDir execName destDir destName retry port flags domain serverAdmin xs =
     siteAtoms' b port domain serverAdmin $
     serverAtoms b sourceDir execName destDir destName retry port flags True $ xs
 
-serverAtoms :: (HasOldAtoms atoms, HasAtoms atoms) => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> String -> Int -> [String] -> Bool -> atoms -> atoms
+serverAtoms :: HasAtoms atoms => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> String -> Int -> [String] -> Bool -> atoms -> atoms
 serverAtoms b sourceDir execName destDir destName retry _port flags isSite xs =
     execAtoms b sourceDir execName destDir destName $
     insertAtoms' (Just b) (debianPostinst b isSite) $
     insertAtom (Just b) (logrotateConfig b isSite) $
-    insertOldAtoms (debianInit b destName retry flags) xs
+    insertAtom (Just b) (debianInit b destName retry flags) xs
 
 -- | Generate the atom that installs the executable.  Trickier than it should
 -- be due to limitations in the dh_install script, and the fact that we don't
 -- yet know the build directory path.
-execAtoms :: (HasOldAtoms atoms, HasAtoms atoms) => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> atoms -> atoms
+execAtoms :: HasAtoms atoms => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> atoms -> atoms
 execAtoms b sourceDir execName destDir destName xs =
     insertAtom Nothing (DebRulesFragment (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp"))) $
-    insertOldAtoms
-      [case (sourceDir, execName == destName) of
-         (Nothing, True) -> DHInstallCabalExec b execName d
-         (Just s, True) -> DHInstall b s d
-         (Nothing, False) -> DHInstallCabalExecTo b execName (d </> destName)
-         (Just s, False) -> DHInstallTo b s (d </> destName)]
+    insertAtom
+      (Just b)
+      (case (sourceDir, execName == destName) of
+         (Nothing, True) -> DHInstallCabalExec execName d
+         (Just s, True) -> DHInstall s d
+         (Nothing, False) -> DHInstallCabalExecTo execName (d </> destName)
+         (Just s, False) -> DHInstallTo s (d </> destName))
       xs
     where
       d = fromMaybe "usr/bin" destDir
@@ -96,10 +97,9 @@ debianPostinst b isSite =
                , "    service apache2 restart" ]
           else []
 
-debianInit :: BinPkgName -> String -> String -> [String] -> [DebAtom]
+debianInit :: BinPkgName -> String -> String -> [String] -> NewDebAtom
 debianInit b destName retry flags =
-    [DHInstallInit
-            b
+    DHInstallInit
             (pack . unlines $
              [ "#! /bin/sh -e"
              , ""
@@ -123,7 +123,7 @@ debianInit b destName retry flags =
              , "    exit 1"
              , "esac"
              , ""
-             , "exit 0" ])]
+             , "exit 0" ])
   where
     startCommand = showCommandForUser "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
     stopCommand = showCommandForUser "start-stop-daemon" (stopOptions ++ commonOptions)
@@ -147,13 +147,11 @@ oldClckwrksFlags _ = []
 
 -- | An apache site configuration file.  This is installed via a line
 -- in debianFiles.
-siteAtoms' :: (HasOldAtoms atoms, HasAtoms atoms) => BinPkgName -> Int -> String -> String -> atoms -> atoms
+siteAtoms' :: HasAtoms atoms => BinPkgName -> Int -> String -> String -> atoms -> atoms
 siteAtoms' b port domain serverAdmin xs =
     insertAtom (Just b) (DHLink ("/etc/apache2/sites-available/" ++ domain) ("/etc/apache2/sites-enabled/" ++ domain)) $
-    insertOldAtoms
-      [DHInstallDir b (apacheLogDirectory b), -- Server won't start if log directory doesn't exist
-       DHFile b ("/etc/apache2/sites-available" </> domain) text]
-      xs
+    insertAtom (Just b) (DHInstallDir (apacheLogDirectory b)) $  -- Server won't start if log directory doesn't exist
+    insertAtom (Just b) (DHFile ("/etc/apache2/sites-available" </> domain) text) $ xs
     where
       text =
            (pack . unlines $

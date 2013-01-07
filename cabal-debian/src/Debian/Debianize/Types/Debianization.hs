@@ -16,7 +16,7 @@ import Data.Map as Map (Map)
 import Data.Set as Set (Set)
 import Data.Text (Text)
 import Debian.Changes (ChangeLog(..))
-import Debian.Debianize.Types.Atoms (DebAtom, HasOldAtoms(..), NewDebAtom, HasAtoms(..))
+import Debian.Debianize.Types.Atoms (NewDebAtom, HasAtoms(..))
 import Debian.Orphans ()
 import Debian.Orphans ()
 import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures, Section)
@@ -49,7 +49,7 @@ data Debianization
       -- actual debianization files.  Binary values are associated
       -- with a BinPkgName, the Nothing entries in the map represent
       -- source values.
-      , atoms :: [DebAtom]
+      -- , atoms :: [DebAtom]
       -- ^ All the additional non-manditory debianization information.
       -- It is possible to construct a set with multiple conflicting
       -- values in this set, for example two different DebSourceFormat
@@ -57,10 +57,6 @@ data Debianization
       -- debianization should be.  Perhaps a clever Eq instance for
       -- DebAtom would help this situation.
       } deriving (Eq, Show)
-
-instance HasOldAtoms Debianization where
-    getOldAtoms = atoms
-    putOldAtoms ats x = x {atoms = ats}
 
 instance HasAtoms Debianization where
     getAtoms = debAtoms

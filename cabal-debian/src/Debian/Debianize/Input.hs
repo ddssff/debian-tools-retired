@@ -20,7 +20,7 @@ import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import Debian.Debianize.Default (newSourceDebDescription, newBinaryDebDescription)
-import Debian.Debianize.Types.Atoms (DebAtom(..), NewDebAtom(..), HasAtoms, insertAtom, insertAtoms', HasOldAtoms, insertOldAtoms)
+import Debian.Debianize.Types.Atoms (NewDebAtom(..), HasAtoms, insertAtom, insertAtoms')
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                              VersionControlSpec(..), XField(..))
 import Debian.Debianize.Utility (getDirectoryContents')
@@ -39,7 +39,6 @@ inputDebianization top =
                            <*> inputRulesFile debian
                            <*> inputCompat debian
                            <*> (Right <$> inputCopyright debian)
-                           <*> pure mempty
                            <*> pure mempty
        inputAtomsFromDirectory debian xs `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
     where
@@ -160,11 +159,11 @@ inputCompat debian = read . unpack <$> readFile (debian </> "compat")
 inputCopyright :: FilePath -> IO Text
 inputCopyright debian = readFile (debian </> "copyright")
 
-inputAtomsFromDirectory :: (HasOldAtoms atoms, HasAtoms atoms) => FilePath -> atoms -> IO atoms -- .install files, .init files, etc.
+inputAtomsFromDirectory :: HasAtoms atoms => FilePath -> atoms -> IO atoms -- .install files, .init files, etc.
 inputAtomsFromDirectory debian xs =
     debianFiles xs >>= intermediateFiles (debian </> "cabalInstall")
     where
-      debianFiles :: (HasOldAtoms atoms, HasAtoms atoms) => atoms -> IO atoms
+      debianFiles :: HasAtoms atoms => atoms -> IO atoms
       debianFiles xs' =
           getDirectoryContents' debian >>=
           return . (++ ["source/format"]) >>=
@@ -177,15 +176,15 @@ inputAtomsFromDirectory debian xs =
              files <- mapM (readFile . (tmp </>)) paths
              foldM (\ xs'' (path, file) -> return $ insertAtom Nothing (DHIntermediate ("debian/cabalInstall" </> path) file) xs'') xs' (zip paths files)
 
-inputAtoms :: (HasOldAtoms atoms, HasAtoms atoms) => FilePath -> FilePath -> atoms -> IO atoms
+inputAtoms :: HasAtoms atoms => FilePath -> FilePath -> atoms -> IO atoms
 inputAtoms _ path xs | elem path ["changelog", "control", "compat", "copyright", "rules"] = return xs
 inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ insertAtom Nothing (DebSourceFormat text) xs
 inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ insertAtom Nothing (DebWatch text) xs
 inputAtoms debian name xs =
     case (BinPkgName (dropExtension name), takeExtension name) of
-      (p, ".install") ->   readFile (debian </> name) >>= \ text -> return $ insertOldAtoms (mapMaybe (readInstall p) (lines text)) xs
-      (p, ".dirs") ->      readFile (debian </> name) >>= \ text -> return $ insertOldAtoms (map (readDir p) (lines text)) xs
-      (p, ".init") ->      readFile (debian </> name) >>= \ text -> return $ insertOldAtoms [DHInstallInit p text] xs
+      (p, ".install") ->   readFile (debian </> name) >>= \ text -> return $ insertAtoms' (Just p) (mapMaybe (readInstall p) (lines text)) xs
+      (p, ".dirs") ->      readFile (debian </> name) >>= \ text -> return $ insertAtoms' (Just p) (map readDir (lines text)) xs
+      (p, ".init") ->      readFile (debian </> name) >>= \ text -> return $ insertAtom (Just p) (DHInstallInit text) xs
       (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> return $ insertAtom (Just p) (DHInstallLogrotate text) xs
       (p, ".links") ->     readFile (debian </> name) >>= \ text -> return $ insertAtoms' (Just p) (mapMaybe readLink (lines text)) xs
       (p, ".postinst") ->  readFile (debian </> name) >>= \ text -> return $ insertAtom (Just p) (DHPostInst text) xs
@@ -208,11 +207,11 @@ readLink line =
       [] -> Nothing
       _ -> trace ("readLink: " ++ show line) Nothing
 
-readInstall :: BinPkgName -> Text -> Maybe DebAtom
+readInstall :: BinPkgName -> Text -> Maybe NewDebAtom
 readInstall name line =
     case break isSpace line of
       (_, b) | null b -> error $ "readInstall: syntax error in .install file for " ++ show name ++ ": " ++ show line
-      (a, b) -> Just $ DHInstall name (unpack (strip a)) (unpack (strip b))
+      (a, b) -> Just $ DHInstall (unpack (strip a)) (unpack (strip b))
 
-readDir :: BinPkgName -> Text -> DebAtom
-readDir p line = DHInstallDir p (unpack line)
+readDir :: Text -> NewDebAtom
+readDir line = DHInstallDir (unpack line)

@@ -14,7 +14,7 @@ import Data.List (sort)
 import Data.Map (Map)
 import qualified Data.Text as T
 import Data.Set as Set (Set, toList, fromList, difference)
-import Debian.Debianize.Types.Atoms (NewDebAtom(..), DebAtom)
+import Debian.Debianize.Types.Atoms (NewDebAtom(..))
 import Debian.Debianize.Types.Debianization (Debianization(..), VersionControlSpec, XField)
 import Debian.Debianize.Utility (showDeps)
 import Debian.Relation (Relation, BinPkgName)
@@ -57,7 +57,7 @@ data Diff
 
 gdiff :: GenericQ (GenericQ [Diff])
 gdiff x y =
-    (gdiff' `mkQ2` stringEq `extQ2` textEq `extQ2` setEq1 `extQ2` setEq2 `extQ2` mapEq1 `extQ2` atomsEq `extQ2` relEq) x y
+    (gdiff' `mkQ2` stringEq `extQ2` textEq `extQ2` setEq1 `extQ2` setEq2 `extQ2` mapEq1 `extQ2` relEq) x y
     where
       -- If the specialized eqs don't work, use the generic.  This
       -- will throw an exception if it encounters something with a
@@ -77,13 +77,6 @@ gdiff x y =
       setEq2 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
       mapEq1 :: Map (Maybe BinPkgName) (Set NewDebAtom) -> Map (Maybe BinPkgName) (Set NewDebAtom) -> [Diff]
       mapEq1 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
-      atomsEq :: [DebAtom] -> [DebAtom] -> [Diff]
-      atomsEq a b = if fromList a == fromList b
-                    then []
-                    else [SetDiff {stack = [],
-                                   expected = show (sort a),
-                                   missing = show (Set.difference (Set.fromList a) (Set.fromList b)),
-                                   extra = show (Set.difference (Set.fromList b) (Set.fromList a))}]
       relEq :: [[Relation]] -> [[Relation]] -> [Diff]
       relEq a b = if Set.fromList a == Set.fromList b
                   then []

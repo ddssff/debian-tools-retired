@@ -32,8 +32,7 @@ newDebianization entry@(Entry {}) copy level standards =
                                    , "" ]
       , compat = level
       , copyright = copy
-      , debAtoms = mempty
-      , atoms = mempty }
+      , debAtoms = mempty }
 
 newSourceDebDescription :: SrcPkgName -> NameAddr -> StandardsVersion -> SourceDebDescription
 newSourceDebDescription src who standards =

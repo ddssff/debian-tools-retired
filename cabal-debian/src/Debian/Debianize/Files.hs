@@ -6,16 +6,15 @@ module Debian.Debianize.Files
     ) where
 
 import qualified Data.Map as Map
-import Data.Maybe (mapMaybe)
-import Data.Monoid ((<>))
+import Data.Monoid ((<>), mempty)
 import Data.Set (toList)
-import Data.Text (Text, pack, unlines)
+import Data.Text (Text, pack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.Combinators (deSugarDebianization)
-import Debian.Debianize.Types.Atoms (DebAtom(..), HasOldAtoms(getOldAtoms), NewDebAtom(..), lookupAtom, foldAtoms)
+import Debian.Debianize.Types.Atoms (NewDebAtom(..), lookupAtom, foldAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
 import Debian.Debianize.Utility (showDeps')
-import Debian.Relation (BinPkgName, Relations)
+import Debian.Relation (Relations)
 import Prelude hiding (init, unlines)
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -41,6 +40,7 @@ intermediate deb =
       atomf Nothing (DHIntermediate path text) files = (path,  text) : files
       atomf _ _ files = files
 
+{-
 -- | Assemble the atoms into per-package debianization files, merging
 -- the text from each.
 assemble :: (DebAtom -> Maybe (BinPkgName, [Text])) -> (BinPkgName -> FilePath) -> Debianization -> [(FilePath, Text)]
@@ -56,78 +56,84 @@ assemble1 atomf pathf deb =
     where
       test (name, [t]) = (pathf name, t)
       test (name, ts) = error $ "Multiple entries for " ++ show (pretty name) ++ ": " ++ show ts
+-}
 
 install :: FilePath -> Debianization -> [(FilePath, Text)]
 install build deb =
-    assemble atomf (\ name -> "debian" </> show (pretty name) ++ ".install") deb
+    Map.toList $ foldAtoms atomf Map.empty deb
     where
-      atomf (DHInstall name src dst) = Just (name, [pack (src ++ " " ++ dst)])
-      atomf (DHInstallCabalExec name exec dst) = Just (name, [pack (build </> exec </> exec ++ " " ++ dst)])
-      atomf _ = Nothing
+      atomf (Just name) (DHInstall src dst) files = Map.insertWith with1 (pathf name)  (pack (src ++ " " ++ dst)) files
+      atomf (Just name) (DHInstallCabalExec exec dst) files = Map.insertWith (\ old new -> old <> "\n" <> new) (pathf name) (pack (build </> exec </> exec ++ " " ++ dst)) files
+      atomf _ _ files = files
+      pathf name = "debian" </> show (pretty name) ++ ".install"
 
 dirs :: Debianization -> [(FilePath, Text)]
 dirs deb =
-    assemble atomf pathf deb
+    Map.toList $ foldAtoms atomf Map.empty deb
     where
-      atomf (DHInstallDir name d) = Just (name, [pack d])
-      atomf _ = Nothing
+      atomf (Just name) (DHInstallDir d) files = Map.insertWith with1 (pathf name) (pack d) files
+      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".dirs"
+
+with1 old new = old <> "\n" <> new
+
+with2 msg _ _ = error msg
 
 init :: Debianization -> [(FilePath, Text)]
 init deb =
-    assemble1 atomf pathf deb
+    Map.toList $ foldAtoms atomf Map.empty deb
     where
-      atomf (DHInstallInit name t) = Just (name, [t])
-      atomf _ = Nothing
+      atomf (Just name) (DHInstallInit t) files = Map.insertWith (with2 "init") (pathf name) t files
+      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".init"
 
 -- FIXME - use a map and insertWith, check for multiple entries
 logrotate :: Debianization -> [(FilePath, Text)]
 logrotate deb =
-    foldAtoms atomf [] deb
+    Map.toList $ foldAtoms atomf Map.empty deb
     where
-      atomf (Just name) (DHInstallLogrotate t) files = (pathf name, t) : files
+      atomf (Just name) (DHInstallLogrotate t) files = Map.insertWith (with2 "logrotate") (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".logrotate"
 
 -- | Assemble all the links by package and output one file each
 link :: Debianization -> [(FilePath, Text)]
 link deb =
-    foldAtoms atomf [] deb
+    Map.toList $ foldAtoms atomf Map.empty deb
     where
-      atomf (Just name) (DHLink loc txt) files = (pathf name, pack (loc ++ " " ++ txt)) : files
+      atomf (Just name) (DHLink loc txt) files = Map.insertWith with1 (pathf name) (pack (loc ++ " " ++ txt)) files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".links"
 
 postinst :: Debianization -> [(FilePath, Text)]
 postinst deb =
-    foldAtoms atomf [] deb
+    Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Just name) (DHPostInst t) files = (pathf name, t) : files
+      atomf (Just name) (DHPostInst t) files = Map.insertWith (with2 "postinst") (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postinst"
 
 postrm :: Debianization -> [(FilePath, Text)]
 postrm deb =
-    foldAtoms atomf [] deb
+    Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Just name) (DHPostRm t) files = (pathf name, t) : files
+      atomf (Just name) (DHPostRm t) files = Map.insertWith (with2 "postrm") (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postrm"
 
 preinst :: Debianization -> [(FilePath, Text)]
 preinst deb =
-    foldAtoms atomf [] deb
+    Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Just name) (DHPreInst t) files = (pathf name, t) : files
+      atomf (Just name) (DHPreInst t) files = Map.insertWith (with2 "preinst") (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".preinst"
 
 prerm :: Debianization -> [(FilePath, Text)]
 prerm deb =
-    foldAtoms atomf [] deb
+    Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Just name) (DHPreRm t) files = (pathf name, t) : files
+      atomf (Just name) (DHPreRm t) files = Map.insertWith (with2 "prerm") (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".prerm"
 

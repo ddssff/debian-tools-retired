@@ -1,9 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances #-}
 module Debian.Debianize.Types.Atoms
-    ( DebAtom(..)
-    , HasOldAtoms(..)
-    , insertOldAtoms
-    , NewDebAtom(..)
+    ( NewDebAtom(..)
     , HasAtoms(..)
     , insertAtom
     , insertAtoms
@@ -18,7 +15,6 @@ module Debian.Debianize.Types.Atoms
     , noDocumentationLibrary
     ) where
 
-import Data.Generics (Data, Typeable)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey)
 import Data.Maybe (mapMaybe)
 import Data.Monoid (mempty)
@@ -35,17 +31,6 @@ import Prelude hiding (init)
 -- converted directly into files in the debian directory, others
 -- become fragments of those files, and others are first converted
 -- into different DebAtom values as new information becomes available.
-data DebAtom
-    = DHInstall BinPkgName FilePath FilePath      -- ^ Install a build file into the binary package
-    | DHInstallTo BinPkgName FilePath FilePath    -- ^ Install a build file into the binary package at an exact location
-    | DHInstallData BinPkgName FilePath FilePath  -- ^ DHInstallTo the package's data directory: /usr/share/package-version/
-    | DHFile BinPkgName FilePath Text             -- ^ Create a file with the given text at the given path
-    | DHInstallCabalExec BinPkgName String FilePath -- ^ Install a cabal executable into the binary package
-    | DHInstallCabalExecTo BinPkgName String FilePath -- ^ Install a cabal executable into the binary package at an exact location
-    | DHInstallDir BinPkgName FilePath            -- ^ Create a directory in the binary package
-    | DHInstallInit BinPkgName Text               -- ^ Add an init.d file to the binary package
-    deriving (Eq, Ord, Show, Data, Typeable)
-
 data NewDebAtom
     = NoDocumentationLibrary -- replaces haddock
     | NoProfilingLibrary     -- replaces debLibProf
@@ -68,18 +53,15 @@ data NewDebAtom
     | DHPostRm Text                     	  -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
     | DHPreInst Text                    	  -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
     | DHPreRm Text                      	  -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
+    | DHInstall FilePath FilePath       	  -- ^ Install a build file into the binary package
+    | DHInstallTo FilePath FilePath     	  -- ^ Install a build file into the binary package at an exact location
+    | DHInstallData FilePath FilePath   	  -- ^ DHInstallTo the package's data directory: /usr/share/package-version/
+    | DHFile FilePath Text              	  -- ^ Create a file with the given text at the given path
+    | DHInstallCabalExec String FilePath  	  -- ^ Install a cabal executable into the binary package
+    | DHInstallCabalExecTo String FilePath  	  -- ^ Install a cabal executable into the binary package at an exact location
+    | DHInstallDir FilePath             	  -- ^ Create a directory in the binary package
+    | DHInstallInit Text                	  -- ^ Add an init.d file to the binary package
     deriving (Eq, Ord, Show)
-
-class HasOldAtoms atoms where
-    getOldAtoms :: atoms -> [DebAtom]
-    putOldAtoms :: [DebAtom] -> atoms -> atoms
-
-instance HasOldAtoms [DebAtom] where
-    getOldAtoms x = x
-    putOldAtoms _ x = x
-
-insertOldAtoms :: HasOldAtoms atoms => [DebAtom] -> atoms -> atoms
-insertOldAtoms xs ats = putOldAtoms (xs ++ getOldAtoms ats) ats
 
 class HasAtoms atoms where
     getAtoms :: atoms -> Map (Maybe BinPkgName) (Set NewDebAtom)
