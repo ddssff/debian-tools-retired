@@ -81,53 +81,54 @@ init deb =
       atomf _ = Nothing
       pathf name = "debian" </> show (pretty name) ++ ".init"
 
+-- FIXME - use a map and insertWith, check for multiple entries
 logrotate :: Debianization -> [(FilePath, Text)]
 logrotate deb =
-    assemble1 atomf pathf deb
+    foldAtoms atomf [] deb
     where
-      atomf (DHInstallLogrotate name t) = Just (name, [t])
-      atomf _ = Nothing
+      atomf (Just name) (DHInstallLogrotate t) files = (pathf name, t) : files
+      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".logrotate"
 
 -- | Assemble all the links by package and output one file each
 link :: Debianization -> [(FilePath, Text)]
 link deb =
-    assemble atomf pathf deb
+    foldAtoms atomf [] deb
     where
-      atomf (DHLink name loc txt) = Just (name, [pack (loc ++ " " ++ txt)])
-      atomf _ = Nothing
+      atomf (Just name) (DHLink loc txt) files = (pathf name, pack (loc ++ " " ++ txt)) : files
+      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".links"
 
 postinst :: Debianization -> [(FilePath, Text)]
 postinst deb =
-    assemble1 atomf pathf deb
+    foldAtoms atomf [] deb
     where
-      atomf (DHPostInst name t) = Just (name, [t])
-      atomf _ = Nothing
+      atomf (Just name) (DHPostInst t) files = (pathf name, t) : files
+      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postinst"
 
 postrm :: Debianization -> [(FilePath, Text)]
 postrm deb =
-    assemble1 atomf pathf deb
+    foldAtoms atomf [] deb
     where
-      atomf (DHPostRm name t) = Just (name, [t])
-      atomf _ = Nothing
+      atomf (Just name) (DHPostRm t) files = (pathf name, t) : files
+      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postrm"
 
 preinst :: Debianization -> [(FilePath, Text)]
 preinst deb =
-    assemble1 atomf pathf deb
+    foldAtoms atomf [] deb
     where
-      atomf (DHPreInst name t) = Just (name, [t])
-      atomf _ = Nothing
+      atomf (Just name) (DHPreInst t) files = (pathf name, t) : files
+      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".preinst"
 
 prerm :: Debianization -> [(FilePath, Text)]
 prerm deb =
-    assemble1 atomf pathf deb
+    foldAtoms atomf [] deb
     where
-      atomf (DHPreRm name t) = Just (name, [t])
-      atomf _ = Nothing
+      atomf (Just name) (DHPreRm t) files = (pathf name, t) : files
+      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".prerm"
 
 -- | Turn the DebAtoms into a list of files, making sure the text

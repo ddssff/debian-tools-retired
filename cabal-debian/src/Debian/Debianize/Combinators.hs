@@ -114,11 +114,12 @@ deSugarDebianization build datadir deb =
           let deb'' =  foldr deSugarOldAtom (putOldAtoms [] deb') (getOldAtoms deb') in
           foldAtoms deSugarAtom (putAtoms mempty deb'') (getAtoms deb'')
       deSugarAtom (Just b) (DHApacheSite domain' logdir text) deb' =
+          insertAtom (Just b) (DHLink ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain')) $
           insertOldAtoms
             [DHInstallDir b logdir, -- Server won't start if log directory doesn't exist
-             DHLink b ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain'),
              DHFile b ("/etc/apache2/sites-available" </> domain') text]
           deb'
+      deSugarAtom (Just b) x@(DHInstallLogrotate _) deb' = insertAtom (Just b) x $ insertOldAtoms [DHInstallDir b (apacheLogDirectory b)] deb'
       deSugarAtom k x deb' = insertAtom k x deb'
       deSugarOldAtom (DHInstallCabalExec pkg name dst) deb' = insertOldAtoms [DHInstall pkg (build </> name </> name) dst] deb'
       deSugarOldAtom (DHInstallCabalExecTo {}) deb' = deb' -- This becomes a rule in rulesAtomText
@@ -128,7 +129,6 @@ deSugarDebianization build datadir deb =
               tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
               tmpPath = tmpDir </> destName' in
           insertAtom Nothing (DHIntermediate tmpPath s) (insertOldAtoms [DHInstall b tmpPath destDir'] deb')
-      deSugarOldAtom x@(DHInstallLogrotate b _) deb' = insertOldAtoms [x, DHInstallDir b (apacheLogDirectory b)] deb'
       deSugarOldAtom x deb' = insertOldAtoms [x] deb'
       mergeRules :: Debianization -> Debianization
       mergeRules x = x { rulesHead = foldAtoms mergeRulesAtom (foldl mergeRulesOldAtom (rulesHead x) (getOldAtoms x)) (getAtoms x) }

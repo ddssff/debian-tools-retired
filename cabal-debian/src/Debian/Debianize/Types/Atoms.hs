@@ -44,12 +44,6 @@ data DebAtom
     | DHInstallCabalExecTo BinPkgName String FilePath -- ^ Install a cabal executable into the binary package at an exact location
     | DHInstallDir BinPkgName FilePath            -- ^ Create a directory in the binary package
     | DHInstallInit BinPkgName Text               -- ^ Add an init.d file to the binary package
-    | DHInstallLogrotate BinPkgName Text          -- ^ Add a logrotate file to the binary package
-    | DHLink BinPkgName FilePath FilePath         -- ^ Create a symbolic link in the binary package
-    | DHPostInst BinPkgName Text                  -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
-    | DHPostRm BinPkgName Text                    -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
-    | DHPreInst BinPkgName Text                   -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
-    | DHPreRm BinPkgName Text                     -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
     deriving (Eq, Ord, Show, Data, Typeable)
 
 data NewDebAtom
@@ -68,6 +62,12 @@ data NewDebAtom
     | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
     | DebRulesFragment Text                       -- ^ A Fragment of debian/rules
     | DHApacheSite String FilePath Text           -- ^ Have Apache configure a site using PACKAGE, DOMAIN, LOGDIR, and APACHECONFIGFILE
+    | DHInstallLogrotate Text		          -- ^ Add a logrotate file to the binary package
+    | DHLink FilePath FilePath          	  -- ^ Create a symbolic link in the binary package
+    | DHPostInst Text                   	  -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
+    | DHPostRm Text                     	  -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
+    | DHPreInst Text                    	  -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
+    | DHPreRm Text                      	  -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
     deriving (Eq, Ord, Show)
 
 class HasOldAtoms atoms where
