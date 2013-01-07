@@ -170,12 +170,12 @@ inputAtomsFromDirectory debian xs =
           return . (++ ["source/format"]) >>=
           filterM (doesFileExist . (debian </>)) >>=
           foldM (\ xs'' name -> inputAtoms debian name xs'') xs'
-      intermediateFiles :: HasOldAtoms atoms => FilePath -> atoms -> IO atoms
+      intermediateFiles :: HasAtoms atoms => FilePath -> atoms -> IO atoms
       intermediateFiles tmp xs' =
           do sums <- getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
              paths <- mapM (\ sum -> getDirectoryContents' (tmp </> sum) >>= return . map (sum </>)) sums >>= return . concat
              files <- mapM (readFile . (tmp </>)) paths
-             foldM (\ xs'' (path, file) -> return $ insertOldAtoms [DHIntermediate ("debian/cabalInstall" </> path) file] xs'') xs' (zip paths files)
+             foldM (\ xs'' (path, file) -> return $ insertAtom Nothing (DHIntermediate ("debian/cabalInstall" </> path) file) xs'') xs' (zip paths files)
 
 inputAtoms :: (HasOldAtoms atoms, HasAtoms atoms) => FilePath -> FilePath -> atoms -> IO atoms
 inputAtoms _ path xs | elem path ["changelog", "control", "compat", "copyright", "rules"] = return xs

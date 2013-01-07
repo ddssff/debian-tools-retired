@@ -12,7 +12,7 @@ import Data.Set (toList)
 import Data.Text (Text, pack, unlines)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.Combinators (deSugarDebianization)
-import Debian.Debianize.Types.Atoms (DebAtom(..), HasOldAtoms(getOldAtoms), NewDebAtom(..), lookupAtom)
+import Debian.Debianize.Types.Atoms (DebAtom(..), HasOldAtoms(getOldAtoms), NewDebAtom(..), lookupAtom, foldAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (BinPkgName, Relations)
@@ -36,10 +36,10 @@ watch deb =
 
 intermediate :: Debianization -> [(FilePath, Text)]
 intermediate deb =
-    mapMaybe atomf (getOldAtoms deb)
+    foldAtoms atomf [] deb
     where
-      atomf (DHIntermediate path text) = Just (path,  text)
-      atomf _ = Nothing
+      atomf Nothing (DHIntermediate path text) files = (path,  text) : files
+      atomf _ _ files = files
 
 -- | Assemble the atoms into per-package debianization files, merging
 -- the text from each.

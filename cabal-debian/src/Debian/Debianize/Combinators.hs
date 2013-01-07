@@ -124,7 +124,7 @@ deSugarDebianization build datadir deb =
           let (destDir', destName') = splitFileName path
               tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
               tmpPath = tmpDir </> destName' in
-          insertOldAtoms [DHIntermediate tmpPath s, DHInstall b tmpPath destDir'] deb'
+          insertAtom Nothing (DHIntermediate tmpPath s) (insertOldAtoms [DHInstall b tmpPath destDir'] deb')
       deSugarAtom x@(DHInstallLogrotate b _) deb' = insertOldAtoms [x, DHInstallDir b (apacheLogDirectory b)] deb'
       deSugarAtom x deb' = insertOldAtoms [x] deb'
       mergeRules :: Debianization -> Debianization
