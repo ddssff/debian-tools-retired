@@ -110,33 +110,36 @@ deSugarDebianization  :: FilePath -> FilePath -> Debianization -> Debianization
 deSugarDebianization build datadir deb =
     deSugarAtoms . mergeRules $ deb
     where
-      deSugarAtoms x = putOldAtoms (concatMap deSugarAtom (getOldAtoms x)) x
-      deSugarAtom (DHInstallCabalExec pkg name dst) = [DHInstall pkg (build </> name </> name) dst]
-      deSugarAtom (DHInstallCabalExecTo {}) = [] -- This becomes a rule in rulesAtomText
-      deSugarAtom (DHInstallData p s d) = [DHInstallTo p s (datadir </> makeRelative "/" d)]
-      deSugarAtom (DHApacheSite b domain' logdir text) =
-          [DHInstallDir b logdir, -- Server won't start if log directory doesn't exist
-           DHLink b ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain'),
-           DHFile b ("/etc/apache2/sites-available" </> domain') text]
-      deSugarAtom (DHFile b path s) =
+      deSugarAtoms deb' = foldr deSugarAtom (putOldAtoms [] deb') (getOldAtoms deb')
+      deSugarAtom (DHInstallCabalExec pkg name dst) deb' = insertOldAtoms [DHInstall pkg (build </> name </> name) dst] deb'
+      deSugarAtom (DHInstallCabalExecTo {}) deb' = deb' -- This becomes a rule in rulesAtomText
+      deSugarAtom (DHInstallData p s d) deb' = insertOldAtoms [DHInstallTo p s (datadir </> makeRelative "/" d)] deb'
+      deSugarAtom (DHApacheSite b domain' logdir text) deb' =
+          insertOldAtoms
+            [DHInstallDir b logdir, -- Server won't start if log directory doesn't exist
+             DHLink b ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain'),
+             DHFile b ("/etc/apache2/sites-available" </> domain') text]
+          deb'
+      deSugarAtom (DHFile b path s) deb' =
           let (destDir', destName') = splitFileName path
               tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
               tmpPath = tmpDir </> destName' in
-          [DHIntermediate tmpPath s, DHInstall b tmpPath destDir']
-      deSugarAtom x@(DHInstallLogrotate b _) = [x, DHInstallDir b (apacheLogDirectory b)]
-      deSugarAtom x = [x]
+          insertOldAtoms [DHIntermediate tmpPath s, DHInstall b tmpPath destDir'] deb'
+      deSugarAtom x@(DHInstallLogrotate b _) deb' = insertOldAtoms [x, DHInstallDir b (apacheLogDirectory b)] deb'
+      deSugarAtom x deb' = insertOldAtoms [x] deb'
       mergeRules :: Debianization -> Debianization
-      mergeRules x = x { rulesHead = rulesHead x <> Text.intercalate "\n" (mapMaybe rulesAtomText (getOldAtoms x)) }
-
-      rulesAtomText (DebRulesFragment x) = Just x
-      rulesAtomText (DHInstallTo p s d) =
-          Just (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
-                        , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])
-      rulesAtomText (DHInstallData _ _ _) = error "DHInstallData should have been turned into a DHInstallTo"
-      rulesAtomText (DHInstallCabalExecTo p n d) =
-          Just (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
-                        , "\tinstall -Dp " <> pack (build </> n </> n) <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])
-      rulesAtomText _ = Nothing
+      mergeRules x = x { rulesHead = foldl mergeRulesAtom (rulesHead x) (getOldAtoms x) }
+      mergeRulesAtom text (DebRulesFragment x) = text <> "\n" <> x
+      mergeRulesAtom text (DHInstallTo p s d) =
+          text <> "\n" <>
+               unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
+                       , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]
+      mergeRulesAtom _ (DHInstallData _ _ _) = error "DHInstallData should have been turned into a DHInstallTo"
+      mergeRulesAtom text (DHInstallCabalExecTo p n d) =
+          text <> "\n" <>
+               unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
+                       , "\tinstall -Dp " <> pack (build </> n </> n) <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]
+      mergeRulesAtom text _ = text
 
 watchAtom :: PackageName -> Debianization -> Debianization
 watchAtom (PackageName pkgname) deb =
@@ -213,8 +216,7 @@ cdbsRules hints pkgId deb =
                        "DEB_CABAL_PACKAGE = " <> pack (show (pretty (debianName hints Extra pkgId :: BinPkgName))),
                        "",
                        "include /usr/share/cdbs/1/rules/debhelper.mk",
-                       "include /usr/share/cdbs/1/class/hlibrary.mk",
-                       "" ] }
+                       "include /usr/share/cdbs/1/class/hlibrary.mk" ] }
 
 putCopyright :: Text -> Debianization -> Debianization
 putCopyright text deb = deb {copyright = Right text}
@@ -331,7 +333,8 @@ docSpecsParagraph hints pkgId describe =
 -- the executable and utility packages.
 execAndUtilSpecs :: DependencyHints -> PackageHints -> PackageDescription -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
 execAndUtilSpecs dependencyHints packageHints pkgDesc describe deb =
-    insertOldAtoms (concatMap packageHintAtoms packageHints ++ makeUtilsAtoms dependencyHints packageHints pkgDesc) $
+    flip (foldr packageHintAtoms) packageHints $
+    makeUtilsAtoms dependencyHints packageHints pkgDesc $
     deb { sourceDebDescription = (sourceDebDescription deb) { binaryPackages = map applyPackageHints (newBinaryPackageList (sourceDebDescription deb)) } }
     where
       newBinaryPackageList src=
@@ -366,16 +369,16 @@ execAndUtilSpecs dependencyHints packageHints pkgDesc describe deb =
              }]
       packageHintDeb _ = []
 
-      packageHintAtoms (SiteHint debName site) =
+      packageHintAtoms (SiteHint debName site) xs =
           siteAtoms debName (sourceDir (installFile (server site))) (execName (installFile (server site))) (destDir (installFile (server site))) (destName (installFile (server site)))
                     (retry (server site)) (port (server site)) (serverFlags (server site))
-                    (domain site) (serverAdmin site)
-      packageHintAtoms (ServerHint debName server') =
+                    (domain site) (serverAdmin site) xs
+      packageHintAtoms (ServerHint debName server') xs =
           serverAtoms debName (sourceDir (installFile server')) (execName (installFile server')) (destDir (installFile server')) (destName (installFile server'))
-                      (retry server') (port server') (serverFlags server') False
-      packageHintAtoms (InstallFileHint debName e) =
-          execAtoms debName (sourceDir e) (execName e) (destDir e) (destName e)
-      packageHintAtoms _ = []
+                      (retry server') (port server') (serverFlags server') False xs
+      packageHintAtoms (InstallFileHint debName e) xs =
+          execAtoms debName (sourceDir e) (execName e) (destDir e) (destName e) xs
+      packageHintAtoms _ xs = xs
 
       -- Create a package to hold any executables and data files not
       -- assigned to some other package.
@@ -419,17 +422,19 @@ execAndUtilSpecs dependencyHints packageHints pkgDesc describe deb =
       applyPackageHint (ServerHint {}) bin = bin
       applyPackageHint (SiteHint {}) bin = bin
 
-makeUtilsAtoms :: DependencyHints -> PackageHints -> PackageDescription -> [DebAtom]
-makeUtilsAtoms dependencyHints packageHints pkgDesc =
+makeUtilsAtoms :: DependencyHints -> PackageHints -> PackageDescription -> Debianization -> Debianization
+makeUtilsAtoms dependencyHints packageHints pkgDesc deb =
     case (bundledExecutables packageHints pkgDesc, Cabal.dataFiles pkgDesc) of
-      ([], []) -> []
+      ([], []) -> deb
       _ -> let p = debianName dependencyHints Utilities (Cabal.package pkgDesc)
                p' = show (pretty p)
                c = Cabal.package pkgDesc
                c' = display c in
-           map (\ e -> DHInstallCabalExec p (exeName e) "usr/bin") (bundledExecutables packageHints pkgDesc) ++
-           map (\ f -> DHInstall p f (takeDirectory ("usr/share" </> c' </> f))) (Cabal.dataFiles pkgDesc) ++
-          [DebRulesFragment (pack ("build" </> p' ++ ":: build-ghc-stamp"))]
+           insertOldAtoms
+             (map (\ e -> DHInstallCabalExec p (exeName e) "usr/bin") (bundledExecutables packageHints pkgDesc) ++
+              map (\ f -> DHInstall p f (takeDirectory ("usr/share" </> c' </> f))) (Cabal.dataFiles pkgDesc) ++
+              [DebRulesFragment (pack ("build" </> p' ++ ":: build-ghc-stamp"))])
+             deb
 
 -- | The list of executables without a corresponding cabal package to put them into
 bundledExecutables :: [PackageHint] -> PackageDescription -> [Executable]

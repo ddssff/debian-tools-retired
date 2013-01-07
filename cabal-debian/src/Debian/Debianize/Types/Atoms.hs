@@ -7,8 +7,11 @@ module Debian.Debianize.Types.Atoms
     , HasAtoms(..)
     , insertAtom
     , insertAtoms
+    , insertAtoms'
     , lookupAtom
     , lookupAtoms
+    , foldAtoms
+    , mapAtoms
     , compiler
     , compilerVersion
     , noProfilingLibrary
@@ -16,9 +19,10 @@ module Debian.Debianize.Types.Atoms
     ) where
 
 import Data.Generics (Data, Typeable)
+import Data.Map as Map (Map, lookup, insertWith, foldWithKey)
 import Data.Maybe (mapMaybe)
-import Data.Map as Map (Map, lookup, insertWith)
-import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton)
+import Data.Monoid (mempty)
+import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold)
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Orphans ()
@@ -99,8 +103,17 @@ lookupAtoms mbin from x = maybe empty (setMapMaybe from) (Map.lookup mbin (getAt
 insertAtom :: HasAtoms atoms => Maybe BinPkgName -> NewDebAtom -> atoms -> atoms
 insertAtom mbin atom x = putAtoms (insertWith union mbin (singleton atom) (getAtoms x)) x
 
-insertAtoms :: HasAtoms atoms => Maybe BinPkgName -> [NewDebAtom] -> atoms -> atoms
-insertAtoms mbin atoms x = putAtoms (insertWith union mbin (fromList atoms) (getAtoms x)) x
+insertAtoms :: HasAtoms atoms => Maybe BinPkgName -> Set NewDebAtom -> atoms -> atoms
+insertAtoms mbin atoms x = putAtoms (insertWith union mbin atoms (getAtoms x)) x
+
+insertAtoms' :: HasAtoms atoms => Maybe BinPkgName -> [NewDebAtom] -> atoms -> atoms
+insertAtoms' mbin atoms x = insertAtoms mbin (fromList atoms) x
+
+foldAtoms :: HasAtoms atoms => (Maybe BinPkgName -> NewDebAtom -> r -> r) -> r -> atoms -> r
+foldAtoms f r0 xs = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (getAtoms xs)
+
+mapAtoms :: HasAtoms atoms => (Maybe BinPkgName -> NewDebAtom -> Set NewDebAtom) -> atoms -> atoms
+mapAtoms f xs = foldAtoms (\ k atom xs' -> insertAtoms k (f k atom) xs') (putAtoms mempty xs) (getAtoms xs)
 
 setMapMaybe :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
 setMapMaybe p = fromList . mapMaybe p . toList

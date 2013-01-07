@@ -11,7 +11,7 @@ module Debian.Debianize.Server
 import Data.Maybe (fromMaybe)
 import Data.Text (pack)
 import Debian.Debianize.Paths (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
-import Debian.Debianize.Types.Atoms (DebAtom(..))
+import Debian.Debianize.Types.Atoms (DebAtom(..), HasOldAtoms, insertOldAtoms)
 import Debian.Debianize.Types.PackageHints (PackageHint(..), Server(..), Site(..))
 import Debian.Relation (BinPkgName)
 import System.FilePath ((</>))
@@ -20,29 +20,33 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | Return a list of files to add to the debianization to manage the
 -- server or web site.
-siteAtoms :: BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> String -> Int -> [String] -> String -> String -> [DebAtom]
-siteAtoms b sourceDir execName destDir destName retry port flags domain serverAdmin =
-    siteAtoms' b port domain serverAdmin ++
-    serverAtoms b sourceDir execName destDir destName retry port flags True
+siteAtoms :: HasOldAtoms atoms => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> String -> Int -> [String] -> String -> String -> atoms -> atoms
+siteAtoms b sourceDir execName destDir destName retry port flags domain serverAdmin xs =
+    siteAtoms' b port domain serverAdmin $
+    serverAtoms b sourceDir execName destDir destName retry port flags True $ xs
 
-serverAtoms :: BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> String -> Int -> [String] -> Bool -> [DebAtom]
-serverAtoms b sourceDir execName destDir destName retry _port flags isSite =
-    debianPostinst b isSite ++
-    debianInit b destName retry flags ++
-    logrotateConfig b isSite ++
-    execAtoms b sourceDir execName destDir destName
+serverAtoms :: HasOldAtoms atoms => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> String -> Int -> [String] -> Bool -> atoms -> atoms
+serverAtoms b sourceDir execName destDir destName retry _port flags isSite xs =
+    execAtoms b sourceDir execName destDir destName $
+    insertOldAtoms
+      (debianPostinst b isSite ++
+       debianInit b destName retry flags ++
+       logrotateConfig b isSite)
+      xs
 
 -- | Generate the atom that installs the executable.  Trickier than it should
 -- be due to limitations in the dh_install script, and the fact that we don't
 -- yet know the build directory path.
-execAtoms :: BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> [DebAtom]
-execAtoms b sourceDir execName destDir destName =
-    [DebRulesFragment (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp")),
-     case (sourceDir, execName == destName) of
-       (Nothing, True) -> DHInstallCabalExec b execName d
-       (Just s, True) -> DHInstall b s d
-       (Nothing, False) -> DHInstallCabalExecTo b execName (d </> destName)
-       (Just s, False) -> DHInstallTo b s (d </> destName)]
+execAtoms :: HasOldAtoms atoms => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> atoms -> atoms
+execAtoms b sourceDir execName destDir destName xs =
+    insertOldAtoms
+      [DebRulesFragment (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp")),
+       case (sourceDir, execName == destName) of
+         (Nothing, True) -> DHInstallCabalExec b execName d
+         (Just s, True) -> DHInstall b s d
+         (Nothing, False) -> DHInstallCabalExecTo b execName (d </> destName)
+         (Just s, False) -> DHInstallTo b s (d </> destName)]
+      xs
     where
       d = fromMaybe "usr/bin" destDir
 
@@ -146,11 +150,13 @@ oldClckwrksFlags _ = []
 
 -- | An apache site configuration file.  This is installed via a line
 -- in debianFiles.
-siteAtoms' :: BinPkgName -> Int -> String -> String -> [DebAtom]
-siteAtoms' b port domain serverAdmin =
-    [DHInstallDir b (apacheLogDirectory b), -- Server won't start if log directory doesn't exist
-     DHLink b ("/etc/apache2/sites-available/" ++ domain) ("/etc/apache2/sites-enabled/" ++ domain),
-     DHFile b ("/etc/apache2/sites-available" </> domain) text]
+siteAtoms' :: HasOldAtoms atoms => BinPkgName -> Int -> String -> String -> atoms -> atoms
+siteAtoms' b port domain serverAdmin xs =
+    insertOldAtoms
+      [DHInstallDir b (apacheLogDirectory b), -- Server won't start if log directory doesn't exist
+       DHLink b ("/etc/apache2/sites-available/" ++ domain) ("/etc/apache2/sites-enabled/" ++ domain),
+       DHFile b ("/etc/apache2/sites-available" </> domain) text]
+      xs
     where
       text =
            (pack . unlines $
