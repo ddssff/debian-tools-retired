@@ -24,9 +24,10 @@ import Control.Exception (catch, try, IOException)
 import Control.Monad (when)
 import Control.Monad.Reader (ReaderT, ask)
 import Data.Char (isSpace)
-import Data.List (isSuffixOf, intercalate)
+import Data.List (isSuffixOf, intercalate, intersperse)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
+import Data.Monoid (mconcat)
 import qualified Data.Set as Set
 import Debian.Control (parseControl, lookupP, Field'(Field), unControl, stripWS)
 import Debian.Version (DebianVersion, prettyDebianVersion)
@@ -40,7 +41,7 @@ import System.FilePath ((</>), dropExtension)
 import System.IO (IOMode (ReadMode), hGetContents, withFile, openFile, hSetBinaryMode, hGetContents)
 import System.IO.Error (isDoesNotExistError)
 import System.Process (readProcessWithExitCode, showCommandForUser)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
+import Text.PrettyPrint.ANSI.Leijen (pretty, text)
 
 type DebMap = Map.Map D.BinPkgName (Maybe DebianVersion)
 
