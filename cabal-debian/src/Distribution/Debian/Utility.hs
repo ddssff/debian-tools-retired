@@ -149,10 +149,12 @@ filterMissing :: [D.BinPkgName] -> [[D.Relation]] -> [[D.Relation]]
 filterMissing missing rels =
     filter (/= []) (map (filter (\ (D.Rel name _ _) -> not (elem name missing))) rels)
 
+-- | Format dependencies on a single line.
 showDeps :: [[D.Relation]] -> String
-showDeps = show . D.prettyRelations
+showDeps = show . mconcat . intersperse (text ", ") . map D.prettyOrRelation
 
--- The extra space after prefix' is here for historical reasons(?)
+-- | Format dependencies on multiple lines, indenting enough to line
+-- up under the given label.
 showDeps' :: [a] -> [[D.Relation]] -> String
 showDeps' prefix xss =
     intercalate  ("\n" ++ prefix' ++ " ") . lines . show . D.prettyRelations $ xss

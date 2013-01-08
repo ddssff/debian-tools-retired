@@ -496,7 +496,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
            ([Field ("Package", " " ++ debName p),
              Field ("Architecture", " " ++ "any"),
              Field ("Section", " " ++ "misc"),
-             Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (D.BinPkgName (debName p)) (binaryPackageDeps flags)))),
+             Field ("Depends", " " ++ showDeps' "Depends" (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (D.BinPkgName (debName p)) (binaryPackageDeps flags)))),
              Field ("Conflicts", " " ++ "${haskell:Conflicts}"),
              Field ("Description", " " ++ maybe debianDescription (const executableDescription) (library pkgDesc))] ++
             conflicts (filterMissing (missingDependencies' flags) (extraDeps (b p) (binaryPackageConflicts flags)))),
@@ -517,7 +517,7 @@ execAndUtilSpecs flags pkgDesc debianDescription =
                   ([Field ("Package", " " ++ p'),
                     Field ("Architecture", " " ++ "any"),
                     Field ("Section", " " ++ "misc"),
-                    Field ("Depends", " " ++ showDeps (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps p (binaryPackageDeps flags)))),
+                    Field ("Depends", " " ++ showDeps' "Depends" (filterMissing (missingDependencies' flags) ([anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps p (binaryPackageDeps flags)))),
                     Field ("Conflicts", " " ++ "${haskell:Conflicts}"),
                     Field ("Description", " " ++ maybe debianDescription (const utilsDescription) (library pkgDesc))] ++
                    conflicts (extraDeps p (binaryPackageConflicts flags))),
@@ -535,7 +535,7 @@ b p = D.BinPkgName (debName p)
 conflicts :: [[D.Relation]] -> [Field' String]
 conflicts [] = []
 conflicts [[]] = [] -- I don't think this happens
-conflicts rels = [Field ("Conflicts", " " ++ showDeps rels)]
+conflicts rels = [Field ("Conflicts", " " ++ showDeps' "Conflicts" rels)]
 
 extraDeps :: D.BinPkgName -> [(D.BinPkgName, D.BinPkgName)] -> [[D.Relation]]
 extraDeps p deps =
