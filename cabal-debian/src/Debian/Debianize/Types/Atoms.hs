@@ -39,9 +39,10 @@ data DebAtomKey
 -- become fragments of those files, and others are first converted
 -- into different DebAtom values as new information becomes available.
 data DebAtom
-    = NoDocumentationLibrary -- replaces haddock
-    | NoProfilingLibrary     -- replaces debLibProf
-    | Compiler Compiler
+    = NoDocumentationLibrary
+    -- ^ Do not produce a libghc-foo-doc package.
+    | NoProfilingLibrary
+    -- ^ Do not produce a libghc-foo-prof package.
     | CompilerVersion Version
       -- ^ Specify the version number of the GHC compiler in the build
       -- environment.  The default is to assume that version is the same
@@ -49,6 +50,15 @@ data DebAtom
       -- This is used to look up hard coded lists of packages bundled
       -- with the compiler and their version numbers.  (This could
       -- certainly be done in a more beautiful way.)
+    | Compiler Compiler
+    -- ^ The Compiler value returned with the Cabal
+    -- PackageDescription, then used to determine what libraries
+    -- (i.e. dependencies) are provided by the compiler.
+    | BuildDir FilePath
+    -- ^ The build directory used by cabal, typically dist/build when
+    -- building manually or dist-ghc/build when building using GHC and
+    -- haskell-devscripts.  This value is used to locate files
+    -- produced by cabal so we can move them into the deb.
     | DebSourceFormat SourceFormat                -- ^ Write debian/source/format
     | DebWatch Text                               -- ^ Write debian/watch
     | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.

@@ -55,7 +55,6 @@ Library
    Debian.Cabal.PackageDescription
    Debian.Cabal.Tests
    Debian.Debianize.Combinators
-   Debian.Debianize.Default
    Debian.Debianize.Files
    Debian.Debianize.Generic
    Debian.Debianize.Interspersed

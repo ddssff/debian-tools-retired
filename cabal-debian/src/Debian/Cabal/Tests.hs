@@ -15,14 +15,14 @@ import Debian.Cabal.Dependencies (DependencyHints (missingDependencies, execMap,
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Combinators (tightDependencyFixup, deSugarDebianization, buildDeps, setSourcePackageName, setChangelog, control)
-import Debian.Debianize.Default (newDebianization)
 import Debian.Debianize.Files (toFiles)
 import Debian.Debianize.Generic (gdiff)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
 import Debian.Debianize.Types.Atoms (compilerVersion, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms)
-import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
+import Debian.Debianize.Types.Debianization (Debianization(..), newDebianization, SourceDebDescription(..), BinaryDebDescription(..),
+                                             PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Policy (StandardsVersion(StandardsVersion), getDebhelperCompatLevel, getDebianStandardsVersion,
                       PackagePriority(Extra), PackageArchitectures(All, Any), SourceFormat(Native3))

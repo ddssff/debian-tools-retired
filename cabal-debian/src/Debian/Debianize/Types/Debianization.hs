@@ -2,26 +2,34 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances #-}
 module Debian.Debianize.Types.Debianization
     ( Debianization(..)
+    , newDebianization
     , SourceDebDescription(..)
+    , newSourceDebDescription
     , VersionControlSpec(..)
     , XField(..)
     , XFieldDest(..)
     , BinaryDebDescription(..)
+    , newBinaryDebDescription
     , PackageRelations(..)
     , DebType(..)
+    , PackageType(..)
+    , mkPkgName
+    , packageArch
     ) where
 
+import Data.Char (toLower)
 import Data.Generics (Data, Typeable)
 import Data.Map as Map (Map)
-import Data.Set as Set (Set)
-import Data.Text (Text)
-import Debian.Changes (ChangeLog(..))
+import Data.Monoid (mempty)
+import Data.Set as Set (Set, empty)
+import Data.Text (Text, pack)
+import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Types.Atoms (DebAtomKey, DebAtom, HasAtoms(..))
 import Debian.Orphans ()
-import Debian.Orphans ()
-import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures, Section)
-import Debian.Relation (Relations, SrcPkgName, BinPkgName)
+import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures(..), Section, parseMaintainer)
+import Debian.Relation (Relations, PkgName(pkgNameFromString), SrcPkgName(..), BinPkgName)
 import Distribution.License (License)
+import Distribution.Package (PackageName(PackageName))
 import Prelude hiding (init)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
@@ -62,6 +70,26 @@ instance HasAtoms Debianization where
     getAtoms = debAtoms
     putAtoms ats x = x {debAtoms = ats}
 
+-- | Create a Debianization based on a changelog entry and a license
+-- value.  Uses the currently installed versions of debhelper and
+-- debian-policy to set the compatibility levels.
+newDebianization :: ChangeLogEntry -> Either License Text -> Int -> StandardsVersion -> Debianization
+newDebianization (WhiteSpace {}) _ _ _ = error "defaultDebianization: Invalid changelog entry"
+newDebianization entry@(Entry {}) copy level standards =
+    Debianization
+      { sourceDebDescription = newSourceDebDescription (SrcPkgName (logPackage entry)) (either error id (parseMaintainer (logWho entry))) standards
+      , changelog = ChangeLog [entry]
+      , rulesHead = pack $ unlines [ "#!/usr/bin/make -f"
+                                   , ""
+                                   , "DEB_CABAL_PACKAGE = " ++ logPackage entry
+                                   , ""
+                                   , "include /usr/share/cdbs/1/rules/debhelper.mk"
+                                   , "include /usr/share/cdbs/1/class/hlibrary.mk"
+                                   , "" ]
+      , compat = level
+      , copyright = copy
+      , debAtoms = mempty }
+
 -- | This type represents the debian/control file, which is the core
 -- of the source package debianization.  It includes the information
 -- that goes in the first, or source, section, and then a list of the
@@ -94,6 +122,25 @@ data SourceDebDescription
       , buildConflictsIndep :: Relations
       , binaryPackages :: [BinaryDebDescription]
       } deriving (Eq, Show, Data, Typeable)
+
+newSourceDebDescription :: SrcPkgName -> NameAddr -> StandardsVersion -> SourceDebDescription
+newSourceDebDescription src who standards =
+    SourceDebDescription
+      { source = src
+      , maintainer = who
+      , changedBy = Nothing
+      , uploaders = []
+      , dmUploadAllowed = False
+      , priority = Nothing
+      , section = Nothing
+      , buildDepends = []
+      , buildConflicts = []
+      , buildDependsIndep  = []
+      , buildConflictsIndep  = []
+      , standardsVersion = standards
+      , vcsFields = Set.empty
+      , xFields = Set.empty
+      , binaryPackages = [] }
 
 data VersionControlSpec
     = VCSBrowser Text
@@ -139,6 +186,17 @@ data BinaryDebDescription
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
       } deriving (Read, Eq, Show, Data, Typeable)
 
+newBinaryDebDescription :: BinPkgName -> PackageArchitectures -> BinaryDebDescription
+newBinaryDebDescription name arch =
+    BinaryDebDescription
+      { package = name -- mkPkgName base typ
+      , architecture = arch -- packageArch typ
+      , binarySection = Nothing
+      , binaryPriority = Nothing
+      , essential = False
+      , description = mempty
+      , relations = newPackageRelations }
+
 -- ^ Package interrelationship information.
 data PackageRelations
     = PackageRelations
@@ -153,4 +211,63 @@ data PackageRelations
       , builtUsing :: Relations
       } deriving (Read, Eq, Show, Data, Typeable)
 
+newPackageRelations :: PackageRelations
+newPackageRelations =
+    PackageRelations
+      { depends = []
+      , recommends = []
+      , suggests = []
+      , preDepends = []
+      , breaks = []
+      , conflicts = []
+      , provides = []
+      , replaces = []
+      , builtUsing = [] }
+
 data DebType = Dev | Prof | Doc deriving (Eq, Read, Show)
+
+-- ^ The different types of binary debs we can produce from a haskell package
+data PackageType
+    = Development   -- ^ The libghc-foo-dev package.
+    | Profiling     -- ^ The libghc-foo-prof package.
+    | Documentation -- ^ The libghc-foo-doc package.
+    | Exec          -- ^ A package related to a particular executable, perhaps
+                    -- but not necessarily a server.
+    | Utilities     -- ^ A package that holds the package's data files
+                    -- and any executables not assigned to other
+                    -- packages.
+    | Source'       -- ^ The source package (not a binary deb actually.)
+    | Cabal         -- ^ This is used to construct the value for
+                    -- DEB_CABAL_PACKAGE in the rules file
+    deriving (Eq, Show)
+
+-- | Build a debian package name from a cabal package name and a
+-- debian package type.  Unfortunately, this does not enforce the
+-- correspondence between the PackageType value and the name type, so
+-- it can return nonsense like (SrcPkgName "libghc-debian-dev").
+mkPkgName :: PkgName name => PackageName -> PackageType -> name
+mkPkgName (PackageName name) typ =
+    pkgNameFromString $
+             case typ of
+                Documentation -> "libghc-" ++ base ++ "-doc"
+                Development -> "libghc-" ++ base ++ "-dev"
+                Profiling -> "libghc-" ++ base ++ "-prof"
+                Utilities -> "haskell-" ++ base ++ "-utils"
+                Exec -> base
+                Source' -> "haskell-" ++ base ++ ""
+                Cabal -> base
+    where
+      base = map (fixChar . toLower) name
+      -- Underscore is prohibited in debian package names.
+      fixChar :: Char -> Char
+      fixChar '_' = '-'
+      fixChar c = toLower c
+
+packageArch :: PackageType -> PackageArchitectures
+packageArch Development = Any
+packageArch Profiling = Any
+packageArch Documentation = All
+packageArch Utilities = All
+packageArch Exec = Any
+packageArch Cabal = undefined
+packageArch Source' = undefined

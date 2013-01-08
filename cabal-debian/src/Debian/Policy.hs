@@ -101,7 +101,7 @@ readPriority s =
 instance Pretty PackagePriority where
     pretty = text . map toLower . show
 
--- | The architectures for which a binary deb can be built
+-- | The architectures for which a binary deb can be built.
 data PackageArchitectures
     = All            -- ^ The package is architecture independenct
     | Any            -- ^ The package can be built for any architecture

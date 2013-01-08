@@ -3,7 +3,6 @@
 module Debian.Cabal.Dependencies
     ( DependencyHints(..)
     , defaultDependencyHints
-    , PackageType(..)
     , VersionSplits(..)
     , filterMissing' -- Debian.Cabal.SubstVars
     , cabalDependencies -- Debian.Cabal.SubstVars
@@ -18,7 +17,7 @@ module Debian.Cabal.Dependencies
     , debianBuildDepsIndep
     ) where
 
-import Data.Char (toLower, isSpace)
+import Data.Char (isSpace)
 import Data.Function (on)
 import Data.List (nub, minimumBy, isSuffixOf)
 import qualified Data.Map as Map
@@ -28,8 +27,8 @@ import Debian.Cabal.Bundled (ghcBuiltIn)
 import Debian.Control
 import Debian.Debianize.Interspersed (Interspersed(foldInverted, leftmost, pairs), foldTriples)
 import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary)
-import Debian.Debianize.Types.Debianization as Debian (Debianization, DebType(Dev, Prof, Doc))
-import Debian.Relation (Relations, Relation, BinPkgName, PkgName(pkgNameFromString))
+import Debian.Debianize.Types.Debianization as Debian (Debianization, DebType(Dev, Prof, Doc), PackageType(..), mkPkgName)
+import Debian.Relation (Relations, Relation, BinPkgName, PkgName)
 import qualified Debian.Relation as D
 import Debian.Version (DebianVersion, parseDebianVersion)
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..), Dependency(..))
@@ -160,8 +159,6 @@ defaultDependencyHints =
     , debVersion = Nothing
     , versionSplits = knownVersionSplits
     }
-
-data PackageType = Source | Development | Profiling | Documentation | Utilities | Exec | {- ServerPackage | -} Extra deriving (Eq, Show)
 
 data VersionSplits name
     = VersionSplits {
@@ -296,29 +293,6 @@ packageRangesFromVersionSplits splits =
                       (dname, intersectVersionRanges (maybe anyVersion orLaterVersion older) (maybe anyVersion earlierVersion newer)) : more)
                  []
                  splits
-
--- | Build a debian package name from a cabal package name and a
--- debian package type.  Unfortunately, this does not enforce the
--- correspondence between the PackageType value and the name type, so
--- it can return nonsense like (SrcPkgName "libghc-debian-dev").
-mkPkgName :: PkgName name => PackageName -> PackageType -> name
-mkPkgName (PackageName name) typ =
-    pkgNameFromString $
-             case typ of
-                Source -> "haskell-" ++ base ++ ""
-                Documentation -> "libghc-" ++ base ++ "-doc"
-                Development -> "libghc-" ++ base ++ "-dev"
-                Profiling -> "libghc-" ++ base ++ "-prof"
-                Utilities -> "haskell-" ++ base ++ "-utils"
-                Exec -> base
-                -- ServerPackage -> base
-                Extra -> base
-    where
-      base = map (fixChar . toLower) name
-      -- Underscore is prohibited in debian package names.
-      fixChar :: Char -> Char
-      fixChar '_' = '-'
-      fixChar c = toLower c
 
 filterMissing' :: DependencyHints -> [[D.Relation]] -> [[D.Relation]]
 filterMissing' hints rels =

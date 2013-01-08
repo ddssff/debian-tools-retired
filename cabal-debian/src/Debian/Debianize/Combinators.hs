@@ -30,15 +30,14 @@ import Data.Set (Set)
 import Data.Text as Text (Text, pack, intercalate, unpack, unlines)
 import Data.Version (Version)
 import qualified Debian.Relation as D
-import Debian.Cabal.Dependencies (PackageType(Development, Profiling, Documentation, Exec, Utilities, {-Source,-} Extra),
-                                  DependencyHints (binaryPackageDeps, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap, revision, debVersion, missingDependencies),
+import Debian.Cabal.Dependencies (DependencyHints (binaryPackageDeps, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap, revision, debVersion, missingDependencies),
                                   debianName, debianBuildDeps, debianBuildDepsIndep)
-import qualified Debian.Cabal.Dependencies as Cabal
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Paths (apacheLogDirectory)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
 import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtomKey(..), DebAtom(..), HasAtoms(getAtoms, putAtoms), insertAtom, foldAtoms, insertAtoms')
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
+import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
+                                                       PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Types.PackageHints (PackageHints, PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (trim)
 import Debian.Policy (StandardsVersion, PackagePriority(Optional), PackageArchitectures(Any, All), Section(..))
@@ -186,7 +185,7 @@ versionInfo hints pkgId debianMaintainer date deb@(Debianization {changelog = Ch
                        , logWho = show (pretty debianMaintainer)
                        , logDate = date }
       sourceName :: SrcPkgName
-      sourceName = debianName hints Cabal.Source pkgId
+      sourceName = debianName hints Source' pkgId
       merge :: ChangeLogEntry -> ChangeLogEntry -> ChangeLogEntry
       merge old new =
           old { logComments = logComments old ++ logComments new
@@ -219,7 +218,7 @@ cdbsRules hints pkgId deb =
     deb { rulesHead =
               unlines ["#!/usr/bin/make -f",
                        "",
-                       "DEB_CABAL_PACKAGE = " <> pack (show (pretty (debianName hints Extra pkgId :: BinPkgName))),
+                       "DEB_CABAL_PACKAGE = " <> pack (show (pretty (debianName hints Cabal pkgId :: BinPkgName))),
                        "",
                        "include /usr/share/cdbs/1/rules/debhelper.mk",
                        "include /usr/share/cdbs/1/class/hlibrary.mk" ] }
