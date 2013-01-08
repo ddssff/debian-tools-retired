@@ -21,7 +21,7 @@ import Debian.Debianize.Generic (gdiff)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
-import Debian.Debianize.Types.Atoms (compilerVersion, DebAtom(..), insertAtom, mapAtoms)
+import Debian.Debianize.Types.Atoms (compilerVersion, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms)
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Policy (StandardsVersion(StandardsVersion), getDebhelperCompatLevel, getDebianStandardsVersion,
@@ -134,7 +134,7 @@ test4 =
       dropRulesAtoms deb =
           mapAtoms omitRulesAtom deb
           where
-            omitRulesAtom Nothing (DebRulesFragment _) = mempty
+            omitRulesAtom Source (DebRulesFragment _) = mempty
             omitRulesAtom _ x = Set.singleton x
       flags = Flags.defaultFlags
               { Flags.dependencyHints = (Flags.dependencyHints Flags.defaultFlags) { missingDependencies = [BinPkgName "libghc-clckwrks-theme-clckwrks-doc"]
@@ -247,7 +247,7 @@ test6 =
                                                   ArchitectureHint (BinPkgName "creativeprompts-development") All,
                                                   InstallFileHint (BinPkgName "creativeprompts-production") $ InstallFile "creativeprompts-production" Nothing Nothing "creativeprompts-production",
                                                   ArchitectureHint (BinPkgName "creativeprompts-production") All,
-                                                  UtilsPackageHint (BinPkgName "creativeprompts-data"),
+                                                  UtilsPackageNameHint (BinPkgName "creativeprompts-data"),
                                                   ArchitectureHint (BinPkgName "creativeprompts-data") All,
                                                   InstallFileHint (BinPkgName "creativeprompts-backups") $ InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups",
                                                   ArchitectureHint (BinPkgName "creativeprompts-backups") Any] compiler pkgDesc $
@@ -327,7 +327,7 @@ testDeb1 =
 
 testDeb2 :: Debianization
 testDeb2 =
-    insertAtom Nothing (DebSourceFormat "3.0 (native)\n") $
+    insertAtom Source (DebSourceFormat "3.0 (native)\n") $
     Debianization
     { sourceDebDescription =
           SourceDebDescription

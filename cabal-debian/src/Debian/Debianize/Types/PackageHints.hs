@@ -17,7 +17,7 @@ import System.FilePath (splitFileName)
 type PackageHints = [PackageHint]
 
 data PackageHint
-    = UtilsPackageHint BinPkgName
+    = UtilsPackageNameHint BinPkgName
     -- ^ Change the name of the catch-all package
     | InstallFileHint BinPkgName InstallFile
     | ServerHint BinPkgName Server

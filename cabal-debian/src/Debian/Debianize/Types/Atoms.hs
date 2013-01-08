@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances #-}
 module Debian.Debianize.Types.Atoms
-    ( DebAtom(..)
+    ( DebAtomKey(..)
+    , DebAtom(..)
     , HasAtoms(..)
     , insertAtom
     , insertAtoms
@@ -15,6 +16,7 @@ module Debian.Debianize.Types.Atoms
     , noDocumentationLibrary
     ) where
 
+import Data.Generics (Data, Typeable)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey)
 import Data.Maybe (mapMaybe)
 import Data.Monoid (mempty)
@@ -26,6 +28,11 @@ import Debian.Orphans ()
 import Debian.Relation (BinPkgName)
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init)
+
+data DebAtomKey
+    = Source
+    | Binary BinPkgName
+    deriving (Eq, Ord, Data, Typeable, Show)
 
 -- | The smallest pieces of debhelper information.  Some of these are
 -- converted directly into files in the debian directory, others
@@ -64,36 +71,36 @@ data DebAtom
     deriving (Eq, Ord, Show)
 
 class HasAtoms atoms where
-    getAtoms :: atoms -> Map (Maybe BinPkgName) (Set DebAtom)
-    putAtoms :: Map (Maybe BinPkgName) (Set DebAtom) -> atoms -> atoms
+    getAtoms :: atoms -> Map DebAtomKey (Set DebAtom)
+    putAtoms :: Map DebAtomKey (Set DebAtom) -> atoms -> atoms
 
-instance HasAtoms (Map (Maybe BinPkgName) (Set DebAtom)) where
+instance HasAtoms (Map DebAtomKey (Set DebAtom)) where
     getAtoms x = x
     putAtoms _ x = x
 
-lookupAtom :: HasAtoms atoms => (Show a, Ord a) => Maybe BinPkgName -> (DebAtom -> Maybe a) -> atoms -> Maybe a
+lookupAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Maybe a
 lookupAtom mbin from atoms =
     case maxView (lookupAtoms mbin from (getAtoms atoms)) of
       Nothing -> Nothing
       Just (x, s) | Set.null s -> Just x
       Just (x, s) -> error $ "lookupAtom - multiple: " ++ show (x : toList s)
 
-lookupAtoms :: HasAtoms atoms => (Show a, Ord a) => Maybe BinPkgName -> (DebAtom -> Maybe a) -> atoms -> Set a
+lookupAtoms :: HasAtoms atoms => (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Set a
 lookupAtoms mbin from x = maybe empty (setMapMaybe from) (Map.lookup mbin (getAtoms x))
 
-insertAtom :: HasAtoms atoms => Maybe BinPkgName -> DebAtom -> atoms -> atoms
+insertAtom :: HasAtoms atoms => DebAtomKey -> DebAtom -> atoms -> atoms
 insertAtom mbin atom x = putAtoms (insertWith union mbin (singleton atom) (getAtoms x)) x
 
-insertAtoms :: HasAtoms atoms => Maybe BinPkgName -> Set DebAtom -> atoms -> atoms
+insertAtoms :: HasAtoms atoms => DebAtomKey -> Set DebAtom -> atoms -> atoms
 insertAtoms mbin atoms x = putAtoms (insertWith union mbin atoms (getAtoms x)) x
 
-insertAtoms' :: HasAtoms atoms => Maybe BinPkgName -> [DebAtom] -> atoms -> atoms
+insertAtoms' :: HasAtoms atoms => DebAtomKey -> [DebAtom] -> atoms -> atoms
 insertAtoms' mbin atoms x = insertAtoms mbin (fromList atoms) x
 
-foldAtoms :: HasAtoms atoms => (Maybe BinPkgName -> DebAtom -> r -> r) -> r -> atoms -> r
+foldAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
 foldAtoms f r0 xs = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (getAtoms xs)
 
-mapAtoms :: HasAtoms atoms => (Maybe BinPkgName -> DebAtom -> Set DebAtom) -> atoms -> atoms
+mapAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> Set DebAtom) -> atoms -> atoms
 mapAtoms f xs = foldAtoms (\ k atom xs' -> insertAtoms k (f k atom) xs') (putAtoms mempty xs) (getAtoms xs)
 
 setMapMaybe :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
@@ -101,26 +108,26 @@ setMapMaybe p = fromList . mapMaybe p . toList
 
 compiler :: HasAtoms atoms => atoms -> Maybe Compiler
 compiler deb =
-    lookupAtom Nothing fromCompiler deb
+    lookupAtom Source fromCompiler deb
     where fromCompiler (Compiler x) = Just x
           fromCompiler _ = Nothing
 
 compilerVersion :: HasAtoms atoms => atoms -> Maybe Version
 compilerVersion deb =
-    lookupAtom Nothing from deb
+    lookupAtom Source from deb
     where from (CompilerVersion x) = Just x
           from _ = Nothing
 
 noProfilingLibrary :: HasAtoms atoms => atoms -> Bool
 noProfilingLibrary deb =
-    not . Set.null . lookupAtoms Nothing isNoProfilingLibrary $ deb
+    not . Set.null . lookupAtoms Source isNoProfilingLibrary $ deb
     where
       isNoProfilingLibrary NoProfilingLibrary = Just NoProfilingLibrary
       isNoProfilingLibrary _ = Nothing
 
 noDocumentationLibrary :: HasAtoms atoms => atoms -> Bool
 noDocumentationLibrary deb =
-    not . Set.null . lookupAtoms Nothing isNoDocumentationLibrary $ deb
+    not . Set.null . lookupAtoms Source isNoDocumentationLibrary $ deb
     where
       isNoDocumentationLibrary NoDocumentationLibrary = Just NoDocumentationLibrary
       isNoDocumentationLibrary _ = Nothing

@@ -16,7 +16,7 @@ import Data.Map (Map)
 import Data.Monoid (mempty)
 import Data.Set (Set)
 import Debian.Cabal.Dependencies (DependencyHints, defaultDependencyHints)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion), insertAtom, compilerVersion)
+import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion), insertAtom, compilerVersion)
 import Debian.Debianize.Types.Debianization (DebType)
 import Debian.Debianize.Types.PackageHints (PackageHints)
 import Debian.Policy (SourceFormat(Native3, Quilt3))
@@ -120,7 +120,7 @@ data Flags = Flags
     -- obtained from the cabal file, and if it is not there then from
     -- the environment.  As a last resort, there is a hard coded
     -- string in here somewhere.
-    , debAtoms :: Map (Maybe BinPkgName) (Set DebAtom)
+    , debAtoms :: Map DebAtomKey (Set DebAtom)
     -- ^ Preliminary value of corresponding Debianization field
     }
 
@@ -177,15 +177,15 @@ options =
              "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
       Option "h?" ["help"] (NoArg (\x -> x { help = True }))
              "Show this help text",
-      Option "" ["ghc-version"] (ReqArg (\ ver x -> insertAtom Nothing (CompilerVersion (last (map fst (readP_to_S parseVersion ver)))) x) "VERSION")
+      Option "" ["ghc-version"] (ReqArg (\ ver x -> insertAtom Source (CompilerVersion (last (map fst (readP_to_S parseVersion ver)))) x) "VERSION")
              "Version of GHC in build environment",
-      Option "" ["disable-haddock"] (NoArg (\ x -> insertAtom Nothing NoDocumentationLibrary x))
+      Option "" ["disable-haddock"] (NoArg (\ x -> insertAtom Source NoDocumentationLibrary x))
              "Don't generate API documentation.  Use this if build is crashing due to a haddock error.",
       Option "" ["missing-dependency"] (ReqArg (\ name x -> x { dependencyHints = (dependencyHints x) {missingDependencies = b name : missingDependencies (dependencyHints x)}}) "DEB")
              "Mark a package missing, do not add it to any dependency lists in the debianization.",
       Option "" ["source-package-name"] (ReqArg (\ name x -> x {sourcePackageName = Just name}) "NAME")
              "Use this name for the debian source package.  Default is haskell-<cabalname>, where the cabal package name is downcased.",
-      Option "" ["disable-library-profiling"] (NoArg (\ x -> insertAtom Nothing NoProfilingLibrary x))
+      Option "" ["disable-library-profiling"] (NoArg (\ x -> insertAtom Source NoProfilingLibrary x))
              "Don't generate profiling libraries",
       Option "f" ["flags"] (ReqArg (\flags x -> x { cabalFlagAssignments = cabalFlagAssignments x ++ flagList flags }) "FLAGS")
              "Set given flags in Cabal conditionals",

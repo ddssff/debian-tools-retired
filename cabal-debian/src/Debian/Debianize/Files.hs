@@ -11,7 +11,7 @@ import Data.Set (toList)
 import Data.Text (Text, pack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.Combinators (deSugarDebianization)
-import Debian.Debianize.Types.Atoms (DebAtom(..), lookupAtom, foldAtoms)
+import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations)
@@ -21,14 +21,14 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 sourceFormat :: Debianization -> [(FilePath, Text)]
 sourceFormat deb =
-    maybe [] (\ x -> [("debian/source/format", x)]) (lookupAtom Nothing f deb)
+    maybe [] (\ x -> [("debian/source/format", x)]) (lookupAtom Source f deb)
     where
       f (DebSourceFormat x) = Just x
       f _ = Nothing
 
 watch :: Debianization -> [(FilePath, Text)]
 watch deb =
-    maybe [] (\ x -> [("debian/watch", x)]) (lookupAtom Nothing f deb)
+    maybe [] (\ x -> [("debian/watch", x)]) (lookupAtom Source f deb)
     where
       f (DebWatch x) = Just x
       f _ = Nothing
@@ -37,7 +37,7 @@ intermediate :: Debianization -> [(FilePath, Text)]
 intermediate deb =
     foldAtoms atomf [] deb
     where
-      atomf Nothing (DHIntermediate path text) files = (path,  text) : files
+      atomf Source (DHIntermediate path text) files = (path,  text) : files
       atomf _ _ files = files
 
 {-
@@ -62,8 +62,8 @@ install :: FilePath -> Debianization -> [(FilePath, Text)]
 install build deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
-      atomf (Just name) (DHInstall src dst) files = Map.insertWith with1 (pathf name)  (pack (src ++ " " ++ dst)) files
-      atomf (Just name) (DHInstallCabalExec exec dst) files = Map.insertWith (\ old new -> old <> "\n" <> new) (pathf name) (pack (build </> exec </> exec ++ " " ++ dst)) files
+      atomf (Binary name) (DHInstall src dst) files = Map.insertWith with1 (pathf name)  (pack (src ++ " " ++ dst)) files
+      atomf (Binary name) (DHInstallCabalExec exec dst) files = Map.insertWith (\ old new -> old <> "\n" <> new) (pathf name) (pack (build </> exec </> exec ++ " " ++ dst)) files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".install"
 
@@ -71,7 +71,7 @@ dirs :: Debianization -> [(FilePath, Text)]
 dirs deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
-      atomf (Just name) (DHInstallDir d) files = Map.insertWith with1 (pathf name) (pack d) files
+      atomf (Binary name) (DHInstallDir d) files = Map.insertWith with1 (pathf name) (pack d) files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".dirs"
 
@@ -83,7 +83,7 @@ init :: Debianization -> [(FilePath, Text)]
 init deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
-      atomf (Just name) (DHInstallInit t) files = Map.insertWith (with2 "init") (pathf name) t files
+      atomf (Binary name) (DHInstallInit t) files = Map.insertWith (with2 "init") (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".init"
 
@@ -92,7 +92,7 @@ logrotate :: Debianization -> [(FilePath, Text)]
 logrotate deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
-      atomf (Just name) (DHInstallLogrotate t) files = Map.insertWith (with2 "logrotate") (pathf name) t files
+      atomf (Binary name) (DHInstallLogrotate t) files = Map.insertWith (with2 "logrotate") (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".logrotate"
 
@@ -101,7 +101,7 @@ link :: Debianization -> [(FilePath, Text)]
 link deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
-      atomf (Just name) (DHLink loc txt) files = Map.insertWith with1 (pathf name) (pack (loc ++ " " ++ txt)) files
+      atomf (Binary name) (DHLink loc txt) files = Map.insertWith with1 (pathf name) (pack (loc ++ " " ++ txt)) files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".links"
 
@@ -109,7 +109,7 @@ postinst :: Debianization -> [(FilePath, Text)]
 postinst deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Just name) (DHPostInst t) files = Map.insertWith (with2 "postinst") (pathf name) t files
+      atomf (Binary name) (DHPostInst t) files = Map.insertWith (with2 "postinst") (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postinst"
 
@@ -117,7 +117,7 @@ postrm :: Debianization -> [(FilePath, Text)]
 postrm deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Just name) (DHPostRm t) files = Map.insertWith (with2 "postrm") (pathf name) t files
+      atomf (Binary name) (DHPostRm t) files = Map.insertWith (with2 "postrm") (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postrm"
 
@@ -125,7 +125,7 @@ preinst :: Debianization -> [(FilePath, Text)]
 preinst deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Just name) (DHPreInst t) files = Map.insertWith (with2 "preinst") (pathf name) t files
+      atomf (Binary name) (DHPreInst t) files = Map.insertWith (with2 "preinst") (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".preinst"
 
@@ -133,7 +133,7 @@ prerm :: Debianization -> [(FilePath, Text)]
 prerm deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Just name) (DHPreRm t) files = Map.insertWith (with2 "prerm") (pathf name) t files
+      atomf (Binary name) (DHPreRm t) files = Map.insertWith (with2 "prerm") (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".prerm"
 

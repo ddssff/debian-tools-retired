@@ -16,7 +16,7 @@ import Data.Map as Map (Map)
 import Data.Set as Set (Set)
 import Data.Text (Text)
 import Debian.Changes (ChangeLog(..))
-import Debian.Debianize.Types.Atoms (DebAtom, HasAtoms(..))
+import Debian.Debianize.Types.Atoms (DebAtomKey, DebAtom, HasAtoms(..))
 import Debian.Orphans ()
 import Debian.Orphans ()
 import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures, Section)
@@ -43,7 +43,7 @@ data Debianization
       , copyright :: Either License Text
       -- ^ Copyright information, either as a Cabal License value or
       -- the full text.
-      , debAtoms :: Map (Maybe BinPkgName) (Set DebAtom)
+      , debAtoms :: Map DebAtomKey (Set DebAtom)
       -- ^ Information about the source and binary packages that will
       -- be transformed into values for the fields that represent the
       -- actual debianization files.  Binary values are associated
