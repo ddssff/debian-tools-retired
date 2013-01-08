@@ -8,15 +8,17 @@ module Debian.Cabal.Debianize
     ( debianizationWithIO
     ) where
 
+import Data.Map (Map)
 import Data.Maybe
+import Data.Set (Set)
 import Data.Version (Version)
 import Debian.Cabal.Dependencies (DependencyHints)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (debianization)
+import Debian.Debianize.Types.Atoms (DebAtomKey, DebAtom)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..))
 import Debian.Debianize.Types.PackageHints (PackageHints)
 import Debian.Debianize.Utility (withCurrentDirectory)
-import Debian.Policy (SourceFormat)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Distribution.PackageDescription as Cabal (FlagName)
 import Prelude hiding (writeFile, unlines)

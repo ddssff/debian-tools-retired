@@ -25,7 +25,7 @@ import Debian.Debianize.Types.Atoms (compilerVersion, DebAtomKey(..), DebAtom(..
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Policy (StandardsVersion(StandardsVersion), getDebhelperCompatLevel, getDebianStandardsVersion,
-                      PackagePriority(Extra), PackageArchitectures(All, Any))
+                      PackagePriority(Extra), PackageArchitectures(All, Any), SourceFormat(Native3))
 import Debian.Relation (Relation(..), VersionReq(..), SrcPkgName(..), BinPkgName(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Version (buildDebianVersion, parseDebianVersion)
@@ -39,11 +39,11 @@ tests = TestLabel "Debianization Tests" (TestList [test1, test2a, test2b, test3,
 
 test1 :: Test
 test1 =
-    TestLabel "Minimal Debianization" $
+    TestLabel "test1" $
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion
                  let deb = newDebianization testEntry (Left BSD3) level standards
-                 assertEqual "Minimal Debianization" testDeb1 deb)
+                 assertEqual "test1" testDeb1 deb)
 
 test2a :: Test
 test2a =
@@ -117,17 +117,17 @@ test2b =
 
 test3 :: Test
 test3 =
-    TestLabel "Convert PackageDescription" $
+    TestLabel "test3" $
     TestCase (do deb <- inputDebianization "test-data/haskell-devscripts"
-                 assertEqual "Convert PackageDescription" [] (gdiff testDeb2 deb))
+                 assertEqual "test3" [] (gdiff testDeb2 deb))
 
 test4 :: Test
 test4 =
-    TestLabel "Convert clckwrks-dot-com" $
+    TestLabel "test4" $
     TestCase (do oldlog <- inputChangeLog "test-data/clckwrks-dot-com/input/debian"
                  old <- inputDebianization "test-data/clckwrks-dot-com/output" >>= \ x -> return (x {changelog = oldlog})
-                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.sourceFormat flags) (Flags.executablePackages flags) old
-                 assertEqual "Convert clckwrks-dot-com" [] (gdiff (dropFirstLogEntry old) (dropRulesAtoms (dropFirstLogEntry (deSugarDebianization "dist-ghc/build" dataDir (fixRules (tight new)))))))
+                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.executablePackages flags) (Flags.debAtoms flags) old
+                 assertEqual "test4" [] (gdiff (dropFirstLogEntry old) (dropRulesAtoms (dropFirstLogEntry (deSugarDebianization "dist-ghc/build" dataDir (fixRules (tight new)))))))
     where
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
@@ -136,7 +136,8 @@ test4 =
           where
             omitRulesAtom Source (DebRulesFragment _) = mempty
             omitRulesAtom _ x = Set.singleton x
-      flags = Flags.defaultFlags
+      flags = insertAtom Source (DebSourceFormat Native3) $
+              Flags.defaultFlags
               { Flags.dependencyHints = (Flags.dependencyHints Flags.defaultFlags) { missingDependencies = [BinPkgName "libghc-clckwrks-theme-clckwrks-doc"]
                                                                        , revision            = "" }
               , Flags.executablePackages  = map theSite serverNames ++ [backups] }
@@ -207,14 +208,14 @@ test4 =
 
 test5 :: Test
 test5 =
-    TestLabel "Convert creativeprompts" $
+    TestLabel "test5" $
     TestCase (     do oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" >>= \ x -> return (x {changelog = oldlog})
-                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.sourceFormat flags) (Flags.executablePackages flags) old
+                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.executablePackages flags) (Flags.debAtoms flags) old
                       desc <- describeDebianization (Flags.buildDir flags) "test-data/creativeprompts/output" dataDir new
                       writeFile "/tmp/foo" desc
                       -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (deSugarDebianization "dist-ghc/build" dataDir new))))
-                      assertEqual "Convert creativeprompts" "" desc
+                      assertEqual "test5" "" desc
              )
     where
       flags = Flags.defaultFlags { Flags.dependencyHints = (Flags.dependencyHints Flags.defaultFlags) {execMap = insert "trhsx" (BinPkgName "haskell-hsx-utils") (execMap (Flags.dependencyHints Flags.defaultFlags))}
@@ -234,7 +235,7 @@ dropFirstLogEntry (deb@(Debianization {changelog = ChangeLog (_ : tl)})) = deb {
 
 test6 :: Test
 test6 =
-    TestLabel "Convert creativeprompts 2" $
+    TestLabel "test6" $
     TestCase ( do (Debianization {changelog = oldLog@(ChangeLog (entry : _))}) <- inputDebianization "test-data/creativeprompts/output"
                   withSimplePackageDescription "test-data/creativeprompts/input" 0 Nothing [] $ \ pkgDesc compiler ->
                       do -- compat <- getDebhelperCompatLevel
@@ -256,7 +257,7 @@ test6 =
                                    buildDeps hints compiler pkgDesc $ newDebianization entry (Left BSD3) compat' standards
                          desc <- describeDebianization "dist-ghc/build" "test-data/creativeprompts/output" (dataDirectory pkgDesc) new
                          writeFile "/tmp/bar" desc
-                         assertEqual "Convert creativeprompts 2" "" desc
+                         assertEqual "test6" "" desc
              )
     where
       hints = (Flags.dependencyHints Flags.defaultFlags) { execMap = insert "trhsx" (BinPkgName "haskell-hsx-utils") (execMap (Flags.dependencyHints Flags.defaultFlags))
@@ -327,7 +328,7 @@ testDeb1 =
 
 testDeb2 :: Debianization
 testDeb2 =
-    insertAtom Source (DebSourceFormat "3.0 (native)\n") $
+    insertAtom Source (DebSourceFormat Native3) $
     Debianization
     { sourceDebDescription =
           SourceDebDescription

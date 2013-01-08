@@ -16,7 +16,7 @@ import Data.Map (Map)
 import Data.Monoid (mempty)
 import Data.Set (Set)
 import Debian.Cabal.Dependencies (DependencyHints, defaultDependencyHints)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion), insertAtom, compilerVersion)
+import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat), insertAtom, compilerVersion)
 import Debian.Debianize.Types.Debianization (DebType)
 import Debian.Debianize.Types.PackageHints (PackageHints)
 import Debian.Policy (SourceFormat(Native3, Quilt3))
@@ -111,8 +111,6 @@ data Flags = Flags
     , sourcePackageName :: Maybe String
     -- ^ Name to give the debian source package.  If none is given it
     -- is constructed from the cabal package name.
-    , sourceFormat :: SourceFormat
-    -- ^ The value to write into the debian/source/format file
     , debMaintainer :: Maybe NameAddr
     -- ^ Value for the maintainer field in the control file.  Note
     -- that the cabal maintainer field can have multiple addresses,
@@ -137,7 +135,6 @@ defaultFlags =
     , help = False
     , verbosity = defaultVerbosity
     , debAction = Usage
-    , sourceFormat = Native3
     , dryRun = False
     , validate = False
     , executablePackages = []
@@ -146,7 +143,7 @@ defaultFlags =
     -- , modifyAtoms = id
     , buildDir = "dist-ghc/build"
     , dependencyHints = defaultDependencyHints
-    , debAtoms = mempty
+    , debAtoms = insertAtom Source (DebSourceFormat Native3) mempty
     }
 
 getFlags :: IO Flags
@@ -227,7 +224,7 @@ options =
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
       Option "" ["omit-lt-deps"] (NoArg (\x -> x {dependencyHints = (dependencyHints x) { omitLTDeps = True }}))
              "Don't generate the << dependency when we see a cabal equals dependency.",
-      Option "" ["quilt"] (NoArg (\ x -> x {sourceFormat = Quilt3}))
+      Option "" ["quilt"] (NoArg (\ x -> insertAtom Source (DebSourceFormat Quilt3) x))
              "The package has an upstream tarball, write '3.0 (quilt)' into source/format.",
       Option "n" ["dry-run", "compare"] (NoArg (\ x -> x {dryRun = True}))
              "Just compare the existing debianization to the one we would generate.",
@@ -326,5 +323,5 @@ debianize :: FilePath -> Flags -> IO ()
 debianize top flags =
     withEnvironmentFlags flags $ \ flags' ->
     do old <- inputDebianization "."
-       (new, dataDir) <- debianizationWithIO top (verbosity flags') (compilerVersion flags') (cabalFlagAssignments flags') (debMaintainer flags') (dependencyHints flags') (sourceFormat flags') (executablePackages flags') old
+       (new, dataDir) <- debianizationWithIO top (verbosity flags') (compilerVersion flags') (cabalFlagAssignments flags') (debMaintainer flags') (dependencyHints flags') (executablePackages flags') (debAtoms flags') old
        outputDebianization (dryRun flags') (validate flags') (buildDir flags') dataDir old new

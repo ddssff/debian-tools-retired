@@ -5,7 +5,6 @@ module Debian.Debianize.Combinators
     , tightDependencyFixup
     , deSugarDebianization
     , watchAtom
-    , sourceFormatAtom
     , versionInfo
     , cdbsRules
     , putCopyright
@@ -24,8 +23,10 @@ import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
 import Data.List as List (nub, intercalate, intersperse)
 import qualified Data.Map as Map
+import Data.Map (Map)
 import Data.Maybe
 import Data.Monoid ((<>), mempty)
+import Data.Set (Set)
 import Data.Text as Text (Text, pack, intercalate, unpack, unlines)
 import Data.Version (Version)
 import qualified Debian.Relation as D
@@ -40,7 +41,7 @@ import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary,
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
 import Debian.Debianize.Types.PackageHints (PackageHints, PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (trim)
-import Debian.Policy (StandardsVersion, SourceFormat, PackagePriority(Optional), PackageArchitectures(Any, All), Section(..))
+import Debian.Policy (StandardsVersion, PackagePriority(Optional), PackageArchitectures(Any, All), Section(..))
 import Debian.Relation (BinPkgName, SrcPkgName(..), Relation(Rel))
 import Debian.Release (parseReleaseName)
 import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
@@ -56,7 +57,7 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 debianization :: DependencyHints
-              -> SourceFormat
+              -> Map DebAtomKey (Set DebAtom)
               -> PackageHints
               -> PackageDescription  -- ^ info from the .cabal file
               -> Compiler            -- ^ compiler details
@@ -66,8 +67,7 @@ debianization :: DependencyHints
               -> StandardsVersion
               -> Debianization       -- ^ Existing debianization
               -> Debianization       -- ^ New debianization
-debianization hints sourceFormat execs pkgDesc compiler date copyright' maint standards oldDeb =
-    sourceFormatAtom sourceFormat $
+debianization hints atoms execs pkgDesc compiler date copyright' maint standards oldDeb =
     watchAtom (pkgName . Cabal.package $ pkgDesc)  $
     putCopyright copyright' $
     putStandards standards $
@@ -76,6 +76,11 @@ debianization hints sourceFormat execs pkgDesc compiler date copyright' maint st
     addExtraLibDependencies hints pkgDesc $
     control hints execs compiler pkgDesc $
     cdbsRules hints (Cabal.package pkgDesc) $
+    -- Do we want to replace the atoms in the old deb, or add these?
+    -- Or should we delete even more information from the original,
+    -- keeping only the changelog?  Probably the latter.  So this is
+    -- somewhat wrong.
+    putAtoms atoms $
     oldDeb
 
 -- | Create equals dependencies.  For each pair (A, B), use dpkg-query
@@ -150,9 +155,11 @@ watchAtom (PackageName pkgname) deb =
             "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
             " \\\n    ([\\d\\.]*\\d)/\n"
 
+{-
 sourceFormatAtom :: SourceFormat -> Debianization -> Debianization
 sourceFormatAtom format deb =
-    insertAtom Source (DebSourceFormat (pack (show (pretty format)))) deb
+    insertAtom Source (DebSourceFormat format) deb
+-}
 
 -- | Set the debianization's version info - everything that goes into
 -- the new changelog entry, source package name, exact debian version,

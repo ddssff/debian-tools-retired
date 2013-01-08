@@ -24,7 +24,7 @@ import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, sing
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Orphans ()
-import Debian.Orphans ()
+import Debian.Policy (SourceFormat)
 import Debian.Relation (BinPkgName)
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init)
@@ -49,10 +49,12 @@ data DebAtom
       -- This is used to look up hard coded lists of packages bundled
       -- with the compiler and their version numbers.  (This could
       -- certainly be done in a more beautiful way.)
-    | DebSourceFormat Text                        -- ^ Write debian/source/format (FIXME: Use Debian.Policy.SourceFormat instead of Text)
+    | DebSourceFormat SourceFormat                -- ^ Write debian/source/format
     | DebWatch Text                               -- ^ Write debian/watch
     | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
     | DebRulesFragment Text                       -- ^ A Fragment of debian/rules
+    | Warning Text                                -- ^ A warning to be reported later
+    -- From here down are atoms to be associated with a Debian binary package
     | DHApacheSite String FilePath Text           -- ^ Have Apache configure a site using PACKAGE, DOMAIN, LOGDIR, and APACHECONFIGFILE
     | DHInstallLogrotate Text		          -- ^ Add a logrotate file to the binary package
     | DHLink FilePath FilePath          	  -- ^ Create a symbolic link in the binary package

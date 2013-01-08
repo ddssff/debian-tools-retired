@@ -25,7 +25,7 @@ import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescrip
                                              VersionControlSpec(..), XField(..))
 import Debian.Debianize.Utility (getDirectoryContents')
 import Debian.Orphans ()
-import Debian.Policy (parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer, parseUploaders)
+import Debian.Policy (parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer, parseUploaders, readSourceFormat)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
 import Prelude hiding (readFile, lines, words, break, null, log, sum)
 import System.Directory (doesFileExist)
@@ -178,7 +178,7 @@ inputAtomsFromDirectory debian xs =
 
 inputAtoms :: HasAtoms atoms => FilePath -> FilePath -> atoms -> IO atoms
 inputAtoms _ path xs | elem path ["changelog", "control", "compat", "copyright", "rules"] = return xs
-inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ insertAtom Source (DebSourceFormat text) xs
+inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ insertAtom Source (either Warning DebSourceFormat (readSourceFormat text)) xs
 inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ insertAtom Source (DebWatch text) xs
 inputAtoms debian name xs =
     case (BinPkgName (dropExtension name), takeExtension name) of

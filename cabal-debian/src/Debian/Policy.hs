@@ -1,6 +1,6 @@
 -- | Code pulled out of cabal-debian that straightforwardly implements
 -- parts of the Debian policy manual.
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
 module Debian.Policy
     ( debianPackageVersion
     , getDebhelperCompatLevel
@@ -8,6 +8,7 @@ module Debian.Policy
     , getDebianStandardsVersion
     , parseStandardsVersion
     , SourceFormat(..)
+    , readSourceFormat
     , PackagePriority(..)
     , readPriority
     , PackageArchitectures(..)
@@ -27,7 +28,7 @@ import Control.Monad (mplus)
 import Data.Char (toLower, isSpace)
 import Data.List (groupBy, intercalate)
 import Data.Generics (Data, Typeable)
-import Data.Text (pack, unpack, strip)
+import Data.Text (Text, pack, unpack, strip)
 import Data.Monoid ((<>))
 import Debian.Version (DebianVersion, parseDebianVersion, version)
 import System.Environment (getEnvironment)
@@ -66,11 +67,18 @@ parseStandardsVersion s =
 data SourceFormat
     = Native3
     | Quilt3
-    deriving (Eq, Show, Data, Typeable)
+    deriving (Eq, Ord, Show, Data, Typeable)
 
 instance Pretty SourceFormat where
     pretty Quilt3 = text "3.0 (quilt)\n"
     pretty Native3 = text "3.0 (native)\n"
+
+readSourceFormat :: Text -> Either Text SourceFormat
+readSourceFormat s =
+    case () of
+      _ | strip s == "3.0 (native)" -> Right Native3
+      _ | strip s == "3.0 (quilt)" -> Right Quilt3
+      _ -> Left $ "Invalid debian/source/format: " <> pack (show (strip s))
 
 data PackagePriority
     = Required

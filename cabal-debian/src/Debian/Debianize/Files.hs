@@ -21,7 +21,7 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 sourceFormat :: Debianization -> [(FilePath, Text)]
 sourceFormat deb =
-    maybe [] (\ x -> [("debian/source/format", x)]) (lookupAtom Source f deb)
+    maybe [] (\ x -> [("debian/source/format", pack (show (pretty x)))]) (lookupAtom Source f deb)
     where
       f (DebSourceFormat x) = Just x
       f _ = Nothing
