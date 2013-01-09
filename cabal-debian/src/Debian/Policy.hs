@@ -86,7 +86,7 @@ data PackagePriority
     | Standard
     | Optional
     | Extra
-    deriving (Eq, Read, Show, Data, Typeable)
+    deriving (Eq, Ord, Read, Show, Data, Typeable)
 
 readPriority :: String -> PackagePriority
 readPriority s =
@@ -106,7 +106,7 @@ data PackageArchitectures
     = All            -- ^ The package is architecture independenct
     | Any            -- ^ The package can be built for any architecture
     | Names [String] -- ^ The list of suitable architectures
-    deriving (Read, Eq, Show, Data, Typeable)
+    deriving (Read, Eq, Ord, Show, Data, Typeable)
 
 instance Pretty PackageArchitectures where
     pretty All = text "all"
@@ -121,7 +121,7 @@ parsePackageArchitectures s = error $ "FIXME: parsePackageArchitectures " ++ sho
 data Section
     = MainSection String -- Equivalent to AreaSection Main s?
     | AreaSection Area String
-    deriving (Read, Eq, Show, Data, Typeable)
+    deriving (Read, Eq, Ord, Show, Data, Typeable)
 
 readSection :: String -> Section
 readSection s =
@@ -141,7 +141,7 @@ data Area
     = Main
     | Contrib
     | NonFree
-    deriving (Read, Eq, Show, Data, Typeable)
+    deriving (Read, Eq, Ord, Show, Data, Typeable)
 
 instance Pretty Area where
     pretty Main = text "main"

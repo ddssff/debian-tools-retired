@@ -14,6 +14,7 @@ module Debian.Debianize.Types.Atoms
     , compilerVersion
     , noProfilingLibrary
     , noDocumentationLibrary
+    , utilsPackageName
     ) where
 
 import Data.Generics (Data, Typeable)
@@ -24,7 +25,7 @@ import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, sing
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Orphans ()
-import Debian.Policy (SourceFormat)
+import Debian.Policy (SourceFormat, PackagePriority, Section, PackageArchitectures)
 import Debian.Relation (BinPkgName)
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init)
@@ -64,6 +65,7 @@ data DebAtom
     | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
     | DebRulesFragment Text                       -- ^ A Fragment of debian/rules
     | Warning Text                                -- ^ A warning to be reported later
+    | UtilsPackageName BinPkgName                 -- ^ Name to give the package for left-over data files and executables
     -- From here down are atoms to be associated with a Debian binary package
     | DHApacheSite String FilePath Text           -- ^ Have Apache configure a site using PACKAGE, DOMAIN, LOGDIR, and APACHECONFIGFILE
     | DHInstallLogrotate Text		          -- ^ Add a logrotate file to the binary package
@@ -80,6 +82,18 @@ data DebAtom
     | DHInstallCabalExecTo String FilePath  	  -- ^ Install a cabal executable into the binary package at an exact location
     | DHInstallDir FilePath             	  -- ^ Create a directory in the binary package
     | DHInstallInit Text                	  -- ^ Add an init.d file to the binary package
+{-  -- Moved here from PackageHint
+    | PriorityHint (Maybe PackagePriority)
+    | SectionHint (Maybe Section)
+    | ArchitectureHint PackageArchitectures
+    | DescriptionHint Text
+-}
+{-
+      applyPackageHint (PriorityHint name x) bin = if name == Debian.package bin then (bin {binaryPriority = x}) else bin
+      applyPackageHint (SectionHint name x) bin = if name == Debian.package bin then (bin {binarySection = x}) else bin
+      applyPackageHint (ArchitectureHint name x) bin = if name == Debian.package bin then (bin {architecture = x}) else bin
+      applyPackageHint (DescriptionHint name x) bin = if name == Debian.package bin then (bin {Debian.description = x}) else bin
+-}
     deriving (Eq, Ord, Show)
 
 class HasAtoms atoms where
@@ -143,3 +157,11 @@ noDocumentationLibrary deb =
     where
       isNoDocumentationLibrary NoDocumentationLibrary = Just NoDocumentationLibrary
       isNoDocumentationLibrary _ = Nothing
+
+utilsPackageName :: HasAtoms atoms => atoms -> Maybe BinPkgName
+utilsPackageName deb =
+    foldAtoms from Nothing deb
+    where
+      from Source (UtilsPackageName r) Nothing = Just r
+      from Source (UtilsPackageName _) (Just _) = error "Multiple values for UtilsPackageName"
+      from _ _ r = r

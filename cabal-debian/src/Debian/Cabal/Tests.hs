@@ -14,7 +14,7 @@ import Debian.Cabal.Debianize (debianizationWithIO)
 import Debian.Cabal.Dependencies (DependencyHints (missingDependencies, execMap, revision, extraDevDeps))
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
-import Debian.Debianize.Combinators (tightDependencyFixup, deSugarDebianization, buildDeps, setSourcePackageName, setChangelog, control)
+import Debian.Debianize.Combinators (tightDependencyFixup, deSugarDebianization, buildDeps, setSourcePackageName, setChangelog, control, setArchitecture)
 import Debian.Debianize.Files (toFiles)
 import Debian.Debianize.Generic (gdiff)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
@@ -212,16 +212,19 @@ test5 =
     TestCase (     do oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" >>= \ x -> return (x {changelog = oldlog})
                       (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.executablePackages flags) (Flags.debAtoms flags) old
-                      desc <- describeDebianization (Flags.buildDir flags) "test-data/creativeprompts/output" dataDir new
+                      let new' = insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
+                                 copyFirstLogEntry old $
+                                 new
+                      desc <- describeDebianization (Flags.buildDir flags) "test-data/creativeprompts/output" dataDir (copyFirstLogEntry old new')
                       writeFile "/tmp/foo" desc
                       -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (deSugarDebianization "dist-ghc/build" dataDir new))))
                       assertEqual "test5" "" desc
              )
     where
       flags = Flags.defaultFlags { Flags.dependencyHints = (Flags.dependencyHints Flags.defaultFlags) {execMap = insert "trhsx" (BinPkgName "haskell-hsx-utils") (execMap (Flags.dependencyHints Flags.defaultFlags))}
-                           , Flags.executablePackages = (InstallFileHint (BinPkgName "creativeprompts-server") $ InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server") :
-                                                  (InstallFileHint (BinPkgName "creativeprompts-development") $ InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") :
-                                                  Flags.executablePackages Flags.defaultFlags }
+                                 , Flags.executablePackages = (InstallFileHint (BinPkgName "creativeprompts-server") $ InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server") :
+                                                              (InstallFileHint (BinPkgName "creativeprompts-development") $ InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") :
+                                                              Flags.executablePackages Flags.defaultFlags }
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
       addMarkdownDependency :: Debianization -> Debianization
@@ -233,6 +236,9 @@ test5 =
 dropFirstLogEntry :: Debianization -> Debianization
 dropFirstLogEntry (deb@(Debianization {changelog = ChangeLog (_ : tl)})) = deb {changelog = ChangeLog tl}
 
+copyFirstLogEntry :: Debianization -> Debianization -> Debianization
+copyFirstLogEntry (Debianization {changelog = ChangeLog (hd1 : _)}) (deb2@(Debianization {changelog = ChangeLog (_ : tl2)})) = deb2 {changelog = ChangeLog (hd1 : tl2)}
+
 test6 :: Test
 test6 =
     TestLabel "test6" $
@@ -242,16 +248,17 @@ test6 =
                          let compat' = 7
                          -- standards <- getDebianStandardsVersion
                          let standards = StandardsVersion 3 8 1 Nothing
-                         let new = control hints [InstallFileHint (BinPkgName "creativeprompts-server") $ InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server",
-                                                  ArchitectureHint (BinPkgName "creativeprompts-server") Any,
+                         let new = setArchitecture (BinPkgName "creativeprompts-server") Any $
+                                   setArchitecture  (BinPkgName "creativeprompts-development") All $
+                                   setArchitecture (BinPkgName "creativeprompts-production") All $
+                                   setArchitecture (BinPkgName "creativeprompts-data") All $
+                                   setArchitecture (BinPkgName "creativeprompts-backups") Any $
+                                   control hints [InstallFileHint (BinPkgName "creativeprompts-server") $ InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server",
                                                   InstallFileHint (BinPkgName "creativeprompts-development") $ InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development",
-                                                  ArchitectureHint (BinPkgName "creativeprompts-development") All,
                                                   InstallFileHint (BinPkgName "creativeprompts-production") $ InstallFile "creativeprompts-production" Nothing Nothing "creativeprompts-production",
-                                                  ArchitectureHint (BinPkgName "creativeprompts-production") All,
-                                                  UtilsPackageNameHint (BinPkgName "creativeprompts-data"),
-                                                  ArchitectureHint (BinPkgName "creativeprompts-data") All,
-                                                  InstallFileHint (BinPkgName "creativeprompts-backups") $ InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups",
-                                                  ArchitectureHint (BinPkgName "creativeprompts-backups") Any] compiler pkgDesc $
+                                                  InstallFileHint (BinPkgName "creativeprompts-backups") $ InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups"
+                                                  ] compiler pkgDesc $
+                                   insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
                                    setSourcePackageName (SrcPkgName "haskell-creativeprompts") $
                                    setChangelog oldLog $
                                    buildDeps hints compiler pkgDesc $ newDebianization entry (Left BSD3) compat' standards

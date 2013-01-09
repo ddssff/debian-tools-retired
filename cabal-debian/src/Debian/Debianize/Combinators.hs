@@ -17,11 +17,16 @@ module Debian.Debianize.Combinators
     , filterMissing
     , setSourcePackageName
     , setChangelog
+    , modifyBinaryDeb
+    , setArchitecture
+    , setBinaryPriority
+    , setBinarySection
+    , setDescription
     ) where
 
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
-import Data.List as List (nub, intercalate, intersperse)
+import Data.List as List (nub, intercalate, intersperse, find)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Maybe
@@ -35,19 +40,20 @@ import Debian.Cabal.Dependencies (DependencyHints (binaryPackageDeps, extraLibMa
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Paths (apacheLogDirectory)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
-import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtomKey(..), DebAtom(..), HasAtoms(getAtoms, putAtoms), insertAtom, foldAtoms, insertAtoms')
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                                       PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
+import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtomKey(..), DebAtom(..), HasAtoms(getAtoms, putAtoms), insertAtom, foldAtoms, insertAtoms', utilsPackageName)
+import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), newBinaryDebDescription,
+                                                       PackageRelations(..), PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Types.PackageHints (PackageHints, PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (trim)
-import Debian.Policy (StandardsVersion, PackagePriority(Optional), PackageArchitectures(Any, All), Section(..))
+import Debian.Policy (StandardsVersion, PackagePriority(Optional), PackageArchitectures(Any, All, Names), Section(..))
 import Debian.Relation (BinPkgName, SrcPkgName(..), Relation(Rel))
 import Debian.Release (parseReleaseName)
 import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
 import Distribution.License (License)
 import Distribution.Package (PackageIdentifier(..), PackageName(..))
-import Distribution.PackageDescription as Cabal (PackageDescription(package, library, {-homepage,-} synopsis, description, maintainer, dataFiles, executables, author, pkgUrl),
+import Distribution.PackageDescription as Cabal (PackageDescription(package, library, {-homepage,-} synopsis, {-description,-} maintainer, dataFiles, executables, author, pkgUrl),
                                                  BuildInfo(buildable, extraLibs), Executable(exeName, buildInfo), allBuildInfo)
+import qualified Distribution.PackageDescription as Cabal
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Text (display)
 import Prelude hiding (writeFile, init, unlines)
@@ -372,7 +378,6 @@ execAndUtilSpecs dependencyHints packageHints pkgDesc describe deb =
                  , builtUsing = []
                  }
              }]
-      packageHintDeb _ = []
 
       packageHintAtoms (SiteHint debName site) xs =
           siteAtoms debName (sourceDir (installFile (server site))) (execName (installFile (server site))) (destDir (installFile (server site))) (destName (installFile (server site)))
@@ -393,9 +398,7 @@ execAndUtilSpecs dependencyHints packageHints pkgDesc describe deb =
             ([], []) ->
                 []
             _ ->
-                let p = case mapMaybe (\ hint -> case hint of UtilsPackageNameHint b -> Just b; _ -> Nothing) packageHints of
-                          [] -> debianName dependencyHints Utilities (Cabal.package pkgDesc)
-                          (b : _) -> b in
+                let p = fromMaybe (debianName dependencyHints Utilities (Cabal.package pkgDesc)) (utilsPackageName deb) in
                 [BinaryDebDescription
                     { Debian.package = p
                     , architecture = Any
@@ -418,11 +421,6 @@ execAndUtilSpecs dependencyHints packageHints pkgDesc describe deb =
                     }]
 
       applyPackageHints bin = foldr applyPackageHint bin packageHints
-      applyPackageHint (PriorityHint name x) bin = if name == Debian.package bin then (bin {binaryPriority = x}) else bin
-      applyPackageHint (SectionHint name x) bin = if name == Debian.package bin then (bin {binarySection = x}) else bin
-      applyPackageHint (ArchitectureHint name x) bin = if name == Debian.package bin then (bin {architecture = x}) else bin
-      applyPackageHint (DescriptionHint name x) bin = if name == Debian.package bin then (bin {Debian.description = x}) else bin
-      applyPackageHint (UtilsPackageNameHint {}) bin = bin
       applyPackageHint (InstallFileHint {}) bin = bin
       applyPackageHint (ServerHint {}) bin = bin
       applyPackageHint (SiteHint {}) bin = bin
@@ -551,3 +549,23 @@ setSourcePackageName name@(SrcPkgName string) deb@(Debianization {changelog = Ch
 
 setChangelog :: ChangeLog -> Debianization -> Debianization
 setChangelog log' deb = deb { changelog = log' }
+
+setArchitecture :: BinPkgName -> PackageArchitectures -> Debianization -> Debianization
+setArchitecture bin x deb = modifyBinaryDeb bin (\ b -> b {architecture = x}) deb
+
+setBinaryPriority :: BinPkgName -> Maybe PackagePriority -> Debianization -> Debianization
+setBinaryPriority bin x deb = modifyBinaryDeb bin (\ b -> b {binaryPriority = x}) deb
+
+setBinarySection :: BinPkgName -> Maybe Section -> Debianization -> Debianization
+setBinarySection bin x deb = modifyBinaryDeb bin (\ b -> b {binarySection = x}) deb
+
+setDescription :: BinPkgName -> Text -> Debianization -> Debianization
+setDescription bin x deb = modifyBinaryDeb bin (\ b -> b {Debian.description = x}) deb
+
+modifyBinaryDeb :: BinPkgName -> (BinaryDebDescription -> BinaryDebDescription) -> Debianization -> Debianization
+modifyBinaryDeb bin f deb =
+    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = f b : binaryPackages (sourceDebDescription deb)}}
+    where
+      b = case find ((== bin) . Debian.package) (binaryPackages (sourceDebDescription deb)) of
+            Nothing -> newBinaryDebDescription bin (Names [])
+            Just x -> x
