@@ -108,7 +108,7 @@ data SourceDebDescription
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-DM-Upload-Allowed>
       , priority :: Maybe PackagePriority
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Priority>
-      , section :: Maybe Text
+      , section :: Maybe Section
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Section>
       , standardsVersion :: StandardsVersion
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Standards-Version>

@@ -27,7 +27,7 @@ import Debian.Debianize.Types.Debianization (Debianization(..), newDebianization
                                              PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Policy (StandardsVersion(StandardsVersion), getDebhelperCompatLevel, getDebianStandardsVersion,
-                      PackagePriority(Extra), PackageArchitectures(All, Any), SourceFormat(Native3))
+                      PackagePriority(Extra), PackageArchitectures(All, Any), SourceFormat(Native3), Section(..))
 import Debian.Relation (Relation(..), VersionReq(..), SrcPkgName(..), BinPkgName(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Version (buildDebianVersion, parseDebianVersion)
@@ -275,8 +275,8 @@ test6 =
                                                   InstallFileHint (BinPkgName "creativeprompts-backups") $ InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups"
                                                   ] compiler pkgDesc $
                                    insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
-                                   setSourcePackageName (SrcPkgName "haskell-creativeprompts") $
-                                   setChangelog oldLog $
+                                   -- setSourcePackageName (SrcPkgName "haskell-creativeprompts") $
+                                   -- setChangelog oldLog $
                                    buildDeps hints compiler pkgDesc $ newDebianization entry (Left BSD3) compat' standards
                          desc <- describeDebianization "dist-ghc/build" "test-data/creativeprompts/output" (dataDirectory pkgDesc) new
                          writeFile "/tmp/bar" desc
@@ -397,7 +397,7 @@ testDeb2 =
           , uploaders = [NameAddr {nameAddr_name = Just "Marco Silva", nameAddr_addr = "marcot@debian.org"},NameAddr {nameAddr_name = Just "Joachim Breitner", nameAddr_addr = "nomeata@debian.org"}]
           , dmUploadAllowed = False
           , priority = Just Extra
-          , section = Just "haskell"
+          , section = Just (MainSection "haskell")
           , buildDepends = [[Rel (BinPkgName {unBinPkgName = "debhelper"}) (Just (GRE (Debian.Version.parseDebianVersion ("7" :: String)))) Nothing]]
           , buildConflicts = []
           , buildDependsIndep = [[Rel (BinPkgName {unBinPkgName = "perl"}) Nothing Nothing]]

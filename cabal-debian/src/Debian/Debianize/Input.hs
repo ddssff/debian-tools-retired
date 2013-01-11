@@ -24,7 +24,8 @@ import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescrip
                                              VersionControlSpec(..), XField(..), newSourceDebDescription, newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')
 import Debian.Orphans ()
-import Debian.Policy (parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer, parseUploaders, readSourceFormat)
+import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
+                      parseUploaders, readSourceFormat)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
 import Prelude hiding (readFile, lines, words, break, null, log, sum)
 import System.Directory (doesFileExist)
@@ -70,7 +71,7 @@ parseSourceDebDescription (Paragraph fields) binaryParagraphs =
       readField (Field ("Uploaders", value)) (desc, unrecognized) = (desc {uploaders = either (const []) id (parseUploaders value)}, unrecognized)
       readField (Field ("DM-Upload-Allowed", value)) (desc, unrecognized) = (desc {dmUploadAllowed = yes value}, unrecognized)
       readField (Field ("Priority", value)) (desc, unrecognized) = (desc {priority = Just (readPriority value)}, unrecognized)
-      readField (Field ("Section", value)) (desc, unrecognized) = (desc {section = Just (pack value)}, unrecognized)
+      readField (Field ("Section", value)) (desc, unrecognized) = (desc {section = Just (MainSection value)}, unrecognized)
       readField (Field ("Build-Depends", value)) (desc, unrecognized) = (desc {buildDepends = rels value}, unrecognized)
       readField (Field ("Build-Conflicts", value)) (desc, unrecognized) = (desc {buildConflicts = rels value}, unrecognized)
       readField (Field ("Build-Depends-Indep", value)) (desc, unrecognized) = (desc {buildDependsIndep = rels value}, unrecognized)

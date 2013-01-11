@@ -16,6 +16,9 @@ module Debian.Debianize.Combinators
     , addExtraLibDependencies
     , filterMissing
     , setSourcePackageName
+    , setSourcePriority
+    , setSourceSection
+    , setSourceBinaries
     , setChangelog
     , modifyBinaryDeb
     , setArchitecture
@@ -246,11 +249,10 @@ control dependencyHints packageHints compiler pkgDesc deb =
     execAndUtilSpecs dependencyHints packageHints pkgDesc describe $
     librarySpecs dependencyHints pkgDesc describe $
     buildDeps dependencyHints compiler pkgDesc $
-    deb { sourceDebDescription =
-            (sourceDebDescription deb)
-              { priority = Just Optional
-              , section = Just (pack "haskell")
-              , binaryPackages = {- trace ("binaryPackages: " ++ show (binaryPackages (sourceDebDescription deb))) -} [] } }
+    setSourcePriority (Just Optional) $
+    setSourceSection (Just (MainSection "haskell")) $
+    setSourceBinaries [] $
+    deb
     where
       describe = debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc)
 
@@ -542,6 +544,15 @@ setSourcePackageName :: SrcPkgName -> Debianization -> Debianization
 setSourcePackageName name@(SrcPkgName string) deb@(Debianization {changelog = ChangeLog (newest : older)}) =
     deb { sourceDebDescription = (sourceDebDescription deb) {source = name}
         , changelog = ChangeLog (newest {logPackage = string} : older)}
+
+setSourcePriority :: Maybe PackagePriority -> Debianization -> Debianization
+setSourcePriority x deb = deb {sourceDebDescription = (sourceDebDescription deb) {priority = x}}
+
+setSourceSection :: Maybe Section -> Debianization -> Debianization
+setSourceSection x deb = deb {sourceDebDescription = (sourceDebDescription deb) {section = x}}
+
+setSourceBinaries :: [BinaryDebDescription] -> Debianization -> Debianization
+setSourceBinaries xs deb = deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = xs}}
 
 setChangelog :: ChangeLog -> Debianization -> Debianization
 setChangelog log' deb = deb { changelog = log' }
