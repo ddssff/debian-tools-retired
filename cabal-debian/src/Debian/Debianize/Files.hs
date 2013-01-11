@@ -2,7 +2,7 @@
 -- written out.
 {-# LANGUAGE OverloadedStrings #-}
 module Debian.Debianize.Files
-    ( toFiles
+    ( toFileMap
     ) where
 
 import qualified Data.Map as Map
@@ -92,7 +92,7 @@ logrotate :: Debianization -> [(FilePath, Text)]
 logrotate deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
-      atomf (Binary name) (DHInstallLogrotate t) files = Map.insertWith (with2 "logrotate") (pathf name) t files
+      atomf (Binary name) (DHLogrotateStanza t) files = Map.insertWith with1 (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".logrotate"
 
@@ -139,9 +139,8 @@ prerm deb =
 
 -- | Turn the DebAtoms into a list of files, making sure the text
 -- associated with each path is unique.
-toFiles :: FilePath -> FilePath -> Debianization -> [(FilePath, Text)]
-toFiles build datadir d0 =
-    Map.toList $
+toFileMap :: FilePath -> FilePath -> Debianization -> Map.Map FilePath Text
+toFileMap build datadir d0 =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
       [("debian/control", pack (show (pretty (control (sourceDebDescription d))))),
        ("debian/changelog", pack (show (pretty (changelog d)))),
@@ -179,6 +178,7 @@ control src =
             depField "Build-Conflicts" (buildConflicts src) ++
             depField "Build-Conflicts-Indep" (buildConflictsIndep src) ++
             [Field ("Standards-Version", " " <> show (pretty (standardsVersion src)))] ++
+            mField "Homepage" (homepage src) ++
             map vcsField (toList (vcsFields src)) ++
             map xField (toList (xFields src))) :
            map binary (binaryPackages src))

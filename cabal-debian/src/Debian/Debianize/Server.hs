@@ -23,13 +23,14 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 siteAtoms :: HasAtoms atoms => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> String -> Int -> [String] -> String -> String -> atoms -> atoms
 siteAtoms b sourceDir execName destDir destName retry port flags domain serverAdmin xs =
     siteAtoms' b port domain serverAdmin $
+    apacheLogrotate b $
     serverAtoms b sourceDir execName destDir destName retry port flags True $ xs
 
 serverAtoms :: HasAtoms atoms => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> String -> Int -> [String] -> Bool -> atoms -> atoms
 serverAtoms b sourceDir execName destDir destName retry _port flags isSite xs =
     execAtoms b sourceDir execName destDir destName $
     insertAtoms' (Binary b) (debianPostinst b isSite) $
-    insertAtom (Binary b) (logrotateConfig b isSite) $
+    serverLogrotate b $
     insertAtom (Binary b) (debianInit b destName retry flags) xs
 
 -- | Generate the atom that installs the executable.  Trickier than it should
@@ -190,36 +191,41 @@ siteAtoms' b port domain serverAdmin xs =
 
 -- | A configuration file for the logrotate facility, installed via a line
 -- in debianFiles.
-logrotateConfig :: BinPkgName -> Bool -> DebAtom
-logrotateConfig b isSite =
-    DHInstallLogrotate (pack . unlines $ (apacheConfig ++ serverConfig))
-     -- DHInstallDir b ("/var/log/apache2" </> show (pretty b))
-    where
-      apacheConfig =
-          if isSite
-          then [ apacheAccessLog b ++ " {"
-               , "  weekly"
-               , "  rotate 5"
-               , "  compress"
-               , "  missingok"
-               , "}"
-               , apacheErrorLog b ++ " {"
-               , "  weekly"
-               , "  rotate 5"
-               , "  compress"
-               , "  missingok"
-               , "}" ]
-          else []
-      serverConfig =
-          [ serverAccessLog b ++ " {"
-               , "  weekly"
-               , "  rotate 5"
-               , "  compress"
-               , "  missingok"
-               , "}"
-               , serverAppLog b ++ " {"
-               , "  weekly"
-               , "  rotate 5"
-               , "  compress"
-               , "  missingok"
-               , "}" ]
+serverLogrotate :: HasAtoms atoms => BinPkgName -> atoms -> atoms
+serverLogrotate b xs =
+    insertAtoms' (Binary b)
+                 [ DHLogrotateStanza . pack . unlines $
+                   [ serverAccessLog b ++ " {"
+                   , "  weekly"
+                   , "  rotate 5"
+                   , "  compress"
+                   , "  missingok"
+                   , "}" ]
+                 , DHLogrotateStanza . pack . unlines $
+                   [ serverAppLog b ++ " {"
+                   , "  weekly"
+                   , "  rotate 5"
+                   , "  compress"
+                   , "  missingok"
+                   , "}" ] ]
+                 xs
+
+apacheLogrotate :: HasAtoms atoms => BinPkgName -> atoms -> atoms
+apacheLogrotate b xs =
+    insertAtoms' (Binary b)
+                 [ DHInstallDir (apacheLogDirectory b),
+                   DHLogrotateStanza . pack . unlines $
+                   [ apacheAccessLog b ++ " {"
+                   , "  weekly"
+                   , "  rotate 5"
+                   , "  compress"
+                   , "  missingok"
+                   , "}"]
+                 , DHLogrotateStanza . pack . unlines $
+                   [ apacheErrorLog b ++ " {"
+                   , "  weekly"
+                   , "  rotate 5"
+                   , "  compress"
+                   , "  missingok"
+                   , "}" ] ]
+                 xs

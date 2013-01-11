@@ -1,13 +1,15 @@
 {-# LANGUAGE OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Debian.Cabal.Tests
     ( tests
     ) where
 
 import qualified CabalDebian.Flags as Flags (Flags(..), defaultFlags)
-
-import Data.Map (insert)
-import Data.Monoid (mempty)
+import Data.Algorithm.Diff.Context (contextDiff)
+import Data.Algorithm.Diff.Pretty (prettyDiff)
+import Data.Map as Map (insert, differenceWithKey, intersectionWithKey)
+import qualified Data.Map as Map
+import Data.Monoid (mempty, mconcat, (<>))
 import Data.Set as Set (fromList, singleton)
 import qualified Data.Text as T
 import Debian.Cabal.Debianize (debianizationWithIO)
@@ -15,7 +17,7 @@ import Debian.Cabal.Dependencies (DependencyHints (missingDependencies, execMap,
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Combinators (tightDependencyFixup, deSugarDebianization, buildDeps, setSourcePackageName, setChangelog, control, setArchitecture)
-import Debian.Debianize.Files (toFiles)
+import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Generic (gdiff)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
@@ -30,9 +32,10 @@ import Debian.Relation (Relation(..), VersionReq(..), SrcPkgName(..), BinPkgName
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Version (buildDebianVersion, parseDebianVersion)
 import Distribution.License (License(BSD3))
+import System.FilePath ((</>))
 import Test.HUnit
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..))
-import Text.PrettyPrint.ANSI.Leijen (pretty)
+import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
 
 tests :: Test
 tests = TestLabel "Debianization Tests" (TestList [test1, test2a, test2b, test3, test4, test5, test6])
@@ -69,8 +72,9 @@ test2a =
                   buildDependsIndep = [],
                   buildConflictsIndep = [],
                   standardsVersion = StandardsVersion 3 9 3 (Just 1),
-                  vcsFields = fromList [],
-                  xFields = fromList [],
+                  homepage = Nothing,
+                  vcsFields = Set.fromList [],
+                  xFields = Set.fromList [],
                   binaryPackages = [] },
             changelog =
                 ChangeLog [Entry {logPackage = "haskell-cabal-debian",
@@ -100,7 +104,8 @@ test2b =
                  standards <- getDebianStandardsVersion
                  let deb = newDebianization testEntry (Left BSD3) level standards
                  assertEqual "test2b"
-                  ([("debian/changelog", (T.unlines
+                  (Map.fromList 
+                   [("debian/changelog", (T.unlines
                                           ["haskell-cabal-debian (2.6.2) unstable; urgency=low",
                                            "",
                                            "  * Fix a bug constructing the destination pathnames that was dropping",
@@ -111,8 +116,7 @@ test2b =
                     ("debian/control","Source: haskell-cabal-debian\nMaintainer: David Fox <dsf@seereason.com>\nStandards-Version: 3.9.3.1\n"),
                     ("debian/copyright","BSD3\n"),
                     ("debian/rules", "#!/usr/bin/make -f\n\nDEB_CABAL_PACKAGE = haskell-cabal-debian\n\ninclude /usr/share/cdbs/1/rules/debhelper.mk\ninclude /usr/share/cdbs/1/class/hlibrary.mk\n\n")])
-                   -- (runReader (toFiles "dist-ghc/build" d) testConfig)
-                  (toFiles "dist-ghc/build" "<datadir>" deb)
+                  (toFileMap "dist-ghc/build" "<datadir>" deb)
              )
 
 test3 :: Test
@@ -127,7 +131,12 @@ test4 =
     TestCase (do oldlog <- inputChangeLog "test-data/clckwrks-dot-com/input/debian"
                  old <- inputDebianization "test-data/clckwrks-dot-com/output" >>= \ x -> return (x {changelog = oldlog})
                  (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.executablePackages flags) (Flags.debAtoms flags) old
-                 assertEqual "test4" [] (gdiff (dropFirstLogEntry old) (dropRulesAtoms (dropFirstLogEntry (deSugarDebianization "dist-ghc/build" dataDir (fixRules (tight new)))))))
+                 let new' = copyFirstLogEntry old (fixRules (tight new))
+                 desc <- describeDebianization (Flags.buildDir flags) "test-data/clckwrks-dot-com/output" dataDir new'
+                 -- assertEqual "test4" "" desc
+                 -- assertEqual "test4" [] (gdiff old (deSugarDebianization "dist-ghc/build" dataDir new'))
+                 assertEqual "test4" (toFileMap "dist-ghc/build" "<datadir>" old) (toFileMap "dist-ghc/build" "<datadir>" new')
+             )
     where
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
@@ -215,10 +224,17 @@ test5 =
                       let new' = insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
                                  copyFirstLogEntry old $
                                  new
-                      desc <- describeDebianization (Flags.buildDir flags) "test-data/creativeprompts/output" dataDir (copyFirstLogEntry old new')
+                      desc <- describeDebianization (Flags.buildDir flags) "test-data/creativeprompts/output" dataDir new'
                       writeFile "/tmp/foo" desc
                       -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (deSugarDebianization "dist-ghc/build" dataDir new))))
-                      assertEqual "test5" "" desc
+                      -- assertEqual "test5" "" desc
+                      -- assertEqual "test5" (toFileMap "dist-ghc/build" "<datadir>" old) (toFileMap "dist-ghc/build" "<datadir>" new')
+                      let -- Put the old values in fst, the new values in snd
+                          new'' :: Map.Map FilePath T.Text
+                          new'' = (toFileMap "dist-ghc/build" "<datadir>" new')
+                          old' :: Map.Map FilePath (T.Text, T.Text)
+                          old' = Map.map (\ x -> (x, mempty)) (toFileMap "dist-ghc/build" "<datadir>" old)
+                      assertEqual "test5" [] (diffDebianizations old new')
              )
     where
       flags = Flags.defaultFlags { Flags.dependencyHints = (Flags.dependencyHints Flags.defaultFlags) {execMap = insert "trhsx" (BinPkgName "haskell-hsx-utils") (execMap (Flags.dependencyHints Flags.defaultFlags))}
@@ -242,14 +258,14 @@ copyFirstLogEntry (Debianization {changelog = ChangeLog (hd1 : _)}) (deb2@(Debia
 test6 :: Test
 test6 =
     TestLabel "test6" $
-    TestCase ( do (Debianization {changelog = oldLog@(ChangeLog (entry : _))}) <- inputDebianization "test-data/creativeprompts/output"
+    TestCase ( do old@(Debianization {changelog = oldLog@(ChangeLog (entry : _))}) <- inputDebianization "test-data/creativeprompts/output"
                   withSimplePackageDescription "test-data/creativeprompts/input" 0 Nothing [] $ \ pkgDesc compiler ->
                       do -- compat <- getDebhelperCompatLevel
                          let compat' = 7
                          -- standards <- getDebianStandardsVersion
                          let standards = StandardsVersion 3 8 1 Nothing
                          let new = setArchitecture (BinPkgName "creativeprompts-server") Any $
-                                   setArchitecture  (BinPkgName "creativeprompts-development") All $
+                                   setArchitecture (BinPkgName "creativeprompts-development") All $
                                    setArchitecture (BinPkgName "creativeprompts-production") All $
                                    setArchitecture (BinPkgName "creativeprompts-data") All $
                                    setArchitecture (BinPkgName "creativeprompts-backups") Any $
@@ -264,7 +280,7 @@ test6 =
                                    buildDeps hints compiler pkgDesc $ newDebianization entry (Left BSD3) compat' standards
                          desc <- describeDebianization "dist-ghc/build" "test-data/creativeprompts/output" (dataDirectory pkgDesc) new
                          writeFile "/tmp/bar" desc
-                         assertEqual "test6" "" desc
+                         assertEqual "test6" [] (diffDebianizations old new)
              )
     where
       hints = (Flags.dependencyHints Flags.defaultFlags) { execMap = insert "trhsx" (BinPkgName "haskell-hsx-utils") (execMap (Flags.dependencyHints Flags.defaultFlags))
@@ -276,6 +292,41 @@ test6 =
       addMarkdownDependency deb = updateBinaryPackage (BinPkgName "creativeprompts-server") addMarkdownDependency' deb
       addMarkdownDependency' :: BinaryDebDescription -> BinaryDebDescription
       addMarkdownDependency' deb = deb {relations = (relations deb) {depends = [[Rel (BinPkgName "markdown") Nothing Nothing]] ++ depends (relations deb)}}
+
+data Change k a
+    = Created k a
+    | Deleted k a
+    | Modified k a a
+    | Unchanged k a
+    deriving (Eq, Show)
+
+diffMaps :: (Ord k, Eq a, Show k, Show a) => Map.Map k a -> Map.Map k a -> [Change k a]
+diffMaps old new =
+    Map.elems (intersectionWithKey combine1 old new) ++
+    map (uncurry Deleted) (Map.toList (differenceWithKey combine2 old new)) ++
+    map (uncurry Created) (Map.toList (differenceWithKey combine2 new old))
+    where
+      combine1 k a b = if a == b then Unchanged k a else Modified k a b
+      combine2 _ _ _ = Nothing
+
+diffDebianizations :: Debianization -> Debianization -> String -- [Change FilePath T.Text]
+diffDebianizations old new =
+    show (mconcat (map prettyChange (filter (not . isUnchanged) (diffMaps old' new'))))
+    where
+      old' = toFileMap "dist-ghc/build" "<datadir>" old
+      new' = toFileMap "dist-ghc/build" "<datadir>" new
+      isUnchanged (Unchanged _ _) = True
+      isUnchanged _ = False
+      prettyChange (Unchanged path _) = text ("Unchanged: " <> path <> "\n")
+      prettyChange (Deleted path _) = text ("Deleted: " <> path <> "\n")
+      prettyChange (Created path _) = text ("Created: " <> path <> "\n")
+      prettyChange (Modified path a b) =
+          text ("Modified: " <> path <> "\n") <>
+          prettyDiff ("old" </> path) ("new" </> path)
+                     -- We use split here instead of lines so we can
+                     -- detect whether the file has a final newline
+                     -- character.
+                     (contextDiff 2 (T.split (== '\n') a) (T.split (== '\n') b))
 
 updateBinaryPackage :: BinPkgName -> (BinaryDebDescription -> BinaryDebDescription) -> Debianization -> Debianization
 updateBinaryPackage name f deb =
@@ -310,6 +361,7 @@ testDeb1 =
                 , buildDependsIndep = []
                 , buildConflictsIndep = []
                 , standardsVersion = StandardsVersion 3 9 3 (Just 1) -- This will change as new versions of debian-policy are released
+                , homepage = Nothing
                 , vcsFields = Set.fromList []
                 , xFields = Set.fromList []
                 , binaryPackages = [] }
@@ -351,9 +403,10 @@ testDeb2 =
           , buildDependsIndep = [[Rel (BinPkgName {unBinPkgName = "perl"}) Nothing Nothing]]
           , buildConflictsIndep = []
           , standardsVersion = StandardsVersion 3 9 4 Nothing
-          , vcsFields = fromList [ VCSBrowser "http://darcs.debian.org/cgi-bin/darcsweb.cgi?r=pkg-haskell/haskell-devscripts"
-                                 , VCSDarcs "http://darcs.debian.org/pkg-haskell/haskell-devscripts"]
-          , xFields = fromList []
+          , homepage = Nothing
+          , vcsFields = Set.fromList [ VCSBrowser "http://darcs.debian.org/cgi-bin/darcsweb.cgi?r=pkg-haskell/haskell-devscripts"
+                                     , VCSDarcs "http://darcs.debian.org/pkg-haskell/haskell-devscripts"]
+          , xFields = Set.fromList []
           , binaryPackages = [BinaryDebDescription { package = BinPkgName {unBinPkgName = "haskell-devscripts"}
                                                    , architecture = All
                                                    , binarySection = Nothing

@@ -5,27 +5,7 @@ DEB_CABAL_PACKAGE = creativeprompts
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/hlibrary.mk
 
-build/creativeprompts-server:: build-ghc-stamp
-
-# ls -1 static/theme/ | xargs -i -n1 echo '	install' -Dp static/theme/{} debian/creativeprompts-data/usr/share/creativeprompts-data/theme/{}
-binary-fixup/creativeprompts-data::
-	install -Dp static/theme/comment-bottom.png debian/creativeprompts-data/usr/share/creativeprompts-data/theme/comment-bottom.png
-	install -Dp static/theme/comment-middle.png debian/creativeprompts-data/usr/share/creativeprompts-data/theme/comment-middle.png
-	install -Dp static/theme/comment-top.png debian/creativeprompts-data/usr/share/creativeprompts-data/theme/comment-top.png
-	install -Dp static/theme/creative-prompts-logo.png debian/creativeprompts-data/usr/share/creativeprompts-data/theme/creative-prompts-logo.png
-	install -Dp static/theme/entry-bottom.png debian/creativeprompts-data/usr/share/creativeprompts-data/theme/entry-bottom.png
-	install -Dp static/theme/entry-middle.png debian/creativeprompts-data/usr/share/creativeprompts-data/theme/entry-middle.png
-	install -Dp static/theme/entry-top.png debian/creativeprompts-data/usr/share/creativeprompts-data/theme/entry-top.png
-	install -Dp static/theme/json2.js debian/creativeprompts-data/usr/share/creativeprompts-data/theme/json2.js
-	install -Dp static/theme/menu-bar-background.png debian/creativeprompts-data/usr/share/creativeprompts-data/theme/menu-bar-background.png
-	install -Dp static/theme/menu-gradient.png debian/creativeprompts-data/usr/share/creativeprompts-data/theme/menu-gradient.png
-	install -Dp static/theme/paint-background.jpg debian/creativeprompts-data/usr/share/creativeprompts-data/theme/paint-background.jpg
-	install -Dp static/theme/site.js debian/creativeprompts-data/usr/share/creativeprompts-data/theme/site.js
-	install -Dp static/theme/style.css debian/creativeprompts-data/usr/share/creativeprompts-data/theme/style.css
-	install -Dp static/theme/icons/person-icon.png debian/creativeprompts-data/usr/share/creativeprompts-data/theme/icons/person-icon.png
-
-binary-fixup/creativeprompts-backups::
-	install -Dps -m 755 dist-ghc/build/creativeprompts-backups/creativeprompts-backups debian/creativeprompts-backups/etc/cron.hourly/creativeprompts
-
-build/creativeprompts-development:: build-ghc-stamp
 build/haskell-creativeprompts-utils:: build-ghc-stamp
+
+build/creativeprompts-server:: build-ghc-stamp
+build/creativeprompts-development:: build-ghc-stamp

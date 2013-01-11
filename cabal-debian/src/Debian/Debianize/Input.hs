@@ -66,6 +66,7 @@ parseSourceDebDescription (Paragraph fields) binaryParagraphs =
       readField (Field ("Source", _)) x = x
       readField (Field ("Maintainer", _)) x = x
       readField (Field ("Standards-Version", _)) x = x
+      readField (Field ("Homepage", value)) (desc, unrecognized) = (desc {homepage = Just (strip (pack value))}, unrecognized)
       readField (Field ("Uploaders", value)) (desc, unrecognized) = (desc {uploaders = either (const []) id (parseUploaders value)}, unrecognized)
       readField (Field ("DM-Upload-Allowed", value)) (desc, unrecognized) = (desc {dmUploadAllowed = yes value}, unrecognized)
       readField (Field ("Priority", value)) (desc, unrecognized) = (desc {priority = Just (readPriority value)}, unrecognized)
@@ -184,7 +185,7 @@ inputAtoms debian name xs =
       (p, ".install") ->   readFile (debian </> name) >>= \ text -> return $ insertAtoms' (Binary p) (mapMaybe (readInstall p) (lines text)) xs
       (p, ".dirs") ->      readFile (debian </> name) >>= \ text -> return $ insertAtoms' (Binary p) (map readDir (lines text)) xs
       (p, ".init") ->      readFile (debian </> name) >>= \ text -> return $ insertAtom (Binary p) (DHInstallInit text) xs
-      (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> return $ insertAtom (Binary p) (DHInstallLogrotate text) xs
+      (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> return $ insertAtom (Binary p) (DHLogrotateStanza text) xs
       (p, ".links") ->     readFile (debian </> name) >>= \ text -> return $ insertAtoms' (Binary p) (mapMaybe readLink (lines text)) xs
       (p, ".postinst") ->  readFile (debian </> name) >>= \ text -> return $ insertAtom (Binary p) (DHPostInst text) xs
       (p, ".postrm") ->    readFile (debian </> name) >>= \ text -> return $ insertAtom (Binary p) (DHPostRm text) xs

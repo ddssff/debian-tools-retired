@@ -25,7 +25,7 @@ import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, sing
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Orphans ()
-import Debian.Policy (SourceFormat, PackagePriority, Section, PackageArchitectures)
+import Debian.Policy (SourceFormat)
 import Debian.Relation (BinPkgName)
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init)
@@ -68,7 +68,7 @@ data DebAtom
     | UtilsPackageName BinPkgName                 -- ^ Name to give the package for left-over data files and executables
     -- From here down are atoms to be associated with a Debian binary package
     | DHApacheSite String FilePath Text           -- ^ Have Apache configure a site using PACKAGE, DOMAIN, LOGDIR, and APACHECONFIGFILE
-    | DHInstallLogrotate Text		          -- ^ Add a logrotate file to the binary package
+    | DHLogrotateStanza Text		          -- ^ Add a stanza of a logrotate file to the binary package
     | DHLink FilePath FilePath          	  -- ^ Create a symbolic link in the binary package
     | DHPostInst Text                   	  -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
     | DHPostRm Text                     	  -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0

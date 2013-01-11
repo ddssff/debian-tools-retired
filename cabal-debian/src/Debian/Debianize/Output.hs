@@ -10,9 +10,10 @@ module Debian.Debianize.Output
     ) where
 
 import Control.Monad.Trans (MonadIO, liftIO)
+import Data.Map as Map (toList)
 import Data.Text (Text, unpack)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logVersion))
-import Debian.Debianize.Files (toFiles)
+import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(changelog, sourceDebDescription),
                                                        SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
 import Debian.Debianize.Utility (replaceFile, diffFile)
@@ -53,7 +54,7 @@ outputDebianization dryRun validate buildDir dataDir old new =
 -- | Describe a 'Debianization' in relation to one that is written into 
 describeDebianization :: FilePath -> FilePath -> FilePath -> Debianization -> IO String
 describeDebianization buildDir old dataDir d =
-    mapM (\ (path, text) -> liftIO (doFile path text)) (toFiles buildDir dataDir d) >>= return . concat
+    mapM (\ (path, text) -> liftIO (doFile path text)) (toList (toFileMap buildDir dataDir d)) >>= return . concat
     where
       doFile :: FilePath -> Text -> IO String
       doFile path text =
@@ -65,7 +66,7 @@ describeDebianization buildDir old dataDir d =
 
 writeDebianization :: FilePath -> FilePath -> Debianization -> IO ()
 writeDebianization buildDir dataDir d =
-    mapM_ (uncurry doFile) (toFiles buildDir dataDir d) >>
+    mapM_ (uncurry doFile) (toList (toFileMap buildDir dataDir d)) >>
     getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})
     where
       doFile path text =

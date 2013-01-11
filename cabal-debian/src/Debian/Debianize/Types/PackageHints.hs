@@ -7,9 +7,6 @@ module Debian.Debianize.Types.PackageHints
     , executableOption
     ) where
 
-import Data.Text (Text)
---import Debian.Debianize.Types.Debianization (PackageRelations)
-import Debian.Policy (PackagePriority, Section, PackageArchitectures)
 import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Orphans ()
 import System.FilePath (splitFileName)

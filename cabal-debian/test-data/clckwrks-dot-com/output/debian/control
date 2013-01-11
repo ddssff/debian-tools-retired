@@ -1,7 +1,7 @@
 Source: haskell-clckwrks-dot-com
+Maintainer: Jeremy Shaw <jeremy@n-heptane.com>
 Priority: optional
 Section: haskell
-Maintainer: Jeremy Shaw <jeremy@n-heptane.com>
 Build-Depends: debhelper (>= 7.0)
                , haskell-devscripts (>= 0.8)
                , cdbs
@@ -78,17 +78,15 @@ Homepage: http://www.clckwrks.com/
 Package: clckwrks-dot-com-production
 Architecture: any
 Section: misc
-Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}
+         , ${haskell:Depends}
+         , ${misc:Depends}
 Conflicts: ${haskell:Conflicts}
-Description: clckwrks.com
- .
- An executable built from the clckwrks-dot-com package.
 
 Package: clckwrks-dot-com-backups
 Architecture: any
 Section: misc
-Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}
+         , ${haskell:Depends}
+         , ${misc:Depends}
 Conflicts: ${haskell:Conflicts}
-Description: clckwrks.com
- .
- An executable built from the clckwrks-dot-com package.

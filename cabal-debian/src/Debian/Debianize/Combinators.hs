@@ -38,7 +38,6 @@ import qualified Debian.Relation as D
 import Debian.Cabal.Dependencies (DependencyHints (binaryPackageDeps, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap, revision, debVersion, missingDependencies),
                                   debianName, debianBuildDeps, debianBuildDepsIndep)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.Paths (apacheLogDirectory)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
 import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtomKey(..), DebAtom(..), HasAtoms(getAtoms, putAtoms), insertAtom, foldAtoms, insertAtoms', utilsPackageName)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), newBinaryDebDescription,
@@ -126,7 +125,6 @@ deSugarDebianization build datadir deb =
           insertAtom (Binary b) (DHLink ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain')) $
           insertAtom (Binary b) (DHInstallDir logdir) $ -- Server won't start if log directory doesn't exist
           insertAtom (Binary b) (DHFile ("/etc/apache2/sites-available" </> domain') text) $ deb'
-      deSugarAtom (Binary b) x@(DHInstallLogrotate _) deb' = insertAtom (Binary b) x $ insertAtom (Binary b) (DHInstallDir (apacheLogDirectory b)) deb'
       deSugarAtom (Binary pkg) (DHInstallCabalExec name dst) deb' = insertAtom (Binary pkg) (DHInstall (build </> name </> name) dst) deb'
       deSugarAtom (Binary _) (DHInstallCabalExecTo {}) deb' = deb' -- This becomes a rule in rulesAtomText
       deSugarAtom (Binary p) (DHInstallData s d) deb' = insertAtom (Binary p) (DHInstallTo s (datadir </> makeRelative "/" d)) deb'
@@ -388,7 +386,6 @@ execAndUtilSpecs dependencyHints packageHints pkgDesc describe deb =
                       (retry server') (port server') (serverFlags server') False xs
       packageHintAtoms (InstallFileHint debName e) xs =
           execAtoms debName (sourceDir e) (execName e) (destDir e) (destName e) xs
-      packageHintAtoms _ xs = xs
 
       -- Create a package to hold any executables and data files not
       -- assigned to some other package.
@@ -448,7 +445,6 @@ bundledExecutables packageHints pkgDesc =
       execNameOfHint (InstallFileHint _ e) = Just (execName e)
       execNameOfHint (ServerHint _ s) = Just (execName (installFile s))
       execNameOfHint (SiteHint _ s) = Just (execName (installFile (server s)))
-      execNameOfHint _ = Nothing
 
 debianDescription :: String -> String -> String -> String -> String -> PackageType -> PackageIdentifier -> Text
 debianDescription synopsis' description' author' maintainer' url typ pkgId =

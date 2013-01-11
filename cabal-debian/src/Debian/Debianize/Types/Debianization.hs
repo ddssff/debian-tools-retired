@@ -112,6 +112,8 @@ data SourceDebDescription
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Section>
       , standardsVersion :: StandardsVersion
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Standards-Version>
+      , homepage :: Maybe Text
+      -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Homepage>
       , vcsFields :: Set VersionControlSpec
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-VCS-fields>
       , xFields :: Set XField
@@ -138,6 +140,7 @@ newSourceDebDescription src who standards =
       , buildDependsIndep  = []
       , buildConflictsIndep  = []
       , standardsVersion = standards
+      , homepage = Nothing
       , vcsFields = Set.empty
       , xFields = Set.empty
       , binaryPackages = [] }
