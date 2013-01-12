@@ -12,7 +12,7 @@ import Data.Map (Map)
 import Data.Maybe
 import Data.Set (Set)
 import Data.Version (Version)
-import Debian.Cabal.Dependencies (DependencyHints)
+import Debian.Debianize.Types.Dependencies (DependencyHints)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (debianization)
 import Debian.Debianize.Types.Atoms (DebAtomKey, DebAtom)

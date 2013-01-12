@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -Wall -Wwarn -fno-warn-name-shadowing -fno-warn-orphans #-}
-module Debian.Cabal.Dependencies
+module Debian.Debianize.Types.Dependencies
     ( DependencyHints(..)
     , defaultDependencyHints
     , VersionSplits(..)

@@ -43,7 +43,7 @@ import Data.Set as Set (Set, difference, union, fromList, null, insert, toList)
 import Data.Text as Text (Text, pack, intercalate, unpack, unlines)
 import Data.Version (Version)
 import qualified Debian.Relation as D
-import Debian.Cabal.Dependencies (DependencyHints (binaryPackageDeps, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap, revision, debVersion, missingDependencies),
+import Debian.Debianize.Types.Dependencies (DependencyHints (binaryPackageDeps, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap, revision, debVersion, missingDependencies),
                                   debianName, debianBuildDeps, debianBuildDepsIndep)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)

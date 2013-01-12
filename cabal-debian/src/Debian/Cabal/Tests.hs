@@ -13,7 +13,7 @@ import Data.Monoid (mempty, mconcat, (<>))
 import Data.Set as Set (fromList, singleton)
 import qualified Data.Text as T
 import Debian.Cabal.Debianize (debianizationWithIO)
-import Debian.Cabal.Dependencies (DependencyHints (missingDependencies, execMap, revision, extraDevDeps))
+import Debian.Debianize.Types.Dependencies (DependencyHints (missingDependencies, execMap, revision, extraDevDeps))
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Combinators (tightDependencyFixup, buildDeps, setSourcePackageName, setChangelog, control,

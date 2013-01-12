@@ -54,7 +54,6 @@ Library
    Debian.Cabal
    Debian.Cabal.Bundled
    Debian.Cabal.Debianize
-   Debian.Cabal.Dependencies
    Debian.Cabal.PackageDescription
    Debian.Cabal.Tests
    Debian.Debianize.Combinators
@@ -67,6 +66,7 @@ Library
    Debian.Debianize.Server
    Debian.Debianize.Types.Atoms
    Debian.Debianize.Types.Debianization
+   Debian.Debianize.Types.Dependencies
    Debian.Debianize.Types.PackageHints
    Debian.Debianize.Utility
    Debian.Orphans
