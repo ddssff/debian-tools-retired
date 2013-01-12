@@ -19,7 +19,7 @@ import Data.Version (Version)
 import Debian.Debianize.Types.Dependencies (DependencyHints, filterMissing', cabalDependencies, PackageInfo(..), debNameFromType, debDeps)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription)
 import Debian.Control
-import Debian.Debianize.Types.Debianization (DebType)
+import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps,
                                     dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
 import qualified Debian.Relation as D

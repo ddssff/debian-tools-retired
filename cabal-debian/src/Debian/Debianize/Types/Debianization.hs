@@ -11,13 +11,9 @@ module Debian.Debianize.Types.Debianization
     , BinaryDebDescription(..)
     , newBinaryDebDescription
     , PackageRelations(..)
-    , DebType(..)
-    , PackageType(..)
-    , mkPkgName
     , packageArch
     ) where
 
-import Data.Char (toLower)
 import Data.Generics (Data, Typeable)
 import Data.Map as Map (Map)
 import Data.Monoid (mempty)
@@ -25,11 +21,11 @@ import Data.Set as Set (Set, empty)
 import Data.Text (Text, pack)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Types.Atoms (DebAtomKey, DebAtom, HasAtoms(..))
+import Debian.Debianize.Types.PackageType (PackageType(..))
 import Debian.Orphans ()
 import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures(..), Section, parseMaintainer)
-import Debian.Relation (Relations, PkgName(pkgNameFromString), SrcPkgName(..), BinPkgName)
+import Debian.Relation (Relations, SrcPkgName(..), BinPkgName)
 import Distribution.License (License)
-import Distribution.Package (PackageName(PackageName))
 import Prelude hiding (init)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
@@ -226,45 +222,6 @@ newPackageRelations =
       , provides = []
       , replaces = []
       , builtUsing = [] }
-
-data DebType = Dev | Prof | Doc deriving (Eq, Read, Show)
-
--- ^ The different types of binary debs we can produce from a haskell package
-data PackageType
-    = Development   -- ^ The libghc-foo-dev package.
-    | Profiling     -- ^ The libghc-foo-prof package.
-    | Documentation -- ^ The libghc-foo-doc package.
-    | Exec          -- ^ A package related to a particular executable, perhaps
-                    -- but not necessarily a server.
-    | Utilities     -- ^ A package that holds the package's data files
-                    -- and any executables not assigned to other
-                    -- packages.
-    | Source'       -- ^ The source package (not a binary deb actually.)
-    | Cabal         -- ^ This is used to construct the value for
-                    -- DEB_CABAL_PACKAGE in the rules file
-    deriving (Eq, Show)
-
--- | Build a debian package name from a cabal package name and a
--- debian package type.  Unfortunately, this does not enforce the
--- correspondence between the PackageType value and the name type, so
--- it can return nonsense like (SrcPkgName "libghc-debian-dev").
-mkPkgName :: PkgName name => PackageName -> PackageType -> name
-mkPkgName (PackageName name) typ =
-    pkgNameFromString $
-             case typ of
-                Documentation -> "libghc-" ++ base ++ "-doc"
-                Development -> "libghc-" ++ base ++ "-dev"
-                Profiling -> "libghc-" ++ base ++ "-prof"
-                Utilities -> "haskell-" ++ base ++ "-utils"
-                Exec -> base
-                Source' -> "haskell-" ++ base ++ ""
-                Cabal -> base
-    where
-      base = map (fixChar . toLower) name
-      -- Underscore is prohibited in debian package names.
-      fixChar :: Char -> Char
-      fixChar '_' = '-'
-      fixChar c = toLower c
 
 packageArch :: PackageType -> PackageArchitectures
 packageArch Development = Any

@@ -68,6 +68,7 @@ Library
    Debian.Debianize.Types.Debianization
    Debian.Debianize.Types.Dependencies
    Debian.Debianize.Types.PackageHints
+   Debian.Debianize.Types.PackageType
    Debian.Debianize.Utility
    Debian.Orphans
    Debian.Policy

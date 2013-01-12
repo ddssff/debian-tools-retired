@@ -22,12 +22,13 @@ import Data.Function (on)
 import Data.List (nub, minimumBy, isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
-import Data.Version (Version(Version), showVersion)
+import Data.Version (Version, showVersion)
 import Debian.Cabal.Bundled (ghcBuiltIn)
 import Debian.Control
-import Debian.Debianize.Interspersed (Interspersed(foldInverted, leftmost, pairs), foldTriples)
+import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
 import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler)
-import Debian.Debianize.Types.Debianization as Debian (Debianization, DebType(Dev, Prof, Doc), PackageType(..), mkPkgName)
+import Debian.Debianize.Types.Debianization as Debian (Debianization)
+import Debian.Debianize.Types.PackageType (DebType(Dev, Prof, Doc), PackageType(..), mkPkgName, VersionSplits(..), knownVersionSplits)
 import Debian.Relation (Relations, Relation, BinPkgName, PkgName)
 import qualified Debian.Relation as D
 import Debian.Version (DebianVersion, parseDebianVersion)
@@ -159,34 +160,6 @@ defaultDependencyHints =
     , debVersion = Nothing
     , versionSplits = knownVersionSplits
     }
-
-data VersionSplits name
-    = VersionSplits {
-        packageName :: PackageName
-      , oldestPackage :: name
-      , splits :: [(Version, name)] -- Assumed to be in version number order
-      }
-
-instance PkgName name => Interspersed (VersionSplits name) name Version where
-    leftmost (VersionSplits {splits = []}) = error "Empty Interspersed instance"
-    leftmost (VersionSplits {oldestPackage = p}) = p
-    pairs (VersionSplits {splits = xs}) = xs
-
--- | These are the instances of debian names changing that I know
--- about.  I know they really shouldn't be hard coded.  Send a patch.
--- Note that this inherits the lack of type safety of the mkPkgName
--- function.
-knownVersionSplits :: D.PkgName name => PackageType -> [VersionSplits name]
-knownVersionSplits typ =
-    [ VersionSplits {
-        packageName = PackageName "parsec"
-      , oldestPackage = mkPkgName (PackageName "parsec2") typ
-      , splits = [(Version [3] [], mkPkgName (PackageName "parsec3") typ)] }
-    , VersionSplits {
-        packageName = PackageName "QuickCheck"
-      , oldestPackage = mkPkgName (PackageName "quickcheck1") typ
-      , splits = [(Version [2] [], mkPkgName (PackageName "quickcheck2") typ)] }
-    ]
 
 -- | Turn a cabal dependency into debian dependencies.  The result
 -- needs to correspond to a single debian package to be installed,
