@@ -129,11 +129,11 @@ data DependencyHints
       -- version 0.3.0.0-1build3, we need to specify
       -- debVersion="0.3.0.0-1build3" or the version we produce will
       -- look older than the one already available upstream.
-      , versionSplits :: D.PkgName name => PackageType -> [VersionSplits name]
+      , versionSplits :: [VersionSplits]
       -- ^ Instances where the debian package name is different (for
       -- some range of version numbers) from the default constructed
       -- by mkPkgName.
-      }
+      } deriving (Eq, Ord, Show)
 
 defaultDependencyHints :: DependencyHints
 defaultDependencyHints =
@@ -174,11 +174,11 @@ dependencies hints compiler typ name cabalRange =
       -- we may need to distribute any "and" dependencies implied
       -- by a version range over these "or" dependences.
       alts :: [(BinPkgName, VersionRange)]
-      alts = case Map.lookup name (packageSplits (versionSplits hints) typ) of
+      alts = case Map.lookup name (packageSplits (versionSplits hints)) of
                -- If there are no splits for this package just return the single dependency for the package
                Nothing -> [(mkPkgName name typ, cabalRange')]
                -- If there are splits create a list of (debian package name, VersionRange) pairs
-               Just splits' -> packageRangesFromVersionSplits splits'
+               Just splits' -> map (\ (n, r) -> (mkPkgName n typ, r)) (packageRangesFromVersionSplits splits')
 
       convert :: (BinPkgName, VersionRange) -> Maybe (Rels Relation)
       convert (dname, range) =
@@ -250,17 +250,17 @@ canonical (Or rels) = And . map Or $ sequence $ map (concat . map unOr . unAnd .
 convert' :: Rels a -> [[a]]
 convert' = map (map unRel . unOr) . unAnd . canonical
 
-packageSplits :: (PackageType -> [VersionSplits BinPkgName]) -> PackageType -> Map.Map PackageName (VersionSplits BinPkgName)
-packageSplits splits typ =
+packageSplits :: [VersionSplits] -> Map.Map PackageName VersionSplits
+packageSplits splits =
     foldr (\ splits' mp -> Map.insertWith multipleSplitsError (packageName splits') splits' mp)
           Map.empty
-          (splits typ)
+          splits
     where
-      multipleSplitsError :: VersionSplits BinPkgName -> a -> b
+      multipleSplitsError :: VersionSplits -> a -> b
       multipleSplitsError (VersionSplits {packageName = PackageName p}) _s2 =
           error ("Multiple splits for package " ++ show p)
 
-packageRangesFromVersionSplits :: (PkgName name) => VersionSplits name -> [(name, VersionRange)]
+packageRangesFromVersionSplits :: VersionSplits -> [(PackageName, VersionRange)]
 packageRangesFromVersionSplits splits =
     foldInverted (\ older dname newer more ->
                       (dname, intersectVersionRanges (maybe anyVersion orLaterVersion older) (maybe anyVersion earlierVersion newer)) : more)
@@ -367,8 +367,9 @@ docDependencies _ _ _ = []
 -- is >= v.
 debianName :: PkgName name => DependencyHints -> PackageType -> PackageIdentifier -> name
 debianName hints typ pkgDesc =
-    case filter (\ x -> pname == packageName x) (versionSplits hints $ typ) of
-      [] -> def
+    (\ pname -> mkPkgName pname typ) $
+    case filter (\ x -> pname == packageName x) (versionSplits hints) of
+      [] -> pname
       [splits] ->
           foldTriples' (\ ltName v geName debName ->
                            if pname /= packageName splits
@@ -383,13 +384,13 @@ debianName hints typ pkgDesc =
                                   Just (D.GRE v') | v' < split -> ltName
                                   Just (D.SGR v') | v' < split -> ltName
                                   _ -> geName)
-                       def
+                       pname
                        splits
       _ -> error $ "Multiple splits for cabal package " ++ string
     where
-      foldTriples' :: (PkgName name) => (name -> Version -> name -> name -> name) -> name -> VersionSplits name -> name
+      foldTriples' :: (PackageName -> Version -> PackageName -> PackageName -> PackageName) -> PackageName -> VersionSplits -> PackageName
       foldTriples' = foldTriples
-      def = mkPkgName pname typ
+      -- def = mkPkgName pname typ
       pname@(PackageName string) = pkgName pkgDesc
       version = (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion pkgDesc)))))
 

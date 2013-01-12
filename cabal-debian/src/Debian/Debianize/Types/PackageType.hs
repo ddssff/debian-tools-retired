@@ -54,14 +54,14 @@ mkPkgName (PackageName name) typ =
 -- | A redundant data type, too lazy to expunge.
 data DebType = Dev | Prof | Doc deriving (Eq, Read, Show)
 
-data VersionSplits name
+data VersionSplits
     = VersionSplits {
         packageName :: PackageName
-      , oldestPackage :: name
-      , splits :: [(Version, name)] -- Assumed to be in version number order
-      }
+      , oldestPackage :: PackageName
+      , splits :: [(Version, PackageName)] -- Assumed to be in version number order
+      } deriving (Eq, Ord, Show)
 
-instance PkgName name => Interspersed (VersionSplits name) name Version where
+instance Interspersed VersionSplits PackageName Version where
     leftmost (VersionSplits {splits = []}) = error "Empty Interspersed instance"
     leftmost (VersionSplits {oldestPackage = p}) = p
     pairs (VersionSplits {splits = xs}) = xs
@@ -70,14 +70,14 @@ instance PkgName name => Interspersed (VersionSplits name) name Version where
 -- about.  I know they really shouldn't be hard coded.  Send a patch.
 -- Note that this inherits the lack of type safety of the mkPkgName
 -- function.
-knownVersionSplits :: PkgName name => PackageType -> [VersionSplits name]
-knownVersionSplits typ =
+knownVersionSplits :: [VersionSplits]
+knownVersionSplits =
     [ VersionSplits {
         packageName = PackageName "parsec"
-      , oldestPackage = mkPkgName (PackageName "parsec2") typ
-      , splits = [(Version [3] [], mkPkgName (PackageName "parsec3") typ)] }
+      , oldestPackage = PackageName "parsec2"
+      , splits = [(Version [3] [], PackageName "parsec3")] }
     , VersionSplits {
         packageName = PackageName "QuickCheck"
-      , oldestPackage = mkPkgName (PackageName "quickcheck1") typ
-      , splits = [(Version [2] [], mkPkgName (PackageName "quickcheck2") typ)] }
+      , oldestPackage = PackageName "quickcheck1"
+      , splits = [(Version [2] [], PackageName "quickcheck2")] }
     ]
