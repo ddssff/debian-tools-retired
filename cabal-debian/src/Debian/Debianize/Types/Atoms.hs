@@ -11,6 +11,7 @@ module Debian.Debianize.Types.Atoms
     , foldAtoms
     , mapAtoms
     , compiler
+    , packageDescription
     , compilerVersion
     , noProfilingLibrary
     , noDocumentationLibrary
@@ -19,7 +20,7 @@ module Debian.Debianize.Types.Atoms
 
 import Data.Generics (Data, Typeable)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Monoid (mempty)
 import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold)
 import Data.Text (Text)
@@ -27,6 +28,7 @@ import Data.Version (Version)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat)
 import Debian.Relation (BinPkgName)
+import Distribution.PackageDescription as Cabal (PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init)
 
@@ -51,7 +53,9 @@ data DebAtom
       -- This is used to look up hard coded lists of packages bundled
       -- with the compiler and their version numbers.  (This could
       -- certainly be done in a more beautiful way.)
-    | Compiler Compiler
+    | DHPackageDescription PackageDescription
+    -- ^ The cabal package description record
+    | DHCompiler Compiler
     -- ^ The Compiler value returned with the Cabal
     -- PackageDescription, then used to determine what libraries
     -- (i.e. dependencies) are provided by the compiler.
@@ -78,8 +82,8 @@ data DebAtom
     | DHInstallTo FilePath FilePath     	  -- ^ Install a build file into the binary package at an exact location
     | DHInstallData FilePath FilePath   	  -- ^ DHInstallTo the package's data directory: /usr/share/package-version/
     | DHFile FilePath Text              	  -- ^ Create a file with the given text at the given path
-    | DHInstallCabalExec String FilePath  	  -- ^ Install a cabal executable into the binary package
-    | DHInstallCabalExecTo String FilePath  	  -- ^ Install a cabal executable into the binary package at an exact location
+    | DHInstallCabalExec String FilePath	  -- ^ Install a cabal executable into the binary package
+    | DHInstallCabalExecTo String FilePath	  -- ^ Install a cabal executable into the binary package at an exact location
     | DHInstallDir FilePath             	  -- ^ Create a directory in the binary package
     | DHInstallInit Text                	  -- ^ Add an init.d file to the binary package
 {-  -- Moved here from PackageHint
@@ -132,11 +136,17 @@ mapAtoms f xs = foldAtoms (\ k atom xs' -> insertAtoms k (f k atom) xs') (putAto
 setMapMaybe :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
 setMapMaybe p = fromList . mapMaybe p . toList
 
-compiler :: HasAtoms atoms => atoms -> Maybe Compiler
-compiler deb =
-    lookupAtom Source fromCompiler deb
-    where fromCompiler (Compiler x) = Just x
+compiler :: HasAtoms atoms => Compiler -> atoms -> Compiler
+compiler def deb =
+    fromMaybe def $ lookupAtom Source fromCompiler deb
+    where fromCompiler (DHCompiler x) = Just x
           fromCompiler _ = Nothing
+
+packageDescription :: HasAtoms atoms => PackageDescription -> atoms -> PackageDescription
+packageDescription def deb =
+    fromMaybe def $ lookupAtom Source from deb
+    where from (DHPackageDescription x) = Just x
+          from _ = Nothing
 
 compilerVersion :: HasAtoms atoms => atoms -> Maybe Version
 compilerVersion deb =

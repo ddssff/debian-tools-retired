@@ -2,6 +2,7 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Debian.Orphans where
 
+import Data.Function (on)
 import Data.Generics (Data, Typeable)
 import Data.List (isPrefixOf)
 import Data.Monoid ((<>))
@@ -14,8 +15,9 @@ import Debian.Relation (Relation(..), VersionReq(..), ArchitectureReq(..),
 import Debian.Version (DebianVersion, prettyDebianVersion, parseDebianVersion)
 import Distribution.License (License(..))
 import Distribution.Compiler (CompilerId(..), CompilerFlavor(..))
+import Distribution.PackageDescription (PackageDescription(package))
 import Distribution.Simple.Compiler (Compiler(..))
-import Distribution.Version (VersionRange, foldVersionRange')
+import Distribution.Version (VersionRange(..), foldVersionRange')
 import Language.Haskell.Extension (Extension(..), KnownExtension(..), Language(..))
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), text)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..))
@@ -39,6 +41,9 @@ deriving instance Ord KnownExtension
 deriving instance Ord Extension
 deriving instance Eq Compiler
 deriving instance Ord Compiler
+
+instance Ord PackageDescription where
+    compare = compare `on` package
 
 instance Pretty Text where
     pretty = text . unpack

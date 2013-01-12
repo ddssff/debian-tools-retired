@@ -5,7 +5,8 @@ DEB_CABAL_PACKAGE = creativeprompts
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/hlibrary.mk
 
-build/haskell-creativeprompts-utils:: build-ghc-stamp
-
+build/creativeprompts-data:: build-ghc-stamp
 build/creativeprompts-server:: build-ghc-stamp
+build/creativeprompts-production:: build-ghc-stamp
 build/creativeprompts-development:: build-ghc-stamp
+build/creativeprompts-backups:: build-ghc-stamp

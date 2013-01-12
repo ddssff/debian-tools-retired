@@ -24,8 +24,8 @@ import Triplets (mkQ2, extQ2)
 deriving instance Typeable Debianization
 deriving instance Typeable DebAtom
 
-deriving instance Data Debianization
-deriving instance Data DebAtom
+-- deriving instance Data Debianization
+-- deriving instance Data DebAtom
 
 -- ext2Q' :: (Data d, Typeable2 t) => (d -> q) -> (forall d1 d2. (Data d1, Data d2) => t d1 d2 -> q) -> d -> q
 -- ext2Q' = ext2Q

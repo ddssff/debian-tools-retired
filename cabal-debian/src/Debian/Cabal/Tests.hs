@@ -16,7 +16,8 @@ import Debian.Cabal.Debianize (debianizationWithIO)
 import Debian.Cabal.Dependencies (DependencyHints (missingDependencies, execMap, revision, extraDevDeps))
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
-import Debian.Debianize.Combinators (tightDependencyFixup, deSugarDebianization, buildDeps, setSourcePackageName, setChangelog, control, setArchitecture)
+import Debian.Debianize.Combinators (tightDependencyFixup, buildDeps, setSourcePackageName, setChangelog, control,
+                                     setArchitecture, installExec, installServer, installWebsite)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Generic (gdiff)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
@@ -123,7 +124,7 @@ test3 :: Test
 test3 =
     TestLabel "test3" $
     TestCase (do deb <- inputDebianization "test-data/haskell-devscripts"
-                 assertEqual "test3" [] (gdiff testDeb2 deb))
+                 assertEqual "test3" [] (diffDebianizations testDeb2 deb))
 
 test4 :: Test
 test4 =
@@ -134,8 +135,9 @@ test4 =
                  let new' = copyFirstLogEntry old (fixRules (tight new))
                  desc <- describeDebianization (Flags.buildDir flags) "test-data/clckwrks-dot-com/output" dataDir new'
                  -- assertEqual "test4" "" desc
-                 -- assertEqual "test4" [] (gdiff old (deSugarDebianization "dist-ghc/build" dataDir new'))
-                 assertEqual "test4" (toFileMap "dist-ghc/build" "<datadir>" old) (toFileMap "dist-ghc/build" "<datadir>" new')
+                 -- assertEqual "test4" [] (gdiff old (finalizeDebianization "dist-ghc/build" dataDir new'))
+                 -- assertEqual "test4" (toFileMap "dist-ghc/build" "<datadir>" old) (toFileMap "dist-ghc/build" "<datadir>" new')
+                 assertEqual "test4" [] (diffDebianizations old new')
              )
     where
       -- A log entry gets added when the Debianization is generated,
@@ -221,12 +223,14 @@ test5 =
     TestCase (     do oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" >>= \ x -> return (x {changelog = oldlog})
                       (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.executablePackages flags) (Flags.debAtoms flags) old
-                      let new' = insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
+                      let new' = setArchitecture (BinPkgName "creativeprompts-development") All $
+                                 setArchitecture (BinPkgName "creativeprompts-production") All $
+                                 insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
                                  copyFirstLogEntry old $
                                  new
                       desc <- describeDebianization (Flags.buildDir flags) "test-data/creativeprompts/output" dataDir new'
                       writeFile "/tmp/foo" desc
-                      -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (deSugarDebianization "dist-ghc/build" dataDir new))))
+                      -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (finalizeDebianization "dist-ghc/build" dataDir new))))
                       -- assertEqual "test5" "" desc
                       -- assertEqual "test5" (toFileMap "dist-ghc/build" "<datadir>" old) (toFileMap "dist-ghc/build" "<datadir>" new')
                       let -- Put the old values in fst, the new values in snd
@@ -240,6 +244,8 @@ test5 =
       flags = Flags.defaultFlags { Flags.dependencyHints = (Flags.dependencyHints Flags.defaultFlags) {execMap = insert "trhsx" (BinPkgName "haskell-hsx-utils") (execMap (Flags.dependencyHints Flags.defaultFlags))}
                                  , Flags.executablePackages = (InstallFileHint (BinPkgName "creativeprompts-server") $ InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server") :
                                                               (InstallFileHint (BinPkgName "creativeprompts-development") $ InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") :
+                                                              (InstallFileHint (BinPkgName "creativeprompts-production") $ InstallFile "creativeprompts-production" Nothing Nothing "creativeprompts-production") :
+                                                              (InstallFileHint (BinPkgName "creativeprompts-backups") $ InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups") :
                                                               Flags.executablePackages Flags.defaultFlags }
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
@@ -259,7 +265,7 @@ test6 :: Test
 test6 =
     TestLabel "test6" $
     TestCase ( do old@(Debianization {changelog = oldLog@(ChangeLog (entry : _))}) <- inputDebianization "test-data/creativeprompts/output"
-                  withSimplePackageDescription "test-data/creativeprompts/input" 0 Nothing [] $ \ pkgDesc compiler ->
+                  withSimplePackageDescription "test-data/creativeprompts/input" 0 Nothing [] $ \ pkgDesc cmplr ->
                       do -- compat <- getDebhelperCompatLevel
                          let compat' = 7
                          -- standards <- getDebianStandardsVersion
@@ -273,11 +279,14 @@ test6 =
                                                   InstallFileHint (BinPkgName "creativeprompts-development") $ InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development",
                                                   InstallFileHint (BinPkgName "creativeprompts-production") $ InstallFile "creativeprompts-production" Nothing Nothing "creativeprompts-production",
                                                   InstallFileHint (BinPkgName "creativeprompts-backups") $ InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups"
-                                                  ] compiler pkgDesc $
+                                                  ] $
                                    insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
                                    -- setSourcePackageName (SrcPkgName "haskell-creativeprompts") $
                                    -- setChangelog oldLog $
-                                   buildDeps hints compiler pkgDesc $ newDebianization entry (Left BSD3) compat' standards
+                                   buildDeps hints $
+                                   insertAtom Source (DHPackageDescription pkgDesc) $
+                                   insertAtom Source (DHCompiler cmplr) $
+                                   newDebianization entry (Left BSD3) compat' standards
                          desc <- describeDebianization "dist-ghc/build" "test-data/creativeprompts/output" (dataDirectory pkgDesc) new
                          writeFile "/tmp/bar" desc
                          assertEqual "test6" [] (diffDebianizations old new)

@@ -7,12 +7,13 @@ module Debian.Debianize.Files
 
 import qualified Data.Map as Map
 import Data.Monoid ((<>), mempty)
-import Data.Set (toList)
-import Data.Text (Text, pack)
+import Data.Set (toList, member)
+import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.Combinators (deSugarDebianization)
+import Debian.Debianize.Combinators (finalizeDebianization)
 import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms)
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
+import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
+                                                       VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations)
 import Prelude hiding (init, unlines)
@@ -160,7 +161,7 @@ toFileMap build datadir d0 =
       prerm d ++
       intermediate d
     where
-      d = deSugarDebianization build datadir d0
+      d = finalizeDebianization build datadir d0
 
 control :: SourceDebDescription -> Control' String
 control src =
@@ -197,8 +198,19 @@ control src =
       bField tag flag = if flag then [Field (tag, " yes")] else []
       lField _ [] = []
       lField tag xs = [Field (tag, " " <> show (pretty xs))]
-      vcsField _ = error "vcsField"
-      xField _ = error "xField"
+      vcsField (VCSBrowser t) = Field ("Vcs-Browser", " " ++ unpack t)
+      vcsField (VCSArch t) = Field ("Vcs-Arch", " " ++ unpack t)
+      vcsField (VCSBzr t) = Field ("Vcs-Bzr", " " ++ unpack t)
+      vcsField (VCSCvs t) = Field ("Vcs-Cvs", " " ++ unpack t)
+      vcsField (VCSDarcs t) = Field ("Vcs-Darcs", " " ++ unpack t)
+      vcsField (VCSGit t) = Field ("Vcs-Git", " " ++ unpack t)
+      vcsField (VCSHg t) = Field ("Vcs-Hg", " " ++ unpack t)
+      vcsField (VCSMtn t) = Field ("Vcs-Mtn", " " ++ unpack t)
+      vcsField (VCSSvn t) = Field ("Vcs-Svn", " " ++ unpack t)
+      xField (XField dests tag t) = Field (unpack ("X" <> showDests dests <> "-" <> tag), unpack (" " <> t))
+      showDests s = if member B s then "B" else "" <>
+                    if member S s then "S" else "" <>
+                    if member C s then "C" else ""
 
 relFields :: PackageRelations -> [Field' [Char]]
 relFields rels =

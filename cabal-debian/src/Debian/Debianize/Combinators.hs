@@ -3,7 +3,7 @@
 module Debian.Debianize.Combinators
     ( debianization
     , tightDependencyFixup
-    , deSugarDebianization
+    , finalizeDebianization
     , watchAtom
     , versionInfo
     , cdbsRules
@@ -13,6 +13,9 @@ module Debian.Debianize.Combinators
     , buildDeps
     , librarySpecs
     , execAndUtilSpecs
+    , installExec
+    , installServer
+    , installWebsite
     , addExtraLibDependencies
     , filterMissing
     , setSourcePackageName
@@ -27,14 +30,16 @@ module Debian.Debianize.Combinators
     , setDescription
     ) where
 
+import Debug.Trace
+
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
-import Data.List as List (nub, intercalate, intersperse, find)
+import Data.List as List (nub, intercalate, intersperse)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Maybe
 import Data.Monoid ((<>), mempty)
-import Data.Set (Set)
+import Data.Set as Set (Set, difference, union, fromList, null, insert, toList)
 import Data.Text as Text (Text, pack, intercalate, unpack, unlines)
 import Data.Version (Version)
 import qualified Debian.Relation as D
@@ -42,7 +47,7 @@ import Debian.Cabal.Dependencies (DependencyHints (binaryPackageDeps, extraLibMa
                                   debianName, debianBuildDeps, debianBuildDepsIndep)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
-import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtomKey(..), DebAtom(..), HasAtoms(getAtoms, putAtoms), insertAtom, foldAtoms, insertAtoms', utilsPackageName)
+import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtomKey(..), DebAtom(..), HasAtoms(getAtoms, putAtoms), insertAtom, foldAtoms, insertAtoms', utilsPackageName, packageDescription, compiler)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), newBinaryDebDescription,
                                                        PackageRelations(..), PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Types.PackageHints (PackageHints, PackageHint(..), InstallFile(..), Server(..), Site(..))
@@ -53,8 +58,8 @@ import Debian.Release (parseReleaseName)
 import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
 import Distribution.License (License)
 import Distribution.Package (PackageIdentifier(..), PackageName(..))
-import Distribution.PackageDescription as Cabal (PackageDescription(package, library, {-homepage,-} synopsis, {-description,-} maintainer, dataFiles, executables, author, pkgUrl),
-                                                 BuildInfo(buildable, extraLibs), Executable(exeName, buildInfo), allBuildInfo)
+import Distribution.PackageDescription as Cabal (PackageDescription({-package, library, homepage, synopsis, description, maintainer, dataFiles, executables, author, pkgUrl-}),
+                                                 BuildInfo(buildable {-, extraLibs-}), Executable(exeName, buildInfo) {-, allBuildInfo-})
 import qualified Distribution.PackageDescription as Cabal
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Text (display)
@@ -74,19 +79,21 @@ debianization :: DependencyHints
               -> StandardsVersion
               -> Debianization       -- ^ Existing debianization
               -> Debianization       -- ^ New debianization
-debianization hints atoms execs pkgDesc compiler date copyright' maint standards oldDeb =
+debianization hints atoms execs pkgDesc cmplr date copyright' maint standards oldDeb =
     watchAtom (pkgName . Cabal.package $ pkgDesc)  $
     putCopyright copyright' $
     putStandards standards $
     filterMissing (missingDependencies hints) $
-    versionInfo hints (Cabal.package pkgDesc) maint date $
-    addExtraLibDependencies hints pkgDesc $
-    control hints execs compiler pkgDesc $
+    versionInfo hints maint date $
+    addExtraLibDependencies hints $
+    control hints execs $
     cdbsRules hints (Cabal.package pkgDesc) $
     -- Do we want to replace the atoms in the old deb, or add these?
     -- Or should we delete even more information from the original,
     -- keeping only the changelog?  Probably the latter.  So this is
     -- somewhat wrong.
+    insertAtom Source (DHPackageDescription pkgDesc) $
+    insertAtom Source (DHCompiler cmplr) $
     putAtoms atoms $
     oldDeb
 
@@ -119,24 +126,24 @@ tightDependencyFixup pairs p deb =
 -- are not removed from the list because they may contribute to the
 -- debianization in other ways, so be careful not to do this twice,
 -- this function is not idempotent.  (Exported for use in unit tests.)
-deSugarDebianization  :: FilePath -> FilePath -> Debianization -> Debianization
-deSugarDebianization build datadir deb =
-    deSugarAtoms . mergeRules $ deb
+finalizeDebianization  :: FilePath -> FilePath -> Debianization -> Debianization
+finalizeDebianization build datadir deb =
+    finalizeAtoms . mergeRules $ deb
     where
-      deSugarAtoms deb' = foldAtoms deSugarAtom (putAtoms mempty deb') (getAtoms deb')
-      deSugarAtom (Binary b) (DHApacheSite domain' logdir text) deb' =
+      finalizeAtoms deb' = foldAtoms finalizeAtom (putAtoms mempty deb') (getAtoms deb')
+      finalizeAtom (Binary b) (DHApacheSite domain' logdir text) deb' =
           insertAtom (Binary b) (DHLink ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain')) $
           insertAtom (Binary b) (DHInstallDir logdir) $ -- Server won't start if log directory doesn't exist
           insertAtom (Binary b) (DHFile ("/etc/apache2/sites-available" </> domain') text) $ deb'
-      deSugarAtom (Binary pkg) (DHInstallCabalExec name dst) deb' = insertAtom (Binary pkg) (DHInstall (build </> name </> name) dst) deb'
-      deSugarAtom (Binary _) (DHInstallCabalExecTo {}) deb' = deb' -- This becomes a rule in rulesAtomText
-      deSugarAtom (Binary p) (DHInstallData s d) deb' = insertAtom (Binary p) (DHInstallTo s (datadir </> makeRelative "/" d)) deb'
-      deSugarAtom (Binary p) (DHFile path s) deb' =
+      finalizeAtom (Binary pkg) (DHInstallCabalExec name dst) deb' = insertAtom (Binary pkg) (DHInstall (build </> name </> name) dst) deb'
+      finalizeAtom (Binary _) (DHInstallCabalExecTo {}) deb' = deb' -- This becomes a rule in rulesAtomText
+      finalizeAtom (Binary p) (DHInstallData s d) deb' = insertAtom (Binary p) (DHInstallTo s (datadir </> makeRelative "/" d)) deb'
+      finalizeAtom (Binary p) (DHFile path s) deb' =
           let (destDir', destName') = splitFileName path
               tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
               tmpPath = tmpDir </> destName' in
           insertAtom Source (DHIntermediate tmpPath s) (insertAtom (Binary p) (DHInstall tmpPath destDir') deb')
-      deSugarAtom k x deb' = insertAtom k x deb'
+      finalizeAtom k x deb' = insertAtom k x deb'
       mergeRules :: Debianization -> Debianization
       mergeRules x = x { rulesHead = foldAtoms mergeRulesAtom (rulesHead x) (getAtoms x) }
       mergeRulesAtom Source (DebRulesFragment x) text = text <> "\n" <> x
@@ -144,7 +151,6 @@ deSugarDebianization build datadir deb =
           text <> "\n" <>
                unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
                        , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]
-      mergeRulesAtom _ (DHInstallData _ _) _ = error "DHInstallData should have been turned into a DHInstallTo"
       mergeRulesAtom (Binary p) (DHInstallCabalExecTo n d) text =
           text <> "\n" <>
                unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
@@ -170,8 +176,8 @@ sourceFormatAtom format deb =
 -- | Set the debianization's version info - everything that goes into
 -- the new changelog entry, source package name, exact debian version,
 -- log comments, maintainer name, revision date.
-versionInfo :: DependencyHints -> PackageIdentifier -> NameAddr -> String -> Debianization -> Debianization
-versionInfo hints pkgId debianMaintainer date deb@(Debianization {changelog = ChangeLog oldEntries}) =
+versionInfo :: DependencyHints -> NameAddr -> String -> Debianization -> Debianization
+versionInfo hints debianMaintainer date deb@(Debianization {changelog = ChangeLog oldEntries}) =
     deb { changelog = newLog
         , sourceDebDescription =
             (sourceDebDescription deb)
@@ -199,6 +205,8 @@ versionInfo hints pkgId debianMaintainer date deb@(Debianization {changelog = Ch
               , logDate = date }
       debinfo = maybe (Right (epoch, revision hints)) Left (debVersion hints)
       epoch = Map.lookup (pkgName pkgId) (epochMap hints)
+      pkgId = Cabal.package pkgDesc
+      pkgDesc = packageDescription (error "versionInfo: no PackageDescription") deb
 
 -- | Combine various bits of information to produce the debian version
 -- which will be used for the debian package.  If the override
@@ -244,26 +252,29 @@ putLicense license deb = deb {copyright = Left license}
 -- produced.  If the package contains a library we usually want dev,
 -- prof, and doc packages.
 
-control :: DependencyHints -> PackageHints -> Compiler -> PackageDescription -> Debianization -> Debianization
-control dependencyHints packageHints compiler pkgDesc deb =
-    execAndUtilSpecs dependencyHints packageHints pkgDesc describe $
-    librarySpecs dependencyHints pkgDesc describe $
-    buildDeps dependencyHints compiler pkgDesc $
+control :: DependencyHints -> PackageHints -> Debianization -> Debianization
+control dependencyHints packageHints deb =
+    execAndUtilSpecs dependencyHints packageHints describe $
+    librarySpecs dependencyHints describe $
+    buildDeps dependencyHints $
     setSourcePriority (Just Optional) $
     setSourceSection (Just (MainSection "haskell")) $
     setSourceBinaries [] $
     deb
     where
       describe = debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc)
+      pkgDesc = packageDescription (error "control: no PackageDescription") deb
 
-buildDeps :: DependencyHints -> Compiler -> PackageDescription -> Debianization -> Debianization
-buildDeps hints compiler pkgDesc deb =
-    deb { sourceDebDescription = (sourceDebDescription deb) { Debian.buildDepends = debianBuildDeps hints compiler pkgDesc deb
-                                                            , buildDependsIndep = debianBuildDepsIndep hints compiler pkgDesc deb } }
+buildDeps :: DependencyHints -> Debianization -> Debianization
+buildDeps hints deb =
+    deb { sourceDebDescription = (sourceDebDescription deb) { Debian.buildDepends = debianBuildDeps hints cmplr deb
+                                                            , buildDependsIndep = debianBuildDepsIndep hints deb } }
+    where
+      cmplr = compiler (error "debianBuildDeps: no Compiler") deb
 
 -- debLibProf haddock binaryPackageDeps extraDevDeps extraLibMap
-librarySpecs :: DependencyHints -> PackageDescription -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
-librarySpecs hints pkgDesc describe deb =
+librarySpecs :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
+librarySpecs hints describe deb =
     deb { sourceDebDescription =
             (sourceDebDescription deb)
               { binaryPackages =
@@ -273,12 +284,14 @@ librarySpecs hints pkgDesc describe deb =
                                   if noDocumentationLibrary deb then [] else [docSpecsParagraph hints (Cabal.package pkgDesc) describe]))
                           (Cabal.library pkgDesc) ++
                     binaryPackages (sourceDebDescription deb) } }
+    where
+      pkgDesc = packageDescription (error "librarySpecs: no PackageDescription") deb
 
 -- | Convert the extraLibs field of the cabal build info into debian
 -- binary package names and make them dependendencies of the debian
 -- devel package (if there is one.)
-addExtraLibDependencies :: DependencyHints -> PackageDescription -> Debianization -> Debianization
-addExtraLibDependencies hints pkgDesc deb =
+addExtraLibDependencies :: DependencyHints -> Debianization -> Debianization
+addExtraLibDependencies hints deb =
     deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = map f (binaryPackages (sourceDebDescription deb))}}
     where
       f :: BinaryDebDescription -> BinaryDebDescription
@@ -290,6 +303,7 @@ addExtraLibDependencies hints pkgDesc deb =
       g rels = rels { depends = depends rels ++
                                 map anyrel' (concatMap (\ cab -> fromMaybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] (Map.lookup cab (extraLibMap hints)))
                                                        (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc)) }
+      pkgDesc = packageDescription (error "addExtraLibDependencies: no PackageDescription") deb
 
 librarySpec :: DependencyHints -> PackageArchitectures -> PackageType -> PackageIdentifier -> (PackageType -> PackageIdentifier -> Text) -> BinaryDebDescription
 librarySpec hints arch typ pkgId describe =
@@ -340,103 +354,146 @@ docSpecsParagraph hints pkgId describe =
                 }
             }
 
+data FileInfo
+    = DataFile FilePath
+    -- ^ A file that is going to be installed into the package's data
+    -- file directory, /usr/share/packagename-version/.
+    | CabalExecutable String
+    -- ^ A Cabal Executable record, which appears in dist/build/name/name,
+    -- and is typically installed into /usr/bin.
+    deriving (Eq, Ord, Show)
+
 -- | Generate the control file sections and other debhelper atoms for
 -- the executable and utility packages.
-execAndUtilSpecs :: DependencyHints -> PackageHints -> PackageDescription -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
-execAndUtilSpecs dependencyHints packageHints pkgDesc describe deb =
-    flip (foldr packageHintAtoms) packageHints $
-    makeUtilsAtoms dependencyHints packageHints pkgDesc $
-    deb { sourceDebDescription = (sourceDebDescription deb) { binaryPackages = map applyPackageHints (newBinaryPackageList (sourceDebDescription deb)) } }
-    where
-      newBinaryPackageList src=
-          concatMap packageHintDeb packageHints ++
-          makeUtilsPackage (Cabal.dataFiles pkgDesc) ++
-          binaryPackages src
+execAndUtilSpecs :: DependencyHints -> PackageHints -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
+execAndUtilSpecs dependencyHints packageHints describe deb =
+    makeUtilsPackage dependencyHints packageHints describe $
+    applyPackageHints dependencyHints describe packageHints $ deb
 
+t1 x = trace ("t1: " ++ show x) x
+t2 x = trace ("t2: " ++ show x) x
+t3 x = {- trace ("t3: " ++ show x) -} x
+t4 x = trace ("t4: " ++ show x) x
+t5 x = trace ("t5: " ++ show x) x
+
+-- Create a package to hold any executables and data files not
+-- assigned to some other package.
+makeUtilsPackage :: DependencyHints -> PackageHints -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
+makeUtilsPackage dependencyHints packageHints describe deb =
+    case Set.difference (t1 available) (t2 installed) of
+      s | Set.null s -> deb
+      s ->      let p = t4 (fromMaybe (debianName dependencyHints Utilities (Cabal.package pkgDesc)) (t5 (utilsPackageName deb))) in
+                makeUtilsAtoms p s $
+                deb { sourceDebDescription =
+                          (sourceDebDescription deb)
+                          { binaryPackages =
+                               binaryPackages (sourceDebDescription deb) ++
+                               [BinaryDebDescription
+                                { Debian.package = p
+                                , architecture = Any
+                                , binarySection = Just (MainSection "misc")
+                                , binaryPriority = Nothing
+                                , essential = False
+                                , Debian.description = describe Utilities (Cabal.package pkgDesc)
+                                , relations =
+                                    PackageRelations
+                                    { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
+                                                extraDeps (binaryPackageDeps dependencyHints) p
+                                    , recommends = []
+                                    , suggests = []
+                                    , preDepends = []
+                                    , breaks = []
+                                    , conflicts = [anyrel "${haskell:Conflicts}"] ++ extraDeps (binaryPackageConflicts dependencyHints) p
+                                    , provides = []
+                                    , replaces = []
+                                    , builtUsing = []
+                                    }
+                                }]} }
+    where
+      pkgDesc = packageDescription (error "makeUtilsPackage: no PackageDescription") deb
+      available = Set.union (Set.fromList (map DataFile (Cabal.dataFiles pkgDesc)))
+                            (Set.fromList (map (CabalExecutable . exeName) (Cabal.executables pkgDesc)))
+      installed = foldAtoms cabalFile mempty (t3 (getAtoms deb))
+      cabalFile _ (DHInstallCabalExec name _) xs = Set.insert (CabalExecutable name) xs
+      cabalFile _ (DHInstallCabalExecTo name _) xs = Set.insert (CabalExecutable name) xs
+      cabalFile _ (DHInstallData path _) xs = Set.insert (DataFile path) xs
+      cabalFile _ _ xs = xs
+      makeUtilsAtoms :: BinPkgName -> Set FileInfo -> Debianization -> Debianization
+      makeUtilsAtoms p s deb' =
+          case (bundledExecutables packageHints pkgDesc, Cabal.dataFiles pkgDesc) of
+            ([], []) -> deb'
+            _ -> insertAtom Source (DebRulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))) $
+                 insertAtoms' (Binary p) (map fileInfoAtom (Set.toList s)) $
+                 deb'
+      fileInfoAtom (DataFile path) = DHInstall path (takeDirectory ("usr/share" </> display (Cabal.package pkgDesc) </> path))
+      fileInfoAtom (CabalExecutable name) = DHInstallCabalExec name "usr/bin"
+
+applyPackageHint :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> PackageHint -> Debianization -> Debianization
+applyPackageHint dependencyHints describe (SiteHint b x) deb = installWebsite dependencyHints describe b x deb
+applyPackageHint dependencyHints describe (ServerHint b x) deb = installServer dependencyHints describe b x deb
+applyPackageHint dependencyHints describe (InstallFileHint b x) deb = installExec dependencyHints describe b x deb
+
+installWebsite :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> BinPkgName -> Site -> Debianization -> Debianization
+installWebsite dependencyHints describe b site deb =
+    siteAtoms b site $ cabalExecBinaryPackage b dependencyHints describe $ deb
+
+installServer :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> BinPkgName -> Server -> Debianization -> Debianization
+installServer dependencyHints describe b server deb =
+    serverAtoms b server False $ cabalExecBinaryPackage b dependencyHints describe $ deb
+
+installExec :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> BinPkgName -> InstallFile -> Debianization -> Debianization
+installExec dependencyHints describe b e deb =
+    execAtoms b e $ cabalExecBinaryPackage b dependencyHints describe $ deb
+
+{-
+applyPackageHint dependencyHints pkgDesc describe packageHint deb =
+    packageHintAtoms packageHint $ packageHintPackages $ deb
+    where
+      packageHintPackages :: Debianization -> Debianization
+      packageHintPackages deb' =
+          deb' { sourceDebDescription =
+                    (sourceDebDescription deb')
+                    { binaryPackages = concatMap packageHintDeb packageHints ++ binaryPackages (sourceDebDescription deb') } }
+
+      packageHintAtoms (SiteHint debName site) xs = siteAtoms debName site xs
+      packageHintAtoms (ServerHint debName server') xs = serverAtoms debName server' False xs
+      packageHintAtoms (InstallFileHint debName e) xs = execAtoms debName e xs
       -- If this package hint implies a new binary deb, create it
       packageHintDeb :: PackageHint -> [BinaryDebDescription]
       packageHintDeb (SiteHint debName site) = packageHintDeb (ServerHint debName (server site))
       packageHintDeb (ServerHint debName server') = packageHintDeb (InstallFileHint debName (installFile server'))
-      packageHintDeb (InstallFileHint debName _p) =
-          [BinaryDebDescription
-             { Debian.package = debName
-             , architecture = Any
-             , binarySection = Just (MainSection "misc")
-             , binaryPriority = Nothing
-             , essential = False
-             , Debian.description = describe Exec (Cabal.package pkgDesc)
-             , relations =
-                 PackageRelations
-                 { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (binaryPackageDeps dependencyHints) debName
-                 , recommends = []
-                 , suggests = []
-                 , preDepends = []
-                 , breaks = []
-                 , conflicts = [anyrel "${haskell:Conflicts}"] ++ extraDeps (binaryPackageConflicts dependencyHints) debName
-                 , provides = []
-                 , replaces = []
-                 , builtUsing = []
-                 }
-             }]
+-}
 
-      packageHintAtoms (SiteHint debName site) xs =
-          siteAtoms debName (sourceDir (installFile (server site))) (execName (installFile (server site))) (destDir (installFile (server site))) (destName (installFile (server site)))
-                    (retry (server site)) (port (server site)) (serverFlags (server site))
-                    (domain site) (serverAdmin site) xs
-      packageHintAtoms (ServerHint debName server') xs =
-          serverAtoms debName (sourceDir (installFile server')) (execName (installFile server')) (destDir (installFile server')) (destName (installFile server'))
-                      (retry server') (port server') (serverFlags server') False xs
-      packageHintAtoms (InstallFileHint debName e) xs =
-          execAtoms debName (sourceDir e) (execName e) (destDir e) (destName e) xs
+cabalExecBinaryPackage :: BinPkgName -> DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
+cabalExecBinaryPackage b dependencyHints describe deb =
+    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = bin : binaryPackages (sourceDebDescription deb)}}
+    where
+      bin = BinaryDebDescription
+            { Debian.package = b
+            , architecture = Any
+            , binarySection = Just (MainSection "misc")
+            , binaryPriority = Nothing
+            , essential = False
+            , Debian.description = describe Exec (Cabal.package pkgDesc)
+            , relations =
+                PackageRelations
+                { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
+                            extraDeps (binaryPackageDeps dependencyHints) b
+                , recommends = []
+                , suggests = []
+                , preDepends = []
+                , breaks = []
+                , conflicts = [anyrel "${haskell:Conflicts}"] ++ extraDeps (binaryPackageConflicts dependencyHints) b
+                , provides = []
+                , replaces = []
+                , builtUsing = []
+                }
+            }
+      pkgDesc = packageDescription (error "cabalExecBinaryPackage: no PackageDescription") deb
 
-      -- Create a package to hold any executables and data files not
-      -- assigned to some other package.
-      makeUtilsPackage :: [FilePath] -> [BinaryDebDescription]
-      makeUtilsPackage dataFiles' =
-          case (bundledExecutables packageHints pkgDesc, dataFiles') of
-            ([], []) ->
-                []
-            _ ->
-                let p = fromMaybe (debianName dependencyHints Utilities (Cabal.package pkgDesc)) (utilsPackageName deb) in
-                [BinaryDebDescription
-                    { Debian.package = p
-                    , architecture = Any
-                    , binarySection = Just (MainSection "misc")
-                    , binaryPriority = Nothing
-                    , essential = False
-                    , Debian.description = describe Utilities (Cabal.package pkgDesc)
-                    , relations =
-                        PackageRelations
-                        { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ extraDeps (binaryPackageDeps dependencyHints) p
-                        , recommends = []
-                        , suggests = []
-                        , preDepends = []
-                        , breaks = []
-                        , conflicts = [anyrel "${haskell:Conflicts}"] ++ extraDeps (binaryPackageConflicts dependencyHints) p
-                        , provides = []
-                        , replaces = []
-                        , builtUsing = []
-                        }
-                    }]
-
-      applyPackageHints bin = foldr applyPackageHint bin packageHints
-      applyPackageHint (InstallFileHint {}) bin = bin
-      applyPackageHint (ServerHint {}) bin = bin
-      applyPackageHint (SiteHint {}) bin = bin
-
-makeUtilsAtoms :: DependencyHints -> PackageHints -> PackageDescription -> Debianization -> Debianization
-makeUtilsAtoms dependencyHints packageHints pkgDesc deb =
-    case (bundledExecutables packageHints pkgDesc, Cabal.dataFiles pkgDesc) of
-      ([], []) -> deb
-      _ -> let p = debianName dependencyHints Utilities (Cabal.package pkgDesc)
-               p' = show (pretty p)
-               c = Cabal.package pkgDesc
-               c' = display c in
-           insertAtom Source (DebRulesFragment (pack ("build" </> p' ++ ":: build-ghc-stamp\n"))) $
-           insertAtoms' (Binary p)
-             (map (\ e -> DHInstallCabalExec (exeName e) "usr/bin") (bundledExecutables packageHints pkgDesc) ++
-              map (\ f -> DHInstall f (takeDirectory ("usr/share" </> c' </> f))) (Cabal.dataFiles pkgDesc))
-             deb
+applyPackageHints :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> PackageHints -> Debianization -> Debianization
+applyPackageHints dependencyHints describe packageHints deb =
+    foldr (applyPackageHint dependencyHints describe) deb packageHints
 
 -- | The list of executables without a corresponding cabal package to put them into
 bundledExecutables :: [PackageHint] -> PackageDescription -> [Executable]
@@ -571,8 +628,10 @@ setDescription bin x deb = modifyBinaryDeb bin (\ b -> b {Debian.description = x
 
 modifyBinaryDeb :: BinPkgName -> (BinaryDebDescription -> BinaryDebDescription) -> Debianization -> Debianization
 modifyBinaryDeb bin f deb =
-    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = f b : binaryPackages (sourceDebDescription deb)}}
+    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = xs''}}
     where
-      b = case find ((== bin) . Debian.package) (binaryPackages (sourceDebDescription deb)) of
-            Nothing -> newBinaryDebDescription bin (Names [])
-            Just x -> x
+      -- scan the binary debs and apply f to the target, recording whether we found it
+      (xs', found) = foldl g ([], False) (binaryPackages (sourceDebDescription deb))
+      g (xs, found) x = if Debian.package x == bin then (f x : xs, True) else (x : xs, found)
+      -- If we didn't find the target package create it and apply f
+      xs'' = if found then xs' else f (newBinaryDebDescription bin (Names [])) : xs'
