@@ -10,6 +10,7 @@ module Debian.Debianize.Types.Atoms
     , lookupAtoms
     , foldAtoms
     , mapAtoms
+    , partitionAtoms
     , compiler
     , packageDescription
     , compilerVersion
@@ -22,7 +23,7 @@ import Data.Generics (Data, Typeable)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey)
 import Data.Maybe (mapMaybe, fromMaybe)
 import Data.Monoid (mempty)
-import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold)
+import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert)
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Orphans ()
@@ -70,7 +71,9 @@ data DebAtom
     | DebRulesFragment Text                       -- ^ A Fragment of debian/rules
     | Warning Text                                -- ^ A warning to be reported later
     | UtilsPackageName BinPkgName                 -- ^ Name to give the package for left-over data files and executables
-    -- From here down are atoms to be associated with a Debian binary package
+    -- From here down are atoms to be associated with a Debian binary
+    -- package.  This could be done with more type safety, separate
+    -- maps for the Source atoms and the Binary atoms.
     | DHApacheSite String FilePath Text           -- ^ Have Apache configure a site using PACKAGE, DOMAIN, LOGDIR, and APACHECONFIGFILE
     | DHLogrotateStanza Text		          -- ^ Add a stanza of a logrotate file to the binary package
     | DHLink FilePath FilePath          	  -- ^ Create a symbolic link in the binary package
@@ -86,18 +89,6 @@ data DebAtom
     | DHInstallCabalExecTo String FilePath	  -- ^ Install a cabal executable into the binary package at an exact location
     | DHInstallDir FilePath             	  -- ^ Create a directory in the binary package
     | DHInstallInit Text                	  -- ^ Add an init.d file to the binary package
-{-  -- Moved here from PackageHint
-    | PriorityHint (Maybe PackagePriority)
-    | SectionHint (Maybe Section)
-    | ArchitectureHint PackageArchitectures
-    | DescriptionHint Text
--}
-{-
-      applyPackageHint (PriorityHint name x) bin = if name == Debian.package bin then (bin {binaryPriority = x}) else bin
-      applyPackageHint (SectionHint name x) bin = if name == Debian.package bin then (bin {binarySection = x}) else bin
-      applyPackageHint (ArchitectureHint name x) bin = if name == Debian.package bin then (bin {architecture = x}) else bin
-      applyPackageHint (DescriptionHint name x) bin = if name == Debian.package bin then (bin {Debian.description = x}) else bin
--}
     deriving (Eq, Ord, Show)
 
 class HasAtoms atoms where
@@ -130,8 +121,18 @@ insertAtoms' mbin atoms x = insertAtoms mbin (fromList atoms) x
 foldAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
 foldAtoms f r0 xs = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (getAtoms xs)
 
+-- | Map each atom of a HasAtoms instance to zero or more new atoms.
 mapAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> Set DebAtom) -> atoms -> atoms
 mapAtoms f xs = foldAtoms (\ k atom xs' -> insertAtoms k (f k atom) xs') (putAtoms mempty xs) (getAtoms xs)
+
+-- | Split atoms out of a HasAtoms instance by predicate.
+partitionAtoms :: (HasAtoms atoms, Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> atoms -> (Set a, atoms)
+partitionAtoms f deb =
+    foldAtoms (\ k atom (xs, deb') -> case f k atom of
+                                        Just x -> (Set.insert x xs, deb')
+                                        Nothing -> (xs, insertAtom k atom deb'))
+              (mempty, putAtoms mempty deb)
+              (getAtoms deb)
 
 setMapMaybe :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
 setMapMaybe p = fromList . mapMaybe p . toList
