@@ -7,23 +7,22 @@ module Debian.Cabal.Tests
 import qualified CabalDebian.Flags as Flags (Flags(..), defaultFlags)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
-import Data.Map as Map (insert, differenceWithKey, intersectionWithKey)
+import Data.Map as Map (differenceWithKey, intersectionWithKey)
 import qualified Data.Map as Map
 import Data.Monoid (mempty, mconcat, (<>))
 import Data.Set as Set (fromList, singleton)
 import qualified Data.Text as T
 import Debian.Cabal.Debianize (debianizationWithIO)
-import Debian.Debianize.Types.Dependencies (DependencyHints (missingDependencies, execMap, revision, extraDevDeps))
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Combinators (tightDependencyFixup, buildDeps, setSourcePackageName, setChangelog, control,
                                      setArchitecture, installExec, installServer, installWebsite)
 import Debian.Debianize.Files (toFileMap)
-import Debian.Debianize.Generic (gdiff)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
-import Debian.Debianize.Types.Atoms (compilerVersion, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms)
+import Debian.Debianize.Types.Atoms (compilerVersion, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms,
+                                     dependencyHints, missingDependency, setRevision, putExecMap, putExtraDevDep)
 import Debian.Debianize.Types.Debianization (Debianization(..), newDebianization, SourceDebDescription(..), BinaryDebDescription(..),
                                              PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
@@ -131,7 +130,7 @@ test4 =
     TestLabel "test4" $
     TestCase (do oldlog <- inputChangeLog "test-data/clckwrks-dot-com/input/debian"
                  old <- inputDebianization "test-data/clckwrks-dot-com/output" >>= \ x -> return (x {changelog = oldlog})
-                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.executablePackages flags) (Flags.debAtoms flags) old
+                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.executablePackages flags) (Flags.debAtoms flags) old
                  let new' = copyFirstLogEntry old (fixRules (tight new))
                  desc <- describeDebianization (Flags.buildDir flags) "test-data/clckwrks-dot-com/output" dataDir new'
                  -- assertEqual "test4" "" desc
@@ -148,10 +147,9 @@ test4 =
             omitRulesAtom Source (DebRulesFragment _) = mempty
             omitRulesAtom _ x = Set.singleton x
       flags = insertAtom Source (DebSourceFormat Native3) $
-              Flags.defaultFlags
-              { Flags.dependencyHints = (Flags.dependencyHints Flags.defaultFlags) { missingDependencies = [BinPkgName "libghc-clckwrks-theme-clckwrks-doc"]
-                                                                       , revision            = "" }
-              , Flags.executablePackages  = map theSite serverNames ++ [backups] }
+              missingDependency (BinPkgName "libghc-clckwrks-theme-clckwrks-doc") $
+              setRevision "" $
+              Flags.defaultFlags { Flags.executablePackages  = map theSite serverNames ++ [backups] }
       serverNames = map BinPkgName ["clckwrks-dot-com-production"] -- , "clckwrks-dot-com-staging", "clckwrks-dot-com-development"]
       -- Insert a line just above the debhelper.mk include
       fixRules deb = deb {rulesHead = T.unlines $ concat $ map (\ line -> if line == "include /usr/share/cdbs/1/rules/debhelper.mk"
@@ -222,7 +220,7 @@ test5 =
     TestLabel "test5" $
     TestCase (     do oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" >>= \ x -> return (x {changelog = oldlog})
-                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.dependencyHints flags) (Flags.executablePackages flags) (Flags.debAtoms flags) old
+                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.executablePackages flags) (Flags.debAtoms flags) old
                       let new' = setArchitecture (BinPkgName "creativeprompts-development") All $
                                  setArchitecture (BinPkgName "creativeprompts-production") All $
                                  insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
@@ -241,8 +239,8 @@ test5 =
                       assertEqual "test5" [] (diffDebianizations old new')
              )
     where
-      flags = Flags.defaultFlags { Flags.dependencyHints = (Flags.dependencyHints Flags.defaultFlags) {execMap = insert "trhsx" (BinPkgName "haskell-hsx-utils") (execMap (Flags.dependencyHints Flags.defaultFlags))}
-                                 , Flags.executablePackages = (InstallFileHint (BinPkgName "creativeprompts-server") $ InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server") :
+      flags = putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
+              Flags.defaultFlags { Flags.executablePackages = (InstallFileHint (BinPkgName "creativeprompts-server") $ InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server") :
                                                               (InstallFileHint (BinPkgName "creativeprompts-development") $ InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") :
                                                               (InstallFileHint (BinPkgName "creativeprompts-production") $ InstallFile "creativeprompts-production" Nothing Nothing "creativeprompts-production") :
                                                               (InstallFileHint (BinPkgName "creativeprompts-backups") $ InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups") :
@@ -292,8 +290,7 @@ test6 =
                          assertEqual "test6" [] (diffDebianizations old new)
              )
     where
-      hints = (Flags.dependencyHints Flags.defaultFlags) { execMap = insert "trhsx" (BinPkgName "haskell-hsx-utils") (execMap (Flags.dependencyHints Flags.defaultFlags))
-                                             , extraDevDeps = BinPkgName "markdown" : extraDevDeps (Flags.dependencyHints Flags.defaultFlags) }
+      hints = dependencyHints (error "Missing DependencyHints atom") (putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $ putExtraDevDep (BinPkgName "markdown") $ Flags.defaultFlags)
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
       -- dropFirstLogEntry (deb@(Debianization {changelog = ChangeLog (_ : tl)})) = deb {changelog = ChangeLog tl}

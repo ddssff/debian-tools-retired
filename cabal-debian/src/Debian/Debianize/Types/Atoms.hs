@@ -17,16 +17,24 @@ module Debian.Debianize.Types.Atoms
     , noProfilingLibrary
     , noDocumentationLibrary
     , utilsPackageName
+    -- * DependencyHint getter and setters
+    , dependencyHints
+    , doDependencyHint
+    , missingDependency
+    , setRevision
+    , putExecMap
+    , putExtraDevDep
     ) where
 
 import Data.Generics (Data, Typeable)
-import Data.Map as Map (Map, lookup, insertWith, foldWithKey)
+import Data.Map as Map (Map, lookup, insertWith, foldWithKey, insert)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert)
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Debianize.Utility (setMapMaybe)
+import Debian.Debianize.Types.Dependencies (DependencyHints(..), defaultDependencyHints)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat)
 import Debian.Relation (BinPkgName)
@@ -72,6 +80,11 @@ data DebAtom
     | DebRulesFragment Text                       -- ^ A Fragment of debian/rules
     | Warning Text                                -- ^ A warning to be reported later
     | UtilsPackageName BinPkgName                 -- ^ Name to give the package for left-over data files and executables
+    | DHDependencyHints DependencyHints           -- ^ Information about the mapping from cabal package names and
+                                                  -- versions to debian package names and versions.  (This could be
+                                                  -- broken up into smaller atoms, many of which would be attached to
+                                                  -- binary packages.)
+
     -- From here down are atoms to be associated with a Debian binary
     -- package.  This could be done with more type safety, separate
     -- maps for the Source atoms and the Binary atoms.
@@ -174,3 +187,32 @@ utilsPackageName deb =
       from Source (UtilsPackageName r) Nothing = Just r
       from Source (UtilsPackageName _) (Just _) = error "Multiple values for UtilsPackageName"
       from _ _ r = r
+
+doDependencyHint :: HasAtoms atoms => (DependencyHints -> DependencyHints) -> atoms -> atoms
+doDependencyHint f deb =
+    if Set.null hints
+    then insertAtom Source (DHDependencyHints (f defaultDependencyHints)) deb'
+    else insertAtoms' Source (map (DHDependencyHints . f) (Set.toList hints)) deb'
+    where
+      (hints, deb') = partitionAtoms p deb
+      p Source (DHDependencyHints x) = Just x
+      p _ _ = Nothing
+
+dependencyHints :: HasAtoms atoms => DependencyHints -> atoms -> DependencyHints
+dependencyHints def deb =
+    fromMaybe def $ lookupAtom Source from deb
+    where
+      from (DHDependencyHints x) = Just x
+      from _ = Nothing
+
+missingDependency :: HasAtoms atoms => BinPkgName -> atoms -> atoms
+missingDependency b deb = doDependencyHint (\ x -> x {missingDependencies = b : missingDependencies x}) deb
+
+setRevision :: HasAtoms atoms => String -> atoms -> atoms
+setRevision s deb = doDependencyHint (\ x -> x {revision = s}) deb
+
+putExecMap :: HasAtoms atoms => String -> BinPkgName -> atoms -> atoms
+putExecMap cabal debian deb = doDependencyHint (\ x -> x {execMap = Map.insert cabal debian (execMap x)}) deb
+
+putExtraDevDep :: HasAtoms atoms => BinPkgName -> atoms -> atoms
+putExtraDevDep bin deb = doDependencyHint (\ x -> x {extraDevDeps = bin : extraDevDeps x}) deb

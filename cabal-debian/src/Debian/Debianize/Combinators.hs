@@ -45,7 +45,7 @@ import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
-import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtomKey(..), DebAtom(..), HasAtoms(getAtoms, putAtoms), insertAtom, foldAtoms, insertAtoms', utilsPackageName, packageDescription, compiler)
+import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtomKey(..), DebAtom(..), HasAtoms(getAtoms, putAtoms), insertAtom, foldAtoms, insertAtoms', utilsPackageName, packageDescription, compiler, dependencyHints)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), newBinaryDebDescription,
                                                        PackageRelations(..))
 import Debian.Debianize.Types.Dependencies (DependencyHints (binaryPackageDeps, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap,
@@ -70,8 +70,7 @@ import System.FilePath ((</>), takeDirectory, makeRelative, splitFileName)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
-debianization :: DependencyHints
-              -> Map DebAtomKey (Set DebAtom)
+debianization :: Map DebAtomKey (Set DebAtom)
               -> PackageHints
               -> PackageDescription  -- ^ info from the .cabal file
               -> Compiler            -- ^ compiler details
@@ -81,7 +80,7 @@ debianization :: DependencyHints
               -> StandardsVersion
               -> Debianization       -- ^ Existing debianization
               -> Debianization       -- ^ New debianization
-debianization hints atoms execs pkgDesc cmplr date copyright' maint standards oldDeb =
+debianization atoms execs pkgDesc cmplr date copyright' maint standards oldDeb =
     watchAtom (pkgName . Cabal.package $ pkgDesc)  $
     putCopyright copyright' $
     putStandards standards $
@@ -98,6 +97,8 @@ debianization hints atoms execs pkgDesc cmplr date copyright' maint standards ol
     insertAtom Source (DHCompiler cmplr) $
     putAtoms atoms $
     oldDeb
+    where
+      hints = dependencyHints (error "Missing DependencyHints atom") atoms
 
 -- | Create equals dependencies.  For each pair (A, B), use dpkg-query
 -- to find out B's version number, version B.  Then write a rule into
