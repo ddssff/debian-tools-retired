@@ -30,6 +30,8 @@ module Debian.Debianize.Types.Atoms
     , doWebsite
     , setSourcePackageName
     , debMaintainer
+    , buildDir
+    , setBuildDir
     ) where
 
 import Data.Generics (Data, Typeable)
@@ -81,7 +83,9 @@ data DebAtom
     -- ^ The build directory used by cabal, typically dist/build when
     -- building manually or dist-ghc/build when building using GHC and
     -- haskell-devscripts.  This value is used to locate files
-    -- produced by cabal so we can move them into the deb.
+    -- produced by cabal so we can move them into the deb.  Note that
+    -- the --builddir option of runhaskell Setup appends the "/build"
+    -- to the value it receives, so, yes, try not to get confused.
     | DebSourceFormat SourceFormat                -- ^ Write debian/source/format
     | DebWatch Text                               -- ^ Write debian/watch
     | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
@@ -258,3 +262,19 @@ debMaintainer atoms =
       from Source (DHMaintainer x) (Just maint) | x /= maint = error $ "Conflicting maintainer values: " ++ show x ++ " vs. " ++ show maint
       from Source (DHMaintainer x) _ = Just x
       from _ _ x = x
+
+buildDir :: HasAtoms atoms => FilePath -> atoms -> FilePath
+buildDir def atoms =
+    fromMaybe def $ foldAtoms from Nothing atoms
+    where
+      from Source (BuildDir path') (Just path) | path /= path' = error $ "Conflicting buildDir atoms: " ++ show path ++ " vs. " ++ show path'
+      from Source (BuildDir path') _ = Just path'
+      from _ _ x = x
+
+setBuildDir :: HasAtoms atoms => FilePath -> atoms -> atoms
+setBuildDir path atoms =
+    insertAtom Source (BuildDir path) atoms'
+    where
+      (_, atoms') = partitionAtoms p atoms
+      p Source (BuildDir x) = Just x
+      p _ _ = Nothing

@@ -23,7 +23,7 @@ import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
 import Debian.Debianize.Types.Atoms (compilerVersion, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms,
                                      dependencyHints, missingDependency, setRevision, putExecMap, putExtraDevDep, putBinaryPackageDep,
-                                     doExecutable, doWebsite, doServer)
+                                     doExecutable, doWebsite, doServer, buildDir)
 import Debian.Debianize.Types.Debianization (Debianization(..), newDebianization, SourceDebDescription(..), BinaryDebDescription(..),
                                              PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
@@ -133,7 +133,7 @@ test4 =
                  old <- inputDebianization "test-data/clckwrks-dot-com/output" >>= \ x -> return (x {changelog = oldlog})
                  (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debAtoms flags) old
                  let new' = copyFirstLogEntry old (fixRules (tight new))
-                 desc <- describeDebianization (Flags.buildDir flags) "test-data/clckwrks-dot-com/output" dataDir new'
+                 desc <- describeDebianization (buildDir "dist-ghc/build" flags) "test-data/clckwrks-dot-com/output" dataDir new'
                  -- assertEqual "test4" "" desc
                  -- assertEqual "test4" [] (gdiff old (finalizeDebianization "dist-ghc/build" dataDir new'))
                  -- assertEqual "test4" (toFileMap "dist-ghc/build" "<datadir>" old) (toFileMap "dist-ghc/build" "<datadir>" new')
@@ -229,7 +229,7 @@ test5 =
                                  putBinaryPackageDep (BinPkgName "creativeprompts-backups") (BinPkgName "anacron") $
                                  putBinaryPackageDep (BinPkgName "creativeprompts-server") (BinPkgName "markdown") $
                                  new
-                      desc <- describeDebianization (Flags.buildDir flags) "test-data/creativeprompts/output" dataDir new'
+                      desc <- describeDebianization (buildDir "dist-ghc/build" flags) "test-data/creativeprompts/output" dataDir new'
                       writeFile "/tmp/foo" desc
                       -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (finalizeDebianization "dist-ghc/build" dataDir new))))
                       -- assertEqual "test5" "" desc
