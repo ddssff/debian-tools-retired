@@ -11,9 +11,8 @@ import Data.Monoid (mempty)
 import Data.Set (Set)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat),
                                      insertAtom, compilerVersion, doDependencyHint, missingDependency, doExecutable, setSourcePackageName)
-import Debian.Debianize.Types.PackageHints (PackageHints)
 import Debian.Debianize.Types.PackageType (DebType)
-import Debian.Policy (SourceFormat(Native3, Quilt3))
+import Debian.Policy (SourceFormat(Quilt3))
 import Distribution.PackageDescription as Cabal (FlagName)
 import System.Exit (ExitCode(ExitSuccess))
 import System.Process.Progress (defaultVerbosity)
@@ -119,7 +118,7 @@ defaultFlags =
     , validate = False
     , debMaintainer = Nothing
     , buildDir = "dist-ghc/build"
-    , debAtoms = insertAtom Source (DebSourceFormat Native3) mempty
+    , debAtoms =  mempty
     }
 
 getFlags :: IO Flags

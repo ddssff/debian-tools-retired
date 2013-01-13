@@ -24,6 +24,7 @@ module Debian.Debianize.Types.Atoms
     , setRevision
     , putExecMap
     , putExtraDevDep
+    , putBinaryPackageDep
     , doExecutable
     , doServer
     , doWebsite
@@ -208,9 +209,9 @@ doDependencyHint f deb =
       p Source (DHDependencyHints x) = Just x
       p _ _ = Nothing
 
-dependencyHints :: HasAtoms atoms => DependencyHints -> atoms -> DependencyHints
-dependencyHints def deb =
-    fromMaybe def $ lookupAtom Source from deb
+dependencyHints :: HasAtoms atoms => atoms -> DependencyHints
+dependencyHints deb =
+    fromMaybe defaultDependencyHints $ lookupAtom Source from deb
     where
       from (DHDependencyHints x) = Just x
       from _ = Nothing
@@ -226,6 +227,10 @@ putExecMap cabal debian deb = doDependencyHint (\ x -> x {execMap = Map.insert c
 
 putExtraDevDep :: HasAtoms atoms => BinPkgName -> atoms -> atoms
 putExtraDevDep bin deb = doDependencyHint (\ x -> x {extraDevDeps = bin : extraDevDeps x}) deb
+
+putBinaryPackageDep :: HasAtoms atoms => BinPkgName -> BinPkgName -> atoms -> atoms
+putBinaryPackageDep pkg dep deb =
+    doDependencyHint (\ x -> x {binaryPackageDeps = (pkg, dep) : binaryPackageDeps x}) deb
 
 doExecutable :: HasAtoms atoms => BinPkgName -> InstallFile -> atoms -> atoms
 doExecutable bin x deb = insertAtom (Binary bin) (DHExecutable x) deb

@@ -5,17 +5,13 @@ module Debian.Debianize.Types.Dependencies
     , defaultDependencyHints
     , VersionSplits(..)
     , filterMissing' -- Debian.Cabal.SubstVars
-    , dependencies
-    , debianName
     , PackageInfo(..)
     , debNameFromType
     ) where
 
-import Data.Function (on)
 import Data.List (minimumBy, isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, listToMaybe)
-import Data.Version (Version, showVersion)
 import Debian.Cabal.Bundled (ghcBuiltIn)
 import Debian.Control
 import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
@@ -29,7 +25,6 @@ import Distribution.Simple.Compiler (Compiler)
 import Distribution.Version (VersionRange, anyVersion, foldVersionRange', intersectVersionRanges, unionVersionRanges,
                              laterVersion, orLaterVersion, earlierVersion, orEarlierVersion, fromVersionIntervals, toVersionIntervals, withinVersion,
                              isNoVersion, asVersionIntervals)
-import Distribution.Version.Invert (invertVersionRange)
 
 data DependencyHints
     = DependencyHints
@@ -149,148 +144,9 @@ defaultDependencyHints =
     , versionSplits = knownVersionSplits
     }
 
--- | Turn a cabal dependency into debian dependencies.  The result
--- needs to correspond to a single debian package to be installed,
--- so we will return just an OrRelation.
-dependencies :: DependencyHints -> Compiler -> PackageType -> PackageName -> VersionRange -> Relations
-dependencies hints compiler typ name cabalRange =
-    map doBundled $ convert' (canonical (Or (catMaybes (map convert alts))))
-    where
-
-      -- Compute a list of alternative debian dependencies for
-      -- satisfying a cabal dependency.  The only caveat is that
-      -- we may need to distribute any "and" dependencies implied
-      -- by a version range over these "or" dependences.
-      alts :: [(BinPkgName, VersionRange)]
-      alts = case Map.lookup name (packageSplits (versionSplits hints)) of
-               -- If there are no splits for this package just return the single dependency for the package
-               Nothing -> [(mkPkgName name typ, cabalRange')]
-               -- If there are splits create a list of (debian package name, VersionRange) pairs
-               Just splits' -> map (\ (n, r) -> (mkPkgName n typ, r)) (packageRangesFromVersionSplits splits')
-
-      convert :: (BinPkgName, VersionRange) -> Maybe (Rels Relation)
-      convert (dname, range) =
-          if isNoVersion range'''
-          then Nothing
-          else Just $
-               foldVersionRange'
-                 (Rel (D.Rel dname Nothing Nothing))
-                 (\ v -> Rel (D.Rel dname (Just (D.EEQ (dv v))) Nothing))
-                 (\ v -> Rel (D.Rel dname (Just (D.SGR (dv v))) Nothing))
-                 (\ v -> Rel (D.Rel dname (Just (D.SLT (dv v))) Nothing))
-                 (\ v -> Rel (D.Rel dname (Just (D.GRE (dv v))) Nothing))
-                 (\ v -> Rel (D.Rel dname (Just (D.LTE (dv v))) Nothing))
-                 (\ x y -> And [Rel (D.Rel dname (Just (D.GRE (dv x))) Nothing), Rel (D.Rel dname (Just (D.SLT (dv y))) Nothing)])
-                 (\ x y -> Or [x, y])
-                 (\ x y -> And [x, y])
-                 id
-                 range'''
-          where 
-            -- Choose the simpler of the two
-            range''' = canon (simpler range' range'')
-            -- Unrestrict the range for versions that we know don't exist for this debian package
-            range'' = canon (unionVersionRanges range' (invertVersionRange range))
-            -- Restrict the range to the versions specified for this debian package
-            range' = intersectVersionRanges cabalRange' range
-            -- When we see a cabal equals dependency we need to turn it into
-            -- a wildcard because the resulting debian version numbers have
-            -- various suffixes added.
-      cabalRange' =
-          foldVersionRange'
-            anyVersion
-            withinVersion  -- <- Here we are turning equals into wildcard
-            laterVersion
-            earlierVersion
-            orLaterVersion
-            orEarlierVersion
-            (\ lb ub -> intersectVersionRanges (orLaterVersion lb) (earlierVersion ub))
-            unionVersionRanges
-            intersectVersionRanges
-            id
-            cabalRange
-      -- Convert a cabal version to a debian version, adding an epoch number if requested
-      dv v = parseDebianVersion (maybe "" (\ n -> show n ++ ":") (Map.lookup name (epochMap hints)) ++ showVersion v)
-      simpler v1 v2 = minimumBy (compare `on` (length . asVersionIntervals)) [v1, v2]
-      -- Simplify a VersionRange
-      canon = fromVersionIntervals . toVersionIntervals
-
-      -- If a package is bundled with the compiler we make the
-      -- compiler a substitute for that package.  If we were to
-      -- specify the virtual package (e.g. libghc-base-dev) we would
-      -- have to make sure not to specify a version number.
-      doBundled :: [D.Relation] -> [D.Relation]
-      doBundled rels | ghcBuiltIn compiler name = rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
-      doBundled rels = rels
-
-      compilerPackageName Documentation = D.BinPkgName "ghc-doc"
-      compilerPackageName Profiling = D.BinPkgName "ghc-prof"
-      compilerPackageName Development = D.BinPkgName "ghc"
-      compilerPackageName _ = D.BinPkgName "ghc" -- whatevs
-
-data Rels a = And {unAnd :: [Rels a]} | Or {unOr :: [Rels a]} | Rel {unRel :: a} deriving Show
-
--- | return and of ors of rel
-canonical :: Rels a -> Rels a
-canonical (Rel rel) = And [Or [Rel rel]]
-canonical (And rels) = And $ concatMap (unAnd . canonical) rels
-canonical (Or rels) = And . map Or $ sequence $ map (concat . map unOr . unAnd . canonical) $ rels
-
-convert' :: Rels a -> [[a]]
-convert' = map (map unRel . unOr) . unAnd . canonical
-
-packageSplits :: [VersionSplits] -> Map.Map PackageName VersionSplits
-packageSplits splits =
-    foldr (\ splits' mp -> Map.insertWith multipleSplitsError (packageName splits') splits' mp)
-          Map.empty
-          splits
-    where
-      multipleSplitsError :: VersionSplits -> a -> b
-      multipleSplitsError (VersionSplits {packageName = PackageName p}) _s2 =
-          error ("Multiple splits for package " ++ show p)
-
-packageRangesFromVersionSplits :: VersionSplits -> [(PackageName, VersionRange)]
-packageRangesFromVersionSplits splits =
-    foldInverted (\ older dname newer more ->
-                      (dname, intersectVersionRanges (maybe anyVersion orLaterVersion older) (maybe anyVersion earlierVersion newer)) : more)
-                 []
-                 splits
-
 filterMissing' :: DependencyHints -> [[D.Relation]] -> [[D.Relation]]
 filterMissing' hints rels =
     filter (/= []) (map (filter (\ (D.Rel name _ _) -> not (elem name (missingDependencies hints)))) rels)
-
--- | Function that applies the mapping from cabal names to debian
--- names based on version numbers.  If a version split happens at v,
--- this will return the ltName if < v, and the geName if the relation
--- is >= v.
-debianName :: PkgName name => DependencyHints -> PackageType -> PackageIdentifier -> name
-debianName hints typ pkgDesc =
-    (\ pname -> mkPkgName pname typ) $
-    case filter (\ x -> pname == packageName x) (versionSplits hints) of
-      [] -> pname
-      [splits] ->
-          foldTriples' (\ ltName v geName debName ->
-                           if pname /= packageName splits
-                           then debName
-                           else let split = parseDebianVersion (showVersion v) in
-                                case version of
-                                  Nothing -> geName
-                                  Just (D.SLT v') | v' <= split -> ltName
-                                  -- Otherwise use ltName only when the split is below v'
-                                  Just (D.EEQ v') | v' < split -> ltName
-                                  Just (D.LTE v') | v' < split -> ltName
-                                  Just (D.GRE v') | v' < split -> ltName
-                                  Just (D.SGR v') | v' < split -> ltName
-                                  _ -> geName)
-                       pname
-                       splits
-      _ -> error $ "Multiple splits for cabal package " ++ string
-    where
-      foldTriples' :: (PackageName -> Version -> PackageName -> PackageName -> PackageName) -> PackageName -> VersionSplits -> PackageName
-      foldTriples' = foldTriples
-      -- def = mkPkgName pname typ
-      pname@(PackageName string) = pkgName pkgDesc
-      version = (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion pkgDesc)))))
 
 data PackageInfo = PackageInfo { libDir :: FilePath
                                , cabalName :: String

@@ -22,7 +22,8 @@ import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
 import Debian.Debianize.Types.Atoms (compilerVersion, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms,
-                                     dependencyHints, missingDependency, setRevision, putExecMap, putExtraDevDep, doExecutable, doWebsite, doServer)
+                                     dependencyHints, missingDependency, setRevision, putExecMap, putExtraDevDep, putBinaryPackageDep,
+                                     doExecutable, doWebsite, doServer)
 import Debian.Debianize.Types.Debianization (Debianization(..), newDebianization, SourceDebDescription(..), BinaryDebDescription(..),
                                              PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
@@ -46,7 +47,7 @@ test1 =
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion
                  let deb = newDebianization testEntry (Left BSD3) level standards
-                 assertEqual "test1" testDeb1 deb)
+                 assertEqual "test1" [] (diffDebianizations testDeb1 deb))
 
 test2a :: Test
 test2a =
@@ -54,7 +55,7 @@ test2a =
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion
                  let deb = newDebianization testEntry (Left BSD3) level standards
-                 assertEqual "test2a" expect deb)
+                 assertEqual "test2a" [] (diffDebianizations expect deb))
     where
       expect =
           Debianization
@@ -225,6 +226,8 @@ test5 =
                                  setArchitecture (BinPkgName "creativeprompts-production") All $
                                  insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
                                  copyFirstLogEntry old $
+                                 putBinaryPackageDep (BinPkgName "creativeprompts-backups") (BinPkgName "anacron") $
+                                 putBinaryPackageDep (BinPkgName "creativeprompts-server") (BinPkgName "markdown") $
                                  new
                       desc <- describeDebianization (Flags.buildDir flags) "test-data/creativeprompts/output" dataDir new'
                       writeFile "/tmp/foo" desc
@@ -268,7 +271,17 @@ test6 =
                          let compat' = 7
                          -- standards <- getDebianStandardsVersion
                          let standards = StandardsVersion 3 8 1 Nothing
-                         let new = setArchitecture (BinPkgName "creativeprompts-server") Any $
+                         let new = control $
+                                   insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
+                                   -- setSourcePackageName (SrcPkgName "haskell-creativeprompts") $
+                                   -- setChangelog oldLog $
+                                   buildDeps $
+                                   insertAtom Source (DHPackageDescription pkgDesc) $
+                                   insertAtom Source (DHCompiler cmplr) $
+                                   putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
+                                   putBinaryPackageDep (BinPkgName "creativeprompts-backups") (BinPkgName "anacron") $
+                                   putBinaryPackageDep (BinPkgName "creativeprompts-server") (BinPkgName "markdown") $
+                                   setArchitecture (BinPkgName "creativeprompts-server") Any $
                                    setArchitecture (BinPkgName "creativeprompts-development") All $
                                    setArchitecture (BinPkgName "creativeprompts-production") All $
                                    setArchitecture (BinPkgName "creativeprompts-data") All $
@@ -277,20 +290,13 @@ test6 =
                                    doExecutable (BinPkgName "creativeprompts-development") (InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") $
                                    doExecutable (BinPkgName "creativeprompts-production") (InstallFile "creativeprompts-production" Nothing Nothing "creativeprompts-production") $
                                    doExecutable (BinPkgName "creativeprompts-backups") (InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups") $
-                                   control hints $
-                                   insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
-                                   -- setSourcePackageName (SrcPkgName "haskell-creativeprompts") $
-                                   -- setChangelog oldLog $
-                                   buildDeps hints $
-                                   insertAtom Source (DHPackageDescription pkgDesc) $
-                                   insertAtom Source (DHCompiler cmplr) $
                                    newDebianization entry (Left BSD3) compat' standards
                          desc <- describeDebianization "dist-ghc/build" "test-data/creativeprompts/output" (dataDirectory pkgDesc) new
                          writeFile "/tmp/bar" desc
                          assertEqual "test6" [] (diffDebianizations old new)
              )
     where
-      hints = dependencyHints (error "Missing DependencyHints atom") (putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $ putExtraDevDep (BinPkgName "markdown") $ Flags.defaultFlags)
+      -- hints = dependencyHints (putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $ putExtraDevDep (BinPkgName "markdown") $ Flags.defaultFlags)
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
       -- dropFirstLogEntry (deb@(Debianization {changelog = ChangeLog (_ : tl)})) = deb {changelog = ChangeLog tl}

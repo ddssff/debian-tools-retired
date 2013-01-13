@@ -17,7 +17,8 @@ import qualified Data.Set as Set
 import Data.Text (pack)
 import Data.Version (Version)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps)
-import Debian.Debianize.Types.Dependencies (DependencyHints, filterMissing', PackageInfo(..), debNameFromType)
+import Debian.Debianize.Types.Atoms (HasAtoms, dependencyHints)
+import Debian.Debianize.Types.Dependencies (filterMissing', PackageInfo(..), debNameFromType)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription)
 import Debian.Control
 import Debian.Debianize.Types.PackageType (DebType)
@@ -44,22 +45,23 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- names, or examining the /var/lib/dpkg/info/\*.list files.  From
 -- these we can determine the source package name, and from that the
 -- documentation package name.
-substvars :: Bool
+substvars :: HasAtoms atoms =>
+             Bool
           -> Int
           -> Maybe Version
           -> [(FlagName, Bool)]
-          -> DependencyHints
+          -> atoms
           -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> IO ()
-substvars dryRun vb compilerVersion cabalFlagAssignments hints debType =
+substvars dryRun vb compilerVersion cabalFlagAssignments atoms debType =
     withSimplePackageDescription "." vb compilerVersion cabalFlagAssignments $ \ pkgDesc compiler -> do
       debVersions <- buildDebVersionMap
       cabalPackages <- libPaths compiler debVersions >>= return . Map.fromList . map (\ p -> (cabalName p, p))
       control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
-      substvars' dryRun hints pkgDesc debType cabalPackages control
+      substvars' dryRun atoms pkgDesc debType cabalPackages control
 
-substvars' :: Bool -> DependencyHints -> PackageDescription -> DebType -> Map.Map String PackageInfo -> Control' String -> IO ()
-substvars' dryRun hints pkgDesc debType cabalPackages control =
+substvars' :: HasAtoms atoms => Bool -> atoms -> PackageDescription -> DebType -> Map.Map String PackageInfo -> Control' String -> IO ()
+substvars' dryRun atoms pkgDesc debType cabalPackages control =
     case (missingBuildDeps, path) of
       -- There should already be a .substvars file produced by dh_haskell_prep,
       -- keep the relations listed there.  They will contain something like this:
@@ -82,14 +84,14 @@ substvars' dryRun hints pkgDesc debType cabalPackages control =
     where
       addDeps old =
           case partition (isPrefixOf "haskell:Depends=") (lines old) of
-            ([], other) -> unlines (("haskell:Depends=" ++ showDeps (filterMissing' hints deps)) : other)
+            ([], other) -> unlines (("haskell:Depends=" ++ showDeps (filterMissing' (dependencyHints atoms) deps)) : other)
             (hdeps, more) ->
                 case deps of
                   [] -> unlines (hdeps ++ more)
-                  _ -> unlines (map (++ (", " ++ showDeps (filterMissing' hints deps))) hdeps ++ more)
+                  _ -> unlines (map (++ (", " ++ showDeps (filterMissing' (dependencyHints atoms) deps))) hdeps ++ more)
       path = fmap (\ (D.BinPkgName x) -> "debian/" ++ x ++ ".substvars") name
       name = debNameFromType control debType
-      deps = debDeps debType hints cabalPackages pkgDesc control
+      deps = debDeps debType atoms cabalPackages pkgDesc control
       -- We must have build dependencies on the profiling and documentation packages
       -- of all the cabal packages.
       missingBuildDeps =
@@ -100,7 +102,7 @@ substvars' dryRun hints pkgDesc debType cabalPackages control =
                                      let prof = maybe (devDeb info) Just (profDeb info) in
                                      let doc = docDeb info in
                                      catMaybes [prof, doc]
-                                 Nothing -> []) (cabalDependencies hints pkgDesc)) in
+                                 Nothing -> []) (cabalDependencies atoms pkgDesc)) in
           filter (not . (`elem` buildDepNames) . fst) requiredDebs
       buildDepNames :: [D.BinPkgName]
       buildDepNames = concat (map (map (\ (D.Rel s _ _) -> s)) buildDeps)
