@@ -21,11 +21,12 @@ module Debian.Debianize.Types.Atoms
 
 import Data.Generics (Data, Typeable)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey)
-import Data.Maybe (mapMaybe, fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert)
 import Data.Text (Text)
 import Data.Version (Version)
+import Debian.Debianize.Utility (setMapMaybe)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat)
 import Debian.Relation (BinPkgName)
@@ -133,9 +134,6 @@ partitionAtoms f deb =
                                         Nothing -> (xs, insertAtom k atom deb'))
               (mempty, putAtoms mempty deb)
               (getAtoms deb)
-
-setMapMaybe :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
-setMapMaybe p = fromList . mapMaybe p . toList
 
 compiler :: HasAtoms atoms => Compiler -> atoms -> Compiler
 compiler def deb =

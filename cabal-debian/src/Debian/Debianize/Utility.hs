@@ -18,6 +18,7 @@ module Debian.Debianize.Utility
     , showDeps'
     , withCurrentDirectory
     , getDirectoryContents'
+    , setMapMaybe
     ) where
 
 import Control.Exception as E (catch, try, bracket, IOException)
@@ -27,7 +28,6 @@ import Data.Char (isSpace)
 import Data.List (isSuffixOf, intercalate, intersperse)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
-import Data.Monoid (mconcat)
 import qualified Data.Set as Set
 import Data.Text as Text (Text, unpack, lines)
 import Data.Text.IO (hGetContents)
@@ -191,3 +191,6 @@ getDirectoryContents' dir =
       dotFile "." = True
       dotFile ".." = True
       dotFile _ = False
+
+setMapMaybe :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
+setMapMaybe p = fromList . mapMaybe p . toList
