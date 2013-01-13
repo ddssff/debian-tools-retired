@@ -41,6 +41,7 @@ deriving instance Ord KnownExtension
 deriving instance Ord Extension
 deriving instance Eq Compiler
 deriving instance Ord Compiler
+deriving instance Ord NameAddr
 
 instance Ord PackageDescription where
     compare = compare `on` package
@@ -60,7 +61,6 @@ deriving instance Read ArchitectureReq
 deriving instance Read BinPkgName
 deriving instance Read ChangeLog
 deriving instance Read ChangeLogEntry
--- deriving instance Read NameAddr
 deriving instance Read Relation
 deriving instance Read SrcPkgName
 deriving instance Read VersionReq

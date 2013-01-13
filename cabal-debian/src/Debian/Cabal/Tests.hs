@@ -131,7 +131,7 @@ test4 =
     TestLabel "test4" $
     TestCase (do oldlog <- inputChangeLog "test-data/clckwrks-dot-com/input/debian"
                  old <- inputDebianization "test-data/clckwrks-dot-com/output" >>= \ x -> return (x {changelog = oldlog})
-                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.debAtoms flags) old
+                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debAtoms flags) old
                  let new' = copyFirstLogEntry old (fixRules (tight new))
                  desc <- describeDebianization (Flags.buildDir flags) "test-data/clckwrks-dot-com/output" dataDir new'
                  -- assertEqual "test4" "" desc
@@ -221,7 +221,7 @@ test5 =
     TestLabel "test5" $
     TestCase (     do oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" >>= \ x -> return (x {changelog = oldlog})
-                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debMaintainer flags) (Flags.debAtoms flags) old
+                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity flags) (compilerVersion flags) (Flags.cabalFlagAssignments flags) (Flags.debAtoms flags) old
                       let new' = setArchitecture (BinPkgName "creativeprompts-development") All $
                                  setArchitecture (BinPkgName "creativeprompts-production") All $
                                  insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $

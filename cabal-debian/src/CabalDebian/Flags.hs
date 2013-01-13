@@ -9,14 +9,13 @@ module CabalDebian.Flags
 import Data.Map (Map)
 import Data.Monoid (mempty)
 import Data.Set (Set)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat),
+import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat, DHMaintainer),
                                      insertAtom, compilerVersion, doDependencyHint, missingDependency, doExecutable, setSourcePackageName)
 import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Policy (SourceFormat(Quilt3))
 import Distribution.PackageDescription as Cabal (FlagName)
 import System.Exit (ExitCode(ExitSuccess))
 import System.Process.Progress (defaultVerbosity)
-import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 import Control.Monad (when)
 import Data.Char (toLower, isDigit, ord)
@@ -90,13 +89,6 @@ data Flags = Flags
     --------------------------------------------------
     -- Debian Package Configuration
     --------------------------------------------------
-    , debMaintainer :: Maybe NameAddr
-    -- ^ Value for the maintainer field in the control file.  Note
-    -- that the cabal maintainer field can have multiple addresses,
-    -- but debian only one.  If this is not explicitly set, it is
-    -- obtained from the cabal file, and if it is not there then from
-    -- the environment.  As a last resort, there is a hard coded
-    -- string in here somewhere.
     , debAtoms :: Map DebAtomKey (Set DebAtom)
     -- ^ Preliminary value of corresponding Debianization field
     }
@@ -116,7 +108,6 @@ defaultFlags =
     , debAction = Usage
     , dryRun = False
     , validate = False
-    , debMaintainer = Nothing
     , buildDir = "dist-ghc/build"
     , debAtoms =  mempty
     }
@@ -163,7 +154,7 @@ options =
              "Set given flags in Cabal conditionals",
       Option "v" ["verbose"] (ReqArg (\s x -> x { verbosity = read s }) "n")
              "Change build verbosity",
-      Option "" ["maintainer"] (ReqArg (\maint x -> x { debMaintainer = either (error ("Invalid maintainer string: " ++ show maint)) Just (parseMaintainer maint) }) "Maintainer Name <email addr>")
+      Option "" ["maintainer"] (ReqArg (\ maint x -> insertAtom Source (DHMaintainer (either (error ("Invalid maintainer string: " ++ show maint)) id (parseMaintainer maint))) x) "Maintainer Name <email addr>")
              "Override the Maintainer name and email in $DEBEMAIL/$EMAIL/$DEBFULLNAME/$FULLNAME",
       Option "" ["debianize"] (NoArg (\x -> x {debAction = Debianize}))
              "Generate a new debianization, replacing any existing one.  One of --debianize or --substvar is required.",
@@ -297,5 +288,5 @@ debianize :: FilePath -> Flags -> IO ()
 debianize top flags =
     withEnvironmentFlags flags $ \ flags' ->
     do old <- inputDebianization "."
-       (new, dataDir) <- debianizationWithIO top (verbosity flags') (compilerVersion flags') (cabalFlagAssignments flags') (debMaintainer flags') (debAtoms flags') old
+       (new, dataDir) <- debianizationWithIO top (verbosity flags') (compilerVersion flags') (cabalFlagAssignments flags') (debAtoms flags') old
        outputDebianization (dryRun flags') (validate flags') (buildDir flags') dataDir old new

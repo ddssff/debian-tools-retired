@@ -29,6 +29,7 @@ module Debian.Debianize.Types.Atoms
     , doServer
     , doWebsite
     , setSourcePackageName
+    , debMaintainer
     ) where
 
 import Data.Generics (Data, Typeable)
@@ -47,6 +48,7 @@ import Debian.Relation (BinPkgName, SrcPkgName)
 import Distribution.PackageDescription as Cabal (PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init)
+import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 data DebAtomKey
     = Source
@@ -92,6 +94,11 @@ data DebAtom
                                                   -- versions to debian package names and versions.  (This could be
                                                   -- broken up into smaller atoms, many of which would be attached to
                                                   -- binary packages.)
+    | DHMaintainer NameAddr			  -- ^ Value for the maintainer field in the control file.  Note that
+                                                  -- the cabal maintainer field can have multiple addresses, but debian
+                                                  -- only one.  If this is not explicitly set, it is obtained from the
+                                                  -- cabal file, and if it is not there then from the environment.  As a
+                                                  -- last resort, there is a hard coded string in here somewhere.
 
     -- From here down are atoms to be associated with a Debian binary
     -- package.  This could be done with more type safety, separate
@@ -243,3 +250,11 @@ doWebsite bin x deb = insertAtom (Binary bin) (DHWebsite x) deb
 
 setSourcePackageName :: HasAtoms atoms => SrcPkgName -> atoms -> atoms
 setSourcePackageName src deb = insertAtom Source (SourcePackageName src) deb
+
+debMaintainer :: HasAtoms atoms => atoms -> Maybe NameAddr
+debMaintainer atoms =
+    foldAtoms from Nothing atoms
+    where
+      from Source (DHMaintainer x) (Just maint) | x /= maint = error $ "Conflicting maintainer values: " ++ show x ++ " vs. " ++ show maint
+      from Source (DHMaintainer x) _ = Just x
+      from _ _ x = x
