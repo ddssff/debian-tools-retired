@@ -10,7 +10,7 @@ module Debian.Cabal.Debianize
 
 import Data.Map (Map)
 import Data.Maybe
-import Data.Set (Set)
+import Data.Set (Set, toList)
 import Data.Version (Version)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (debianization)

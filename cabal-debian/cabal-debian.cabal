@@ -81,7 +81,8 @@ Executable cabal-debian
  ghc-options: -threaded -Wall -O2
  Build-Depends:
    base,
-   cabal-debian
+   cabal-debian,
+   containers
 
 Executable cabal-debian-tests
  Main-Is: src/Tests.hs

@@ -32,13 +32,15 @@ module Debian.Debianize.Types.Atoms
     , debMaintainer
     , buildDir
     , setBuildDir
+    , cabalFlagAssignments
+    , putCabalFlagAssignments
     ) where
 
 import Data.Generics (Data, Typeable)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey, insert)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
-import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert)
+import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, unions, singleton, fold, insert)
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Debianize.Utility (setMapMaybe)
@@ -47,7 +49,7 @@ import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat)
 import Debian.Relation (BinPkgName, SrcPkgName)
-import Distribution.PackageDescription as Cabal (PackageDescription)
+import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
@@ -103,6 +105,8 @@ data DebAtom
                                                   -- only one.  If this is not explicitly set, it is obtained from the
                                                   -- cabal file, and if it is not there then from the environment.  As a
                                                   -- last resort, there is a hard coded string in here somewhere.
+    | DHCabalFlagAssignments (Set (FlagName, Bool)) -- ^ Flags to pass to Cabal function finalizePackageDescription, this
+                                                  -- can be used to control the flags in the cabal file.
 
     -- From here down are atoms to be associated with a Debian binary
     -- package.  This could be done with more type safety, separate
@@ -277,4 +281,19 @@ setBuildDir path atoms =
     where
       (_, atoms') = partitionAtoms p atoms
       p Source (BuildDir x) = Just x
+      p _ _ = Nothing
+
+cabalFlagAssignments :: HasAtoms atoms => atoms -> Set (FlagName, Bool)
+cabalFlagAssignments atoms =
+    foldAtoms from mempty atoms
+    where
+      from Source (DHCabalFlagAssignments xs) ys = union xs ys
+      from _ _ ys = ys
+
+putCabalFlagAssignments :: HasAtoms atoms => Set (FlagName, Bool) -> atoms -> atoms
+putCabalFlagAssignments xs atoms =
+    insertAtom Source (DHCabalFlagAssignments (unions (xs : toList ys))) atoms'
+    where
+      (ys, atoms') = partitionAtoms p atoms
+      p Source (DHCabalFlagAssignments zs) = Just zs
       p _ _ = Nothing

@@ -9,17 +9,18 @@ module CabalDebian.Flags
 import Data.Map (Map)
 import Data.Monoid (mempty)
 import Data.Set (Set)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat, DHMaintainer),
-                                     insertAtom, compilerVersion, doDependencyHint, missingDependency, doExecutable, setSourcePackageName, buildDir, setBuildDir)
+import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat,
+                                                                           DHMaintainer),
+                                     insertAtom, compilerVersion, doDependencyHint, missingDependency, doExecutable, setSourcePackageName, buildDir, setBuildDir, cabalFlagAssignments, putCabalFlagAssignments)
 import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Policy (SourceFormat(Quilt3))
-import Distribution.PackageDescription as Cabal (FlagName)
 import System.Exit (ExitCode(ExitSuccess))
 import System.Process.Progress (defaultVerbosity)
 
 import Control.Monad (when)
 import Data.Char (toLower, isDigit, ord)
 import qualified Data.Map as Map
+import Data.Set (fromList)
 import Data.Version (parseVersion)
 import Debian.Debianize.Types.Dependencies (DependencyHints (..))
 import Debian.Debianize.Types.PackageHints (executableOption)
@@ -48,8 +49,8 @@ import Debian.Debianize.Output (outputDebianization)
 import System.Directory (doesFileExist)
 import System.Process (readProcessWithExitCode)
 
--- | This record supplies the information we use to generate a
--- debianization from a cabal package.
+-- | This record supplies information about the task we want done -
+-- debianization, validataion, help message, etc.
 data Flags = Flags
     {
     -------------------------
@@ -71,16 +72,6 @@ data Flags = Flags
     -- the control file must match.
     , debAction :: DebAction
     -- ^ What to do - Usage, Debianize or Substvar
-    -------------------------
-    -- Cabal Options
-    -------------------------
-    , cabalFlagAssignments :: [(FlagName, Bool)]
-    -- ^ Flags to pass to Cabal function finalizePackageDescription, this
-    -- can be used to control the flags in the cabal file.
-
-    --------------------------------------------------
-    -- Debian Package Configuration
-    --------------------------------------------------
     , debAtoms :: Map DebAtomKey (Set DebAtom)
     -- ^ Preliminary value of corresponding Debianization field
     }
@@ -94,8 +85,7 @@ data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq)
 defaultFlags :: Flags
 defaultFlags =
     Flags {
-      cabalFlagAssignments = []
-    , help = False
+      help = False
     , verbosity = defaultVerbosity
     , debAction = Usage
     , dryRun = False
@@ -141,7 +131,7 @@ options =
              "Use this name for the debian source package.  Default is haskell-<cabalname>, where the cabal package name is downcased.",
       Option "" ["disable-library-profiling"] (NoArg (\ x -> insertAtom Source NoProfilingLibrary x))
              "Don't generate profiling libraries",
-      Option "f" ["flags"] (ReqArg (\flags x -> x { cabalFlagAssignments = cabalFlagAssignments x ++ flagList flags }) "FLAGS")
+      Option "f" ["flags"] (ReqArg (\ flags atoms -> putCabalFlagAssignments (fromList (flagList flags)) atoms) "FLAGS")
              "Set given flags in Cabal conditionals",
       Option "v" ["verbose"] (ReqArg (\s x -> x { verbosity = read s }) "n")
              "Change build verbosity",
