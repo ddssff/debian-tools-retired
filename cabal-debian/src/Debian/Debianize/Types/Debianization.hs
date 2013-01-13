@@ -118,7 +118,7 @@ data SourceDebDescription
       , buildConflicts :: Relations
       , buildDependsIndep :: Relations
       , buildConflictsIndep :: Relations
-      , binaryPackages :: [BinaryDebDescription]
+      , binaryPackages :: [BinaryDebDescription] -- This should perhaps be a set
       } deriving (Eq, Show, Data, Typeable)
 
 newSourceDebDescription :: SrcPkgName -> NameAddr -> StandardsVersion -> SourceDebDescription

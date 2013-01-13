@@ -15,7 +15,7 @@ module CabalDebian.Flags
 import Data.Map (Map)
 import Data.Monoid (mempty)
 import Data.Set (Set)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat), insertAtom, compilerVersion, doDependencyHint, missingDependency)
+import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat), insertAtom, compilerVersion, doDependencyHint, missingDependency, doExecutable)
 import Debian.Debianize.Types.PackageHints (PackageHints)
 import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Policy (SourceFormat(Native3, Quilt3))
@@ -86,12 +86,6 @@ data Flags = Flags
     -- cabal build process so it must match the builddir used by the
     -- Setup script.  The --builddir option appends the "/build" to
     -- the value it receives, so, yes, try not to get confused.
-    , executablePackages :: PackageHints
-    -- ^ List of executable debian binary packages to create.
-    -- Normally all the executables are gathered into a package names
-    -- haskell-sourcepackage-utils, this lets you split some of them
-    -- out into individual debian binary packages.
-
     -------------------------
     -- Cabal Options
     -------------------------
@@ -131,7 +125,6 @@ defaultFlags =
     , debAction = Usage
     , dryRun = False
     , validate = False
-    , executablePackages = []
     , sourcePackageName = Nothing
     , debMaintainer = Nothing
     -- , modifyAtoms = id
@@ -164,7 +157,7 @@ parseArgs args = do
 
 options :: [OptDescr (Flags -> Flags)]
 options =
-    [ Option "" ["executable"] (ReqArg (\ path x -> executableOption path (\ e -> x { executablePackages = e : executablePackages x})) "SOURCEPATH or SOURCEPATH:DESTDIR")
+    [ Option "" ["executable"] (ReqArg (\ path x -> executableOption path (\ b e -> doExecutable b e x)) "SOURCEPATH or SOURCEPATH:DESTDIR")
              "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
       Option "h?" ["help"] (NoArg (\x -> x { help = True }))
              "Show this help text",
@@ -316,5 +309,5 @@ debianize :: FilePath -> Flags -> IO ()
 debianize top flags =
     withEnvironmentFlags flags $ \ flags' ->
     do old <- inputDebianization "."
-       (new, dataDir) <- debianizationWithIO top (verbosity flags') (compilerVersion flags') (cabalFlagAssignments flags') (debMaintainer flags') (executablePackages flags') (debAtoms flags') old
+       (new, dataDir) <- debianizationWithIO top (verbosity flags') (compilerVersion flags') (cabalFlagAssignments flags') (debMaintainer flags') (debAtoms flags') old
        outputDebianization (dryRun flags') (validate flags') (buildDir flags') dataDir old new

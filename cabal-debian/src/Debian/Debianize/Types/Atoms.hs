@@ -24,6 +24,9 @@ module Debian.Debianize.Types.Atoms
     , setRevision
     , putExecMap
     , putExtraDevDep
+    , doExecutable
+    , doServer
+    , doWebsite
     ) where
 
 import Data.Generics (Data, Typeable)
@@ -35,6 +38,7 @@ import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Debianize.Utility (setMapMaybe)
 import Debian.Debianize.Types.Dependencies (DependencyHints(..), defaultDependencyHints)
+import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat)
 import Debian.Relation (BinPkgName)
@@ -103,6 +107,9 @@ data DebAtom
     | DHInstallCabalExecTo String FilePath	  -- ^ Install a cabal executable into the binary package at an exact location
     | DHInstallDir FilePath             	  -- ^ Create a directory in the binary package
     | DHInstallInit Text                	  -- ^ Add an init.d file to the binary package
+    | DHExecutable InstallFile                    -- ^ Create a binary package to hold a cabal executable
+    | DHServer Server                             -- ^ Like DHExecutable, but configure the executable as a server process
+    | DHWebsite Site                              -- ^ Like DHServer, but configure the server as a web server
     deriving (Eq, Ord, Show)
 
 class HasAtoms atoms where
@@ -216,3 +223,12 @@ putExecMap cabal debian deb = doDependencyHint (\ x -> x {execMap = Map.insert c
 
 putExtraDevDep :: HasAtoms atoms => BinPkgName -> atoms -> atoms
 putExtraDevDep bin deb = doDependencyHint (\ x -> x {extraDevDeps = bin : extraDevDeps x}) deb
+
+doExecutable :: HasAtoms atoms => BinPkgName -> InstallFile -> atoms -> atoms
+doExecutable bin x deb = insertAtom (Binary bin) (DHExecutable x) deb
+
+doServer :: HasAtoms atoms => BinPkgName -> Server -> atoms -> atoms
+doServer bin x deb = insertAtom (Binary bin) (DHServer x) deb
+
+doWebsite :: HasAtoms atoms => BinPkgName -> Site -> atoms -> atoms
+doWebsite bin x deb = insertAtom (Binary bin) (DHWebsite x) deb

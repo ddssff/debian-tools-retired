@@ -51,13 +51,13 @@ data Site
       } deriving (Read, Show, Eq, Ord)
 
 -- | Process a --executable command line argument
-executableOption :: String -> (PackageHint -> a) -> a
+executableOption :: String -> (BinPkgName -> InstallFile -> a) -> a
 executableOption arg f =
     case span (/= ':') arg of
       (sp, md) ->
           let (sd, name) = splitFileName sp in
-          f (InstallFileHint (BinPkgName name)
-                             (InstallFile { execName = name
-                                          , destName = name
-                                          , sourceDir = case sd of "./" -> Nothing; _ -> Just sd
-                                          , destDir = case md of (':' : dd) -> Just dd; _ -> Nothing }))
+          f (BinPkgName name)
+            (InstallFile { execName = name
+                         , destName = name
+                         , sourceDir = case sd of "./" -> Nothing; _ -> Just sd
+                         , destDir = case md of (':' : dd) -> Just dd; _ -> Nothing })

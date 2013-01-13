@@ -71,7 +71,6 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 debianization :: Map DebAtomKey (Set DebAtom)
-              -> PackageHints
               -> PackageDescription  -- ^ info from the .cabal file
               -> Compiler            -- ^ compiler details
               -> String              -- ^ current date
@@ -80,14 +79,14 @@ debianization :: Map DebAtomKey (Set DebAtom)
               -> StandardsVersion
               -> Debianization       -- ^ Existing debianization
               -> Debianization       -- ^ New debianization
-debianization atoms execs pkgDesc cmplr date copyright' maint standards oldDeb =
+debianization atoms pkgDesc cmplr date copyright' maint standards oldDeb =
     watchAtom (pkgName . Cabal.package $ pkgDesc)  $
     putCopyright copyright' $
     putStandards standards $
     filterMissing (missingDependencies hints) $
     versionInfo hints maint date $
     addExtraLibDependencies hints $
-    control hints execs $
+    control hints $
     cdbsRules hints (Cabal.package pkgDesc) $
     -- Do we want to replace the atoms in the old deb, or add these?
     -- Or should we delete even more information from the original,
@@ -255,9 +254,9 @@ putLicense license deb = deb {copyright = Left license}
 -- produced.  If the package contains a library we usually want dev,
 -- prof, and doc packages.
 
-control :: DependencyHints -> PackageHints -> Debianization -> Debianization
-control dependencyHints packageHints deb =
-    execAndUtilSpecs dependencyHints packageHints describe $
+control :: DependencyHints -> Debianization -> Debianization
+control dependencyHints deb =
+    execAndUtilSpecs dependencyHints describe $
     librarySpecs dependencyHints describe $
     buildDeps dependencyHints $
     setSourcePriority (Just Optional) $
@@ -368,10 +367,10 @@ data FileInfo
 
 -- | Generate the control file sections and other debhelper atoms for
 -- the executable and utility packages.
-execAndUtilSpecs :: DependencyHints -> PackageHints -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
-execAndUtilSpecs dependencyHints packageHints describe deb =
-    makeUtilsPackage dependencyHints packageHints describe $
-    applyPackageHints dependencyHints describe packageHints $ deb
+execAndUtilSpecs :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
+execAndUtilSpecs dependencyHints describe deb =
+    makeUtilsPackage dependencyHints describe $
+    applyPackageHints dependencyHints describe $ deb
 
 t1 x = trace ("t1: " ++ show x) x
 t2 x = trace ("t2: " ++ show x) x
@@ -381,8 +380,8 @@ t5 x = trace ("t5: " ++ show x) x
 
 -- Create a package to hold any executables and data files not
 -- assigned to some other package.
-makeUtilsPackage :: DependencyHints -> PackageHints -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
-makeUtilsPackage dependencyHints packageHints describe deb =
+makeUtilsPackage :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
+makeUtilsPackage dependencyHints describe deb =
     case Set.difference (t1 available) (t2 installed) of
       s | Set.null s -> deb
       s ->      let p = t4 (fromMaybe (debianName dependencyHints Utilities (Cabal.package pkgDesc)) (t5 (utilsPackageName deb))) in
@@ -423,7 +422,7 @@ makeUtilsPackage dependencyHints packageHints describe deb =
       cabalFile _ _ xs = xs
       makeUtilsAtoms :: BinPkgName -> Set FileInfo -> Debianization -> Debianization
       makeUtilsAtoms p s deb' =
-          case (bundledExecutables packageHints pkgDesc, Cabal.dataFiles pkgDesc) of
+          case (bundledExecutables deb' pkgDesc, Cabal.dataFiles pkgDesc) of
             ([], []) -> deb'
             _ -> insertAtom Source (DebRulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))) $
                  insertAtoms' (Binary p) (map fileInfoAtom (Set.toList s)) $
@@ -431,10 +430,11 @@ makeUtilsPackage dependencyHints packageHints describe deb =
       fileInfoAtom (DataFile path) = DHInstall path (takeDirectory ("usr/share" </> display (Cabal.package pkgDesc) </> path))
       fileInfoAtom (CabalExecutable name) = DHInstallCabalExec name "usr/bin"
 
-applyPackageHint :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> PackageHint -> Debianization -> Debianization
-applyPackageHint dependencyHints describe (SiteHint b x) deb = installWebsite dependencyHints describe b x deb
-applyPackageHint dependencyHints describe (ServerHint b x) deb = installServer dependencyHints describe b x deb
-applyPackageHint dependencyHints describe (InstallFileHint b x) deb = installExec dependencyHints describe b x deb
+applyPackageHint :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> DebAtomKey -> DebAtom -> Debianization -> Debianization
+applyPackageHint dependencyHints describe (Binary b) (DHWebsite x) deb = installWebsite dependencyHints describe b x deb
+applyPackageHint dependencyHints describe (Binary b) (DHServer x) deb = installServer dependencyHints describe b x deb
+applyPackageHint dependencyHints describe (Binary b) (DHExecutable x) deb = installExec dependencyHints describe b x deb
+applyPackageHint _ _ _ _ deb = deb
 
 installWebsite :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> BinPkgName -> Site -> Debianization -> Debianization
 installWebsite dependencyHints describe b site deb =
@@ -494,19 +494,22 @@ cabalExecBinaryPackage b dependencyHints describe deb =
             }
       pkgDesc = packageDescription (error "cabalExecBinaryPackage: no PackageDescription") deb
 
-applyPackageHints :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> PackageHints -> Debianization -> Debianization
-applyPackageHints dependencyHints describe packageHints deb =
-    foldr (applyPackageHint dependencyHints describe) deb packageHints
+applyPackageHints :: DependencyHints -> (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization
+applyPackageHints dependencyHints describe deb =
+    foldAtoms (applyPackageHint dependencyHints describe) deb deb
+    -- foldr (applyPackageHint dependencyHints describe) deb (getAtoms deb)
 
 -- | The list of executables without a corresponding cabal package to put them into
-bundledExecutables :: [PackageHint] -> PackageDescription -> [Executable]
-bundledExecutables packageHints pkgDesc =
+bundledExecutables :: HasAtoms atoms => atoms -> PackageDescription -> [Executable]
+bundledExecutables atoms pkgDesc =
     filter nopackage (filter (buildable . buildInfo) (Cabal.executables pkgDesc))
     where
-      nopackage p = not (elem (exeName p) (mapMaybe execNameOfHint packageHints))
-      execNameOfHint (InstallFileHint _ e) = Just (execName e)
-      execNameOfHint (ServerHint _ s) = Just (execName (installFile s))
-      execNameOfHint (SiteHint _ s) = Just (execName (installFile (server s)))
+      nopackage p = not (elem (exeName p) (foldAtoms execNameOfHint [] atoms))
+      execNameOfHint :: DebAtomKey -> DebAtom -> [String] -> [String]
+      execNameOfHint (Binary b) (DHExecutable e) xs = execName e : xs
+      execNameOfHint (Binary b) (DHServer s) xs = execName (installFile s) : xs
+      execNameOfHint (Binary b) (DHWebsite s) xs = execName (installFile (server s)) : xs
+      execNameOfHint _ _ xs = xs
 
 debianDescription :: String -> String -> String -> String -> String -> PackageType -> PackageIdentifier -> Text
 debianDescription synopsis' description' author' maintainer' url typ pkgId =
