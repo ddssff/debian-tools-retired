@@ -24,7 +24,7 @@ data InstallFile
       , sourceDir :: Maybe FilePath -- ^ where to find it, default is dist/build/<execName>/
       , destDir :: Maybe FilePath -- ^ where to put it, default is usr/bin/<execName>
       , destName :: String  -- ^ name to give installed executable
-      } deriving (Read, Show, Eq)
+      } deriving (Read, Show, Eq, Ord)
 
 -- | Information about the web site we are packaging.
 data Server
@@ -39,7 +39,7 @@ data Server
       , retry :: String         -- ^ start-stop-daemon --retry argument
       , serverFlags :: [String] -- ^ Extra flags to pass to the server via the init script
       , installFile :: InstallFile -- ^ The hint to install the server executable
-      } deriving (Read, Show, Eq)
+      } deriving (Read, Show, Eq, Ord)
 
 data Site
     = Site
@@ -48,7 +48,7 @@ data Site
                            -- redirect requests from this domain to hostname:port
       , serverAdmin :: String   -- ^ Apache ServerAdmin parameter
       , server :: Server   -- ^ The hint to install the server job
-      } deriving (Read, Show, Eq)
+      } deriving (Read, Show, Eq, Ord)
 
 -- | Process a --executable command line argument
 executableOption :: String -> (PackageHint -> a) -> a

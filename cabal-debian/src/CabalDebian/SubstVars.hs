@@ -16,7 +16,8 @@ import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
 import Data.Version (Version)
-import Debian.Debianize.Types.Dependencies (DependencyHints, filterMissing', cabalDependencies, PackageInfo(..), debNameFromType, debDeps)
+import Debian.Debianize.Dependencies (cabalDependencies, debDeps)
+import Debian.Debianize.Types.Dependencies (DependencyHints, filterMissing', PackageInfo(..), debNameFromType)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription)
 import Debian.Control
 import Debian.Debianize.Types.PackageType (DebType)

@@ -42,18 +42,19 @@ import Data.Monoid ((<>), mempty)
 import Data.Set as Set (Set, difference, union, fromList, null, insert, toList)
 import Data.Text as Text (Text, pack, intercalate, unpack, unlines)
 import Data.Version (Version)
-import qualified Debian.Relation as D
-import Debian.Debianize.Types.Dependencies (DependencyHints (binaryPackageDeps, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap, revision, debVersion, missingDependencies),
-                                  debianName, debianBuildDeps, debianBuildDepsIndep)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
+import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
 import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtomKey(..), DebAtom(..), HasAtoms(getAtoms, putAtoms), insertAtom, foldAtoms, insertAtoms', utilsPackageName, packageDescription, compiler)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), newBinaryDebDescription,
                                                        PackageRelations(..))
+import Debian.Debianize.Types.Dependencies (DependencyHints (binaryPackageDeps, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap,
+                                                             revision, debVersion, missingDependencies), debianName)
 import Debian.Debianize.Types.PackageHints (PackageHints, PackageHint(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Utility (trim)
 import Debian.Policy (StandardsVersion, PackagePriority(Optional), PackageArchitectures(Any, All, Names), Section(..))
+import qualified Debian.Relation as D
 import Debian.Relation (BinPkgName, SrcPkgName(..), Relation(Rel))
 import Debian.Release (parseReleaseName)
 import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
