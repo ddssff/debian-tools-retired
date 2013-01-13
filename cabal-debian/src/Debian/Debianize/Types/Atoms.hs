@@ -27,6 +27,7 @@ module Debian.Debianize.Types.Atoms
     , doExecutable
     , doServer
     , doWebsite
+    , setSourcePackageName
     ) where
 
 import Data.Generics (Data, Typeable)
@@ -41,7 +42,7 @@ import Debian.Debianize.Types.Dependencies (DependencyHints(..), defaultDependen
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat)
-import Debian.Relation (BinPkgName)
+import Debian.Relation (BinPkgName, SrcPkgName)
 import Distribution.PackageDescription as Cabal (PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init)
@@ -84,6 +85,8 @@ data DebAtom
     | DebRulesFragment Text                       -- ^ A Fragment of debian/rules
     | Warning Text                                -- ^ A warning to be reported later
     | UtilsPackageName BinPkgName                 -- ^ Name to give the package for left-over data files and executables
+    | SourcePackageName SrcPkgName                -- ^ Name to give to debian source package.  If not supplied name is constructed
+                                                  -- from the cabal package name.
     | DHDependencyHints DependencyHints           -- ^ Information about the mapping from cabal package names and
                                                   -- versions to debian package names and versions.  (This could be
                                                   -- broken up into smaller atoms, many of which would be attached to
@@ -232,3 +235,6 @@ doServer bin x deb = insertAtom (Binary bin) (DHServer x) deb
 
 doWebsite :: HasAtoms atoms => BinPkgName -> Site -> atoms -> atoms
 doWebsite bin x deb = insertAtom (Binary bin) (DHWebsite x) deb
+
+setSourcePackageName :: HasAtoms atoms => SrcPkgName -> atoms -> atoms
+setSourcePackageName src deb = insertAtom Source (SourcePackageName src) deb

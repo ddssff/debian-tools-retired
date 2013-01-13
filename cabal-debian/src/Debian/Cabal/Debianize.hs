@@ -16,7 +16,6 @@ import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirect
 import Debian.Debianize.Combinators (debianization)
 import Debian.Debianize.Types.Atoms (DebAtomKey, DebAtom)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..))
-import Debian.Debianize.Types.PackageHints (PackageHints)
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Distribution.PackageDescription as Cabal (FlagName)

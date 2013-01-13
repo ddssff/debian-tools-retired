@@ -4,18 +4,13 @@ module CabalDebian.Flags
     , DebAction(..)
     , withFlags
     , debianize
-{-  , compileArgs
-    , withEnvironmentArgs
-    , withEnvironmentFlags
-    , putEnvironmentArgs
-    , callDebianize
-    , runDebianize -}
     ) where
 
 import Data.Map (Map)
 import Data.Monoid (mempty)
 import Data.Set (Set)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat), insertAtom, compilerVersion, doDependencyHint, missingDependency, doExecutable)
+import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat),
+                                     insertAtom, compilerVersion, doDependencyHint, missingDependency, doExecutable, setSourcePackageName)
 import Debian.Debianize.Types.PackageHints (PackageHints)
 import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Policy (SourceFormat(Native3, Quilt3))
@@ -31,7 +26,7 @@ import Data.Version (parseVersion)
 import Debian.Debianize.Types.Dependencies (DependencyHints (..))
 import Debian.Debianize.Types.PackageHints (executableOption)
 import Debian.Policy (parseMaintainer)
-import Debian.Relation (BinPkgName(..))
+import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Version (parseDebianVersion)
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
@@ -96,9 +91,6 @@ data Flags = Flags
     --------------------------------------------------
     -- Debian Package Configuration
     --------------------------------------------------
-    , sourcePackageName :: Maybe String
-    -- ^ Name to give the debian source package.  If none is given it
-    -- is constructed from the cabal package name.
     , debMaintainer :: Maybe NameAddr
     -- ^ Value for the maintainer field in the control file.  Note
     -- that the cabal maintainer field can have multiple addresses,
@@ -125,11 +117,8 @@ defaultFlags =
     , debAction = Usage
     , dryRun = False
     , validate = False
-    , sourcePackageName = Nothing
     , debMaintainer = Nothing
-    -- , modifyAtoms = id
     , buildDir = "dist-ghc/build"
-    -- , dependencyHints = defaultDependencyHints
     , debAtoms = insertAtom Source (DebSourceFormat Native3) mempty
     }
 
@@ -167,7 +156,7 @@ options =
              "Don't generate API documentation.  Use this if build is crashing due to a haddock error.",
       Option "" ["missing-dependency"] (ReqArg (\ name flags -> missingDependency (BinPkgName name) flags) "DEB")
              "Mark a package missing, do not add it to any dependency lists in the debianization.",
-      Option "" ["source-package-name"] (ReqArg (\ name x -> x {sourcePackageName = Just name}) "NAME")
+      Option "" ["source-package-name"] (ReqArg (\ name x -> setSourcePackageName (SrcPkgName name) x) "NAME")
              "Use this name for the debian source package.  Default is haskell-<cabalname>, where the cabal package name is downcased.",
       Option "" ["disable-library-profiling"] (NoArg (\ x -> insertAtom Source NoProfilingLibrary x))
              "Don't generate profiling libraries",

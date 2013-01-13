@@ -15,7 +15,7 @@ import qualified Data.Text as T
 import Debian.Cabal.Debianize (debianizationWithIO)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
-import Debian.Debianize.Combinators (tightDependencyFixup, buildDeps, setSourcePackageName, setChangelog, control,
+import Debian.Debianize.Combinators (tightDependencyFixup, buildDeps, setChangelog, control,
                                      setArchitecture, installExec, installServer, installWebsite)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
