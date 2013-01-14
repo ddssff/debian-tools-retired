@@ -9,10 +9,6 @@ Build-Depends: debhelper (>= 7.0)
                , ghc-prof
                , libghc-cabal-dev (>= 1.9) | ghc
                , libghc-cabal-prof (>= 1.9) | ghc-prof
-               , libghc-diff-dev
-               , libghc-diff-prof
-               , libghc-hunit-dev
-               , libghc-hunit-prof
                , libghc-unixutils-dev (>= 1.50)
                , libghc-unixutils-prof (>= 1.50)
                , libghc-ansi-wl-pprint-dev
@@ -27,36 +23,32 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-containers-prof | ghc-prof
                , libghc-debian-dev (>= 3.70)
                , libghc-debian-prof (>= 3.70)
+               , libghc-diff-dev
+               , libghc-diff-prof
                , libghc-directory-dev | ghc
                , libghc-directory-prof | ghc-prof
                , libghc-filepath-dev | ghc
                , libghc-filepath-prof | ghc-prof
-               , libghc-hsemail-dev
-               , libghc-hsemail-prof
                , libghc-mtl-dev
                , libghc-mtl-prof
                , libghc-network-dev
                , libghc-network-prof
                , libghc-parsec3-dev (>= 3)
                , libghc-parsec3-prof (>= 3)
+               , libghc-pretty-dev | ghc
+               , libghc-pretty-prof | ghc-prof
                , libghc-process-dev | ghc
                , libghc-process-prof | ghc-prof
                , libghc-puremd5-dev
                , libghc-puremd5-prof
                , libghc-regex-tdfa-dev
                , libghc-regex-tdfa-prof
-               , libghc-syb-dev
-               , libghc-syb-prof
-               , libghc-text-dev
-               , libghc-text-prof
                , libghc-unix-dev | ghc
                , libghc-unix-prof | ghc-prof
                , libghc-utf8-string-dev
                , libghc-utf8-string-prof
 Build-Depends-Indep: ghc-doc
                      , libghc-cabal-doc (>= 1.9) | ghc-doc
-                     , libghc-diff-doc
-                     , libghc-hunit-doc
                      , libghc-unixutils-doc (>= 1.50)
                      , libghc-ansi-wl-pprint-doc
                      , libghc-applicative-extras-doc
@@ -64,9 +56,9 @@ Build-Depends-Indep: ghc-doc
                      , libghc-bytestring-doc | ghc-doc
                      , libghc-containers-doc | ghc-doc
                      , libghc-debian-doc (>= 3.70)
+                     , libghc-diff-doc
                      , libghc-directory-doc | ghc-doc
                      , libghc-filepath-doc | ghc-doc
-                     , libghc-hsemail-doc
                      , libghc-mtl-doc
                      , libghc-network-doc
                      , libghc-parsec3-doc (>= 3)
@@ -74,8 +66,6 @@ Build-Depends-Indep: ghc-doc
                      , libghc-process-doc | ghc-doc
                      , libghc-puremd5-doc
                      , libghc-regex-tdfa-doc
-                     , libghc-syb-doc
-                     , libghc-text-doc
                      , libghc-unix-doc | ghc-doc
                      , libghc-utf8-string-doc
 Standards-Version: 3.9.3
@@ -88,7 +78,6 @@ Depends: ${shlibs:Depends}
          , ${misc:Depends}
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
-Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
 Description: Create a debianization for a cabal package
  Tool for creating debianizations of Haskell packages based on the .cabal
@@ -106,7 +95,6 @@ Depends: ${haskell:Depends}
          , ${misc:Depends}
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
-Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
 Description: Create a debianization for a cabal package
  Tool for creating debianizations of Haskell packages based on the .cabal
@@ -125,7 +113,6 @@ Depends: ${haskell:Depends}
          , ${misc:Depends}
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
-Conflicts: ${haskell:Conflicts}
 Description: Create a debianization for a cabal package
  Tool for creating debianizations of Haskell packages based on the .cabal
  file.  If apt-file is installed it will use it to discover what is the

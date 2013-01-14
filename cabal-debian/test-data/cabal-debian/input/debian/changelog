@@ -1,0 +1,455 @@
+haskell-cabal-debian (3.0) unstable; urgency=low
+
+  * Moved the Distribution.Debian modules to Debian.Cabal and
+    Debian.Debianize.
+  * Refactored the debianize function for easier testing
+  * Added test cases.
+  * Add a Debianization type that intends to fully describe a debian
+    package, with functions to read, build, modify, and write a
+    Debianization.
+
+ -- David Fox <dsf@seereason.com>  Wed, 26 Dec 2012 05:45:35 -0800
+
+haskell-cabal-debian (2.6.3) unstable; urgency=low
+
+  * Fix pretty printing of Relations (i.e. dependency lists.)  There
+    is an instance for printing lists in ansi-wl-pprint which prevents
+    us from writing customized Pretty instances for type aliases like
+    Relations, AndRelation, and OrRelation.
+
+ -- David Fox <dsf@seereason.com>  Fri, 04 Jan 2013 09:30:48 -0800
+
+haskell-cabal-debian (2.6.2) unstable; urgency=low
+
+  * Fix a bug constructing the destination pathnames that was dropping
+    files that were supposed to be installed into packages.
+
+ -- David Fox <dsf@seereason.com>  Thu, 20 Dec 2012 06:49:25 -0800
+
+haskell-cabal-debian (2.6.1) unstable; urgency=low
+
+  * Remove the modifyAtoms field from the Flags record, we want to
+    be able to create instances like Read and Show for this type.
+    The modifyAtoms function is now passed separately to debianize.
+  * The flags field of Server was renamed serverFlags because the
+    newly exported Config record has a flags field.
+
+ -- David Fox <dsf@seereason.com>  Wed, 19 Dec 2012 09:45:22 -0800
+
+haskell-cabal-debian (2.5.10) unstable; urgency=low
+
+  * Filter cabal self dependencies out before generating
+    Build-Depends-Indep, just as we added code to filter them out
+    of Build-Depends in version 2.5.7.
+
+ -- David Fox <dsf@seereason.com>  Tue, 18 Dec 2012 13:23:39 -0800
+
+haskell-cabal-debian (2.5.9) unstable; urgency=low
+
+  * Always add +RTS -IO -RTS to server flags.
+
+ -- David Fox <dsf@seereason.com>  Sun, 16 Dec 2012 10:40:52 -0800
+
+haskell-cabal-debian (2.5.8) unstable; urgency=low
+
+  * Add a builtin list for ghc-7.6.1.
+
+ -- David Fox <dsf@seereason.com>  Sat, 15 Dec 2012 07:04:49 -0800
+
+haskell-cabal-debian (2.5.7) unstable; urgency=low
+
+  * Filter out cabal self-dependencies before building the debian
+    dependencies.  In cabal a self dependency means you need the library
+    to build an executable, while in debian it means you need an older
+    version installed to build the current version.
+
+ -- David Fox <dsf@seereason.com>  Thu, 29 Nov 2012 08:42:30 -0800
+
+haskell-cabal-debian (2.5.6) unstable; urgency=low
+
+  * Don't add --base-uri and --http-port arguments automatically, they can be
+    computed by calling the oldClckwrksFlags function and adding the value to
+    the flags field.  Clckwrks-0.3 no longer needs the --base-uri argument.
+
+ -- David Fox <dsf@seereason.com>  Tue, 27 Nov 2012 13:34:31 -0800
+
+haskell-cabal-debian (2.5.5) unstable; urgency=low
+
+  * Have the debianize function return False if there is no debian/Debianize.hs file,
+    but throw an exception if running it failed, so we notice bad debianization code.
+
+ -- David Fox <dsf@seereason.com>  Tue, 27 Nov 2012 07:34:51 -0800
+
+haskell-cabal-debian (2.5.4) unstable; urgency=low
+
+  * Insert "SetEnv proxy-sendcl 1" line into Apache config.
+
+ -- David Fox <dsf@seereason.com>  Tue, 20 Nov 2012 13:43:54 -0800
+
+haskell-cabal-debian (2.5.3) unstable; urgency=low
+
+  * Remove extra copy of binary from the executable debs
+  * Add a sourcePackageName field to Flags, and a --source-package-name
+    command line option.
+
+ -- David Fox <dsf@seereason.com>  Sat, 17 Nov 2012 00:16:21 -0800
+
+haskell-cabal-debian (2.5.2) unstable; urgency=low
+
+  * Fix the path to where the DHInstallTo and DHInstallCabalExecTo
+    DebAtoms put their files.
+
+ -- David Fox <dsf@seereason.com>  Fri, 16 Nov 2012 18:11:45 -0800
+
+haskell-cabal-debian (2.5.1) unstable; urgency=low
+
+  * Add a destName field to Executable so we can give installed
+    executables a different name than they had in the build.
+
+ -- David Fox <dsf@seereason.com>  Fri, 16 Nov 2012 15:37:16 -0800
+
+haskell-cabal-debian (2.5) unstable; urgency=low
+
+  * Add a debName field to the Executable record, before the deb
+    package name had to equal the executable name.
+
+ -- David Fox <dsf@seereason.com>  Fri, 16 Nov 2012 12:32:39 -0800
+
+haskell-cabal-debian (2.4.2) unstable; urgency=low
+
+  * Move location of cabal install files from dist/build/install to
+    debian/cabalInstall, the dist directory was getting wiped at bad
+    moments.
+  * Split the autobuilder function autobuilderDebianize into two
+    new functions in cabal-debian: runDebianize and callDebianize.
+  * Custom debianization code now goes in debian/Debianize.hs rather than
+    in setup, so we can distinguish it failing from it not existing more
+    easily.
+
+ -- David Fox <dsf@seereason.com>  Thu, 15 Nov 2012 11:00:08 -0800
+
+haskell-cabal-debian (2.4.1) unstable; urgency=low
+
+  * We need to verify that debian/compat was created after running the
+    debianize function, because ghc still exits with ExitSuccess
+
+ -- David Fox <dsf@seereason.com>  Thu, 15 Nov 2012 06:34:02 -0800
+
+haskell-cabal-debian (2.4.0) unstable; urgency=low
+
+  * You can run a function in Setup.hs other than main using ghc -e, so we
+    will use this trick to run the debianize function directly rather than
+    running main.
+  * Eliminate the autobuilderDebianize function.
+
+ -- David Fox <dsf@seereason.com>  Thu, 15 Nov 2012 04:05:49 -0800
+
+haskell-cabal-debian (2.3.4) unstable; urgency=low
+
+  * Fix the builddir used when running the cabal-debian standalone
+    executable - it was dist-cabal/build, so the resulting debianization
+    had files in places where cabal didn't expect them.
+
+ -- David Fox <dsf@seereason.com>  Tue, 13 Nov 2012 06:20:51 -0800
+
+haskell-cabal-debian (2.3.3) unstable; urgency=low
+
+  * Eliminate class MonadBuild and the BuildT monad.
+
+ -- David Fox <dsf@seereason.com>  Sun, 11 Nov 2012 17:46:31 -0800
+
+haskell-cabal-debian (2.3.2) unstable; urgency=low
+
+  * Fix exception that was keeping changelogs from being preserved.
+
+ -- David Fox <dsf@seereason.com>  Sat, 10 Nov 2012 10:07:50 -0800
+
+haskell-cabal-debian (2.3.1) unstable; urgency=low
+
+  * Fix the extension of the debhelper links files
+  * Add a general mechanism for installing a file into a deb when
+    we have the file's text in a String (rather than in a file.)
+
+ -- David Fox <dsf@seereason.com>  Sat, 10 Nov 2012 07:35:09 -0800
+
+haskell-cabal-debian (2.3) unstable; urgency=low
+
+  * Add MonadBuild.
+
+ -- David Fox <dsf@seereason.com>  Fri, 09 Nov 2012 12:21:14 -0800
+
+haskell-cabal-debian (2.2.1) unstable; urgency=low
+
+  * Add a modifyAtoms function to Flags that is applied to final list of
+    DebAtom before writing the debianization.
+  * Add DHApacheSite and DHInstallCabalExec atoms so atoms don't depend on
+    the build directory
+  * Add #DEBHELPER# and exit 0 to default web server postinst.
+
+ -- David Fox <dsf@seereason.com>  Fri, 09 Nov 2012 10:25:32 -0800
+
+haskell-cabal-debian (2.2.0) unstable; urgency=low
+
+  * Append a trailing slash to the --base-uri argument passed to the
+    server.  This is required by Web.Routes.Site.runSite.
+
+ -- David Fox <dsf@seereason.com>  Thu, 08 Nov 2012 04:40:08 -0800
+
+haskell-cabal-debian (2.1.4) unstable; urgency=low
+
+  * Merge the Executable and Script constructors of the Executable type
+  * Add a destDir field to Executable to specify the destination.
+
+ -- David Fox <dsf@seereason.com>  Tue, 06 Nov 2012 13:24:25 -0800
+
+haskell-cabal-debian (2.1.3) unstable; urgency=low
+
+  * Don't append a slash to the base-uri.
+  * Construct the name of the data directory in /usr/share from the cabal
+    package name rather than the debian source package name.
+  * Add a --self-depend flag to include a build dependency on this library
+    in all generated debianizations.
+
+ -- David Fox <dsf@seereason.com>  Tue, 06 Nov 2012 07:07:57 -0800
+
+haskell-cabal-debian (2.1.2) unstable; urgency=low
+
+  * Output the server support files.
+
+ -- David Fox <dsf@seereason.com>  Tue, 06 Nov 2012 06:37:18 -0800
+
+haskell-cabal-debian (2.1.1) unstable; urgency=low
+
+  * Restore code that checks for version number match when validating
+    a debianization.  The autobuilder can now pass the version number
+    to cabal-debian, so it should match.
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 Nov 2012 17:42:32 -0800
+
+haskell-cabal-debian (2.1.0) unstable; urgency=low
+
+  * Enable processing of Script, Server and WebSite executables.
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 Nov 2012 12:45:42 -0800
+
+haskell-cabal-debian (2.0.9) unstable; urgency=low
+
+  * Add a Library section, export all the modules.
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 Nov 2012 06:41:25 -0800
+
+haskell-cabal-debian (2.0.8) unstable; urgency=low
+
+  * Bypass abandoned versions.
+
+ -- David Fox <dsf@seereason.com>  Sat, 03 Nov 2012 06:13:27 -0700
+
+haskell-cabal-debian (1.26) unstable; urgency=low
+
+  * Don't try to update the existing debianization, except for the
+    changelog where we retain entries that look older than the one
+    we generate.
+  * Use .install files instead of adding rules to debian/rules
+  * Add --depends and --conflicts options
+
+ -- David Fox <dsf@seereason.com>  Thu, 25 Oct 2012 12:03:49 -0700
+
+haskell-cabal-debian (1.25) unstable; urgency=low
+
+  * If the --disable-haddock flag is given omit the doc package from the
+    control file.
+  * The tarball that was uploaded to Hackage as version 1.24 had a (buggy)
+    change which was not pushed to darcs.  This resolves that confusion.
+
+ -- David Fox <dsf@seereason.com>  Sat, 16 Jun 2012 14:42:12 -0700
+
+haskell-cabal-debian (1.24) unstable; urgency=low
+
+  * No wonder it doesn't build on hackage - none of the source
+    modules were shipped.
+
+ -- David Fox <dsf@seereason.com>  Thu, 14 Jun 2012 08:19:19 -0700
+
+haskell-cabal-debian (1.23) unstable; urgency=low
+
+  * Add a --quilt option to switch from native to quilt format.
+    Without this option the file debian/source/format will contain
+    '3.0 (native)', with it '3.0 (quilt)'.
+
+ -- David Fox <dsf@seereason.com>  Fri, 01 Jun 2012 05:53:36 -0700
+
+haskell-cabal-debian (1.22) unstable; urgency=low
+
+  * Bump version to make sure all changes are uploaded.
+
+ -- David Fox <dsf@seereason.com>  Wed, 23 May 2012 19:54:17 -0700
+
+haskell-cabal-debian (1.21) unstable; urgency=low
+
+  * fix conversion of wildcards into intersected ranges
+
+ -- David Fox <dsf@seereason.com>  Wed, 23 May 2012 19:51:34 -0700
+
+haskell-cabal-debian (1.20) unstable; urgency=low
+
+  * Fix generation of debian library dependencies from the Extra-Libraries
+    field of the cabal file.
+
+ -- David Fox <dsf@seereason.com>  Wed, 23 May 2012 19:50:39 -0700
+
+haskell-cabal-debian (1.19) unstable; urgency=low
+
+  * Handle cabal equals dependencies.
+
+ -- David Fox <dsf@seereason.com>  Tue, 20 Mar 2012 14:34:58 -0700
+
+haskell-cabal-debian (1.18) unstable; urgency=low
+
+  * High level of confidence this time.  Interesting new Interspersed
+    class, and an implementation of invertVersionRanges which should be
+    forwarded to the Cabal folks.
+  * Removes dependency on logic-classes
+
+ -- David Fox <dsf@seereason.com>  Tue, 20 Mar 2012 08:17:25 -0700
+
+haskell-cabal-debian (1.17) unstable; urgency=low
+
+  * Restore code to downcase cabal package name before using it as the
+    base of the debian package name.
+
+ -- David Fox <dsf@seereason.com>  Sun, 18 Mar 2012 15:32:04 -0700
+
+haskell-cabal-debian (1.16) unstable; urgency=low
+
+  * Remove code that implements a special case for the debian name of the
+    haskell-src-exts package.
+
+ -- David Fox <dsf@seereason.com>  Sun, 18 Mar 2012 14:11:21 -0700
+
+haskell-cabal-debian (1.15) unstable; urgency=low
+
+  * Yet another stab at fixing the code for converting cabal dependencies
+    to debian dependencies, with support for splitting version ranges of
+    cabal files among different debian packages.
+
+ -- David Fox <dsf@seereason.com>  Fri, 16 Mar 2012 17:59:28 -0700
+
+haskell-cabal-debian (1.14) unstable; urgency=low
+
+  * Don't try to strip data files
+  * Use permissions 644 for data files, not 755.
+
+ -- David Fox <dsf@seereason.com>  Wed, 07 Mar 2012 14:46:04 -0800
+
+haskell-cabal-debian (1.13) unstable; urgency=low
+
+  * Append the version number when constructing the directory for data
+    files.
+
+ -- David Fox <dsf@seereason.com>  Wed, 07 Mar 2012 08:56:39 -0800
+
+haskell-cabal-debian (1.12) unstable; urgency=low
+
+  * Include any files listed in the Data-Files field of the cabal file
+    in the utils package.
+
+ -- David Fox <dsf@seereason.com>  Tue, 06 Mar 2012 11:31:47 -0800
+
+haskell-cabal-debian (1.11) unstable; urgency=low
+
+  * Replace --epoch flag with --epoch-map, so we can specify epoch numbers
+    for both the package being built and for dependency packages.
+
+ -- David Fox <dsf@seereason.com>  Thu, 09 Feb 2012 07:01:19 -0800
+
+haskell-cabal-debian (1.10) unstable; urgency=low
+
+  * Add bundled package list for ghc 7.4.1.
+
+ -- David Fox <dsf@seereason.com>  Sat, 04 Feb 2012 14:44:33 -0800
+
+haskell-cabal-debian (1.9) unstable; urgency=low
+
+  * Add --dep-map flag to allow mapping of cabal package names to the base
+    of a debian package name.  This modifies the name to which the prefix
+    "lib" and the suffix "-dev" are added.
+  * Fix dependency generation bug introduced in 1.8.
+
+ -- David Fox <dsf@seereason.com>  Mon, 23 Jan 2012 14:13:05 -0800
+
+haskell-cabal-debian (1.8) unstable; urgency=low
+
+  * Add a --dev-dep flag to make one or more packages install dependencies
+    of the dev package.
+
+ -- David Fox <dsf@seereason.com>  Mon, 23 Jan 2012 05:00:46 -0800
+
+haskell-cabal-debian (1.7) unstable; urgency=low
+
+  * Add info about ghc 7.4.0 pre-release.
+
+ -- David Fox <dsf@seereason.com>  Wed, 11 Jan 2012 09:57:45 -0800
+
+haskell-cabal-debian (1.6) unstable; urgency=low
+
+  * Don't omit dependencies built into ghc, they should be satisfied by
+    the Provides in the compiler if they are not available in the
+    repository.  However, we do need to make ghc an alterantive to any
+    versioned dependencies that are bundled with the compiler, since the
+    built in dependencies are virtual packages and thus unversioned.
+
+ -- David Fox <dsf@seereason.com>  Wed, 07 Dec 2011 06:10:17 -0800
+
+haskell-cabal-debian (1.5) unstable; urgency=low
+
+  * Fix the generation of build dependency version ranges by using an
+    intermediate version range type.
+  * If the version range for the cabal file touches two different debian
+    package, don't try to write build dependencies that allow either one,
+    it can't really be done.  Just give the allowable versions of the
+    newer package (e.g. libghc-parsec3-dev rather than libghc-parsec2-dev.)
+
+ -- David Fox <dsf@seereason.com>  Sun, 04 Dec 2011 05:59:25 -0800
+
+haskell-cabal-debian (1.4) unstable; urgency=low
+
+  * Add a --revision <suffix> flag which appends a (perhaps empty) string
+    cabal version number to get the debian version number.  Without this
+    flag the string "-1~hackage1" is appended.
+  * Make it an error to specify a debian version via --deb-version that is
+    older than the current cabal version.
+
+ -- David Fox <dsf@seereason.com>  Sun, 20 Nov 2011 06:45:33 -0800
+
+haskell-cabal-debian (1.3) unstable; urgency=low
+
+  * Fix error message when compiler version is not in bundled package list.
+  * Add bundled package list for compiler 7.0.4 (same as 7.0.3.)
+
+ -- David Fox <dsf@seereason.com>  Sat, 08 Oct 2011 07:58:19 -0700
+
+haskell-cabal-debian (1.2) unstable; urgency=low
+
+  * When computing the debian name from a package's cabal name, if we
+    have no particular version number we are comparing to, use the name
+    from the version split that corresponds to newer version numbers.
+  * Add code to make the cabal package haskell-src-exts map to the debian
+    packages libghc-src-exts-dev etc.  Normally it would map to
+    libghc-haskell-src-exts-dev.
+
+ -- David Fox <dsf@seereason.com>  Thu, 06 Oct 2011 09:27:02 -0700
+
+haskell-cabal-debian (1.1) unstable; urgency=low
+
+  * Use propositional logic package to compute normal form for dependencies
+  * Make sure to correct format of cabal package synopsis before using as debian
+    package description.
+
+ -- David Fox <dsf@seereason.com>  Fri, 30 Sep 2011 06:16:34 -0700
+
+haskell-cabal-debian (1.0) unstable; urgency=low
+
+  * Debianization generated by cabal-debian
+
+ -- David Fox <dsf@seereason.com>  Sun, 18 Sep 2011 06:40:21 -0700
+
