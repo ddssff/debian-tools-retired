@@ -49,9 +49,7 @@ data Flags = Flags
     -------------------------
     -- Modes of Operation ---
     -------------------------
-      help :: Bool
-    -- ^ Print a help message and exit.
-    , verbosity :: Int
+      verbosity :: Int
     -- ^ Run with progress messages at the given level of verboseness.
     , dryRun :: Bool
     -- ^ Don't write any files or create any directories, just explain
@@ -78,8 +76,7 @@ data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq)
 defaultFlags :: Flags
 defaultFlags =
     Flags {
-      help = False
-    , verbosity = 1
+      verbosity = 1
     , debAction = Usage
     , dryRun = False
     , validate = False
@@ -94,7 +91,7 @@ withFlags action = getFlags >>= action
 
 compileArgs :: [String] -> Flags -> Flags
 compileArgs args flags =
-  case getOpt' RequireOrder options args of
+  case getOpt' RequireOrder (flagOptions ++ atomOptions) args of
     (os, [], [], []) -> foldl (flip ($)) flags os
     (_, non, unk, errs) -> error ("Errors: " ++ show errs ++
                                   ", Unrecognized: " ++ show unk ++
@@ -102,18 +99,30 @@ compileArgs args flags =
 
 parseArgs :: [String] -> IO Flags
 parseArgs args = do
-     when (help opts || debAction opts == Usage) $ do
+     when (debAction opts == Usage) $ do
        printHelp stdout
        exitWith ExitSuccess
      return opts
     where opts = compileArgs args defaultFlags
 
-options :: [OptDescr (Flags -> Flags)]
-options =
-    [ Option "" ["executable"] (ReqArg (\ path x -> executableOption path (\ b e -> doExecutable b e x)) "SOURCEPATH or SOURCEPATH:DESTDIR")
-             "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
-      Option "h?" ["help"] (NoArg (\x -> x { help = True }))
+flagOptions :: [OptDescr (Flags -> Flags)]
+flagOptions =
+    [ Option "v" ["verbose"] (ReqArg (\s x -> x { verbosity = read s }) "n")
+             "Change build verbosity",
+      Option "n" ["dry-run", "compare"] (NoArg (\ x -> x {dryRun = True}))
+             "Just compare the existing debianization to the one we would generate.",
+      Option "h?" ["help"] (NoArg (\x -> x { debAction = Usage }))
              "Show this help text",
+      Option "" ["debianize"] (NoArg (\x -> x {debAction = Debianize}))
+             "Generate a new debianization, replacing any existing one.  One of --debianize or --substvar is required.",
+      Option "" ["substvar"] (ReqArg (\ name x -> x {debAction = SubstVar (read name)}) "Doc, Prof, or Dev")
+             (unlines ["Write out the list of dependencies required for the dev, prof or doc package depending",
+                       "on the argument.  This value can be added to the appropriate substvars file."]) ]
+
+atomOptions :: HasAtoms atoms => [OptDescr (atoms -> atoms)]
+atomOptions =
+    [ Option "" ["executable"] (ReqArg (\ path x -> executableOption path (\ bin e -> doExecutable bin e x)) "SOURCEPATH or SOURCEPATH:DESTDIR")
+             "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
       Option "" ["ghc-version"] (ReqArg (\ ver x -> insertAtom Source (CompilerVersion (last (map fst (readP_to_S parseVersion ver)))) x) "VERSION")
              "Version of GHC in build environment",
       Option "" ["disable-haddock"] (NoArg (\ x -> insertAtom Source NoDocumentationLibrary x))
@@ -126,12 +135,8 @@ options =
              "Don't generate profiling libraries",
       Option "f" ["flags"] (ReqArg (\ flags atoms -> putCabalFlagAssignments (fromList (flagList flags)) atoms) "FLAGS")
              "Set given flags in Cabal conditionals",
-      Option "v" ["verbose"] (ReqArg (\s x -> x { verbosity = read s }) "n")
-             "Change build verbosity",
       Option "" ["maintainer"] (ReqArg (\ maint x -> insertAtom Source (DHMaintainer (either (error ("Invalid maintainer string: " ++ show maint)) id (parseMaintainer maint))) x) "Maintainer Name <email addr>")
              "Override the Maintainer name and email in $DEBEMAIL/$EMAIL/$DEBFULLNAME/$FULLNAME",
-      Option "" ["debianize"] (NoArg (\x -> x {debAction = Debianize}))
-             "Generate a new debianization, replacing any existing one.  One of --debianize or --substvar is required.",
       Option "" ["build-dep"] (ReqArg (\ name flags -> doDependencyHint (\ x -> x {buildDeps = BinPkgName name : (buildDeps x)}) flags) "Debian binary package name")
              "Specify a package to add to the build dependency list for this source package, e.g. '--build-dep libglib2.0-dev'.",
       Option "" ["dev-dep"] (ReqArg (\ name flags -> doDependencyHint (\ x -> x {extraDevDeps = BinPkgName name : (extraDevDeps x)}) flags) "Debian binary package name")
@@ -154,9 +159,6 @@ options =
                                                                                          (cab, (_ : [d])) | isDigit d -> Map.insert (PackageName cab) (ord d - ord '0') (epochMap x)
                                                                                          _ -> error "usage: --epoch-map CABALNAME=DIGIT"}) flags) "CABALNAME=DIGIT")
              "Specify a mapping from the cabal package name to a digit to use as the debian package epoch number, e.g. --epoch-map HTTP=1",
-      Option "" ["substvar"] (ReqArg (\ name x -> x {debAction = SubstVar (read name)}) "Doc, Prof, or Dev")
-             (unlines ["Write out the list of dependencies required for the dev, prof or doc package depending",
-                       "on the argument.  This value can be added to the appropriate substvars file."]),
       Option "" ["exec-map"] (ReqArg (\ s flags -> doDependencyHint (\ x -> x {execMap = case break (== '=') s of
                                                                                            (cab, (_ : deb)) -> Map.insert cab (b deb) (execMap x)
                                                                                            _ -> error "usage: --exec-map CABALNAME=DEBNAME"}) flags) "EXECNAME=DEBIANNAME")
@@ -165,8 +167,6 @@ options =
              "Don't generate the << dependency when we see a cabal equals dependency.",
       Option "" ["quilt"] (NoArg (\ x -> insertAtom Source (DebSourceFormat Quilt3) x))
              "The package has an upstream tarball, write '3.0 (quilt)' into source/format.",
-      Option "n" ["dry-run", "compare"] (NoArg (\ x -> x {dryRun = True}))
-             "Just compare the existing debianization to the one we would generate.",
       Option "" ["builddir"] (ReqArg (\ s flags -> setBuildDir (s </> "build") flags) "PATH")
              "Subdirectory where cabal does its build, dist/build by default, dist-ghc when run by haskell-devscripts.  The build subdirectory is added to match the behavior of the --builddir option in the Setup script."
     ]
@@ -204,11 +204,10 @@ flagList = map tagWithValue . words
         tagWithValue name       = (FlagName (map toLower name), True)
 
 printHelp :: Handle -> IO ()
-
 printHelp h = do
     progName <- getProgName
     let info = "Usage: " ++ progName ++ " [FLAGS]\n"
-    hPutStrLn h (usageInfo info options)
+    hPutStrLn h (usageInfo info (flagOptions ++ atomOptions))
 
 b :: String -> BinPkgName
 b = BinPkgName
