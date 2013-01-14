@@ -6,48 +6,41 @@ module CabalDebian.Flags
     , debianize
     ) where
 
-import Data.Map (Map)
-import Data.Monoid (mempty)
-import Data.Set (Set)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat,
-                                                                           DHMaintainer),
-                                     insertAtom, compilerVersion, doDependencyHint, missingDependency, doExecutable, setSourcePackageName, buildDir, setBuildDir, cabalFlagAssignments, putCabalFlagAssignments)
-import Debian.Debianize.Types.PackageType (DebType)
-import Debian.Policy (SourceFormat(Quilt3))
-import System.Exit (ExitCode(ExitSuccess))
-import System.Process.Progress (defaultVerbosity)
-
 import Control.Monad (when)
 import Data.Char (toLower, isDigit, ord)
 import qualified Data.Map as Map
-import Data.Set (fromList)
+import Data.Map (Map)
+import Data.Monoid (mempty)
+import Data.Set (Set, fromList)
 import Data.Version (parseVersion)
+import Debian.Cabal.Debianize (debianizationWithIO)
+import Debian.Debianize.Input (inputDebianization)
+import Debian.Debianize.Output (outputDebianization)
+import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat, DHMaintainer),
+                                     insertAtom, compilerVersion, doDependencyHint, missingDependency, doExecutable, setSourcePackageName,
+                                     buildDir, setBuildDir, cabalFlagAssignments, putCabalFlagAssignments)
 import Debian.Debianize.Types.Dependencies (DependencyHints (..))
-import Debian.Debianize.Types.PackageHints (executableOption)
-import Debian.Policy (parseMaintainer)
+import Debian.Debianize.Types.PackageHints (InstallFile(..))
+import Debian.Debianize.Types.PackageType (DebType)
+import Debian.Orphans ()
+import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Version (parseDebianVersion)
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
-import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..), usageInfo, getOpt')
-import System.Environment (getArgs, getProgName)
-import System.Exit (exitWith)
-import System.FilePath ((</>))
-import System.IO (Handle, hPutStrLn, stdout)
-import Text.ParserCombinators.ReadP (readP_to_S)
-import Text.Regex.TDFA ((=~))
-
-import Debian.Orphans ()
 import Prelude hiding (readFile, lines, null, log, sum)
-import System.Environment (getEnv)
-import System.IO.Error (catchIOError)
-import System.Posix.Env (setEnv)
-
-import Debian.Cabal.Debianize (debianizationWithIO)
-import Debian.Debianize.Input (inputDebianization)
-import Debian.Debianize.Output (outputDebianization)
+import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..), usageInfo, getOpt')
 import System.Directory (doesFileExist)
+import System.Environment (getArgs, getProgName, getEnv)
+import System.Exit (exitWith, ExitCode(ExitSuccess))
+import System.FilePath ((</>), splitFileName)
+import System.IO (Handle, hPutStrLn, stdout)
+import System.IO.Error (catchIOError)
 import System.Process (readProcessWithExitCode)
+-- import System.Process.Progress (defaultVerbosity)
+import Text.ParserCombinators.ReadP (readP_to_S)
+import System.Posix.Env (setEnv)
+import Text.Regex.TDFA ((=~))
 
 -- | This record supplies information about the task we want done -
 -- debianization, validataion, help message, etc.
@@ -86,7 +79,7 @@ defaultFlags :: Flags
 defaultFlags =
     Flags {
       help = False
-    , verbosity = defaultVerbosity
+    , verbosity = 1
     , debAction = Usage
     , dryRun = False
     , validate = False
@@ -177,6 +170,18 @@ options =
       Option "" ["builddir"] (ReqArg (\ s flags -> setBuildDir (s </> "build") flags) "PATH")
              "Subdirectory where cabal does its build, dist/build by default, dist-ghc when run by haskell-devscripts.  The build subdirectory is added to match the behavior of the --builddir option in the Setup script."
     ]
+
+-- | Process a --executable command line argument
+executableOption :: String -> (BinPkgName -> InstallFile -> a) -> a
+executableOption arg f =
+    case span (/= ':') arg of
+      (sp, md) ->
+          let (sd, name) = splitFileName sp in
+          f (BinPkgName name)
+            (InstallFile { execName = name
+                         , destName = name
+                         , sourceDir = case sd of "./" -> Nothing; _ -> Just sd
+                         , destDir = case md of (':' : dd) -> Just dd; _ -> Nothing })
 
 parseDeps :: String -> [(BinPkgName, BinPkgName)]
 parseDeps arg =

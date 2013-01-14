@@ -38,7 +38,6 @@ Library
    network,
    parsec >= 3,
    process,
-   process-progress,
    pureMD5,
    regex-tdfa,
    syb,

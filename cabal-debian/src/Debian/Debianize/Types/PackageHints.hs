@@ -4,12 +4,10 @@ module Debian.Debianize.Types.PackageHints
     , InstallFile(..)
     , Server(..)
     , Site(..)
-    , executableOption
     ) where
 
-import Debian.Relation (BinPkgName(BinPkgName))
+import Debian.Relation (BinPkgName)
 import Debian.Orphans ()
-import System.FilePath (splitFileName)
 
 type PackageHints = [PackageHint]
 
@@ -49,15 +47,3 @@ data Site
       , serverAdmin :: String   -- ^ Apache ServerAdmin parameter
       , server :: Server   -- ^ The hint to install the server job
       } deriving (Read, Show, Eq, Ord)
-
--- | Process a --executable command line argument
-executableOption :: String -> (BinPkgName -> InstallFile -> a) -> a
-executableOption arg f =
-    case span (/= ':') arg of
-      (sp, md) ->
-          let (sd, name) = splitFileName sp in
-          f (BinPkgName name)
-            (InstallFile { execName = name
-                         , destName = name
-                         , sourceDir = case sd of "./" -> Nothing; _ -> Just sd
-                         , destDir = case md of (':' : dd) -> Just dd; _ -> Nothing })
