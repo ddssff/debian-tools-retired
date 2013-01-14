@@ -55,6 +55,7 @@ Library
    Debian.Cabal.Debianize
    Debian.Cabal.PackageDescription
    Debian.Cabal.Tests
+   Debian.Debianize.Atoms
    Debian.Debianize.Combinators
    Debian.Debianize.Dependencies
    Debian.Debianize.Files

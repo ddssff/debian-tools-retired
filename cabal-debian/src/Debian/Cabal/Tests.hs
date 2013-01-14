@@ -15,13 +15,13 @@ import Debian.Cabal.Debianize (debianizationWithIO)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Combinators (tightDependencyFixup, buildDeps, control, setArchitecture)
+import Debian.Debianize.Atoms (missingDependency, setRevision, putExecMap, putBinaryPackageDep,
+                               doExecutable, doWebsite, buildDir, defaultAtoms)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
-import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms,
-                                     missingDependency, setRevision, putExecMap, putBinaryPackageDep,
-                                     doExecutable, doWebsite, buildDir, defaultAtoms)
+import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms)
 import Debian.Debianize.Types.Debianization (Debianization(..), newDebianization, SourceDebDescription(..), BinaryDebDescription(..),
                                              PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))

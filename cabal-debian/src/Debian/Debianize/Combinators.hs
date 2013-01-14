@@ -35,7 +35,6 @@ import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
 import Data.List as List (nub, intercalate, intersperse)
 import qualified Data.Map as Map
-import Data.Map (Map)
 import Data.Maybe
 import Data.Monoid ((<>), mempty)
 import Data.Set as Set (Set, difference, union, fromList, null, insert, toList)
@@ -44,7 +43,8 @@ import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
-import Debian.Debianize.Types.Atoms (noProfilingLibrary, noDocumentationLibrary, DebAtomKey(..), DebAtom(..), HasAtoms(getAtoms, putAtoms), insertAtom, foldAtoms, insertAtoms', utilsPackageName, packageDescription, compiler, dependencyHints)
+import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, utilsPackageName, packageDescription, compiler, dependencyHints)
+import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), HasAtoms(getAtoms, putAtoms), insertAtom, foldAtoms, insertAtoms')
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), newBinaryDebDescription,
                                                        PackageRelations(..))
 import Debian.Debianize.Types.Dependencies (DependencyHints (binaryPackageDeps, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap,

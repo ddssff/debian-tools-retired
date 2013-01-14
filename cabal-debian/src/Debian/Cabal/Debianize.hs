@@ -10,8 +10,9 @@ module Debian.Cabal.Debianize
 
 import Data.Maybe
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory, inputCopyright, inputMaintainer)
+import Debian.Debianize.Atoms (debMaintainer)
 import Debian.Debianize.Combinators (debianization)
-import Debian.Debianize.Types.Atoms (debMaintainer, HasAtoms)
+import Debian.Debianize.Types.Atoms (HasAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..))
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Time (getCurrentLocalRFC822Time)

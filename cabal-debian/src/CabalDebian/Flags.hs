@@ -10,12 +10,12 @@ import qualified Data.Map as Map
 import Data.Set (fromList)
 import Data.Version (parseVersion)
 import Debian.Cabal.Debianize (debianizationWithIO)
+import Debian.Debianize.Atoms (doDependencyHint, missingDependency, doExecutable, setSourcePackageName,
+                               buildDir, setBuildDir, putCabalFlagAssignments, defaultAtoms, flags, mapFlags)
 import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat, DHMaintainer),
-                                     insertAtom, doDependencyHint, missingDependency, doExecutable, setSourcePackageName,
-                                     buildDir, setBuildDir, putCabalFlagAssignments,
-                                     AtomMap, Flags(..), DebAction(..), defaultAtoms, flags, mapFlags)
+                                     insertAtom, AtomMap, Flags(..), DebAction(..))
 import Debian.Debianize.Types.Dependencies (DependencyHints (..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..))
 import Debian.Orphans ()
