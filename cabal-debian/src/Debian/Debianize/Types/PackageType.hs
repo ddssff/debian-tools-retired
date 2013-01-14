@@ -52,7 +52,7 @@ mkPkgName (PackageName name) typ =
       fixChar c = toLower c
 
 -- | A redundant data type, too lazy to expunge.
-data DebType = Dev | Prof | Doc deriving (Eq, Read, Show)
+data DebType = Dev | Prof | Doc deriving (Eq, Ord, Read, Show)
 
 data VersionSplits
     = VersionSplits {

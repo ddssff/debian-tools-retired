@@ -69,7 +69,8 @@ import System.FilePath ((</>), takeDirectory, makeRelative, splitFileName)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
-debianization :: Map DebAtomKey (Set DebAtom)
+debianization :: HasAtoms atoms =>
+                 atoms
               -> PackageDescription  -- ^ info from the .cabal file
               -> Compiler            -- ^ compiler details
               -> String              -- ^ current date
@@ -93,7 +94,7 @@ debianization atoms pkgDesc cmplr date copyright' maint standards oldDeb =
     -- somewhat wrong.
     insertAtom Source (DHPackageDescription pkgDesc) $
     insertAtom Source (DHCompiler cmplr) $
-    putAtoms atoms $
+    putAtoms (getAtoms atoms) $
     oldDeb
 
 -- | Create equals dependencies.  For each pair (A, B), use dpkg-query
@@ -508,9 +509,9 @@ bundledExecutables atoms pkgDesc =
     where
       nopackage p = not (elem (exeName p) (foldAtoms execNameOfHint [] atoms))
       execNameOfHint :: DebAtomKey -> DebAtom -> [String] -> [String]
-      execNameOfHint (Binary b) (DHExecutable e) xs = execName e : xs
-      execNameOfHint (Binary b) (DHServer s) xs = execName (installFile s) : xs
-      execNameOfHint (Binary b) (DHWebsite s) xs = execName (installFile (server s)) : xs
+      execNameOfHint (Binary _) (DHExecutable e) xs = execName e : xs
+      execNameOfHint (Binary _) (DHServer s) xs = execName (installFile s) : xs
+      execNameOfHint (Binary _) (DHWebsite s) xs = execName (installFile (server s)) : xs
       execNameOfHint _ _ xs = xs
 
 debianDescription :: String -> String -> String -> String -> String -> PackageType -> PackageIdentifier -> Text

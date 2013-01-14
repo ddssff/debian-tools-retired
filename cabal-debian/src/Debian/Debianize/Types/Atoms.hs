@@ -2,7 +2,12 @@
 module Debian.Debianize.Types.Atoms
     ( DebAtomKey(..)
     , DebAtom(..)
+    , Flags(..)
+    , defaultFlags
+    , DebAction(..)
     , HasAtoms(..)
+    , AtomMap
+    , defaultAtoms
     , insertAtom
     , insertAtoms
     , insertAtoms'
@@ -34,6 +39,8 @@ module Debian.Debianize.Types.Atoms
     , setBuildDir
     , cabalFlagAssignments
     , putCabalFlagAssignments
+    , flags
+    , mapFlags
     ) where
 
 import Data.Generics (Data, Typeable)
@@ -46,6 +53,7 @@ import Data.Version (Version)
 import Debian.Debianize.Utility (setMapMaybe)
 import Debian.Debianize.Types.Dependencies (DependencyHints(..), defaultDependencyHints)
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
+import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat)
 import Debian.Relation (BinPkgName, SrcPkgName)
@@ -107,6 +115,7 @@ data DebAtom
                                                   -- last resort, there is a hard coded string in here somewhere.
     | DHCabalFlagAssignments (Set (FlagName, Bool)) -- ^ Flags to pass to Cabal function finalizePackageDescription, this
                                                   -- can be used to control the flags in the cabal file.
+    | DHFlags Flags                               -- ^ Information regarding mode of operation - verbosity, dry-run, usage, etc
 
     -- From here down are atoms to be associated with a Debian binary
     -- package.  This could be done with more type safety, separate
@@ -131,6 +140,42 @@ data DebAtom
     | DHWebsite Site                              -- ^ Like DHServer, but configure the server as a web server
     deriving (Eq, Ord, Show)
 
+-- | This record supplies information about the task we want done -
+-- debianization, validataion, help message, etc.
+data Flags = Flags
+    {
+    -------------------------
+    -- Modes of Operation ---
+    -------------------------
+      verbosity :: Int
+    -- ^ Run with progress messages at the given level of verboseness.
+    , dryRun :: Bool
+    -- ^ Don't write any files or create any directories, just explain
+    -- what would have been done.
+    , validate :: Bool
+    -- ^ Fail if the debianization already present doesn't match the
+    -- one we are going to generate closely enough that it is safe to
+    -- debianize during the run of dpkg-buildpackage, when Setup
+    -- configure is run.  Specifically, the version number in the top
+    -- changelog entry must match, and the sets of package names in
+    -- the control file must match.
+    , debAction :: DebAction
+    -- ^ What to do - Usage, Debianize or Substvar
+    } deriving (Eq, Ord, Show)
+
+data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq, Ord)
+
+defaultFlags :: Flags
+defaultFlags =
+    Flags {
+      verbosity = 1
+    , debAction = Usage
+    , dryRun = False
+    , validate = False
+    }
+
+type AtomMap = Map DebAtomKey (Set DebAtom)
+
 class HasAtoms atoms where
     getAtoms :: atoms -> Map DebAtomKey (Set DebAtom)
     putAtoms :: Map DebAtomKey (Set DebAtom) -> atoms -> atoms
@@ -138,6 +183,9 @@ class HasAtoms atoms where
 instance HasAtoms (Map DebAtomKey (Set DebAtom)) where
     getAtoms x = x
     putAtoms _ x = x
+
+defaultAtoms :: Map DebAtomKey (Set DebAtom)
+defaultAtoms = mempty
 
 lookupAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Maybe a
 lookupAtom mbin from atoms =
@@ -296,4 +344,23 @@ putCabalFlagAssignments xs atoms =
     where
       (ys, atoms') = partitionAtoms p atoms
       p Source (DHCabalFlagAssignments zs) = Just zs
+      p _ _ = Nothing
+
+flags :: HasAtoms atoms => atoms -> Flags
+flags atoms =
+    fromMaybe defaultFlags $ foldAtoms from Nothing atoms
+    where
+      from Source (DHFlags _) (Just _) = error "Conflicting Flag atoms"
+      from Source (DHFlags fs) _ = Just fs
+      from _ _ x = x
+
+mapFlags :: HasAtoms atoms => (Flags -> Flags) -> atoms -> atoms
+mapFlags f atoms =
+    insertAtom Source (DHFlags (f fs)) atoms'
+    where
+      fs = case maxView flagss of
+             Nothing -> defaultFlags
+             Just (x, s) -> if Set.null s then x else error "Conflicting Flag atoms"
+      (flagss, atoms') = partitionAtoms p atoms
+      p Source (DHFlags x) = Just x
       p _ _ = Nothing

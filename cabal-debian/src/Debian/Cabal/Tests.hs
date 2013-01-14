@@ -4,7 +4,7 @@ module Debian.Cabal.Tests
     ( tests
     ) where
 
-import qualified CabalDebian.Flags as Flags (Flags(..), defaultFlags)
+import qualified CabalDebian.Flags as Flags (Flags(..))
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Map as Map (differenceWithKey, intersectionWithKey)
@@ -23,7 +23,7 @@ import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
 import Debian.Debianize.Types.Atoms (compilerVersion, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms,
                                      dependencyHints, missingDependency, setRevision, putExecMap, putExtraDevDep, putBinaryPackageDep,
-                                     doExecutable, doWebsite, doServer, buildDir, cabalFlagAssignments)
+                                     doExecutable, doWebsite, doServer, buildDir, cabalFlagAssignments, defaultAtoms, flags)
 import Debian.Debianize.Types.Debianization (Debianization(..), newDebianization, SourceDebDescription(..), BinaryDebDescription(..),
                                              PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
@@ -131,9 +131,9 @@ test4 =
     TestLabel "test4" $
     TestCase (do oldlog <- inputChangeLog "test-data/clckwrks-dot-com/input/debian"
                  old <- inputDebianization "test-data/clckwrks-dot-com/output" >>= \ x -> return (x {changelog = oldlog})
-                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity flags) (compilerVersion flags) (cabalFlagAssignments flags) (Flags.debAtoms flags) old
+                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity (flags atoms)) (compilerVersion atoms) (cabalFlagAssignments atoms) atoms old
                  let new' = copyFirstLogEntry old (fixRules (tight new))
-                 desc <- describeDebianization (buildDir "dist-ghc/build" flags) "test-data/clckwrks-dot-com/output" dataDir new'
+                 desc <- describeDebianization (buildDir "dist-ghc/build" atoms) "test-data/clckwrks-dot-com/output" dataDir new'
                  -- assertEqual "test4" "" desc
                  -- assertEqual "test4" [] (gdiff old (finalizeDebianization "dist-ghc/build" dataDir new'))
                  -- assertEqual "test4" (toFileMap "dist-ghc/build" "<datadir>" old) (toFileMap "dist-ghc/build" "<datadir>" new')
@@ -147,14 +147,14 @@ test4 =
           where
             omitRulesAtom Source (DebRulesFragment _) = mempty
             omitRulesAtom _ x = Set.singleton x
-      flags = insertAtom Source (DebSourceFormat Native3) $
+      atoms = insertAtom Source (DebSourceFormat Native3) $
               missingDependency (BinPkgName "libghc-clckwrks-theme-clckwrks-doc") $
               setRevision "" $
               doWebsite (BinPkgName "clckwrks-dot-com-production") (theSite (BinPkgName "clckwrks-dot-com-production")) $
               doExecutable (BinPkgName "clckwrks-dot-com-backups") backups $
 {-            doServer (BinPkgName "clckwrks-dot-com-staging") (theServer (BinPkgName "clckwrks-dot-com-staging")) $
               doServer (BinPkgName "clckwrks-dot-com-development") (theServer (BinPkgName "clckwrks-dot-com-development")) $ -}
-              Flags.defaultFlags
+              defaultAtoms
       serverNames = map BinPkgName ["clckwrks-dot-com-production"] -- , "clckwrks-dot-com-staging", "clckwrks-dot-com-development"]
       -- Insert a line just above the debhelper.mk include
       fixRules deb = deb {rulesHead = T.unlines $ concat $ map (\ line -> if line == "include /usr/share/cdbs/1/rules/debhelper.mk"
@@ -221,7 +221,7 @@ test5 =
     TestLabel "test5" $
     TestCase (     do oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" >>= \ x -> return (x {changelog = oldlog})
-                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity flags) (compilerVersion flags) (cabalFlagAssignments flags) (Flags.debAtoms flags) old
+                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity (flags atoms)) (compilerVersion atoms) (cabalFlagAssignments atoms) atoms old
                       let new' = setArchitecture (BinPkgName "creativeprompts-development") All $
                                  setArchitecture (BinPkgName "creativeprompts-production") All $
                                  insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
@@ -229,7 +229,7 @@ test5 =
                                  putBinaryPackageDep (BinPkgName "creativeprompts-backups") (BinPkgName "anacron") $
                                  putBinaryPackageDep (BinPkgName "creativeprompts-server") (BinPkgName "markdown") $
                                  new
-                      desc <- describeDebianization (buildDir "dist-ghc/build" flags) "test-data/creativeprompts/output" dataDir new'
+                      desc <- describeDebianization (buildDir "dist-ghc/build" atoms) "test-data/creativeprompts/output" dataDir new'
                       writeFile "/tmp/foo" desc
                       -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (finalizeDebianization "dist-ghc/build" dataDir new))))
                       -- assertEqual "test5" "" desc
@@ -242,12 +242,12 @@ test5 =
                       assertEqual "test5" [] (diffDebianizations old new')
              )
     where
-      flags = putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
+      atoms = putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
               doExecutable (BinPkgName "creativeprompts-backups") (InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups") $
               doExecutable (BinPkgName "creativeprompts-development") (InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") $
               doExecutable (BinPkgName "creativeprompts-production") (InstallFile "creativeprompts-production" Nothing Nothing "creativeprompts-production") $
               doExecutable (BinPkgName "creativeprompts-server") (InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server") $
-              Flags.defaultFlags
+              defaultAtoms
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
       addMarkdownDependency :: Debianization -> Debianization
@@ -309,11 +309,11 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase ( do old <- inputDebianization "."
-                  (new, dataDir) <- debianizationWithIO "test-data/cabal-debian/input" (Flags.verbosity flags) (compilerVersion flags) (cabalFlagAssignments flags) (Flags.debAtoms flags) old
+                  (new, dataDir) <- debianizationWithIO "test-data/cabal-debian/input" (Flags.verbosity (flags atoms)) (compilerVersion atoms) (cabalFlagAssignments atoms) atoms old
                   assertEqual "test7" [] (diffDebianizations old new)
              )
     where
-      flags = Flags.defaultFlags
+      atoms = defaultAtoms
 
 data Change k a
     = Created k a
