@@ -13,7 +13,7 @@ import Data.Maybe
 import Data.Set (toList)
 import Data.Text (Text, pack)
 import Data.Version (showVersion)
-import Debian.Debianize.Atoms (compilerVersion, cabalFlagAssignments, flags)
+import Debian.Debianize.Atoms (compilerVersion, cabalFlagAssignments, flags, setCompiler, setPackageDescription)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
 import Debian.Debianize.Types.Atoms (HasAtoms, Flags(verbosity))
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
@@ -39,10 +39,11 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 intToVerbosity' :: Int -> Verbosity
 intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
 
-withSimplePackageDescription :: HasAtoms atoms => FilePath -> atoms -> (PackageDescription -> Compiler -> IO a) -> IO a
+withSimplePackageDescription :: HasAtoms atoms => FilePath -> atoms -> (atoms -> IO a) -> IO a
 withSimplePackageDescription top atoms action =
     do (pkgDesc, compiler) <- getSimplePackageDescription top atoms
-       action pkgDesc compiler
+       let atoms' = setCompiler compiler . setPackageDescription pkgDesc $ atoms
+       action atoms'
 
 getSimplePackageDescription :: HasAtoms atoms => FilePath -> atoms -> IO (PackageDescription, Compiler)
 getSimplePackageDescription top atoms =

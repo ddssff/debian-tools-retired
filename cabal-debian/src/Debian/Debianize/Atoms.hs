@@ -1,7 +1,10 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Debian.Debianize.Atoms
     ( defaultAtoms
     , compiler
+    , setCompiler
     , packageDescription
+    , setPackageDescription
     , compilerVersion
     , noProfilingLibrary
     , noDocumentationLibrary
@@ -52,11 +55,27 @@ compiler def deb =
     where from (DHCompiler x) = Just x
           from _ = Nothing
 
+setCompiler :: forall atoms. HasAtoms atoms => Compiler -> atoms -> atoms
+setCompiler x atoms =
+    insertAtom Source (DHCompiler x) atoms'
+    where
+      (_, atoms') = partitionAtoms p atoms
+      p Source (DHCompiler x) = Just x
+      p _ _ = Nothing
+
 packageDescription :: HasAtoms atoms => PackageDescription -> atoms -> PackageDescription
 packageDescription def deb =
     lookupAtomDef def Source from deb
     where from (DHPackageDescription x) = Just x
           from _ = Nothing
+
+setPackageDescription :: HasAtoms atoms => PackageDescription -> atoms -> atoms
+setPackageDescription x atoms =
+    insertAtom Source (DHPackageDescription x) atoms'
+    where
+      (_, atoms') = partitionAtoms p atoms
+      p Source (DHPackageDescription x) = Just x
+      p _ _ = Nothing
 
 compilerVersion :: HasAtoms atoms => atoms -> Maybe Version
 compilerVersion deb =

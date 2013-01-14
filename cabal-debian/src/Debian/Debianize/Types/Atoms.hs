@@ -20,14 +20,14 @@ module Debian.Debianize.Types.Atoms
     ) where
 
 import Data.Generics (Data, Typeable)
-import Data.Map as Map (Map, lookup, insertWith, foldWithKey, insert)
+import Data.Map as Map (Map, lookup, insertWith, foldWithKey)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
-import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, unions, singleton, fold, insert)
+import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert)
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Debianize.Utility (setMapMaybe)
-import Debian.Debianize.Types.Dependencies (DependencyHints(..), defaultDependencyHints)
+import Debian.Debianize.Types.Dependencies (DependencyHints(..))
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Orphans ()
@@ -158,7 +158,7 @@ class HasAtoms atoms where
 
 instance HasAtoms (Map DebAtomKey (Set DebAtom)) where
     getAtoms x = x
-    putAtoms _ x = x
+    putAtoms x _ = x
 
 lookupAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Maybe a
 lookupAtom mbin from atoms =
@@ -183,7 +183,7 @@ insertAtoms' :: HasAtoms atoms => DebAtomKey -> [DebAtom] -> atoms -> atoms
 insertAtoms' mbin atoms x = insertAtoms mbin (fromList atoms) x
 
 hasAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Bool
-hasAtom key pred atoms = not . Set.null . lookupAtoms key pred $ atoms
+hasAtom key p atoms = not . Set.null . lookupAtoms key p $ atoms
 
 foldAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
 foldAtoms f r0 xs = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (getAtoms xs)

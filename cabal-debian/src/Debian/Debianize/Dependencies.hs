@@ -62,29 +62,33 @@ unboxDependency (ExtraLibs _) = Nothing -- Dependency (PackageName d) anyVersion
 
 -- Make a list of the debian devel packages corresponding to cabal packages
 -- which are build dependencies
-debDeps :: HasAtoms atoms => DebType -> atoms -> Map.Map String PackageInfo -> PackageDescription -> Control' String -> D.Relations
-debDeps debType atoms cabalPackages pkgDesc control =
+debDeps :: HasAtoms atoms => DebType -> atoms -> Map.Map String PackageInfo -> Control' String -> D.Relations
+debDeps debType atoms cabalPackages control =
     case debType of
       Dev ->
           catMaybes (map (\ (Dependency (PackageName name) _) ->
                           case Map.lookup name cabalPackages :: Maybe PackageInfo of
                             Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (devDeb p)
-                            Nothing -> Nothing) (cabalDependencies atoms pkgDesc))
+                            Nothing -> Nothing) (cabalDependencies atoms))
       Prof ->
           maybe [] (\ name -> [[D.Rel name Nothing Nothing]]) (debNameFromType control Dev) ++
           catMaybes (map (\ (Dependency (PackageName name) _) ->
                           case Map.lookup name cabalPackages :: Maybe PackageInfo of
                             Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (profDeb p)
-                            Nothing -> Nothing) (cabalDependencies atoms pkgDesc))
+                            Nothing -> Nothing) (cabalDependencies atoms))
       Doc ->
           catMaybes (map (\ (Dependency (PackageName name) _) ->
                               case Map.lookup name cabalPackages :: Maybe PackageInfo of
                                 Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (docDeb p)
-                                Nothing -> Nothing) (cabalDependencies atoms pkgDesc))
+                                Nothing -> Nothing) (cabalDependencies atoms))
 
-cabalDependencies :: HasAtoms atoms => atoms -> PackageDescription -> [Dependency]
-cabalDependencies atoms pkgDesc =
-    catMaybes $ map unboxDependency $ allBuildDepends atoms (Cabal.buildDepends pkgDesc) (concatMap buildTools . allBuildInfo $ pkgDesc) (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc) (concatMap extraLibs . allBuildInfo $ pkgDesc)
+cabalDependencies :: HasAtoms atoms => atoms -> [Dependency]
+cabalDependencies atoms =
+    catMaybes $ map unboxDependency $ allBuildDepends atoms
+                  (Cabal.buildDepends (packageDescription (error "cabalDependencies") atoms))
+                  (concatMap buildTools . allBuildInfo . packageDescription (error "cabalDependencies") $ atoms)
+                  (concatMap pkgconfigDepends . allBuildInfo . packageDescription (error "cabalDependencies") $ atoms)
+                  (concatMap extraLibs . allBuildInfo . packageDescription (error "cabalDependencies") $ atoms)
 
 -- |Debian packages don't have per binary package build dependencies,
 -- so we just gather them all up here.

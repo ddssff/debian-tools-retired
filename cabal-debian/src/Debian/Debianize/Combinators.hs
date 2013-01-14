@@ -62,7 +62,6 @@ import Distribution.Package (PackageIdentifier(..), PackageName(..))
 import Distribution.PackageDescription as Cabal (PackageDescription({-package, library, homepage, synopsis, description, maintainer, dataFiles, executables, author, pkgUrl-}),
                                                  BuildInfo(buildable {-, extraLibs-}), Executable(exeName, buildInfo) {-, allBuildInfo-})
 import qualified Distribution.PackageDescription as Cabal
-import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Text (display)
 import Prelude hiding (writeFile, init, unlines)
 import System.FilePath ((</>), takeDirectory, makeRelative, splitFileName)
@@ -71,16 +70,15 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 debianization :: HasAtoms atoms =>
                  atoms
-              -> PackageDescription  -- ^ info from the .cabal file
-              -> Compiler            -- ^ compiler details
               -> String              -- ^ current date
               -> Text                -- ^ copyright
               -> NameAddr            -- ^ maintainer
               -> StandardsVersion
               -> Debianization       -- ^ Existing debianization
               -> Debianization       -- ^ New debianization
-debianization atoms pkgDesc cmplr date copyright' maint standards oldDeb =
-    watchAtom (pkgName . Cabal.package $ pkgDesc)  $
+debianization atoms date copyright' maint standards oldDeb =
+    let pkgDesc = packageDescription (error "debianization") atoms in
+    watchAtom (pkgName $ Cabal.package $ pkgDesc)  $
     putCopyright copyright' $
     putStandards standards $
     filterMissing (missingDependencies (dependencyHints atoms)) $
@@ -92,8 +90,6 @@ debianization atoms pkgDesc cmplr date copyright' maint standards oldDeb =
     -- Or should we delete even more information from the original,
     -- keeping only the changelog?  Probably the latter.  So this is
     -- somewhat wrong.
-    insertAtom Source (DHPackageDescription pkgDesc) $
-    insertAtom Source (DHCompiler cmplr) $
     putAtoms (getAtoms atoms) $
     oldDeb
 

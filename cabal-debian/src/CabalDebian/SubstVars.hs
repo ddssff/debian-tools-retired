@@ -15,7 +15,7 @@ import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
-import Debian.Debianize.Atoms (dependencyHints, flags)
+import Debian.Debianize.Atoms (dependencyHints, flags, compiler)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps)
 import Debian.Debianize.Types.Atoms (HasAtoms, Flags(dryRun))
 import Debian.Debianize.Types.Dependencies (filterMissing', PackageInfo(..), debNameFromType)
@@ -28,7 +28,6 @@ import qualified Debian.Relation as D
 import Distribution.Package (PackageName(..), Dependency(..))
 import Distribution.Simple.Compiler (CompilerFlavor(..), compilerFlavor, Compiler(..))
 import Distribution.Simple.Utils (die)
-import Distribution.PackageDescription (PackageDescription(..))
 import Distribution.Text (display)
 import System.Directory (doesDirectoryExist, getDirectoryContents)
 import System.FilePath ((</>))
@@ -49,14 +48,14 @@ substvars :: HasAtoms atoms =>
           -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> IO ()
 substvars atoms debType =
-    withSimplePackageDescription "." atoms $ \ pkgDesc compiler -> do
+    withSimplePackageDescription "." atoms $ \ atoms' -> do
       debVersions <- buildDebVersionMap
-      cabalPackages <- libPaths compiler debVersions >>= return . Map.fromList . map (\ p -> (cabalName p, p))
+      cabalPackages <- libPaths (compiler (error "substvars") atoms') debVersions >>= return . Map.fromList . map (\ p -> (cabalName p, p))
       control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
-      substvars' atoms pkgDesc debType cabalPackages control
+      substvars' atoms debType cabalPackages control
 
-substvars' :: HasAtoms atoms => atoms -> PackageDescription -> DebType -> Map.Map String PackageInfo -> Control' String -> IO ()
-substvars' atoms pkgDesc debType cabalPackages control =
+substvars' :: HasAtoms atoms => atoms -> DebType -> Map.Map String PackageInfo -> Control' String -> IO ()
+substvars' atoms debType cabalPackages control =
     case (missingBuildDeps, path) of
       -- There should already be a .substvars file produced by dh_haskell_prep,
       -- keep the relations listed there.  They will contain something like this:
@@ -86,7 +85,7 @@ substvars' atoms pkgDesc debType cabalPackages control =
                   _ -> unlines (map (++ (", " ++ showDeps (filterMissing' (dependencyHints atoms) deps))) hdeps ++ more)
       path = fmap (\ (D.BinPkgName x) -> "debian/" ++ x ++ ".substvars") name
       name = debNameFromType control debType
-      deps = debDeps debType atoms cabalPackages pkgDesc control
+      deps = debDeps debType atoms cabalPackages control
       -- We must have build dependencies on the profiling and documentation packages
       -- of all the cabal packages.
       missingBuildDeps =
@@ -97,7 +96,7 @@ substvars' atoms pkgDesc debType cabalPackages control =
                                      let prof = maybe (devDeb info) Just (profDeb info) in
                                      let doc = docDeb info in
                                      catMaybes [prof, doc]
-                                 Nothing -> []) (cabalDependencies atoms pkgDesc)) in
+                                 Nothing -> []) (cabalDependencies atoms)) in
           filter (not . (`elem` buildDepNames) . fst) requiredDebs
       buildDepNames :: [D.BinPkgName]
       buildDepNames = concat (map (map (\ (D.Rel s _ _) -> s)) buildDeps)

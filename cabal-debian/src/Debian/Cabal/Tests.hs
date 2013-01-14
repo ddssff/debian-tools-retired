@@ -16,12 +16,12 @@ import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirect
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Combinators (tightDependencyFixup, buildDeps, control, setArchitecture)
 import Debian.Debianize.Atoms (missingDependency, setRevision, putExecMap, putBinaryPackageDep,
-                               doExecutable, doWebsite, buildDir, defaultAtoms)
+                               doExecutable, doWebsite, buildDir, defaultAtoms, packageDescription, compiler)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
-import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms)
+import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms)
 import Debian.Debianize.Types.Debianization (Debianization(..), newDebianization, SourceDebDescription(..), BinaryDebDescription(..),
                                              PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
@@ -264,8 +264,10 @@ test6 :: Test
 test6 =
     TestLabel "test6" $
     TestCase ( do old@(Debianization {changelog = ChangeLog (entry : _)}) <- inputDebianization "test-data/creativeprompts/output"
-                  withSimplePackageDescription "test-data/creativeprompts/input" defaultAtoms $ \ pkgDesc cmplr ->
-                      do -- compat <- getDebhelperCompatLevel
+                  withSimplePackageDescription "test-data/creativeprompts/input" defaultAtoms $ \ atoms ->
+                      do let pkgDesc = packageDescription (error "test6") atoms
+                             cmplr = compiler (error "test6") atoms
+                         -- compat <- getDebhelperCompatLevel
                          let compat' = 7
                          -- standards <- getDebianStandardsVersion
                          let standards = StandardsVersion 3 8 1 Nothing
@@ -274,8 +276,6 @@ test6 =
                                    -- setSourcePackageName (SrcPkgName "haskell-creativeprompts") $
                                    -- setChangelog oldLog $
                                    buildDeps $
-                                   insertAtom Source (DHPackageDescription pkgDesc) $
-                                   insertAtom Source (DHCompiler cmplr) $
                                    putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
                                    putBinaryPackageDep (BinPkgName "creativeprompts-backups") (BinPkgName "anacron") $
                                    putBinaryPackageDep (BinPkgName "creativeprompts-server") (BinPkgName "markdown") $
@@ -288,6 +288,7 @@ test6 =
                                    doExecutable (BinPkgName "creativeprompts-development") (InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") $
                                    doExecutable (BinPkgName "creativeprompts-production") (InstallFile "creativeprompts-production" Nothing Nothing "creativeprompts-production") $
                                    doExecutable (BinPkgName "creativeprompts-backups") (InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups") $
+                                   putAtoms (getAtoms atoms) $
                                    newDebianization entry (Left BSD3) compat' standards
                          desc <- describeDebianization "dist-ghc/build" "test-data/creativeprompts/output" (dataDirectory pkgDesc) new
                          writeFile "/tmp/bar" desc
