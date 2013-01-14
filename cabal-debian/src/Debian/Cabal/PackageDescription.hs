@@ -10,13 +10,15 @@ import Control.Exception (bracket)
 import Control.Monad (when)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Maybe
+import Data.Set (toList)
 import Data.Text (Text, pack)
+import Data.Version (showVersion)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
-import Data.Version (Version, showVersion)
+import Debian.Debianize.Types.Atoms (HasAtoms, compilerVersion, cabalFlagAssignments, flags, Flags(verbosity))
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
 import Distribution.Package (Package(packageId), PackageIdentifier(pkgName, pkgVersion), PackageName(PackageName))
-import Distribution.PackageDescription as Cabal (PackageDescription(package, licenseFile, license, package, maintainer), FlagName)
+import Distribution.PackageDescription as Cabal (PackageDescription(package, licenseFile, license, package, maintainer))
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), Compiler(..))
@@ -36,25 +38,27 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 intToVerbosity' :: Int -> Verbosity
 intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
 
-withSimplePackageDescription :: FilePath -> Int -> Maybe Version -> [(FlagName, Bool)] -> (PackageDescription -> Compiler -> IO a) -> IO a
-withSimplePackageDescription top vb compilerVersion cabalFlagAssignments action =
-    do (pkgDesc, compiler) <- getSimplePackageDescription top vb compilerVersion cabalFlagAssignments
+withSimplePackageDescription :: HasAtoms atoms => FilePath -> atoms -> (PackageDescription -> Compiler -> IO a) -> IO a
+withSimplePackageDescription top atoms action =
+    do (pkgDesc, compiler) <- getSimplePackageDescription top atoms
        action pkgDesc compiler
 
-getSimplePackageDescription :: FilePath -> Int -> Maybe Version -> [(FlagName, Bool)] -> IO (PackageDescription, Compiler)
-getSimplePackageDescription top vb compilerVersion cabalFlagAssignments =
+getSimplePackageDescription :: HasAtoms atoms => FilePath -> atoms -> IO (PackageDescription, Compiler)
+getSimplePackageDescription top atoms =
     withCurrentDirectory top $ do
-      descPath <- defaultPackageDesc (intToVerbosity' vb)
-      genPkgDesc <- readPackageDescription (intToVerbosity' vb) descPath
-      (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration (intToVerbosity' vb)
-      let compiler = case compilerVersion of
+      descPath <- defaultPackageDesc vb
+      genPkgDesc <- readPackageDescription vb descPath
+      (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
+      let compiler = case compilerVersion atoms of
                        (Just ver) -> compiler' {compilerId = CompilerId GHC ver}
                        _ -> compiler'
-      pkgDesc <- case finalizePackageDescription cabalFlagAssignments (const True) (Platform buildArch buildOS) (compilerId compiler) [] genPkgDesc of
+      pkgDesc <- case finalizePackageDescription (toList (cabalFlagAssignments atoms)) (const True) (Platform buildArch buildOS) (compilerId compiler) [] genPkgDesc of
                    Left e -> error $ "finalize failed: " ++ show e
                    Right (pd, _) -> return pd
-      liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf (intToVerbosity' vb) pkgDesc
+      liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
       return (pkgDesc, compiler)
+    where
+      vb = intToVerbosity' (verbosity (flags atoms))
 
 -- | Run the package's configuration script.
 autoreconf :: Verbosity -> PackageDescription -> IO ()

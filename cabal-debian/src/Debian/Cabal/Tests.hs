@@ -4,7 +4,6 @@ module Debian.Cabal.Tests
     ( tests
     ) where
 
-import qualified CabalDebian.Flags as Flags (Flags(..))
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Map as Map (differenceWithKey, intersectionWithKey)
@@ -15,18 +14,17 @@ import qualified Data.Text as T
 import Debian.Cabal.Debianize (debianizationWithIO)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
-import Debian.Debianize.Combinators (tightDependencyFixup, buildDeps, setChangelog, control,
-                                     setArchitecture, installExec, installServer, installWebsite)
+import Debian.Debianize.Combinators (tightDependencyFixup, buildDeps, control, setArchitecture)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
 import Debian.Debianize.Paths (databaseDirectory)
-import Debian.Debianize.Types.Atoms (compilerVersion, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms,
-                                     dependencyHints, missingDependency, setRevision, putExecMap, putExtraDevDep, putBinaryPackageDep,
-                                     doExecutable, doWebsite, doServer, buildDir, cabalFlagAssignments, defaultAtoms, flags)
+import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms,
+                                     missingDependency, setRevision, putExecMap, putBinaryPackageDep,
+                                     doExecutable, doWebsite, buildDir, defaultAtoms)
 import Debian.Debianize.Types.Debianization (Debianization(..), newDebianization, SourceDebDescription(..), BinaryDebDescription(..),
                                              PackageRelations(..), VersionControlSpec(..))
-import Debian.Debianize.Types.PackageHints (PackageHint(..), InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
 import Debian.Policy (StandardsVersion(StandardsVersion), getDebhelperCompatLevel, getDebianStandardsVersion,
                       PackagePriority(Extra), PackageArchitectures(All, Any), SourceFormat(Native3), Section(..))
 import Debian.Relation (Relation(..), VersionReq(..), SrcPkgName(..), BinPkgName(..))
@@ -131,9 +129,9 @@ test4 =
     TestLabel "test4" $
     TestCase (do oldlog <- inputChangeLog "test-data/clckwrks-dot-com/input/debian"
                  old <- inputDebianization "test-data/clckwrks-dot-com/output" >>= \ x -> return (x {changelog = oldlog})
-                 (new, dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" (Flags.verbosity (flags atoms)) (compilerVersion atoms) (cabalFlagAssignments atoms) atoms old
+                 (new, _dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" atoms old
                  let new' = copyFirstLogEntry old (fixRules (tight new))
-                 desc <- describeDebianization (buildDir "dist-ghc/build" atoms) "test-data/clckwrks-dot-com/output" dataDir new'
+                 -- desc <- describeDebianization (buildDir "dist-ghc/build" atoms) "test-data/clckwrks-dot-com/output" dataDir new'
                  -- assertEqual "test4" "" desc
                  -- assertEqual "test4" [] (gdiff old (finalizeDebianization "dist-ghc/build" dataDir new'))
                  -- assertEqual "test4" (toFileMap "dist-ghc/build" "<datadir>" old) (toFileMap "dist-ghc/build" "<datadir>" new')
@@ -221,7 +219,7 @@ test5 =
     TestLabel "test5" $
     TestCase (     do oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" >>= \ x -> return (x {changelog = oldlog})
-                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" (Flags.verbosity (flags atoms)) (compilerVersion atoms) (cabalFlagAssignments atoms) atoms old
+                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" atoms old
                       let new' = setArchitecture (BinPkgName "creativeprompts-development") All $
                                  setArchitecture (BinPkgName "creativeprompts-production") All $
                                  insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
@@ -265,8 +263,8 @@ copyFirstLogEntry (Debianization {changelog = ChangeLog (hd1 : _)}) (deb2@(Debia
 test6 :: Test
 test6 =
     TestLabel "test6" $
-    TestCase ( do old@(Debianization {changelog = oldLog@(ChangeLog (entry : _))}) <- inputDebianization "test-data/creativeprompts/output"
-                  withSimplePackageDescription "test-data/creativeprompts/input" 0 Nothing [] $ \ pkgDesc cmplr ->
+    TestCase ( do old@(Debianization {changelog = ChangeLog (entry : _)}) <- inputDebianization "test-data/creativeprompts/output"
+                  withSimplePackageDescription "test-data/creativeprompts/input" defaultAtoms $ \ pkgDesc cmplr ->
                       do -- compat <- getDebhelperCompatLevel
                          let compat' = 7
                          -- standards <- getDebianStandardsVersion
@@ -309,7 +307,7 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase ( do old <- inputDebianization "."
-                  (new, dataDir) <- debianizationWithIO "test-data/cabal-debian/input" (Flags.verbosity (flags atoms)) (compilerVersion atoms) (cabalFlagAssignments atoms) atoms old
+                  (new, _dataDir) <- debianizationWithIO "test-data/cabal-debian/input" atoms old
                   assertEqual "test7" [] (diffDebianizations old new)
              )
     where

@@ -15,9 +15,8 @@ import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
-import Data.Version (Version)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps)
-import Debian.Debianize.Types.Atoms (HasAtoms, dependencyHints)
+import Debian.Debianize.Types.Atoms (HasAtoms, dependencyHints, flags, Flags(dryRun))
 import Debian.Debianize.Types.Dependencies (filterMissing', PackageInfo(..), debNameFromType)
 import Debian.Cabal.PackageDescription (withSimplePackageDescription)
 import Debian.Control
@@ -26,7 +25,6 @@ import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps,
                                     dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
 import qualified Debian.Relation as D
 import Distribution.Package (PackageName(..), Dependency(..))
-import Distribution.PackageDescription (FlagName)
 import Distribution.Simple.Compiler (CompilerFlavor(..), compilerFlavor, Compiler(..))
 import Distribution.Simple.Utils (die)
 import Distribution.PackageDescription (PackageDescription(..))
@@ -46,22 +44,18 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- these we can determine the source package name, and from that the
 -- documentation package name.
 substvars :: HasAtoms atoms =>
-             Bool
-          -> Int
-          -> Maybe Version
-          -> [(FlagName, Bool)]
-          -> atoms
+             atoms
           -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> IO ()
-substvars dryRun vb compilerVersion cabalFlagAssignments atoms debType =
-    withSimplePackageDescription "." vb compilerVersion cabalFlagAssignments $ \ pkgDesc compiler -> do
+substvars atoms debType =
+    withSimplePackageDescription "." atoms $ \ pkgDesc compiler -> do
       debVersions <- buildDebVersionMap
       cabalPackages <- libPaths compiler debVersions >>= return . Map.fromList . map (\ p -> (cabalName p, p))
       control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
-      substvars' dryRun atoms pkgDesc debType cabalPackages control
+      substvars' atoms pkgDesc debType cabalPackages control
 
-substvars' :: HasAtoms atoms => Bool -> atoms -> PackageDescription -> DebType -> Map.Map String PackageInfo -> Control' String -> IO ()
-substvars' dryRun atoms pkgDesc debType cabalPackages control =
+substvars' :: HasAtoms atoms => atoms -> PackageDescription -> DebType -> Map.Map String PackageInfo -> Control' String -> IO ()
+substvars' atoms pkgDesc debType cabalPackages control =
     case (missingBuildDeps, path) of
       -- There should already be a .substvars file produced by dh_haskell_prep,
       -- keep the relations listed there.  They will contain something like this:
@@ -75,7 +69,7 @@ substvars' dryRun atoms pkgDesc debType cabalPackages control =
           readFile path' >>= \ old ->
           let new = addDeps old in
           diffFile path' (pack new) >>= maybe (putStrLn ("cabal-debian substvars: No updates found for " ++ show path'))
-                                              (\ diff -> if dryRun then putStr diff else replaceFile path' new)
+                                              (\ diff -> if dryRun (flags atoms) then putStr diff else replaceFile path' new)
       ([], Nothing) -> return ()
       (missing, _) ->
           die ("These debian packages need to be added to the build dependency list so the required cabal packages are available:\n  " ++ intercalate "\n  " (map (show . pretty . fst) missing) ++

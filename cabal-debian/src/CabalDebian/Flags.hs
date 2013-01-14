@@ -13,8 +13,8 @@ import Debian.Cabal.Debianize (debianizationWithIO)
 import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat, DHMaintainer),
-                                     insertAtom, compilerVersion, doDependencyHint, missingDependency, doExecutable, setSourcePackageName,
-                                     buildDir, setBuildDir, cabalFlagAssignments, putCabalFlagAssignments,
+                                     insertAtom, doDependencyHint, missingDependency, doExecutable, setSourcePackageName,
+                                     buildDir, setBuildDir, putCabalFlagAssignments,
                                      AtomMap, Flags(..), DebAction(..), defaultAtoms, flags, mapFlags)
 import Debian.Debianize.Types.Dependencies (DependencyHints (..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..))
@@ -228,5 +228,5 @@ debianize :: HasAtoms atoms => FilePath -> atoms -> IO ()
 debianize top atoms =
     withEnvironmentFlags atoms $ \ atoms' ->
     do old <- inputDebianization "."
-       (new, dataDir) <- debianizationWithIO top (verbosity (flags atoms')) (compilerVersion atoms') (cabalFlagAssignments atoms') atoms' old
+       (new, dataDir) <- debianizationWithIO top atoms' old
        outputDebianization (dryRun (flags atoms')) (validate (flags atoms')) (buildDir "dist-ghc/build" atoms') dataDir old new
