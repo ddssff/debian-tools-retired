@@ -72,6 +72,9 @@ data DebAtom
     -- produced by cabal so we can move them into the deb.  Note that
     -- the --builddir option of runhaskell Setup appends the "/build"
     -- to the value it receives, so, yes, try not to get confused.
+    | DataDir FilePath
+    -- ^ the pathname of the package's data directory, generally the
+    -- value of the dataDirectory field in the PackageDescription.
     | DebSourceFormat SourceFormat                -- ^ Write debian/source/format
     | DebWatch Text                               -- ^ Write debian/watch
     | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.

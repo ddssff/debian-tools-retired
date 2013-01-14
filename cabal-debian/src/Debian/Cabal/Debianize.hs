@@ -12,7 +12,7 @@ import Data.Maybe
 import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory, inputCopyright, inputMaintainer)
 import Debian.Debianize.Atoms (debMaintainer)
 import Debian.Debianize.Combinators (debianization)
-import Debian.Debianize.Atoms (packageDescription)
+import Debian.Debianize.Atoms (packageDescription, setDataDir)
 import Debian.Debianize.Types.Atoms (HasAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..))
 import Debian.Debianize.Utility (withCurrentDirectory)

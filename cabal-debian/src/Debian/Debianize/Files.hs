@@ -10,6 +10,7 @@ import Data.Monoid ((<>), mempty)
 import Data.Set (toList, member)
 import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
+import Debian.Debianize.Atoms (buildDir)
 import Debian.Debianize.Combinators (finalizeDebianization)
 import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
@@ -59,12 +60,12 @@ assemble1 atomf pathf deb =
       test (name, ts) = error $ "Multiple entries for " ++ show (pretty name) ++ ": " ++ show ts
 -}
 
-install :: FilePath -> Debianization -> [(FilePath, Text)]
-install build deb =
+install :: Debianization -> [(FilePath, Text)]
+install deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
       atomf (Binary name) (DHInstall src dst) files = Map.insertWith with1 (pathf name)  (pack (src ++ " " ++ dst)) files
-      atomf (Binary name) (DHInstallCabalExec exec dst) files = Map.insertWith (\ old new -> old <> "\n" <> new) (pathf name) (pack (build </> exec </> exec ++ " " ++ dst)) files
+      atomf (Binary name) (DHInstallCabalExec exec dst) files = Map.insertWith (\ old new -> old <> "\n" <> new) (pathf name) (pack (buildDir "dist-ghc/bulid" deb </> exec </> exec ++ " " ++ dst)) files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".install"
 
@@ -140,8 +141,8 @@ prerm deb =
 
 -- | Turn the DebAtoms into a list of files, making sure the text
 -- associated with each path is unique.
-toFileMap :: FilePath -> FilePath -> Debianization -> Map.Map FilePath Text
-toFileMap build datadir d0 =
+toFileMap :: Debianization -> Map.Map FilePath Text
+toFileMap d0 =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
       [("debian/control", pack (show (pretty (control (sourceDebDescription d))))),
        ("debian/changelog", pack (show (pretty (changelog d)))),
@@ -150,7 +151,7 @@ toFileMap build datadir d0 =
        ("debian/copyright", either (\ x -> pack (show x) <> "\n") id (Debian.copyright d))] ++
       sourceFormat d ++
       watch d ++
-      install build d ++
+      install d ++
       dirs d ++
       init d ++
       logrotate d ++
@@ -161,7 +162,7 @@ toFileMap build datadir d0 =
       prerm d ++
       intermediate d
     where
-      d = finalizeDebianization build datadir d0
+      d = finalizeDebianization d0
 
 control :: SourceDebDescription -> Control' String
 control src =

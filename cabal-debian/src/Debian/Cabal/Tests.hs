@@ -12,11 +12,11 @@ import Data.Monoid (mempty, mconcat, (<>))
 import Data.Set as Set (fromList, singleton)
 import qualified Data.Text as T
 import Debian.Cabal.Debianize (debianizationWithIO)
-import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory)
+import Debian.Cabal.PackageDescription (withSimplePackageDescription)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Combinators (tightDependencyFixup, buildDeps, control, setArchitecture)
 import Debian.Debianize.Atoms (missingDependency, setRevision, putExecMap, putBinaryPackageDep,
-                               doExecutable, doWebsite, buildDir, defaultAtoms, packageDescription, compiler)
+                               doExecutable, doWebsite, defaultAtoms, packageDescription, compiler)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
@@ -115,7 +115,7 @@ test2b =
                     ("debian/control","Source: haskell-cabal-debian\nMaintainer: David Fox <dsf@seereason.com>\nStandards-Version: 3.9.3.1\n"),
                     ("debian/copyright","BSD3\n"),
                     ("debian/rules", "#!/usr/bin/make -f\n\nDEB_CABAL_PACKAGE = haskell-cabal-debian\n\ninclude /usr/share/cdbs/1/rules/debhelper.mk\ninclude /usr/share/cdbs/1/class/hlibrary.mk\n\n")])
-                  (toFileMap "dist-ghc/build" "<datadir>" deb)
+                  (toFileMap deb)
              )
 
 test3 :: Test
@@ -129,7 +129,7 @@ test4 =
     TestLabel "test4" $
     TestCase (do oldlog <- inputChangeLog "test-data/clckwrks-dot-com/input/debian"
                  old <- inputDebianization "test-data/clckwrks-dot-com/output" >>= \ x -> return (x {changelog = oldlog})
-                 (new, _dataDir) <- debianizationWithIO "test-data/clckwrks-dot-com/input" atoms old
+                 new <- debianizationWithIO "test-data/clckwrks-dot-com/input" atoms old
                  let new' = copyFirstLogEntry old (fixRules (tight new))
                  -- desc <- describeDebianization (buildDir "dist-ghc/build" atoms) "test-data/clckwrks-dot-com/output" dataDir new'
                  -- assertEqual "test4" "" desc
@@ -219,7 +219,7 @@ test5 =
     TestLabel "test5" $
     TestCase (     do oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" >>= \ x -> return (x {changelog = oldlog})
-                      (new, dataDir) <- debianizationWithIO "test-data/creativeprompts/input" atoms old
+                      new <- debianizationWithIO "test-data/creativeprompts/input" atoms old
                       let new' = setArchitecture (BinPkgName "creativeprompts-development") All $
                                  setArchitecture (BinPkgName "creativeprompts-production") All $
                                  insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
@@ -227,16 +227,16 @@ test5 =
                                  putBinaryPackageDep (BinPkgName "creativeprompts-backups") (BinPkgName "anacron") $
                                  putBinaryPackageDep (BinPkgName "creativeprompts-server") (BinPkgName "markdown") $
                                  new
-                      desc <- describeDebianization (buildDir "dist-ghc/build" atoms) "test-data/creativeprompts/output" dataDir new'
+                      desc <- describeDebianization "test-data/creativeprompts/output" new'
                       writeFile "/tmp/foo" desc
-                      -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (finalizeDebianization "dist-ghc/build" dataDir new))))
+                      -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (finalizeDebianization "dist-ghc/build" new))))
                       -- assertEqual "test5" "" desc
                       -- assertEqual "test5" (toFileMap "dist-ghc/build" "<datadir>" old) (toFileMap "dist-ghc/build" "<datadir>" new')
                       let -- Put the old values in fst, the new values in snd
                           new'' :: Map.Map FilePath T.Text
-                          new'' = (toFileMap "dist-ghc/build" "<datadir>" new')
+                          new'' = (toFileMap new')
                           old' :: Map.Map FilePath (T.Text, T.Text)
-                          old' = Map.map (\ x -> (x, mempty)) (toFileMap "dist-ghc/build" "<datadir>" old)
+                          old' = Map.map (\ x -> (x, mempty)) (toFileMap old)
                       assertEqual "test5" [] (diffDebianizations old new')
              )
     where
@@ -290,7 +290,7 @@ test6 =
                                    doExecutable (BinPkgName "creativeprompts-backups") (InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups") $
                                    putAtoms (getAtoms atoms) $
                                    newDebianization entry (Left BSD3) compat' standards
-                         desc <- describeDebianization "dist-ghc/build" "test-data/creativeprompts/output" (dataDirectory pkgDesc) new
+                         desc <- describeDebianization "test-data/creativeprompts/output" new
                          writeFile "/tmp/bar" desc
                          assertEqual "test6" [] (diffDebianizations old new)
              )
@@ -308,7 +308,7 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase ( do old <- inputDebianization "."
-                  (new, _dataDir) <- debianizationWithIO "test-data/cabal-debian/input" atoms old
+                  new <- debianizationWithIO "test-data/cabal-debian/input" atoms old
                   assertEqual "test7" [] (diffDebianizations old new)
              )
     where
@@ -334,8 +334,8 @@ diffDebianizations :: Debianization -> Debianization -> String -- [Change FilePa
 diffDebianizations old new =
     show (mconcat (map prettyChange (filter (not . isUnchanged) (diffMaps old' new'))))
     where
-      old' = toFileMap "dist-ghc/build" "<datadir>" old
-      new' = toFileMap "dist-ghc/build" "<datadir>" new
+      old' = toFileMap old
+      new' = toFileMap new
       isUnchanged (Unchanged _ _) = True
       isUnchanged _ = False
       prettyChange (Unchanged path _) = text ("Unchanged: " <> path <> "\n")

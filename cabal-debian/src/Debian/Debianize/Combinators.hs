@@ -41,6 +41,7 @@ import Data.Set as Set (Set, difference, union, fromList, null, insert, toList)
 import Data.Text as Text (Text, pack, intercalate, unpack, unlines)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
+import Debian.Debianize.Atoms (buildDir, dataDir)
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
 import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, utilsPackageName, packageDescription, compiler, dependencyHints)
@@ -122,8 +123,8 @@ tightDependencyFixup pairs p deb =
 -- are not removed from the list because they may contribute to the
 -- debianization in other ways, so be careful not to do this twice,
 -- this function is not idempotent.  (Exported for use in unit tests.)
-finalizeDebianization  :: FilePath -> FilePath -> Debianization -> Debianization
-finalizeDebianization build datadir deb =
+finalizeDebianization  :: Debianization -> Debianization
+finalizeDebianization deb =
     finalizeAtoms . mergeRules $ deb
     where
       finalizeAtoms deb' = foldAtoms finalizeAtom (putAtoms mempty deb') (getAtoms deb')
@@ -131,9 +132,9 @@ finalizeDebianization build datadir deb =
           insertAtom (Binary b) (DHLink ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain')) $
           insertAtom (Binary b) (DHInstallDir logdir) $ -- Server won't start if log directory doesn't exist
           insertAtom (Binary b) (DHFile ("/etc/apache2/sites-available" </> domain') text) $ deb'
-      finalizeAtom (Binary pkg) (DHInstallCabalExec name dst) deb' = insertAtom (Binary pkg) (DHInstall (build </> name </> name) dst) deb'
+      finalizeAtom (Binary pkg) (DHInstallCabalExec name dst) deb' = insertAtom (Binary pkg) (DHInstall (buildDir "dist-ghc/build" deb </> name </> name) dst) deb'
       finalizeAtom (Binary _) (DHInstallCabalExecTo {}) deb' = deb' -- This becomes a rule in rulesAtomText
-      finalizeAtom (Binary p) (DHInstallData s d) deb' = insertAtom (Binary p) (DHInstallTo s (datadir </> makeRelative "/" d)) deb'
+      finalizeAtom (Binary p) (DHInstallData s d) deb' = insertAtom (Binary p) (DHInstallTo s (dataDir (error "finalizeDebianization") deb </> makeRelative "/" d)) deb'
       finalizeAtom (Binary p) (DHFile path s) deb' =
           let (destDir', destName') = splitFileName path
               tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
@@ -150,7 +151,7 @@ finalizeDebianization build datadir deb =
       mergeRulesAtom (Binary p) (DHInstallCabalExecTo n d) text =
           text <> "\n" <>
                unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
-                       , "\tinstall -Dp " <> pack (build </> n </> n) <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]
+                       , "\tinstall -Dp " <> pack (buildDir "dist-ghc/build" deb </> n </> n) <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]
       mergeRulesAtom _ _ text = text
 
 watchAtom :: PackageName -> Debianization -> Debianization

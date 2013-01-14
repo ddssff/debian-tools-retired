@@ -24,6 +24,8 @@ module Debian.Debianize.Atoms
     , debMaintainer
     , buildDir
     , setBuildDir
+    , dataDir
+    , setDataDir
     , cabalFlagAssignments
     , putCabalFlagAssignments
     , flags
@@ -172,6 +174,22 @@ setBuildDir path atoms =
     where
       (_, atoms') = partitionAtoms p atoms
       p Source (BuildDir x) = Just x
+      p _ _ = Nothing
+
+dataDir :: HasAtoms atoms => FilePath -> atoms -> FilePath
+dataDir def atoms =
+    fromMaybe def $ foldAtoms from Nothing atoms
+    where
+      from Source (DataDir path') (Just path) | path /= path' = error $ "Conflicting dataDir atoms: " ++ show path ++ " vs. " ++ show path'
+      from Source (DataDir path') _ = Just path'
+      from _ _ x = x
+
+setDataDir :: HasAtoms atoms => FilePath -> atoms -> atoms
+setDataDir path atoms =
+    insertAtom Source (DataDir path) atoms'
+    where
+      (_, atoms') = partitionAtoms p atoms
+      p Source (DataDir x) = Just x
       p _ _ = Nothing
 
 cabalFlagAssignments :: HasAtoms atoms => atoms -> Set (FlagName, Bool)

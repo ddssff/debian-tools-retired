@@ -13,7 +13,9 @@ import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Map as Map (toList)
 import Data.Text (Text, unpack)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logVersion))
+import Debian.Debianize.Atoms (flags)
 import Debian.Debianize.Files (toFileMap)
+import Debian.Debianize.Types.Atoms (Flags(validate, dryRun))
 import Debian.Debianize.Types.Debianization as Debian (Debianization(changelog, sourceDebDescription),
                                                        SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
 import Debian.Debianize.Utility (replaceFile, diffFile)
@@ -21,8 +23,8 @@ import System.Directory (Permissions(executable), getPermissions, setPermissions
 import System.FilePath ((</>), takeDirectory)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-outputDebianization :: Bool -> Bool -> FilePath -> FilePath -> Debianization -> Debianization -> IO ()
-outputDebianization dryRun validate buildDir dataDir old new =
+outputDebianization :: Debianization -> Debianization -> IO ()
+outputDebianization old new =
        -- It is imperitive that during the time that dpkg-buildpackage
        -- runs the version number in the changelog and the source and
        -- package names in the control file do not change, or the
@@ -33,7 +35,7 @@ outputDebianization dryRun validate buildDir dataDir old new =
        -- rather than storing them apart from the package in the
        -- autobuilder configuration.
        case () of
-         _ | validate ->
+         _ | validate (flags new) ->
                do let oldVersion = logVersion (head (unChangeLog (changelog old)))
                       newVersion = logVersion (head (unChangeLog (changelog new)))
                       oldSource = source . sourceDebDescription $ old
@@ -45,16 +47,16 @@ outputDebianization dryRun validate buildDir dataDir old new =
                       | oldSource /= newSource -> error ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource))
                       | oldPackages /= newPackages -> error ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages))
                       | True -> return ()
-           | dryRun -> putStrLn "Debianization (dry run):" >> describeDebianization buildDir "." dataDir new >>= putStr
-           | True -> writeDebianization buildDir dataDir new
+           | dryRun (flags new) -> putStrLn "Debianization (dry run):" >> describeDebianization "." new >>= putStr
+           | True -> writeDebianization new
     where
       unChangeLog :: ChangeLog -> [ChangeLogEntry]
       unChangeLog (ChangeLog x) = x
 
 -- | Describe a 'Debianization' in relation to one that is written into 
-describeDebianization :: FilePath -> FilePath -> FilePath -> Debianization -> IO String
-describeDebianization buildDir old dataDir d =
-    mapM (\ (path, text) -> liftIO (doFile path text)) (toList (toFileMap buildDir dataDir d)) >>= return . concat
+describeDebianization :: FilePath -> Debianization -> IO String
+describeDebianization old d =
+    mapM (\ (path, text) -> liftIO (doFile path text)) (toList (toFileMap d)) >>= return . concat
     where
       doFile :: FilePath -> Text -> IO String
       doFile path text =
@@ -64,9 +66,9 @@ describeDebianization buildDir old dataDir d =
               then diffFile path' text >>= return . maybe (path ++ ": Unchanged\n") (\ diff -> path ++ ": Modified\n" ++ indent " | " diff)
               else return $ path ++ ": Created\n" ++ indent " | " (unpack text)
 
-writeDebianization :: FilePath -> FilePath -> Debianization -> IO ()
-writeDebianization buildDir dataDir d =
-    mapM_ (uncurry doFile) (toList (toFileMap buildDir dataDir d)) >>
+writeDebianization :: Debianization -> IO ()
+writeDebianization d =
+    mapM_ (uncurry doFile) (toList (toFileMap d)) >>
     getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})
     where
       doFile path text =

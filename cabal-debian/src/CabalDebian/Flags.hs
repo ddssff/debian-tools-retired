@@ -1,7 +1,5 @@
 module CabalDebian.Flags
-    ( Flags(..)
-    , DebAction(..)
-    , withFlags
+    ( withFlags
     , debianize
     ) where
 
@@ -11,7 +9,7 @@ import Data.Set (fromList)
 import Data.Version (parseVersion)
 import Debian.Cabal.Debianize (debianizationWithIO)
 import Debian.Debianize.Atoms (doDependencyHint, missingDependency, doExecutable, setSourcePackageName,
-                               buildDir, setBuildDir, putCabalFlagAssignments, defaultAtoms, flags, mapFlags)
+                               setBuildDir, putCabalFlagAssignments, defaultAtoms, mapFlags)
 import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat, DHMaintainer),
@@ -70,6 +68,7 @@ printHelp h = do
     let info = "Usage: " ++ progName ++ " [FLAGS]\n"
     hPutStrLn h (usageInfo info ((flagOptions ++ atomOptions) :: [OptDescr (AtomMap -> AtomMap)]))
 
+-- | Options that modify the Flags atom.
 flagOptions :: HasAtoms atoms => [OptDescr (atoms -> atoms)]
 flagOptions =
     [ Option "v" ["verbose"] (ReqArg (\ s atoms -> mapFlags (\ x -> x { verbosity = read s }) atoms) "n")
@@ -85,6 +84,7 @@ flagOptions =
                        "on the argument.  This value can be added to the appropriate substvars file."])
     ]
 
+-- | Options that modify other atoms.
 atomOptions :: HasAtoms atoms => [OptDescr (atoms -> atoms)]
 atomOptions =
     [ Option "" ["executable"] (ReqArg (\ path x -> executableOption path (\ bin e -> doExecutable bin e x)) "SOURCEPATH or SOURCEPATH:DESTDIR")
@@ -228,5 +228,5 @@ debianize :: HasAtoms atoms => FilePath -> atoms -> IO ()
 debianize top atoms =
     withEnvironmentFlags atoms $ \ atoms' ->
     do old <- inputDebianization "."
-       (new, dataDir) <- debianizationWithIO top atoms' old
-       outputDebianization (dryRun (flags atoms')) (validate (flags atoms')) (buildDir "dist-ghc/build" atoms') dataDir old new
+       new <- debianizationWithIO top atoms' old
+       outputDebianization old new
