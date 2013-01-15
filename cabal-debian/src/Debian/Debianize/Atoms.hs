@@ -58,8 +58,8 @@ compiler def deb =
           from _ = Nothing
 
 setCompiler :: forall atoms. HasAtoms atoms => Compiler -> atoms -> atoms
-setCompiler x atoms =
-    insertAtom Source (DHCompiler x) atoms'
+setCompiler comp atoms =
+    insertAtom Source (DHCompiler comp) atoms'
     where
       (_, atoms') = partitionAtoms p atoms
       p Source (DHCompiler x) = Just x
@@ -72,8 +72,8 @@ packageDescription def deb =
           from _ = Nothing
 
 setPackageDescription :: HasAtoms atoms => PackageDescription -> atoms -> atoms
-setPackageDescription x atoms =
-    insertAtom Source (DHPackageDescription x) atoms'
+setPackageDescription desc atoms =
+    insertAtom Source (DHPackageDescription desc) atoms'
     where
       (_, atoms') = partitionAtoms p atoms
       p Source (DHPackageDescription x) = Just x

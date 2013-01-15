@@ -6,8 +6,9 @@ module Debian.Debianize.Files
     ) where
 
 import qualified Data.Map as Map
-import Data.Monoid ((<>), mempty)
+import Data.Monoid (Monoid, (<>), mempty)
 import Data.Set (toList, member)
+import Data.String (IsString)
 import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.Atoms (buildDir)
@@ -77,8 +78,10 @@ dirs deb =
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".dirs"
 
+with1 :: (IsString m, Monoid m) => m -> m -> m
 with1 old new = old <> "\n" <> new
 
+with2 :: String -> t -> t1 -> t2
 with2 msg _ _ = error msg
 
 init :: Debianization -> [(FilePath, Text)]

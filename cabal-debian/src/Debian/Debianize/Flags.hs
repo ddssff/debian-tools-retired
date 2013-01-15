@@ -1,6 +1,10 @@
 module Debian.Debianize.Flags
     ( withFlags
     , debianize
+    , callDebianize
+    , runDebianize
+    , withEnvironmentArgs
+    , printHelp
     ) where
 
 import Data.Char (toLower, isDigit, ord)

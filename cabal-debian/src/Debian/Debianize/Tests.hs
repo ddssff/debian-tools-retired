@@ -9,24 +9,23 @@ import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Map as Map (differenceWithKey, intersectionWithKey)
 import qualified Data.Map as Map
 import Data.Monoid (mempty, mconcat, (<>))
-import Data.Set as Set (fromList, singleton)
+import Data.Set as Set (fromList)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Cabal (withSimplePackageDescription)
 import Debian.Debianize.Combinators (tightDependencyFixup, buildDeps, control, setArchitecture)
 import Debian.Debianize.Debianize (cabalToDebianization)
-import Debian.Debianize.Atoms (missingDependency, setRevision, putExecMap, putBinaryPackageDep,
-                               doExecutable, doWebsite, defaultAtoms, packageDescription, compiler)
+import Debian.Debianize.Atoms (missingDependency, setRevision, putExecMap, putBinaryPackageDep, doExecutable, doWebsite, defaultAtoms)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
-import Debian.Debianize.Paths (databaseDirectory)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms)
+import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), insertAtom)
 import Debian.Debianize.Types.Debianization (Debianization(..), newDebianization, SourceDebDescription(..), BinaryDebDescription(..),
                                              PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
-import Debian.Policy (StandardsVersion(StandardsVersion), getDebhelperCompatLevel, getDebianStandardsVersion,
-                      PackagePriority(Extra), PackageArchitectures(All, Any), SourceFormat(Native3), Section(..))
+import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
+                      getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All, Any),
+                      SourceFormat(Native3), Section(..))
 import Debian.Relation (Relation(..), VersionReq(..), SrcPkgName(..), BinPkgName(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Version (buildDebianVersion, parseDebianVersion)
@@ -140,11 +139,13 @@ test4 =
     where
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
+{-
       dropRulesAtoms deb =
           mapAtoms omitRulesAtom deb
           where
             omitRulesAtom Source (DebRulesFragment _) = mempty
             omitRulesAtom _ x = Set.singleton x
+-}
       atoms = insertAtom Source (DebSourceFormat Native3) $
               missingDependency (BinPkgName "libghc-clckwrks-theme-clckwrks-doc") $
               setRevision "" $
@@ -232,11 +233,13 @@ test5 =
                       -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (finalizeDebianization "dist-ghc/build" new))))
                       -- assertEqual "test5" "" desc
                       -- assertEqual "test5" (toFileMap "dist-ghc/build" "<datadir>" old) (toFileMap "dist-ghc/build" "<datadir>" new')
+{-
                       let -- Put the old values in fst, the new values in snd
                           new'' :: Map.Map FilePath T.Text
                           new'' = (toFileMap new')
                           old' :: Map.Map FilePath (T.Text, T.Text)
                           old' = Map.map (\ x -> (x, mempty)) (toFileMap old)
+-}
                       assertEqual "test5" [] (diffDebianizations old new')
              )
     where
@@ -248,14 +251,18 @@ test5 =
               defaultAtoms
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
+{-
       addMarkdownDependency :: Debianization -> Debianization
       addMarkdownDependency deb = updateBinaryPackage (BinPkgName "creativeprompts-server") addMarkdownDependency' deb
       addMarkdownDependency' :: BinaryDebDescription -> BinaryDebDescription
       addMarkdownDependency' deb = deb {relations = (relations deb) {depends = [[Rel (BinPkgName "markdown") Nothing Nothing]] ++ depends (relations deb)}}
+-}
 
 
+{-
 dropFirstLogEntry :: Debianization -> Debianization
 dropFirstLogEntry (deb@(Debianization {changelog = ChangeLog (_ : tl)})) = deb {changelog = ChangeLog tl}
+-}
 
 copyFirstLogEntry :: Debianization -> Debianization -> Debianization
 copyFirstLogEntry (Debianization {changelog = ChangeLog (hd1 : _)}) (deb2@(Debianization {changelog = ChangeLog (_ : tl2)})) = deb2 {changelog = ChangeLog (hd1 : tl2)}
@@ -297,10 +304,12 @@ test6 =
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
       -- dropFirstLogEntry (deb@(Debianization {changelog = ChangeLog (_ : tl)})) = deb {changelog = ChangeLog tl}
+{-
       addMarkdownDependency :: Debianization -> Debianization
       addMarkdownDependency deb = updateBinaryPackage (BinPkgName "creativeprompts-server") addMarkdownDependency' deb
       addMarkdownDependency' :: BinaryDebDescription -> BinaryDebDescription
       addMarkdownDependency' deb = deb {relations = (relations deb) {depends = [[Rel (BinPkgName "markdown") Nothing Nothing]] ++ depends (relations deb)}}
+-}
 
 test7 :: Test
 test7 =
@@ -336,22 +345,24 @@ diffDebianizations old new =
       new' = toFileMap new
       isUnchanged (Unchanged _ _) = True
       isUnchanged _ = False
-      prettyChange (Unchanged path _) = text ("Unchanged: " <> path <> "\n")
-      prettyChange (Deleted path _) = text ("Deleted: " <> path <> "\n")
-      prettyChange (Created path _) = text ("Created: " <> path <> "\n")
-      prettyChange (Modified path a b) =
-          text ("Modified: " <> path <> "\n") <>
-          prettyDiff ("old" </> path) ("new" </> path)
+      prettyChange (Unchanged p _) = text ("Unchanged: " <> p <> "\n")
+      prettyChange (Deleted p _) = text ("Deleted: " <> p <> "\n")
+      prettyChange (Created p _) = text ("Created: " <> p <> "\n")
+      prettyChange (Modified p a b) =
+          text ("Modified: " <> p<> "\n") <>
+          prettyDiff ("old" </> p) ("new" </> p)
                      -- We use split here instead of lines so we can
                      -- detect whether the file has a final newline
                      -- character.
                      (contextDiff 2 (T.split (== '\n') a) (T.split (== '\n') b))
 
+{-
 updateBinaryPackage :: BinPkgName -> (BinaryDebDescription -> BinaryDebDescription) -> Debianization -> Debianization
 updateBinaryPackage name f deb =
     deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = map update (binaryPackages (sourceDebDescription deb))}}
     where update p | package p == name = f p
           update p = p
+-}
 
 testEntry :: ChangeLogEntry
 testEntry =

@@ -347,10 +347,15 @@ execAndUtilSpecs describe deb =
     makeUtilsPackage describe $
     applyPackageHints describe $ deb
 
+t1 :: Show a => a -> a
 t1 x = trace ("t1: " ++ show x) x
+t2 :: Show a => a -> a
 t2 x = trace ("t2: " ++ show x) x
+t3 :: Show a => a -> a
 t3 x = {- trace ("t3: " ++ show x) -} x
+t4 :: Show a => a -> a
 t4 x = trace ("t4: " ++ show x) x
+t5 :: Show a => a -> a
 t5 x = trace ("t5: " ++ show x) x
 
 -- Create a package to hold any executables and data files not
@@ -416,8 +421,8 @@ installWebsite describe b site deb =
     siteAtoms b site $ cabalExecBinaryPackage b describe $ deb
 
 installServer :: (PackageType -> PackageIdentifier -> Text) -> BinPkgName -> Server -> Debianization -> Debianization
-installServer describe b server deb =
-    serverAtoms b server False $ cabalExecBinaryPackage b describe $ deb
+installServer describe b serv deb =
+    serverAtoms b serv False $ cabalExecBinaryPackage b describe $ deb
 
 installExec :: (PackageType -> PackageIdentifier -> Text) -> BinPkgName -> InstallFile -> Debianization -> Debianization
 installExec describe b e deb =
@@ -606,6 +611,6 @@ modifyBinaryDeb bin f deb =
     where
       -- scan the binary debs and apply f to the target, recording whether we found it
       (xs', found) = foldl g ([], False) (binaryPackages (sourceDebDescription deb))
-      g (xs, found) x = if Debian.package x == bin then (f x : xs, True) else (x : xs, found)
+      g (xs, found') x = if Debian.package x == bin then (f x : xs, True) else (x : xs, found')
       -- If we didn't find the target package create it and apply f
       xs'' = if found then xs' else f (newBinaryDebDescription bin (Names [])) : xs'

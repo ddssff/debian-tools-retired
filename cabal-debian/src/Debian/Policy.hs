@@ -1,12 +1,22 @@
 -- | Code pulled out of cabal-debian that straightforwardly implements
--- parts of the Debian policy manual.
+-- parts of the Debian policy manual, or other bits of Linux standards.
 {-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
 module Debian.Policy
-    ( debianPackageVersion
+    ( -- * Paths
+      databaseDirectory
+    , apacheLogDirectory
+    , apacheErrorLog
+    , apacheAccessLog
+    , serverLogDirectory
+    , serverAppLog
+    , serverAccessLog
+    -- * Installed packages
+    , debianPackageVersion
     , getDebhelperCompatLevel
     , StandardsVersion(..)
     , getDebianStandardsVersion
     , parseStandardsVersion
+    -- * Package fields
     , SourceFormat(..)
     , readSourceFormat
     , PackagePriority(..)
@@ -30,12 +40,35 @@ import Data.List (groupBy, intercalate)
 import Data.Generics (Data, Typeable)
 import Data.Text (Text, pack, unpack, strip)
 import Data.Monoid ((<>))
+import Debian.Relation (BinPkgName)
 import Debian.Version (DebianVersion, parseDebianVersion, version)
 import System.Environment (getEnvironment)
+import System.FilePath ((</>))
 import System.Process (readProcess)
 import Text.Parsec (parse)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr, address)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), text)
+
+databaseDirectory :: BinPkgName -> String
+databaseDirectory x = "/srv" </> show (pretty x)
+
+apacheLogDirectory :: BinPkgName -> String
+apacheLogDirectory x =  "/var/log/apache2/" ++ show (pretty x)
+
+apacheErrorLog :: BinPkgName -> String
+apacheErrorLog x = apacheLogDirectory x </> "error.log"
+
+apacheAccessLog :: BinPkgName -> String
+apacheAccessLog x = apacheLogDirectory x </> "access.log"
+
+serverLogDirectory :: BinPkgName -> String
+serverLogDirectory x = "/var/log/" ++ show (pretty x)
+
+serverAppLog :: BinPkgName -> String
+serverAppLog x = serverLogDirectory x </> "app.log"
+
+serverAccessLog :: BinPkgName -> String
+serverAccessLog x = serverLogDirectory x </> "access.log"
 
 debianPackageVersion :: String -> IO DebianVersion
 debianPackageVersion name =
