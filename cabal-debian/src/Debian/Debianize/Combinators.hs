@@ -1,9 +1,7 @@
 -- | Combinator functions for the Debianization type.
 {-# LANGUAGE OverloadedStrings #-}
 module Debian.Debianize.Combinators
-    ( tightDependencyFixup
-    , finalizeDebianization
-    , watchAtom
+    ( finalizeDebianization
     , versionInfo
     , cdbsRules
     , putCopyright
@@ -33,7 +31,7 @@ import Debug.Trace
 
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
-import Data.List as List (nub, intercalate, intersperse)
+import Data.List as List (nub, intercalate)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid ((<>), mempty)
@@ -59,7 +57,7 @@ import Debian.Relation (BinPkgName, SrcPkgName(..), Relation(Rel))
 import Debian.Release (parseReleaseName)
 import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
 import Distribution.License (License)
-import Distribution.Package (PackageIdentifier(..), PackageName(..))
+import Distribution.Package (PackageIdentifier(..))
 import Distribution.PackageDescription as Cabal (PackageDescription({-package, library, homepage, synopsis, description, maintainer, dataFiles, executables, author, pkgUrl-}),
                                                  BuildInfo(buildable {-, extraLibs-}), Executable(exeName, buildInfo) {-, allBuildInfo-})
 import qualified Distribution.PackageDescription as Cabal
@@ -68,29 +66,6 @@ import Prelude hiding (writeFile, init, unlines)
 import System.FilePath ((</>), takeDirectory, makeRelative, splitFileName)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
-
--- | Create equals dependencies.  For each pair (A, B), use dpkg-query
--- to find out B's version number, version B.  Then write a rule into
--- P's .substvar that makes P require that that exact version of A,
--- and another that makes P conflict with any older version of A.
-tightDependencyFixup :: HasAtoms atoms => [(BinPkgName, BinPkgName)] -> BinPkgName -> atoms -> atoms
-tightDependencyFixup [] _ deb = deb
-tightDependencyFixup pairs p deb =
-    insertAtom Source atom deb
-    where
-      atom = DebRulesFragment
-              (unlines $
-               ([ "binary-fixup/" <> name <> "::"
-                , "\techo -n 'haskell:Depends=' >> debian/" <> name <> ".substvars" ] ++
-                intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (map equals pairs) ++
-                [ "\techo '' >> debian/" <> name <> ".substvars"
-                , "\techo -n 'haskell:Conflicts=' >> debian/" <> name <> ".substvars" ] ++
-                intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (map newer pairs) ++
-                [ "\techo '' >> debian/" <> name <> ".substvars" ]))
-      equals (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (=$${Version})' " <>  display' installed <> " >> debian/" <> name <> ".substvars"
-      newer  (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (>>$${Version})' " <> display' installed <> " >> debian/" <> name <> ".substvars"
-      name = display' p
-      display' = pack . show . pretty
 
 -- | Eliminate atoms that can be expressed as simpler ones now that we
 -- know the build directory, and merge the text of all the atoms that
@@ -128,16 +103,6 @@ finalizeDebianization deb =
                unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
                        , "\tinstall -Dp " <> pack (buildDir "dist-ghc/build" deb </> n </> n) <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]
       mergeRulesAtom _ _ text = text
-
-watchAtom :: HasAtoms atoms => PackageName -> atoms -> atoms
-watchAtom (PackageName pkgname) deb =
-    insertAtom Source atom deb
-    where
-      atom =
-          DebWatch . pack $
-            "version=3\nopts=\"downloadurlmangle=s|archive/([\\w\\d_-]+)/([\\d\\.]+)/|archive/$1/$2/$1-$2.tar.gz|,\\\nfilenamemangle=s|(.*)/$|" ++ pkgname ++
-            "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
-            " \\\n    ([\\d\\.]*\\d)/\n"
 
 {-
 sourceFormatAtom :: SourceFormat -> Debianization -> Debianization

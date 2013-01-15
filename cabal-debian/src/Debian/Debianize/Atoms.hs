@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 module Debian.Debianize.Atoms
     ( defaultAtoms
     , compiler
@@ -30,12 +30,16 @@ module Debian.Debianize.Atoms
     , putCabalFlagAssignments
     , flags
     , mapFlags
+    , watchAtom
+    , tightDependencyFixup
     ) where
 
+import Data.List (intersperse)
 import Data.Map as Map (Map, insert)
 import Data.Maybe (fromMaybe)
-import Data.Monoid (mempty)
+import Data.Monoid (mempty, (<>))
 import Data.Set as Set (Set, maxView, toList, null, union, unions)
+import Data.Text (pack, unlines)
 import Data.Version (Version)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags, defaultFlags,
                                      lookupAtom, lookupAtomDef, lookupAtoms, foldAtoms, hasAtom, insertAtom, insertAtoms', partitionAtoms)
@@ -43,10 +47,12 @@ import Debian.Debianize.Types.Dependencies (DependencyHints(..), defaultDependen
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName, SrcPkgName)
+import Distribution.Package (PackageName(..))
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
-import Prelude hiding (init)
+import Prelude hiding (init, unlines)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
+import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 defaultAtoms :: Map DebAtomKey (Set DebAtom)
 defaultAtoms = mempty
@@ -225,3 +231,36 @@ mapFlags f atoms =
       (flagss, atoms') = partitionAtoms p atoms
       p Source (DHFlags x) = Just x
       p _ _ = Nothing
+
+watchAtom :: HasAtoms atoms => PackageName -> atoms -> atoms
+watchAtom (PackageName pkgname) deb =
+    insertAtom Source atom deb
+    where
+      atom =
+          DebWatch . pack $
+            "version=3\nopts=\"downloadurlmangle=s|archive/([\\w\\d_-]+)/([\\d\\.]+)/|archive/$1/$2/$1-$2.tar.gz|,\\\nfilenamemangle=s|(.*)/$|" ++ pkgname ++
+            "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
+            " \\\n    ([\\d\\.]*\\d)/\n"
+
+-- | Create equals dependencies.  For each pair (A, B), use dpkg-query
+-- to find out B's version number, version B.  Then write a rule into
+-- P's .substvar that makes P require that that exact version of A,
+-- and another that makes P conflict with any older version of A.
+tightDependencyFixup :: HasAtoms atoms => [(BinPkgName, BinPkgName)] -> BinPkgName -> atoms -> atoms
+tightDependencyFixup [] _ deb = deb
+tightDependencyFixup pairs p deb =
+    insertAtom Source atom deb
+    where
+      atom = DebRulesFragment
+              (unlines $
+               ([ "binary-fixup/" <> name <> "::"
+                , "\techo -n 'haskell:Depends=' >> debian/" <> name <> ".substvars" ] ++
+                intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (map equals pairs) ++
+                [ "\techo '' >> debian/" <> name <> ".substvars"
+                , "\techo -n 'haskell:Conflicts=' >> debian/" <> name <> ".substvars" ] ++
+                intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (map newer pairs) ++
+                [ "\techo '' >> debian/" <> name <> ".substvars" ]))
+      equals (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (=$${Version})' " <>  display' installed <> " >> debian/" <> name <> ".substvars"
+      newer  (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (>>$${Version})' " <> display' installed <> " >> debian/" <> name <> ".substvars"
+      name = display' p
+      display' = pack . show . pretty

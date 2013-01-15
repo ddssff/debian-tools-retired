@@ -13,9 +13,9 @@ module Debian.Debianize.Debianize
 
 import Data.Maybe
 import Data.Text (Text)
-import Debian.Debianize.Atoms (packageDescription, dependencyHints, defaultAtoms, flags)
+import Debian.Debianize.Atoms (packageDescription, dependencyHints, defaultAtoms, flags, watchAtom)
 import Debian.Debianize.Cabal (withSimplePackageDescription, inputCopyright, inputMaintainer)
-import Debian.Debianize.Combinators (watchAtom, control, cdbsRules, putCopyright, filterMissing, versionInfo, addExtraLibDependencies, putStandards)
+import Debian.Debianize.Combinators (control, cdbsRules, putCopyright, filterMissing, versionInfo, addExtraLibDependencies, putStandards)
 import Debian.Debianize.Flags (flagOptions, atomOptions)
 import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Output (outputDebianization)
