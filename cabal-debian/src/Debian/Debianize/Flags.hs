@@ -1,10 +1,6 @@
 module Debian.Debianize.Flags
-    ( withFlags
-    , debianize
-    , callDebianize
-    , runDebianize
-    , withEnvironmentArgs
-    , printHelp
+    ( flagOptions
+    , atomOptions
     ) where
 
 import Data.Char (toLower, isDigit, ord)
@@ -12,12 +8,9 @@ import qualified Data.Map as Map
 import Data.Set (fromList)
 import Data.Version (parseVersion)
 import Debian.Debianize.Atoms (doDependencyHint, missingDependency, doExecutable, setSourcePackageName,
-                               setBuildDir, putCabalFlagAssignments, defaultAtoms, mapFlags)
-import Debian.Debianize.Debianize (cabalToDebianization)
-import Debian.Debianize.Input (inputDebianization)
-import Debian.Debianize.Output (outputDebianization)
+                               setBuildDir, putCabalFlagAssignments, mapFlags)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat, DHMaintainer),
-                                     insertAtom, AtomMap, Flags(..), DebAction(..))
+                                     insertAtom, Flags(..), DebAction(..))
 import Debian.Debianize.Types.Dependencies (DependencyHints (..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..))
 import Debian.Orphans ()
@@ -27,23 +20,13 @@ import Debian.Version (parseDebianVersion)
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
 import Prelude hiding (readFile, lines, null, log, sum)
-import System.Console.GetOpt (ArgDescr (..), ArgOrder (..), OptDescr (..), usageInfo, getOpt')
-import System.Directory (doesFileExist)
-import System.Environment (getArgs, getProgName, getEnv)
-import System.Exit (ExitCode(ExitSuccess))
+import System.Console.GetOpt (ArgDescr(..), OptDescr(..), usageInfo)
+import System.Environment (getProgName)
 import System.FilePath ((</>), splitFileName)
 import System.IO (Handle, hPutStrLn)
-import System.IO.Error (catchIOError)
-import System.Process (readProcessWithExitCode)
 -- import System.Process.Progress (defaultVerbosity)
 import Text.ParserCombinators.ReadP (readP_to_S)
-import System.Posix.Env (setEnv)
 import Text.Regex.TDFA ((=~))
-
--- | Compile the command line arguments into the atoms value and pass
--- to the action.
-withFlags :: HasAtoms atoms => atoms -> (atoms -> IO a) -> IO a
-withFlags def action = getArgs >>= action . compileArgs def
 
 {-
 getFlags :: HasAtoms atoms => IO atoms
@@ -57,20 +40,6 @@ parseArgs args atoms = do
      return opts
     where opts = compileArgs args atoms
 -}
-
-compileArgs :: HasAtoms atoms => atoms -> [String] -> atoms
-compileArgs atoms args =
-  case getOpt' RequireOrder (flagOptions ++ atomOptions) args of
-    (os, [], [], []) -> foldl (flip ($)) atoms os
-    (_, non, unk, errs) -> error ("Errors: " ++ show errs ++
-                                  ", Unrecognized: " ++ show unk ++
-                                  ", Non-Options: " ++ show non)
-
-printHelp :: Handle -> IO ()
-printHelp h = do
-    progName <- getProgName
-    let info = "Usage: " ++ progName ++ " [FLAGS]\n"
-    hPutStrLn h (usageInfo info ((flagOptions ++ atomOptions) :: [OptDescr (AtomMap -> AtomMap)]))
 
 -- | Options that modify the Flags atom.
 flagOptions :: HasAtoms atoms => [OptDescr (atoms -> atoms)]
@@ -175,62 +144,3 @@ flagList = map tagWithValue . words
 
 b :: String -> BinPkgName
 b = BinPkgName
-
--- | Call a function with a list of strings read from the value of
--- $CABALDEBIAN.
-withEnvironmentArgs :: ([String] -> IO a) -> IO a
-withEnvironmentArgs f =
-  (getEnv "CABALDEBIAN" >>= return . read) `catchIOError` handle >>= f
-  where
-    handle :: IOError -> IO [String]
-    handle _ = return []
-
--- | Read the value of $CABALDEBIAN as a list of command line
--- arguments, construct a ('Flags' -> 'Flags') function from them, and
--- compose it with a function that takes a 'Flags' record.
-withEnvironmentFlags :: HasAtoms atoms => atoms -> (atoms -> IO a) -> IO a
-withEnvironmentFlags atoms0 f =
-    (getEnv "CABALDEBIAN" >>= f . compileArgs atoms0 . read) `catchIOError` (\ _ -> f atoms0)
-
--- | Insert a value for CABALDEBIAN into the environment that the
--- withEnvironment* functions above will find and use.  E.g.
--- putEnvironmentFlags ["--dry-run", "--validate"] (debianize defaultFlags)
-putEnvironmentArgs :: [String] -> IO ()
-putEnvironmentArgs fs = setEnv "CABALDEBIAN" (show fs) True
-
--- | Run the debianize function with arguments pulled out of the
--- @CABALDEBIAN@ environment variable, with the build directory set to
--- match what dpkg-buildpackage will use later when it uses the
--- resulting debianization.
-callDebianize :: [String] -> IO ()
-callDebianize args =
-    debianize "." (compileArgs defaultAtoms args)
-
--- | Try to run the custom script in debian/Debianize.hs to create the
--- debianization.  This can first put some extra arguments into the
--- @CABALDEBIAN@ environment variable.  Often this is used to set the
--- dryRun option by passing @["-n"]@.
-runDebianize :: [String] -> IO Bool
-runDebianize args =
-    doesFileExist "debian/Debianize.hs" >>= \ exists ->
-    case exists of
-      False -> return False
-      True ->
-          putEnvironmentArgs args >> readProcessWithExitCode "runhaskell" ("debian/Debianize.hs" : args) "" >>= \ result ->
-          case result of
-            (ExitSuccess, _, _) -> return True
-            (code, out, err) ->
-              error ("runDebianize failed with " ++ show code ++ ":\n stdout: " ++ show out ++"\n stderr: " ++ show err)
-
--- | Generate a debianization for the cabal package in a directory
--- using information from the .cabal file and from the options in
--- Flags.  This ignores any existing debianization except for the
--- debian/changelog file.  A new entry changelog is generated, and any
--- entries already there that look older than the new one are
--- preserved.
-debianize :: HasAtoms atoms => FilePath -> atoms -> IO ()
-debianize top atoms =
-    withEnvironmentFlags atoms $ \ atoms' ->
-    do old <- inputDebianization "."
-       new <- cabalToDebianization top atoms' old
-       outputDebianization old new

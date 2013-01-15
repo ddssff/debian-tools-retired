@@ -5,15 +5,22 @@
 -- options.
 
 module Debian.Debianize.Debianize
-    ( cabalToDebianization
+    ( cabalDebian
+    , callDebianize
+    , runDebianize
+    , cabalToDebianization
     ) where
 
 import Data.Maybe
 import Data.Text (Text)
+import Debian.Debianize.Atoms (packageDescription, dependencyHints, defaultAtoms, flags)
 import Debian.Debianize.Cabal (withSimplePackageDescription, inputCopyright, inputMaintainer)
-import Debian.Debianize.Atoms (packageDescription, dependencyHints)
 import Debian.Debianize.Combinators (watchAtom, control, cdbsRules, putCopyright, filterMissing, versionInfo, addExtraLibDependencies, putStandards)
-import Debian.Debianize.Types.Atoms (HasAtoms(getAtoms, putAtoms))
+import Debian.Debianize.Flags (flagOptions, atomOptions)
+import Debian.Debianize.Input (inputDebianization)
+import Debian.Debianize.Output (outputDebianization)
+import Debian.Debianize.SubstVars (substvars)
+import Debian.Debianize.Types.Atoms (HasAtoms(getAtoms, putAtoms), Flags(..), DebAction(..), AtomMap)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..))
 import Debian.Debianize.Types.Dependencies (missingDependencies)
 import Debian.Debianize.Utility (withCurrentDirectory)
@@ -22,6 +29,13 @@ import Debian.Time (getCurrentLocalRFC822Time)
 import Distribution.Package (PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (writeFile, unlines)
+import System.Console.GetOpt (ArgOrder(..), getOpt', OptDescr(..), usageInfo)
+import System.Directory (doesFileExist)
+import System.Environment (getArgs, getEnv, getProgName)
+import System.Exit (ExitCode(ExitSuccess))
+import System.IO.Error (catchIOError)
+import System.Posix.Env (setEnv)
+import System.Process (readProcessWithExitCode)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 type Debianization = [DebAtom]
@@ -553,3 +567,36 @@ base
       "time",
       "unix"]
 -}
+
+compileEnvironmentArgs :: HasAtoms atoms => atoms -> IO atoms
+compileEnvironmentArgs atoms0 =
+    getEnv "CABALDEBIAN" >>= return . compileArgs atoms0 . read
+
+-- | Compile the command line arguments into the atoms value and pass
+-- to the action.
+withFlags :: HasAtoms atoms => atoms -> (atoms -> IO a) -> IO a
+withFlags def action = getArgs >>= action . compileArgs def
+
+-- | Read the value of $CABALDEBIAN as a list of command line
+-- arguments, construct a ('Flags' -> 'Flags') function from them, and
+-- compose it with a function that takes a 'Flags' record.
+withEnvironmentFlags :: HasAtoms atoms => atoms -> (atoms -> IO a) -> IO a
+withEnvironmentFlags atoms0 f =
+    (getEnv "CABALDEBIAN" >>= f . compileArgs atoms0 . read) `catchIOError` (\ _ -> f atoms0)
+
+compileArgs :: HasAtoms atoms => atoms -> [String] -> atoms
+compileArgs atoms args =
+    case getOpt' RequireOrder (flagOptions ++ atomOptions) args of
+      (os, [], [], []) -> foldl (flip ($)) atoms os
+      (_, non, unk, errs) -> error ("Errors: " ++ show errs ++
+                                    ", Unrecognized: " ++ show unk ++
+                                    ", Non-Options: " ++ show non)
+
+-- | Call a function with a list of strings read from the value of
+-- $CABALDEBIAN.
+withEnvironmentArgs :: ([String] -> IO a) -> IO a
+withEnvironmentArgs f =
+  (getEnv "CABALDEBIAN" >>= return . read) `catchIOError` handle >>= f
+  where
+    handle :: IOError -> IO [String]
+    handle _ = return []
