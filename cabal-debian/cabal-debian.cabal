@@ -46,25 +46,25 @@ Library
    Unixutils >= 1.50,
    utf8-string
  Exposed-Modules:
-   CabalDebian.Flags
-   CabalDebian.SubstVars
    Data.Algorithm.Diff.Context
    Data.Algorithm.Diff.Pretty
    Debian.Cabal
-   Debian.Cabal.Bundled
-   Debian.Cabal.Debianize
-   Debian.Cabal.PackageDescription
-   Debian.Cabal.Tests
    Debian.Debianize.Atoms
+   Debian.Debianize.Bundled
+   Debian.Debianize.Cabal
    Debian.Debianize.Combinators
+   Debian.Debianize.Debianize
    Debian.Debianize.Dependencies
    Debian.Debianize.Files
+   Debian.Debianize.Flags
    Debian.Debianize.Generic
    Debian.Debianize.Interspersed
    Debian.Debianize.Input
    Debian.Debianize.Output
    Debian.Debianize.Paths
    Debian.Debianize.Server
+   Debian.Debianize.SubstVars
+   Debian.Debianize.Tests
    Debian.Debianize.Types.Atoms
    Debian.Debianize.Types.Debianization
    Debian.Debianize.Types.Dependencies

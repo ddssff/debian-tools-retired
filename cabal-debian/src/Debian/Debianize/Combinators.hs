@@ -1,13 +1,13 @@
 -- | Combinator functions for the Debianization type.
 {-# LANGUAGE OverloadedStrings #-}
 module Debian.Debianize.Combinators
-    ( debianization
-    , tightDependencyFixup
+    ( tightDependencyFixup
     , finalizeDebianization
     , watchAtom
     , versionInfo
     , cdbsRules
     , putCopyright
+    , putStandards
     , putLicense
     , control
     , buildDeps
@@ -44,12 +44,12 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Atoms (buildDir, dataDir)
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms)
-import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, utilsPackageName, packageDescription, compiler, dependencyHints)
+import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, utilsPackageName, packageDescription, dependencyHints)
 import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), HasAtoms(getAtoms, putAtoms), insertAtom, foldAtoms, insertAtoms')
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), newBinaryDebDescription,
                                                        PackageRelations(..))
 import Debian.Debianize.Types.Dependencies (DependencyHints (binaryPackageDeps, extraLibMap, extraDevDeps, binaryPackageConflicts, epochMap,
-                                                             revision, debVersion, missingDependencies))
+                                                             revision, debVersion))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Utility (trim)
@@ -69,36 +69,11 @@ import System.FilePath ((</>), takeDirectory, makeRelative, splitFileName)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
-debianization :: HasAtoms atoms =>
-                 atoms
-              -> String              -- ^ current date
-              -> Text                -- ^ copyright
-              -> NameAddr            -- ^ maintainer
-              -> StandardsVersion
-              -> Debianization       -- ^ Existing debianization
-              -> Debianization       -- ^ New debianization
-debianization atoms date copyright' maint standards oldDeb =
-    let pkgDesc = packageDescription (error "debianization") atoms in
-    watchAtom (pkgName $ Cabal.package $ pkgDesc)  $
-    putCopyright copyright' $
-    putStandards standards $
-    filterMissing (missingDependencies (dependencyHints atoms)) $
-    versionInfo maint date $
-    addExtraLibDependencies $
-    control $
-    cdbsRules (Cabal.package pkgDesc) $
-    -- Do we want to replace the atoms in the old deb, or add these?
-    -- Or should we delete even more information from the original,
-    -- keeping only the changelog?  Probably the latter.  So this is
-    -- somewhat wrong.
-    putAtoms (getAtoms atoms) $
-    oldDeb
-
 -- | Create equals dependencies.  For each pair (A, B), use dpkg-query
 -- to find out B's version number, version B.  Then write a rule into
 -- P's .substvar that makes P require that that exact version of A,
 -- and another that makes P conflict with any older version of A.
-tightDependencyFixup :: [(BinPkgName, BinPkgName)] -> BinPkgName -> Debianization -> Debianization
+tightDependencyFixup :: HasAtoms atoms => [(BinPkgName, BinPkgName)] -> BinPkgName -> atoms -> atoms
 tightDependencyFixup [] _ deb = deb
 tightDependencyFixup pairs p deb =
     insertAtom Source atom deb
@@ -154,7 +129,7 @@ finalizeDebianization deb =
                        , "\tinstall -Dp " <> pack (buildDir "dist-ghc/build" deb </> n </> n) <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]
       mergeRulesAtom _ _ text = text
 
-watchAtom :: PackageName -> Debianization -> Debianization
+watchAtom :: HasAtoms atoms => PackageName -> atoms -> atoms
 watchAtom (PackageName pkgname) deb =
     insertAtom Source atom deb
     where
@@ -271,10 +246,8 @@ control deb =
 
 buildDeps :: Debianization -> Debianization
 buildDeps deb =
-    deb { sourceDebDescription = (sourceDebDescription deb) { Debian.buildDepends = debianBuildDeps cmplr deb
+    deb { sourceDebDescription = (sourceDebDescription deb) { Debian.buildDepends = debianBuildDeps deb
                                                             , buildDependsIndep = debianBuildDepsIndep deb } }
-    where
-      cmplr = compiler (error "debianBuildDeps: no Compiler") deb
 
 -- debLibProf haddock binaryPackageDeps extraDevDeps extraLibMap
 librarySpecs :: (PackageType -> PackageIdentifier -> Text) -> Debianization -> Debianization

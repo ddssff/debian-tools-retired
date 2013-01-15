@@ -1,6 +1,6 @@
-import CabalDebian.Flags (withFlags, debianize)
-import CabalDebian.SubstVars (substvars)
 import Debian.Debianize.Atoms (defaultAtoms, flags)
+import Debian.Debianize.Flags (withFlags, debianize)
+import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types.Atoms (Flags(..), DebAction(..))
 
 -- | This is the main function of the cabal-debian executable.  This

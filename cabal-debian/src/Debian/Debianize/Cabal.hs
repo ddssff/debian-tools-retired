@@ -1,9 +1,8 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
-module Debian.Cabal.PackageDescription
+module Debian.Debianize.Cabal
     ( withSimplePackageDescription
     , inputCopyright
     , inputMaintainer
-    , dataDirectory
     ) where
 
 import Control.Exception (bracket)
@@ -13,9 +12,9 @@ import Data.Maybe
 import Data.Set (toList)
 import Data.Text (Text, pack)
 import Data.Version (showVersion)
-import Debian.Debianize.Atoms (compilerVersion, cabalFlagAssignments, flags, setCompiler, setPackageDescription)
+import Debian.Debianize.Atoms (compilerVersion, cabalFlagAssignments, flags, setCompiler, setPackageDescription, setDataDir)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
-import Debian.Debianize.Types.Atoms (HasAtoms, Flags(verbosity))
+import Debian.Debianize.Types.Atoms (HasAtoms, DebAtomKey(Source), DebAtom(DHMaintainer), Flags(verbosity), lookupAtom)
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
 import Distribution.Package (Package(packageId), PackageIdentifier(pkgName, pkgVersion), PackageName(PackageName))
@@ -42,8 +41,16 @@ intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
 withSimplePackageDescription :: HasAtoms atoms => FilePath -> atoms -> (atoms -> IO a) -> IO a
 withSimplePackageDescription top atoms action =
     do (pkgDesc, compiler) <- getSimplePackageDescription top atoms
-       let atoms' = setCompiler compiler . setPackageDescription pkgDesc $ atoms
+       let atoms' = setDataDir (dataDirectory pkgDesc) $ setCompiler compiler . setPackageDescription pkgDesc $ atoms
        action atoms'
+
+-- | This is the directory where the files listed in the Data-Files
+-- section of the .cabal file need to be installed.
+dataDirectory :: PackageDescription -> FilePath
+dataDirectory pkgDesc =
+    "usr/share" </> (pkgname ++ "-" ++ (showVersion . pkgVersion . package $ pkgDesc))
+    where
+      PackageName pkgname = pkgName . package $ pkgDesc
 
 getSimplePackageDescription :: HasAtoms atoms => FilePath -> atoms -> IO (PackageDescription, Compiler)
 getSimplePackageDescription top atoms =
@@ -75,14 +82,8 @@ autoreconf verbose pkgDesc = do
               ExitSuccess -> return ()
               ExitFailure n -> die ("autoreconf failed with status " ++ show n)
 
--- | This is the directory where the files listed in the Data-Files
--- section of the .cabal file need to be installed.
-dataDirectory :: PackageDescription -> FilePath
-dataDirectory pkgDesc =
-    "usr/share" </> (pkgname ++ "-" ++ (showVersion . pkgVersion . package $ pkgDesc))
-    where
-      PackageName pkgname = pkgName . package $ pkgDesc
-
+-- | Try to read the license file specified in the cabal package,
+-- otherwise return a text representation of the License field.
 inputCopyright :: PackageDescription -> IO Text
 inputCopyright pkgDesc = readFile' (licenseFile pkgDesc) `catchIOError` (\ _ -> return . pack . showLicense . license $ pkgDesc)
 
@@ -101,15 +102,17 @@ showLicense OtherLicense = "Non-distributable"
 showLicense MIT = "MIT"
 showLicense (UnknownLicense _) = "Unknown"
 
-inputMaintainer :: Maybe NameAddr -> PackageDescription -> IO (Maybe NameAddr)
-inputMaintainer maint pkgDesc =
-    do m3 <- getDebianMaintainer
-       return $ case (maint, parse cabalMaintainer, m3) of
-                  (Just x, _, _) -> Just x
-                  (_, Just x, _) -> Just x
-                  (_, _, Just x) -> Just x
-                  _ -> Just haskellMaintainer
+-- | Try to compute the debian maintainer from the maintainer field of the
+-- cabal package, or from the value returned by getDebianMaintainer.
+inputMaintainer :: HasAtoms atoms => PackageDescription -> atoms -> IO (Maybe NameAddr)
+inputMaintainer pkgDesc atoms =
+    return (lookupAtom Source from atoms) >>=
+    return . maybe (parse cabalMaintainer) Just >>=
+    maybe getDebianMaintainer (return . Just) >>=
+    return . maybe (Just haskellMaintainer) Just
     where
+      from (DHMaintainer x) = Just x
+      from _ = Nothing
       parse :: Maybe String -> Maybe NameAddr
       parse Nothing = Nothing
       parse (Just s) = either (const Nothing) Just (parseMaintainer s)

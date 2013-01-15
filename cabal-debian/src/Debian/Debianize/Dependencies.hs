@@ -17,9 +17,9 @@ import Data.List (nub, minimumBy)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, catMaybes)
 import Data.Version (Version, showVersion)
-import Debian.Cabal.Bundled (ghcBuiltIn)
 import Debian.Control
 import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, dependencyHints)
+import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
 import Debian.Debianize.Types.Atoms (HasAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization)
@@ -30,7 +30,6 @@ import Debian.Relation (Relations, Relation, BinPkgName, PkgName)
 import Debian.Version (parseDebianVersion)
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..), Dependency(..))
 import Distribution.PackageDescription as Cabal (PackageDescription(..), allBuildInfo, buildTools, pkgconfigDepends, extraLibs)
-import Distribution.Simple.Compiler (Compiler)
 import Distribution.Version (VersionRange, anyVersion, foldVersionRange', intersectVersionRanges, unionVersionRanges,
                              laterVersion, orLaterVersion, earlierVersion, orEarlierVersion, fromVersionIntervals, toVersionIntervals, withinVersion,
                              isNoVersion, asVersionIntervals)
@@ -104,15 +103,15 @@ allBuildDepends atoms buildDepends buildTools pkgconfigDepends extraLibs =
 
 -- The haskell-cdbs package contains the hlibrary.mk file with
 -- the rules for building haskell packages.
-debianBuildDeps :: HasAtoms atoms => Compiler -> atoms -> D.Relations
-debianBuildDeps compiler deb =
+debianBuildDeps :: HasAtoms atoms => atoms -> D.Relations
+debianBuildDeps deb =
     nub $ [[D.Rel (D.BinPkgName "debhelper") (Just (D.GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
            [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
            anyrel "cdbs",
            anyrel "ghc"] ++
             (map anyrel' (buildDeps (dependencyHints deb))) ++
             (if noProfilingLibrary deb then [] else [anyrel "ghc-prof"]) ++
-            (concat $ map (buildDependencies deb compiler)
+            (concat $ map (buildDependencies deb)
                     $ filter (not . selfDependency (Cabal.package pkgDesc))
                     $ allBuildDepends
                           deb (Cabal.buildDepends pkgDesc) (concatMap buildTools . allBuildInfo $ pkgDesc)
@@ -127,7 +126,7 @@ debianBuildDepsIndep deb =
     then []
     else nub $
           [anyrel "ghc-doc"] ++
-          (concat . map (docDependencies deb (compiler (error "debianBuildDeps: no PackageDescription") deb))
+          (concat . map (docDependencies deb)
                       $ filter (not . selfDependency (Cabal.package pkgDesc))
                       $ allBuildDepends
                             deb (Cabal.buildDepends pkgDesc) (concatMap buildTools . allBuildInfo $ pkgDesc)
@@ -138,21 +137,21 @@ debianBuildDepsIndep deb =
 -- | The documentation dependencies for a package include the
 -- documentation package for any libraries which are build
 -- dependencies, so we have access to all the cross references.
-docDependencies :: HasAtoms atoms => atoms -> Compiler -> Dependency_ -> D.Relations
-docDependencies atoms compiler (BuildDepends (Dependency name ranges)) =
-    dependencies atoms compiler Documentation name ranges
-docDependencies _ _ _ = []
+docDependencies :: HasAtoms atoms => atoms -> Dependency_ -> D.Relations
+docDependencies atoms (BuildDepends (Dependency name ranges)) =
+    dependencies atoms Documentation name ranges
+docDependencies _ _ = []
 
 -- | The Debian build dependencies for a package include the profiling
 -- libraries and the documentation packages, used for creating cross
 -- references.  Also the packages associated with extra libraries.
-buildDependencies :: HasAtoms atoms => atoms -> Compiler -> Dependency_ -> D.Relations
-buildDependencies atoms compiler (BuildDepends (Dependency name ranges)) =
-    dependencies atoms compiler Development name ranges ++
-    dependencies atoms compiler Profiling name ranges
-buildDependencies atoms _compiler dep@(ExtraLibs _) =
+buildDependencies :: HasAtoms atoms => atoms -> Dependency_ -> D.Relations
+buildDependencies atoms (BuildDepends (Dependency name ranges)) =
+    dependencies atoms Development name ranges ++
+    dependencies atoms Profiling name ranges
+buildDependencies atoms dep@(ExtraLibs _) =
     concat (map dependency $ adapt (execMap (dependencyHints atoms)) dep)
-buildDependencies atoms _compiler dep =
+buildDependencies atoms dep =
     case unboxDependency dep of
       Just (Dependency _name _ranges) ->
           concat (map dependency $ adapt (execMap (dependencyHints atoms)) dep)
@@ -197,8 +196,8 @@ anyrel' x = [D.Rel x Nothing Nothing]
 -- | Turn a cabal dependency into debian dependencies.  The result
 -- needs to correspond to a single debian package to be installed,
 -- so we will return just an OrRelation.
-dependencies :: HasAtoms atoms => atoms -> Compiler -> PackageType -> PackageName -> VersionRange -> Relations
-dependencies atoms compiler typ name cabalRange =
+dependencies :: HasAtoms atoms => atoms -> PackageType -> PackageName -> VersionRange -> Relations
+dependencies atoms typ name cabalRange =
     map doBundled $ convert' (canonical (Or (catMaybes (map convert alts))))
     where
 
@@ -264,7 +263,7 @@ dependencies atoms compiler typ name cabalRange =
       -- specify the virtual package (e.g. libghc-base-dev) we would
       -- have to make sure not to specify a version number.
       doBundled :: [D.Relation] -> [D.Relation]
-      doBundled rels | ghcBuiltIn compiler name = rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
+      doBundled rels | ghcBuiltIn (compiler (error "dependencies") atoms) name = rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
       doBundled rels = rels
 
       compilerPackageName Documentation = D.BinPkgName "ghc-doc"

@@ -4,20 +4,25 @@
 -- | Generate a package Debianization from Cabal data and command line
 -- options.
 
-module Debian.Cabal.Debianize
-    ( debianizationWithIO
+module Debian.Debianize.Debianize
+    ( cabalToDebianization
     ) where
 
 import Data.Maybe
-import Debian.Cabal.PackageDescription (withSimplePackageDescription, dataDirectory, inputCopyright, inputMaintainer)
-import Debian.Debianize.Atoms (debMaintainer)
-import Debian.Debianize.Combinators (debianization)
-import Debian.Debianize.Atoms (packageDescription, setDataDir)
-import Debian.Debianize.Types.Atoms (HasAtoms)
+import Data.Text (Text)
+import Debian.Debianize.Cabal (withSimplePackageDescription, inputCopyright, inputMaintainer)
+import Debian.Debianize.Atoms (packageDescription, dependencyHints)
+import Debian.Debianize.Combinators (watchAtom, control, cdbsRules, putCopyright, filterMissing, versionInfo, addExtraLibDependencies, putStandards)
+import Debian.Debianize.Types.Atoms (HasAtoms(getAtoms, putAtoms))
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..))
+import Debian.Debianize.Types.Dependencies (missingDependencies)
 import Debian.Debianize.Utility (withCurrentDirectory)
+import Debian.Policy (StandardsVersion)
 import Debian.Time (getCurrentLocalRFC822Time)
+import Distribution.Package (PackageIdentifier(..))
+import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (writeFile, unlines)
+import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 type Debianization = [DebAtom]
 

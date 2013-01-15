@@ -3,7 +3,7 @@
 
 -- | Support for generating Debianization from Cabal data.
 
-module CabalDebian.SubstVars
+module Debian.Debianize.SubstVars
     ( substvars
     ) where
 
@@ -19,7 +19,7 @@ import Debian.Debianize.Atoms (dependencyHints, flags, compiler)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps)
 import Debian.Debianize.Types.Atoms (HasAtoms, Flags(dryRun))
 import Debian.Debianize.Types.Dependencies (filterMissing', PackageInfo(..), debNameFromType)
-import Debian.Cabal.PackageDescription (withSimplePackageDescription)
+import Debian.Debianize.Cabal (withSimplePackageDescription)
 import Debian.Control
 import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps,

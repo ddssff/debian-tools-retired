@@ -1,4 +1,4 @@
-module CabalDebian.Flags
+module Debian.Debianize.Flags
     ( withFlags
     , debianize
     ) where
@@ -7,9 +7,9 @@ import Data.Char (toLower, isDigit, ord)
 import qualified Data.Map as Map
 import Data.Set (fromList)
 import Data.Version (parseVersion)
-import Debian.Cabal.Debianize (debianizationWithIO)
 import Debian.Debianize.Atoms (doDependencyHint, missingDependency, doExecutable, setSourcePackageName,
                                setBuildDir, putCabalFlagAssignments, defaultAtoms, mapFlags)
+import Debian.Debianize.Debianize (cabalToDebianization)
 import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat, DHMaintainer),
@@ -228,5 +228,5 @@ debianize :: HasAtoms atoms => FilePath -> atoms -> IO ()
 debianize top atoms =
     withEnvironmentFlags atoms $ \ atoms' ->
     do old <- inputDebianization "."
-       new <- debianizationWithIO top atoms' old
+       new <- cabalToDebianization top atoms' old
        outputDebianization old new

@@ -1,6 +1,6 @@
 module Main where
 
-import Debian.Cabal.Tests (tests)
+import Debian.Debianize.Tests (tests)
 import Test.HUnit (runTestTT)
 
 main :: IO ()

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
-module Debian.Cabal.Tests
+module Debian.Debianize.Tests
     ( tests
     ) where
 
@@ -11,10 +11,10 @@ import qualified Data.Map as Map
 import Data.Monoid (mempty, mconcat, (<>))
 import Data.Set as Set (fromList, singleton)
 import qualified Data.Text as T
-import Debian.Cabal.Debianize (debianizationWithIO)
-import Debian.Cabal.PackageDescription (withSimplePackageDescription)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
+import Debian.Debianize.Cabal (withSimplePackageDescription)
 import Debian.Debianize.Combinators (tightDependencyFixup, buildDeps, control, setArchitecture)
+import Debian.Debianize.Debianize (cabalToDebianization)
 import Debian.Debianize.Atoms (missingDependency, setRevision, putExecMap, putBinaryPackageDep,
                                doExecutable, doWebsite, defaultAtoms, packageDescription, compiler)
 import Debian.Debianize.Files (toFileMap)
@@ -129,7 +129,7 @@ test4 =
     TestLabel "test4" $
     TestCase (do oldlog <- inputChangeLog "test-data/clckwrks-dot-com/input/debian"
                  old <- inputDebianization "test-data/clckwrks-dot-com/output" >>= \ x -> return (x {changelog = oldlog})
-                 new <- debianizationWithIO "test-data/clckwrks-dot-com/input" atoms old
+                 new <- cabalToDebianization "test-data/clckwrks-dot-com/input" atoms old
                  let new' = copyFirstLogEntry old (fixRules (tight new))
                  -- desc <- describeDebianization (buildDir "dist-ghc/build" atoms) "test-data/clckwrks-dot-com/output" dataDir new'
                  -- assertEqual "test4" "" desc
@@ -219,7 +219,7 @@ test5 =
     TestLabel "test5" $
     TestCase (     do oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" >>= \ x -> return (x {changelog = oldlog})
-                      new <- debianizationWithIO "test-data/creativeprompts/input" atoms old
+                      new <- cabalToDebianization "test-data/creativeprompts/input" atoms old
                       let new' = setArchitecture (BinPkgName "creativeprompts-development") All $
                                  setArchitecture (BinPkgName "creativeprompts-production") All $
                                  insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
@@ -265,9 +265,7 @@ test6 =
     TestLabel "test6" $
     TestCase ( do old@(Debianization {changelog = ChangeLog (entry : _)}) <- inputDebianization "test-data/creativeprompts/output"
                   withSimplePackageDescription "test-data/creativeprompts/input" defaultAtoms $ \ atoms ->
-                      do let pkgDesc = packageDescription (error "test6") atoms
-                             cmplr = compiler (error "test6") atoms
-                         -- compat <- getDebhelperCompatLevel
+                      do -- compat <- getDebhelperCompatLevel
                          let compat' = 7
                          -- standards <- getDebianStandardsVersion
                          let standards = StandardsVersion 3 8 1 Nothing
@@ -308,7 +306,7 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase ( do old <- inputDebianization "."
-                  new <- debianizationWithIO "test-data/cabal-debian/input" atoms old
+                  new <- cabalToDebianization "test-data/cabal-debian/input" atoms old
                   assertEqual "test7" [] (diffDebianizations old new)
              )
     where
