@@ -5,22 +5,47 @@ module Debian.Debianize.Files
     ( toFileMap
     ) where
 
+import Debug.Trace
+
+import Data.ByteString.Lazy.UTF8 (fromString)
+import Data.Digest.Pure.MD5 (md5)
 import qualified Data.Map as Map
 import Data.Monoid (Monoid, (<>), mempty)
 import Data.Set (toList, member)
 import Data.String (IsString)
-import Data.Text (Text, pack, unpack)
+import Data.Text (Text, pack, unpack, unlines)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.Atoms (buildDir)
-import Debian.Debianize.Combinators (finalizeDebianization)
-import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms)
+import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, dependencyHints)
+import Debian.Debianize.Combinators (describe, extraDeps)
+import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms)
+import Debian.Debianize.Types.Atoms (HasAtoms(getAtoms, putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                        VersionControlSpec(..), XField(..), XFieldDest(..))
+import Debian.Debianize.Types.Dependencies (DependencyHints (binaryPackageDeps, binaryPackageConflicts))
+import Debian.Debianize.Types.PackageType (PackageType(Exec))
 import Debian.Debianize.Utility (showDeps')
-import Debian.Relation (Relations)
+import Debian.Policy (PackageArchitectures(Any), Section(..))
+import Debian.Relation (Relations, BinPkgName)
+import qualified Debian.Relation as D
+import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (init, unlines)
-import System.FilePath ((</>))
+import System.FilePath ((</>), makeRelative, splitFileName)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
+
+import Data.Maybe
+import Data.Set as Set (Set, difference, union, fromList, null, insert, toList)
+import Debian.Debianize.Dependencies (debianName)
+import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, utilsPackageName)
+import Debian.Debianize.Types.Atoms (insertAtoms')
+import Debian.Debianize.Types.Dependencies (DependencyHints (extraDevDeps))
+import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Utilities))
+import Debian.Policy (PackageArchitectures(All))
+import Distribution.Package (PackageIdentifier(..))
+import Distribution.PackageDescription as Cabal (PackageDescription, BuildInfo(buildable), Executable(exeName, buildInfo))
+import Distribution.Text (display)
+import Prelude hiding (writeFile, init, unlines)
+import System.FilePath (takeDirectory)
 
 sourceFormat :: Debianization -> [(FilePath, Text)]
 sourceFormat deb =
@@ -43,30 +68,11 @@ intermediate deb =
       atomf Source (DHIntermediate path text) files = (path,  text) : files
       atomf _ _ files = files
 
-{-
--- | Assemble the atoms into per-package debianization files, merging
--- the text from each.
-assemble :: (DebAtom -> Maybe (BinPkgName, [Text])) -> (BinPkgName -> FilePath) -> Debianization -> [(FilePath, Text)]
-assemble atomf pathf deb =
-    map (\ (name, ts) -> (pathf name, unlines ts))
-        (Map.toList (Map.fromListWith (++) (mapMaybe atomf (getOldAtoms deb))))
-
--- | Assemble the atoms into per-package debianization files, allowing
--- only one atom per package.
-assemble1 :: (DebAtom -> Maybe (BinPkgName, [Text])) -> (BinPkgName -> FilePath) -> Debianization -> [(FilePath, Text)]
-assemble1 atomf pathf deb =
-    map test (Map.toList (Map.fromListWith (++) (mapMaybe atomf (getOldAtoms deb))))
-    where
-      test (name, [t]) = (pathf name, t)
-      test (name, ts) = error $ "Multiple entries for " ++ show (pretty name) ++ ": " ++ show ts
--}
-
 install :: Debianization -> [(FilePath, Text)]
 install deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
       atomf (Binary name) (DHInstall src dst) files = Map.insertWith with1 (pathf name)  (pack (src ++ " " ++ dst)) files
-      atomf (Binary name) (DHInstallCabalExec exec dst) files = Map.insertWith (\ old new -> old <> "\n" <> new) (pathf name) (pack (buildDir "dist-ghc/bulid" deb </> exec </> exec ++ " " ++ dst)) files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".install"
 
@@ -149,7 +155,7 @@ toFileMap d0 =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
       [("debian/control", pack (show (pretty (control (sourceDebDescription d))))),
        ("debian/changelog", pack (show (pretty (changelog d)))),
-       ("debian/rules", rulesHead d),
+       ("debian/rules", rules d),
        ("debian/compat", pack (show (compat d) <> "\n")),
        ("debian/copyright", either (\ x -> pack (show x) <> "\n") id (Debian.copyright d))] ++
       sourceFormat d ++
@@ -165,7 +171,105 @@ toFileMap d0 =
       prerm d ++
       intermediate d
     where
-      d = finalizeDebianization d0
+      d = makeUtilsPackage (librarySpecs (finalizeDebianization d0))
+
+foldAtomsFinalized :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
+foldAtomsFinalized f r0 atoms =
+    foldr (\ (k, a) r -> f k a r) r0 (expandAtoms pairs)
+    where
+      pairs = foldAtoms (\ k a xs -> (k, a) : xs) [] (getAtoms atoms)
+      builddir = buildDir "dist-ghc/build" atoms
+      datadir = dataDir (error "finalizeDebianization") atoms
+
+      -- | Fully expand a list of atom pairs, returning a list containing
+      -- both the original and the expansion.
+      expandAtoms :: [(DebAtomKey, DebAtom)] -> [(DebAtomKey, DebAtom)]
+      expandAtoms [] = []
+      expandAtoms xs = xs ++ expandAtoms (concatMap (uncurry expandAtom) xs)
+
+      expandAtom :: DebAtomKey -> DebAtom -> [(DebAtomKey, DebAtom)]
+      expandAtom (Binary b) (DHApacheSite domain' logdir text) =
+          [(Binary b, DHLink ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain')),
+           (Binary b, DHInstallDir logdir), -- Server won't start if log directory doesn't exist
+           (Binary b, DHFile ("/etc/apache2/sites-available" </> domain') text)]
+      expandAtom (Binary pkg) (DHInstallCabalExec name dst) =
+          [(Binary pkg, DHInstall (builddir </> name </> name) dst)]
+      expandAtom (Binary p) (DHInstallCabalExecTo n d) =
+          [(Source, DebRulesFragment (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
+                                              , "\tinstall -Dp " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]))]
+      expandAtom (Binary p) (DHInstallData s d) =
+          [(Binary p, DHInstallTo s (datadir </> makeRelative "/" d))]
+      expandAtom (Binary p) (DHInstallTo s d) =
+          [(Source, (DebRulesFragment (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
+                                               , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])))]
+      expandAtom (Binary p) (DHFile path s) =
+          let (destDir', destName') = splitFileName path
+              tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
+              tmpPath = tmpDir </> destName' in
+          [(Source, DHIntermediate tmpPath s),
+           (Binary p, DHInstall tmpPath destDir')]
+      expandAtom k (DHWebsite x) =
+          siteAtoms k x
+      expandAtom k (DHServer x) =
+          serverAtoms k x False
+      expandAtom k (DHExecutable x) =
+          execAtoms k x
+      expandAtom _ _ = []
+
+-- | Eliminate atoms that can be expressed as simpler ones now that we
+-- know the build directory, and merge the text of all the atoms that
+-- contribute to the rules file into the rulesHead field.  The atoms
+-- are not removed from the list because they may contribute to the
+-- debianization in other ways, so be careful not to do this twice,
+-- this function is not idempotent.  (Exported for use in unit tests.)
+finalizeDebianization  :: Debianization -> Debianization
+finalizeDebianization deb =
+    foldAtomsFinalized f (putAtoms mempty deb) (getAtoms deb)
+    where
+      f k@(Binary b) a@(DHWebsite _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
+      f k@(Binary b) a@(DHServer _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
+      f k@(Binary b) a@(DHExecutable _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
+      f k a deb' = insertAtom k a deb'
+
+cabalExecBinaryPackage :: BinPkgName -> Debianization -> Debianization
+cabalExecBinaryPackage b deb =
+    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = bin : binaryPackages (sourceDebDescription deb)}}
+    where
+      bin = BinaryDebDescription
+            { Debian.package = b
+            , architecture = Any
+            , binarySection = Just (MainSection "misc")
+            , binaryPriority = Nothing
+            , essential = False
+            , Debian.description = describe deb Exec (Cabal.package pkgDesc)
+            , relations =
+                PackageRelations
+                { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
+                            extraDeps (binaryPackageDeps (dependencyHints deb)) b
+                , recommends = []
+                , suggests = []
+                , preDepends = []
+                , breaks = []
+                , conflicts = [anyrel "${haskell:Conflicts}"] ++ extraDeps (binaryPackageConflicts (dependencyHints deb)) b
+                , provides = []
+                , replaces = []
+                , builtUsing = []
+                }
+            }
+      pkgDesc = fromMaybe (error "cabalExecBinaryPackage: no PackageDescription") $ packageDescription deb
+
+anyrel :: String -> [D.Relation]
+anyrel x = anyrel' (D.BinPkgName x)
+
+anyrel' :: D.BinPkgName -> [D.Relation]
+anyrel' x = [D.Rel x Nothing Nothing]
+
+rules :: Debianization -> Text
+rules deb =
+    foldAtoms append (rulesHead deb) (getAtoms deb)
+    where
+      append Source (DebRulesFragment x) text = text <> "\n" <> x
+      append _ _ text = text
 
 control :: SourceDebDescription -> Control' String
 control src =
@@ -231,85 +335,159 @@ relFields rels =
 depField :: [Char] -> Relations -> [Field' [Char]]
 depField tag rels = case rels of [] -> []; _ -> [Field (tag, " " ++ showDeps' (tag ++ ":") rels)]
 
-{-
-dh_install (1)       - install files into package build directories
-dh_installdirs (1)   - create subdirectories in package build directories
-dh_link (1)          - create symlinks in package build directories
-dh_installinit (1)   - install upstart jobs or init scripts into package build directories
-dh_installlogrotate (1) - install logrotate config files
+-- debLibProf haddock binaryPackageDeps extraDevDeps extraLibMap
+librarySpecs :: Debianization -> Debianization
+librarySpecs deb | isNothing (packageDescription deb) = deb
+librarySpecs deb =
+    deb { sourceDebDescription =
+            (sourceDebDescription deb)
+              { binaryPackages =
+                    maybe []
+                          (const ([librarySpec deb Any Development (Cabal.package pkgDesc)] ++
+                                  if noProfilingLibrary deb then [] else [librarySpec deb Any Profiling (Cabal.package pkgDesc)] ++
+                                  if noDocumentationLibrary deb then [] else [docSpecsParagraph deb (Cabal.package pkgDesc)]))
+                          (Cabal.library pkgDesc) ++
+                    binaryPackages (sourceDebDescription deb) } }
+    where
+      pkgDesc = fromMaybe (error "librarySpecs: no PackageDescription") $ packageDescription deb
 
+docSpecsParagraph :: HasAtoms atoms => atoms -> PackageIdentifier -> BinaryDebDescription
+docSpecsParagraph atoms pkgId =
+          BinaryDebDescription
+            { Debian.package = debianName atoms Documentation pkgId
+            , architecture = All
+            , binarySection = Just (MainSection "doc")
+            , binaryPriority = Nothing
+            , essential = False
+            , Debian.description = describe atoms Documentation pkgId
+            , relations =
+                PackageRelations
+                { depends = [anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
+                            extraDeps (binaryPackageDeps (dependencyHints atoms)) (debianName atoms Documentation pkgId)
+                , recommends = [anyrel "${haskell:Recommends}"]
+                , Debian.suggests = [anyrel "${haskell:Suggests}"]
+                , preDepends = []
+                , breaks = []
+                , Debian.conflicts = [anyrel "${haskell:Conflicts}"]
+                , provides = []
+                , replaces = []
+                , builtUsing = []
+                }
+            }
 
-dh (1)               - debhelper command sequencer
-dh_apparmor (1)      - reload AppArmor profile and create local include
-dh_auto_build (1)    - automatically builds a package
-dh_auto_clean (1)    - automatically cleans up after a build
-dh_auto_configure (1) - automatically configure a package prior to building
-dh_auto_install (1)  - automatically runs make install or similar
-dh_auto_test (1)     - automatically runs a package's test suites
-dh_autotools-dev_restoreconfig (1) - restore config.sub and config.guess
-dh_autotools-dev_updateconfig (1) - update config.sub and config.guess
-dh_bash-completion (1) - install bash completions for package
-dh_bugfiles (1)      - install bug reporting customization files into package build directories
-dh_builddeb (1)      - build Debian binary packages
-dh_clean (1)         - clean up package build directories
-dh_compress (1)      - compress files and fix symlinks in package build directories
-dh_desktop (1)       - deprecated no-op
-dh_dkms (1)          - correctly handle DKMS usage by a kernel module package
-dh_fixperms (1)      - fix permissions of files in package build directories
-dh_gconf (1)         - install GConf defaults files and register schemas
-dh_gencontrol (1)    - generate and install control file
-dh_haskell_depends (1) - calculates Haskell dependencies on Cabalized libraries
-dh_haskell_extra_depends (1) - generate the extra-depends file in Haskell packages
-dh_haskell_provides (1) - calculates Haskell virtual package names on Cabalized libraries
-dh_haskell_shlibdeps (1) - calculates Haskell external dependencies on Cabalized libraries
-dh_icons (1)         - Update Freedesktop icon caches
-dh_installcatalogs (1) - install and register SGML Catalogs
-dh_installchangelogs (1) - install changelogs into package build directories
-dh_installcron (1)   - install cron scripts into etc/cron.*
-dh_installdeb (1)    - install files into the DEBIAN directory
-dh_installdebconf (1) - install files used by debconf in package build directories
-dh_installdocs (1)   - install documentation into package build directories
-dh_installemacsen (1) - register an Emacs add on package
-dh_installexamples (1) - install example files into package build directories
-dh_installgsettings (1) - install GSettings overrides and set dependencies
-dh_installifupdown (1) - install if-up and if-down hooks
-dh_installinfo (1)   - install info files
-dh_installlogcheck (1) - install logcheck rulefiles into etc/logcheck/
-dh_installman (1)    - install man pages into package build directories
-dh_installmanpages (1) - old-style man page installer (deprecated)
-dh_installmenu (1)   - install Debian menu files into package build directories
-dh_installmime (1)   - install mime files into package build directories
-dh_installmodules (1) - register modules with modutils
-dh_installpam (1)    - install pam support files
-dh_installppp (1)    - install ppp ip-up and ip-down files
-dh_installtex (1)    - register Type 1 fonts, hyphenation patterns, or formats with TeX
-dh_installudev (1)   - install udev rules files
-dh_installwm (1)     - register a window manager
-dh_installxfonts (1) - register X fonts
-dh_installxmlcatalogs (1) - install and register XML catalog files
-dh_lintian (1)       - install lintian override files into package build directories
-dh_listpackages (1)  - list binary packages debhelper will act on
-dh_makeshlibs (1)    - automatically create shlibs file and call dpkg-gensymbols
-dh_md5sums (1)       - generate DEBIAN/md5sums file
-dh_perl (1)          - calculates Perl dependencies and cleans up after MakeMaker
-dh_prep (1)          - perform cleanups in preparation for building a binary package
-dh_pysupport (1)     - use the python-support framework to handle Python modules
-dh_python (1)        - calculates Python dependencies and adds postinst and prerm Python scripts (deprecated)
-dh_python2 (1)       - calculates Python dependencies, adds maintainer scripts to byte compile files, etc.
-dh_quilt_patch (1)   - apply patches listed in debian/patches/series
-dh_quilt_unpatch (1) - unapply patches listed in debian/patches/series
-dh_scour (1)         - run scour optimizer on shipped SVG files
-dh_scrollkeeper (1)  - deprecated no-op
-dh_shlibdeps (1)     - calculate shared library dependencies
-dh_strip (1)         - strip executables, shared libraries, and some static libraries
-dh_suidregister (1)  - suid registration program (deprecated)
-dh_testdir (1)       - test directory before building Debian package
-dh_testroot (1)      - ensure that a package is built as root
-dh_translations (1)  - perform common translation related operations
-dh_ucf (1)           - register configuration files with ucf
-dh_undocumented (1)  - undocumented.7 symlink program (deprecated no-op)
-dh_usrlocal (1)      - migrate usr/local directories to maintainer scripts
+librarySpec :: HasAtoms atoms => atoms -> PackageArchitectures -> PackageType -> PackageIdentifier -> BinaryDebDescription
+librarySpec atoms arch typ pkgId =
+          BinaryDebDescription
+            { Debian.package = debianName atoms typ pkgId
+            , architecture = arch
+            , binarySection = Nothing
+            , binaryPriority = Nothing
+            , essential = False
+            , Debian.description = describe atoms typ pkgId
+            , relations =
+                PackageRelations
+                { depends = (if typ == Development then [anyrel "${shlibs:Depends}"] ++ map anyrel' (extraDevDeps (dependencyHints atoms)) else []) ++
+                            ([anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
+                             extraDeps (binaryPackageDeps (dependencyHints atoms)) (debianName atoms typ pkgId))
+                , recommends = [anyrel "${haskell:Recommends}"]
+                , suggests = [anyrel "${haskell:Suggests}"]
+                , preDepends = []
+                , breaks = []
+                , Debian.conflicts = [anyrel "${haskell:Conflicts}"]
+                , provides = [anyrel "${haskell:Provides}"]
+                , replaces = []
+                , builtUsing = []
+                }
+            }
 
-dh_movefiles (1)     - move files out of debian/tmp into subpackages (use dh_install)
+t1 :: Show a => a -> a
+t1 x = trace ("available: " ++ show x) x
+t2 :: Show a => a -> a
+t2 x = trace ("installed: " ++ show x) x
+t3 :: Show a => a -> a
+t3 x = {- trace ("t3: " ++ show x) -} x
+t4 :: Show a => a -> a
+t4 x = trace ("t4: " ++ show x) x
+t5 :: Show a => a -> a
+t5 x = trace ("t5: " ++ show x) x
 
--}
+-- | Create a package to hold any executables and data files not
+-- assigned to some other package.
+makeUtilsPackage :: Debianization -> Debianization
+makeUtilsPackage deb | isNothing (packageDescription deb) = deb
+makeUtilsPackage deb =
+    case Set.difference (t1 available) (t2 installed) of
+      s | Set.null s -> deb
+      s ->      let p = t4 (fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (t5 (utilsPackageName deb))) in
+                makeUtilsAtoms p s $
+                deb { sourceDebDescription =
+                          (sourceDebDescription deb)
+                          { binaryPackages =
+                               binaryPackages (sourceDebDescription deb) ++
+                               [BinaryDebDescription
+                                { Debian.package = p
+                                , architecture = Any
+                                , binarySection = Just (MainSection "misc")
+                                , binaryPriority = Nothing
+                                , essential = False
+                                , Debian.description = describe deb Utilities (Cabal.package pkgDesc)
+                                , relations =
+                                    PackageRelations
+                                    { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
+                                                extraDeps (binaryPackageDeps (dependencyHints deb)) p
+                                    , recommends = []
+                                    , suggests = []
+                                    , preDepends = []
+                                    , breaks = []
+                                    , conflicts = [anyrel "${haskell:Conflicts}"] ++ extraDeps (binaryPackageConflicts (dependencyHints deb)) p
+                                    , provides = []
+                                    , replaces = []
+                                    , builtUsing = []
+                                    }
+                                }]} }
+    where
+      pkgDesc = fromMaybe (error "makeUtilsPackage: no PackageDescription") $ packageDescription deb
+      available :: Set FileInfo
+      available = Set.union (Set.fromList (map DataFile (Cabal.dataFiles pkgDesc)))
+                            (Set.fromList (map (CabalExecutable . exeName) (Cabal.executables pkgDesc)))
+      installed :: Set FileInfo
+      installed = foldAtoms cabalFile mempty (t3 (getAtoms deb))
+      cabalFile :: DebAtomKey -> DebAtom -> Set FileInfo -> Set FileInfo
+      cabalFile _ (DHInstallCabalExec name _) xs = Set.insert (CabalExecutable name) xs
+      cabalFile _ (DHInstallCabalExecTo name _) xs = Set.insert (CabalExecutable name) xs
+      cabalFile k (DHExecutable f@(InstallFile {})) xs = foldr (uncurry cabalFile) xs (fileAtoms k f)
+      -- cabalFile p (DHExecutable f@(InstallFile {}) xs = Set.insert (CabalExecutable name) xs
+      cabalFile _ (DHInstall path _) xs = Set.insert (DataFile path) xs
+      cabalFile _ (DHInstallTo path _) xs = Set.insert (DataFile path) xs
+      cabalFile _ (DHInstallData path _) xs = Set.insert (DataFile path) xs
+      cabalFile _ _ xs = xs
+      makeUtilsAtoms :: BinPkgName -> Set FileInfo -> Debianization -> Debianization
+      makeUtilsAtoms p s deb' =
+          case (bundledExecutables deb' pkgDesc, Cabal.dataFiles pkgDesc) of
+            ([], []) -> deb'
+            _ -> insertAtom Source (DebRulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))) $
+                 insertAtoms' (Binary p) (map fileInfoAtom (Set.toList s)) $
+                 deb'
+      fileInfoAtom (DataFile path) = DHInstall path (takeDirectory ("usr/share" </> display (Cabal.package pkgDesc) </> path))
+      fileInfoAtom (CabalExecutable name) = DHInstallCabalExec name "usr/bin"
+
+-- | The list of executables without a corresponding cabal package to put them into
+bundledExecutables :: HasAtoms atoms => atoms -> PackageDescription -> [Executable]
+bundledExecutables atoms pkgDesc =
+    filter nopackage (filter (buildable . buildInfo) (Cabal.executables pkgDesc))
+    where
+      nopackage p = not (elem (exeName p) (foldAtoms execNameOfHint [] atoms))
+      execNameOfHint :: DebAtomKey -> DebAtom -> [String] -> [String]
+      execNameOfHint (Binary _) (DHExecutable e) xs = execName e : xs
+      execNameOfHint (Binary _) (DHServer s) xs = execName (installFile s) : xs
+      execNameOfHint (Binary _) (DHWebsite s) xs = execName (installFile (server s)) : xs
+      execNameOfHint _ _ xs = xs
+
+data FileInfo
+    = DataFile FilePath
+    -- ^ A file that is going to be installed into the package's data
+    -- file directory, /usr/share/packagename-version/.
+    | CabalExecutable String
+    -- ^ A Cabal Executable record, which appears in dist/build/name/name,
+    -- and is typically installed into /usr/bin.
+    deriving (Eq, Ord, Show)

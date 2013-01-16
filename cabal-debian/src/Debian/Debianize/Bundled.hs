@@ -343,3 +343,46 @@ ghc66BuiltIns = [
     v "X11" [1,1],
     v "xhtml" [2006,9,13]
     ]
+
+-- Script to output a list of the libraries in the ghc package
+-- provides line.  This could be run inside the build environment
+-- instead of having these hard coded lists.
+--
+-- apt-cache show ghc \
+--   | grep ^Provides: \
+--   | cut -d\  -f2-
+--   | sed 's/, /\n/g' \
+--   | grep libghc- \
+--   | cut -d- -f2- \
+--   | grep dev$ \
+--   | sort -u \
+--   | sed 's/-dev//;s/$/",/;s/^/"/'
+--
+-- base :: Set String
+-- base
+--   = Data.Set.fromList
+--     [ "array",
+--       "base",
+--       "binary",
+--       "bin-package-db",
+--       "bytestring",
+--       "cabal",
+--       "containers",
+--       "deepseq",
+--       "directory",
+--       "extensible-exceptions",
+--       "filepath",
+--       "ghc-prim",
+--       "haskell2010",
+--       "haskell98",
+--       "hoopl",
+--       "hpc",
+--       "integer-gmp",
+--       "old-locale",
+--       "old-time",
+--       "pretty",
+--       "process",
+--       "rts",
+--       "template-haskell",
+--       "time",
+--       "unix" ]

@@ -71,9 +71,9 @@ setCompiler comp atoms =
       p Source (DHCompiler x) = Just x
       p _ _ = Nothing
 
-packageDescription :: HasAtoms atoms => PackageDescription -> atoms -> PackageDescription
-packageDescription def deb =
-    lookupAtomDef def Source from deb
+packageDescription :: HasAtoms atoms => atoms -> Maybe PackageDescription
+packageDescription deb =
+    lookupAtom Source from deb
     where from (DHPackageDescription x) = Just x
           from _ = Nothing
 

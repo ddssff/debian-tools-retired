@@ -1,20 +1,20 @@
 module Debian.Debianize.Types.PackageHints
-    ( PackageHints
-    , PackageHint(..)
-    , InstallFile(..)
+    ( InstallFile(..)
     , Server(..)
     , Site(..)
     ) where
 
-import Debian.Relation (BinPkgName)
+--import Debian.Relation (BinPkgName)
 import Debian.Orphans ()
 
+{-
 type PackageHints = [PackageHint]
 
 data PackageHint
     = InstallFileHint BinPkgName InstallFile
     | ServerHint BinPkgName Server
     | SiteHint BinPkgName Site
+-}
 
 data InstallFile
     = InstallFile

@@ -84,10 +84,10 @@ debDeps debType atoms cabalPackages control =
 cabalDependencies :: HasAtoms atoms => atoms -> [Dependency]
 cabalDependencies atoms =
     catMaybes $ map unboxDependency $ allBuildDepends atoms
-                  (Cabal.buildDepends (packageDescription (error "cabalDependencies") atoms))
-                  (concatMap buildTools . allBuildInfo . packageDescription (error "cabalDependencies") $ atoms)
-                  (concatMap pkgconfigDepends . allBuildInfo . packageDescription (error "cabalDependencies") $ atoms)
-                  (concatMap extraLibs . allBuildInfo . packageDescription (error "cabalDependencies") $ atoms)
+                  (Cabal.buildDepends (fromMaybe (error "cabalDependencies") $ packageDescription atoms))
+                  (concatMap buildTools . allBuildInfo . fromMaybe (error "cabalDependencies") $ packageDescription atoms)
+                  (concatMap pkgconfigDepends . allBuildInfo . fromMaybe (error "cabalDependencies") $ packageDescription atoms)
+                  (concatMap extraLibs . allBuildInfo . fromMaybe (error "cabalDependencies") $ packageDescription atoms)
 
 -- |Debian packages don't have per binary package build dependencies,
 -- so we just gather them all up here.
@@ -118,7 +118,7 @@ debianBuildDeps deb =
                           (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc)
                           (concatMap extraLibs . allBuildInfo $ pkgDesc))
     where
-      pkgDesc = packageDescription (error "debianBuildDeps: no PackageDescription") deb
+      pkgDesc = fromMaybe (error "debianBuildDeps: no PackageDescription") $ packageDescription deb
 
 debianBuildDepsIndep :: Debianization -> D.Relations
 debianBuildDepsIndep deb =
@@ -132,7 +132,7 @@ debianBuildDepsIndep deb =
                             deb (Cabal.buildDepends pkgDesc) (concatMap buildTools . allBuildInfo $ pkgDesc)
                             (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc) (concatMap extraLibs . allBuildInfo $ pkgDesc))
     where
-      pkgDesc = packageDescription (error "debianBuildDeps: no PackageDescription") deb
+      pkgDesc = fromMaybe (error "debianBuildDeps: no PackageDescription") $ packageDescription deb
 
 -- | The documentation dependencies for a package include the
 -- documentation package for any libraries which are build

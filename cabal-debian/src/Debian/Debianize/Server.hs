@@ -5,13 +5,15 @@ module Debian.Debianize.Server
        ( siteAtoms
        , serverAtoms
        , execAtoms
-       , oldClckwrksFlags
+       , fileAtoms
+       , oldClckwrksSiteFlags
+       , oldClckwrksServerFlags
        ) where
 
 import Data.Maybe (fromMaybe)
 import Data.Text (pack)
-import Debian.Debianize.Types.Atoms (HasAtoms, DebAtomKey(..), DebAtom(..), insertAtom, insertAtoms')
-import Debian.Debianize.Types.PackageHints (PackageHint(..), Server(..), Site(..), InstallFile(..))
+import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..))
+import Debian.Debianize.Types.PackageHints (Server(..), Site(..), InstallFile(..))
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName)
 import System.FilePath ((</>))
@@ -20,26 +22,26 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | Return a list of files to add to the debianization to manage the
 -- server or web site.
-siteAtoms :: HasAtoms atoms => BinPkgName -> Site -> atoms -> atoms
-siteAtoms b site xs =
-    insertAtom (Binary b) (DHLink ("/etc/apache2/sites-available/" ++ domain site) ("/etc/apache2/sites-enabled/" ++ domain site)) $
-    insertAtom (Binary b) (DHInstallDir (apacheLogDirectory b)) $  -- Server won't start if log directory doesn't exist
-    insertAtom (Binary b) (DHFile ("/etc/apache2/sites-available" </> domain site) apacheConfig) $
-    insertAtom (Binary b) (DHLogrotateStanza (pack . unlines $
+siteAtoms :: DebAtomKey -> Site -> [(DebAtomKey, DebAtom)]
+siteAtoms k@(Binary b) site =
+    [(Binary b, DHLink ("/etc/apache2/sites-available/" ++ domain site) ("/etc/apache2/sites-enabled/" ++ domain site)),
+     (Binary b, DHInstallDir (apacheLogDirectory b)),  -- Server won't start if log directory doesn't exist
+     (Binary b, DHFile ("/etc/apache2/sites-available" </> domain site) apacheConfig),
+     (Binary b, DHLogrotateStanza (pack . unlines $
                                               [ apacheAccessLog b ++ " {"
                                               , "  weekly"
                                               , "  rotate 5"
                                               , "  compress"
                                               , "  missingok"
-                                              , "}"])) $
-    insertAtom (Binary b) (DHLogrotateStanza (pack . unlines $
+                                              , "}"])),
+     (Binary b, DHLogrotateStanza (pack . unlines $
                                               [ apacheErrorLog b ++ " {"
                                               , "  weekly"
                                               , "  rotate 5"
                                               , "  compress"
                                               , "  missingok"
-                                              , "}" ])) $
-    serverAtoms b (server site) True $ xs
+                                              , "}" ]))] ++
+    serverAtoms k (server site) True
     where
       -- An apache site configuration file.  This is installed via a line
       -- in debianFiles.
@@ -78,13 +80,14 @@ siteAtoms b site xs =
                    , "    ProxyPassReverse / http://127.0.0.1:" ++ show (port (server site)) ++ "/"
                    , "</VirtualHost>" ]
 
-serverAtoms :: HasAtoms atoms => BinPkgName -> Server -> Bool -> atoms -> atoms
-serverAtoms b server isSite xs =
-    insertAtom (Binary b) (DHPostInst debianPostinst) $
-    serverLogrotate b $
-    insertAtom (Binary b) (DHInstallInit debianInit) $
-    execAtoms b (installFile server) $ xs
+serverAtoms :: DebAtomKey -> Server -> Bool -> [(DebAtomKey, DebAtom)]
+serverAtoms k@(Binary b) server isSite =
+    [(Binary b, DHPostInst debianPostinst),
+     (Binary b, DHInstallInit debianInit)] ++
+    serverLogrotate b ++
+    execAtoms k exec
     where
+      exec = installFile server
       debianInit =
           pack . unlines $
                    [ "#! /bin/sh -e"
@@ -93,14 +96,14 @@ serverAtoms b server isSite xs =
                    , ""
                    , "case \"$1\" in"
                    , "  start)"
-                   , "    test -x /usr/bin/" ++ destName (installFile server) ++ " || exit 0"
-                   , "    log_begin_msg \"Starting " ++ destName (installFile server) ++ "...\""
+                   , "    test -x /usr/bin/" ++ destName exec ++ " || exit 0"
+                   , "    log_begin_msg \"Starting " ++ destName exec ++ "...\""
                    , "    mkdir -p " ++ databaseDirectory b
                    , "    " ++ startCommand
                    , "    log_end_msg $?"
                    , "    ;;"
                    , "  stop)"
-                   , "    log_begin_msg \"Stopping " ++ destName (installFile server) ++ "...\""
+                   , "    log_begin_msg \"Stopping " ++ destName exec ++ "...\""
                    , "    " ++ stopCommand
                    , "    log_end_msg $?"
                    , "    ;;"
@@ -112,8 +115,8 @@ serverAtoms b server isSite xs =
                    , "exit 0" ]
       startCommand = showCommandForUser "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
       stopCommand = showCommandForUser "start-stop-daemon" (stopOptions ++ commonOptions)
-      commonOptions = ["--pidfile", "/var/run/" ++ destName (installFile server)]
-      startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory b, "--exec", "/usr/bin" </> destName (installFile server)]
+      commonOptions = ["--pidfile", "/var/run/" ++ destName exec]
+      startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory b, "--exec", "/usr/bin" </> destName exec]
       stopOptions = ["--stop", "--oknodo"] ++ if retry server /= "" then ["--retry=" ++ retry server ] else []
       serverOptions = serverFlags server ++ commonServerOptions
       -- Without these, happstack servers chew up CPU even when idle
@@ -142,49 +145,52 @@ serverAtoms b server isSite xs =
 
 -- | A configuration file for the logrotate facility, installed via a line
 -- in debianFiles.
-serverLogrotate :: HasAtoms atoms => BinPkgName -> atoms -> atoms
-serverLogrotate b xs =
-    insertAtoms' (Binary b)
-                 [ DHLogrotateStanza . pack . unlines $
+serverLogrotate :: BinPkgName -> [(DebAtomKey, DebAtom)]
+serverLogrotate b =
+    [(Binary b, (DHLogrotateStanza . pack . unlines $
                    [ serverAccessLog b ++ " {"
                    , "  weekly"
                    , "  rotate 5"
                    , "  compress"
                    , "  missingok"
-                   , "}" ]
-                 , DHLogrotateStanza . pack . unlines $
+                   , "}" ])),
+     (Binary b, (DHLogrotateStanza . pack . unlines $
                    [ serverAppLog b ++ " {"
                    , "  weekly"
                    , "  rotate 5"
                    , "  compress"
                    , "  missingok"
-                   , "}" ] ]
-                 xs
+                   , "}" ]))]
 
 -- | Generate the atom that installs the executable.  Trickier than it should
 -- be due to limitations in the dh_install script, and the fact that we don't
 -- yet know the build directory path.
-execAtoms :: HasAtoms atoms => BinPkgName -> InstallFile -> atoms -> atoms
-execAtoms b ifile xs =
-    insertAtom Source (DebRulesFragment (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp"))) $
-    insertAtom
-      (Binary b)
-      (case (sourceDir ifile, execName ifile == destName ifile) of
-         (Nothing, True) -> DHInstallCabalExec (execName ifile) d
-         (Just s, True) -> DHInstall s d
-         (Nothing, False) -> DHInstallCabalExecTo (execName ifile) (d </> destName ifile)
-         (Just s, False) -> DHInstallTo s (d </> destName ifile))
-      xs
-    where
-      d = fromMaybe "usr/bin" (destDir ifile)
+execAtoms :: DebAtomKey -> InstallFile -> [(DebAtomKey, DebAtom)]
+execAtoms (Binary b) ifile =
+    [(Source, DebRulesFragment (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp")))] ++
+     fileAtoms (Binary b) ifile
 
-oldClckwrksFlags :: PackageHint -> [String]
-oldClckwrksFlags (SiteHint _ site) =
+fileAtoms :: DebAtomKey -> InstallFile -> [(DebAtomKey, DebAtom)]
+fileAtoms k installFile =
+    fileAtoms' k (sourceDir installFile) (execName installFile) (destDir installFile) (destName installFile)
+
+fileAtoms' :: DebAtomKey -> Maybe FilePath -> String -> Maybe FilePath -> String -> [(DebAtomKey, DebAtom)]
+fileAtoms' (Binary b) sourceDir execName destDir destName =
+    [(Binary b, case (sourceDir, execName == destName) of
+                  (Nothing, True) -> DHInstallCabalExec execName d
+                  (Just s, True) -> DHInstall (s </> execName) d
+                  (Nothing, False) -> DHInstallCabalExecTo execName (d </> destName)
+                  (Just s, False) -> DHInstallTo (s </> execName) (d </> destName))]
+    where
+      d = fromMaybe "usr/bin" destDir
+
+oldClckwrksSiteFlags :: Site -> [String]
+oldClckwrksSiteFlags site =
     [ -- According to the happstack-server documentation this needs a trailing slash.
       "--base-uri", "http://" ++ domain site ++ "/"
     , "--http-port", show port]
-oldClckwrksFlags (ServerHint _ server) =
+oldClckwrksServerFlags :: Server -> [String]
+oldClckwrksServerFlags server =
     [ -- According to the happstack-server documentation this needs a trailing slash.
       "--base-uri", "http://" ++ hostname server ++ ":" ++ show (port server) ++ "/"
     , "--http-port", show port]
-oldClckwrksFlags _ = []

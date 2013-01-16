@@ -528,46 +528,6 @@ extraDeps p deps =
 anyrel :: String -> [D.Relation]
 anyrel x = [D.Rel (D.BinPkgName x) Nothing Nothing]
 
--- generated with:
--- apt-cache show ghc \
---   | grep ^Provides: \
---   | cut -d\  -f2-
---   | sed 's/, /\n/g' \
---   | grep libghc- \
---   | cut -d- -f2- \
---   | grep dev$ \
---   | sed 's/-dev//;s/$/",/;s/^/"/'
-
-{-
-base :: Set String
-base
-  = Data.Set.fromList
-    ["array",
-      "base",
-      "bin-package-db",
-      "bytestring",
-      "cabal",
-      "containers",
-      "directory",
-      "extensible-exceptions",
-      "filepath",
-      "ghc-binary",
-      "ghc-prim",
-      "haskell2010",
-      "haskell98",
-      "hpc",
-      "integer-gmp",
-      "old-locale",
-      "old-time",
-      "pretty",
-      "process",
-      "random",
-      "rts",
-      "template-haskell",
-      "time",
-      "unix"]
--}
-
 compileEnvironmentArgs :: HasAtoms atoms => atoms -> IO atoms
 compileEnvironmentArgs atoms0 =
     getEnv "CABALDEBIAN" >>= return . compileArgs atoms0 . read
