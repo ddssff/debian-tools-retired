@@ -6,12 +6,10 @@ module Debian.Debianize.Combinators
     , putCopyright
     , putStandards
     , putLicense
-    , control
     , buildDeps
     , describe
     , extraDeps
     , addExtraLibDependencies
-    , filterMissing
     , setSourcePriority
     , setSourceSection
     , setSourceBinaries
@@ -38,7 +36,7 @@ import Debian.Debianize.Types.Debianization as Debian (Debianization(..), Source
 import Debian.Debianize.Types.Dependencies (DependencyHints (extraLibMap, epochMap, revision, debVersion))
 import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Utility (trim)
-import Debian.Policy (StandardsVersion, PackagePriority(Optional), PackageArchitectures(Names), Section(..))
+import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures(Names), Section)
 import qualified Debian.Relation as D
 import Debian.Relation (BinPkgName, SrcPkgName(..), Relation(Rel))
 import Debian.Release (parseReleaseName)
@@ -138,19 +136,6 @@ putStandards x deb = deb {sourceDebDescription = (sourceDebDescription deb) {sta
 putLicense :: License -> Debianization -> Debianization
 putLicense license deb = deb {copyright = Left license}
 
--- | The control file consists of a Source paragraph and one or more
--- Binary paragraphs, each one representing a binary package to be
--- produced.  If the package contains a library we usually want dev,
--- prof, and doc packages.
-
-control :: Debianization -> Debianization
-control deb =
-    buildDeps $
-    setSourcePriority (Just Optional) $
-    setSourceSection (Just (MainSection "haskell")) $
-    setSourceBinaries [] $
-    deb
-
 describe :: HasAtoms atoms => atoms -> PackageType -> PackageIdentifier -> Text
 describe atoms =
     debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc)
@@ -245,8 +230,8 @@ extraDeps deps p =
 anyrel' :: D.BinPkgName -> [D.Relation]
 anyrel' x = [D.Rel x Nothing Nothing]
 
-filterMissing :: [BinPkgName] -> Debianization -> Debianization
-filterMissing missing deb =
+oldFilterMissing :: [BinPkgName] -> Debianization -> Debianization
+oldFilterMissing missing deb =
     deb {sourceDebDescription = e (sourceDebDescription deb)}
     where
       e src = src { Debian.buildDepends = f (Debian.buildDepends src)

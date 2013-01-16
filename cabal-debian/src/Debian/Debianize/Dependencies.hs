@@ -23,7 +23,7 @@ import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
 import Debian.Debianize.Types.Atoms (HasAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization)
-import Debian.Debianize.Types.Dependencies (DependencyHints(..), PackageInfo(..), devDeb, debNameFromType)
+import Debian.Debianize.Types.Dependencies (DependencyHints(..), PackageInfo(..), devDeb, debNameFromType, filterMissing)
 import Debian.Debianize.Types.PackageType (DebType(Dev, Prof, Doc), PackageType(..), mkPkgName, VersionSplits(..))
 import qualified Debian.Relation as D
 import Debian.Relation (Relations, Relation, BinPkgName, PkgName)
@@ -105,6 +105,7 @@ allBuildDepends atoms buildDepends buildTools pkgconfigDepends extraLibs =
 -- the rules for building haskell packages.
 debianBuildDeps :: HasAtoms atoms => atoms -> D.Relations
 debianBuildDeps deb =
+    filterMissing (dependencyHints deb) $
     nub $ [[D.Rel (D.BinPkgName "debhelper") (Just (D.GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
            [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
            anyrel "cdbs",
@@ -122,6 +123,7 @@ debianBuildDeps deb =
 
 debianBuildDepsIndep :: Debianization -> D.Relations
 debianBuildDepsIndep deb =
+    filterMissing (dependencyHints deb) $
     if noDocumentationLibrary deb
     then []
     else nub $

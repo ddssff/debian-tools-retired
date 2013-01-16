@@ -4,7 +4,7 @@ module Debian.Debianize.Types.Dependencies
     ( DependencyHints(..)
     , defaultDependencyHints
     , VersionSplits(..)
-    , filterMissing' -- Debian.Cabal.SubstVars
+    , filterMissing
     , PackageInfo(..)
     , debNameFromType
     ) where
@@ -138,8 +138,8 @@ defaultDependencyHints =
     , versionSplits = knownVersionSplits
     }
 
-filterMissing' :: DependencyHints -> [[D.Relation]] -> [[D.Relation]]
-filterMissing' hints rels =
+filterMissing :: DependencyHints -> [[D.Relation]] -> [[D.Relation]]
+filterMissing hints rels =
     filter (/= []) (map (filter (\ (D.Rel name _ _) -> not (elem name (missingDependencies hints)))) rels)
 
 data PackageInfo = PackageInfo { libDir :: FilePath

@@ -18,7 +18,7 @@ import Data.Text (pack)
 import Debian.Debianize.Atoms (dependencyHints, flags, compiler)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps)
 import Debian.Debianize.Types.Atoms (HasAtoms, Flags(dryRun))
-import Debian.Debianize.Types.Dependencies (filterMissing', PackageInfo(..), debNameFromType)
+import Debian.Debianize.Types.Dependencies (filterMissing, PackageInfo(..), debNameFromType)
 import Debian.Debianize.Cabal (withSimplePackageDescription)
 import Debian.Control
 import Debian.Debianize.Types.PackageType (DebType)
@@ -78,11 +78,11 @@ substvars' atoms debType cabalPackages control =
     where
       addDeps old =
           case partition (isPrefixOf "haskell:Depends=") (lines old) of
-            ([], other) -> unlines (("haskell:Depends=" ++ showDeps (filterMissing' (dependencyHints atoms) deps)) : other)
+            ([], other) -> unlines (("haskell:Depends=" ++ showDeps (filterMissing (dependencyHints atoms) deps)) : other)
             (hdeps, more) ->
                 case deps of
                   [] -> unlines (hdeps ++ more)
-                  _ -> unlines (map (++ (", " ++ showDeps (filterMissing' (dependencyHints atoms) deps))) hdeps ++ more)
+                  _ -> unlines (map (++ (", " ++ showDeps (filterMissing (dependencyHints atoms) deps))) hdeps ++ more)
       path = fmap (\ (D.BinPkgName x) -> "debian/" ++ x ++ ".substvars") name
       name = debNameFromType control debType
       deps = debDeps debType atoms cabalPackages control

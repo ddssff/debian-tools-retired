@@ -15,7 +15,8 @@ import Data.Maybe
 import Data.Text (Text)
 import Debian.Debianize.Atoms (packageDescription, dependencyHints, defaultAtoms, flags, watchAtom)
 import Debian.Debianize.Cabal (withSimplePackageDescription, inputCopyright, inputMaintainer)
-import Debian.Debianize.Combinators (control, cdbsRules, putCopyright, filterMissing, versionInfo, addExtraLibDependencies, putStandards)
+import Debian.Debianize.Combinators (cdbsRules, putCopyright, versionInfo, addExtraLibDependencies,
+                                     putStandards, setSourcePriority, setSourceSection, buildDeps, setSourceBinaries)
 import Debian.Debianize.Flags (flagOptions, atomOptions)
 import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Output (outputDebianization)
@@ -24,7 +25,7 @@ import Debian.Debianize.Types.Atoms (HasAtoms(getAtoms, putAtoms), Flags(..), De
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..))
 import Debian.Debianize.Types.Dependencies (missingDependencies)
 import Debian.Debianize.Utility (withCurrentDirectory)
-import Debian.Policy (StandardsVersion)
+import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection))
 import Debian.Time (getCurrentLocalRFC822Time)
 import Distribution.Package (PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal

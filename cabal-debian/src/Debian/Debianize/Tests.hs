@@ -12,14 +12,13 @@ import Data.Monoid (mempty, mconcat, (<>))
 import Data.Set as Set (fromList)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
-import Debian.Debianize.Cabal (withSimplePackageDescription)
-import Debian.Debianize.Combinators (buildDeps, control, setArchitecture)
+import Debian.Debianize.Combinators (buildDeps, setArchitecture)
 import Debian.Debianize.Debianize (cabalToDebianization)
 import Debian.Debianize.Atoms (tightDependencyFixup, missingDependency, setRevision, putExecMap, putBinaryPackageDep, doExecutable, doWebsite, defaultAtoms)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), insertAtom)
+import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), insertAtom)
 import Debian.Debianize.Types.Debianization (Debianization(..), newDebianization, SourceDebDescription(..), BinaryDebDescription(..),
                                              PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
@@ -271,33 +270,27 @@ test6 :: Test
 test6 =
     TestLabel "test6" $
     TestCase ( do old@(Debianization {changelog = ChangeLog (entry : _)}) <- inputDebianization "test-data/creativeprompts/output"
-                  withSimplePackageDescription "test-data/creativeprompts/input" defaultAtoms $ \ atoms ->
-                      do -- compat <- getDebhelperCompatLevel
-                         let compat' = 7
-                         -- standards <- getDebianStandardsVersion
-                         let standards = StandardsVersion 3 8 1 Nothing
-                         let new = control $
-                                   insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
-                                   -- setSourcePackageName (SrcPkgName "haskell-creativeprompts") $
-                                   -- setChangelog oldLog $
-                                   buildDeps $
-                                   putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
-                                   putBinaryPackageDep (BinPkgName "creativeprompts-backups") (BinPkgName "anacron") $
-                                   putBinaryPackageDep (BinPkgName "creativeprompts-server") (BinPkgName "markdown") $
-                                   setArchitecture (BinPkgName "creativeprompts-server") Any $
-                                   setArchitecture (BinPkgName "creativeprompts-development") All $
-                                   setArchitecture (BinPkgName "creativeprompts-production") All $
-                                   setArchitecture (BinPkgName "creativeprompts-data") All $
-                                   setArchitecture (BinPkgName "creativeprompts-backups") Any $
-                                   doExecutable (BinPkgName "creativeprompts-server") (InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server") $
-                                   doExecutable (BinPkgName "creativeprompts-development") (InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") $
-                                   doExecutable (BinPkgName "creativeprompts-production") (InstallFile "creativeprompts-production" Nothing Nothing "creativeprompts-production") $
-                                   doExecutable (BinPkgName "creativeprompts-backups") (InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups") $
-                                   putAtoms (getAtoms atoms) $
-                                   newDebianization entry (Left BSD3) compat' standards
-                         desc <- describeDebianization "test-data/creativeprompts/output" new
-                         writeFile "/tmp/bar" desc
-                         assertEqual "test6" [] (diffDebianizations old new)
+                  let standards = StandardsVersion 3 8 1 Nothing
+                      compat' = 7
+                  cabalToDebianization "test-data/creativeprompts/input" defaultAtoms (newDebianization entry (Left BSD3) compat' standards) >>= \ new ->
+                      let new' = insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
+                                 -- setSourcePackageName (SrcPkgName "haskell-creativeprompts") $
+                                 -- setChangelog oldLog $
+                                 buildDeps $
+                                 putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
+                                 putBinaryPackageDep (BinPkgName "creativeprompts-backups") (BinPkgName "anacron") $
+                                 putBinaryPackageDep (BinPkgName "creativeprompts-server") (BinPkgName "markdown") $
+                                 setArchitecture (BinPkgName "creativeprompts-server") Any $
+                                 setArchitecture (BinPkgName "creativeprompts-development") All $
+                                 setArchitecture (BinPkgName "creativeprompts-production") All $
+                                 setArchitecture (BinPkgName "creativeprompts-data") All $
+                                 setArchitecture (BinPkgName "creativeprompts-backups") Any $
+                                 doExecutable (BinPkgName "creativeprompts-server") (InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server") $
+                                 doExecutable (BinPkgName "creativeprompts-development") (InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") $
+                                 doExecutable (BinPkgName "creativeprompts-production") (InstallFile "creativeprompts-production" Nothing Nothing "creativeprompts-production") $
+                                 doExecutable (BinPkgName "creativeprompts-backups") (InstallFile "creativeprompts-backups" Nothing Nothing "creativeprompts-backups") $
+                                 new in
+                      assertEqual "test6" [] (diffDebianizations old new')
              )
     where
       -- hints = dependencyHints (putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $ putExtraDevDep (BinPkgName "markdown") $ Flags.defaultFlags)
