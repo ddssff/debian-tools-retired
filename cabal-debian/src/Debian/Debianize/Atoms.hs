@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 module Debian.Debianize.Atoms
-    ( defaultAtoms
-    , compiler
+    ( compiler
     , setCompiler
     , packageDescription
     , setPackageDescription
@@ -36,15 +35,15 @@ module Debian.Debianize.Atoms
     ) where
 
 import Data.List (intersperse)
-import Data.Map as Map (Map, insert)
+import Data.Map as Map (insert)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty, (<>))
 import Data.Set as Set (Set, maxView, toList, null, union, unions)
 import Data.Text (pack, unlines)
 import Data.Version (Version)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags, defaultFlags,
-                                     lookupAtom, lookupAtomDef, lookupAtoms, foldAtoms, hasAtom, insertAtom, insertAtoms', partitionAtoms)
-import Debian.Debianize.Types.Dependencies (DependencyHints(..), defaultDependencyHints)
+                                     lookupAtom, lookupAtomDef, lookupAtoms, foldAtoms, hasAtom, insertAtom, partitionAtoms)
+import Debian.Debianize.Types.Dependencies (DependencyHints(..))
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName, SrcPkgName)
@@ -55,8 +54,10 @@ import Prelude hiding (init, unlines)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
+{-
 defaultAtoms :: Map DebAtomKey (Set DebAtom)
 defaultAtoms = mempty
+-}
 
 compiler :: HasAtoms atoms => Compiler -> atoms -> Compiler
 compiler def deb =
@@ -115,7 +116,8 @@ utilsPackageName deb =
       from _ _ r = r
 
 doDependencyHint :: HasAtoms atoms => (DependencyHints -> DependencyHints) -> atoms -> atoms
-doDependencyHint f deb =
+doDependencyHint = modifyHints
+{-
     if Set.null hints
     then insertAtom Source (DHDependencyHints (f defaultDependencyHints)) deb'
     else insertAtoms' Source (map (DHDependencyHints . f) (Set.toList hints)) deb'
@@ -124,13 +126,16 @@ doDependencyHint f deb =
       p Source (DHDependencyHints x) = Just x
       p (Binary _) (DHDependencyHints _) = error "doDependencyHint"
       p _ _ = Nothing
+-}
 
 dependencyHints :: HasAtoms atoms => atoms -> DependencyHints
-dependencyHints deb =
+dependencyHints = getHints
+{-
     fromMaybe defaultDependencyHints $ lookupAtom Source from deb
     where
       from (DHDependencyHints x) = Just x
       from _ = Nothing
+-}
 
 missingDependency :: HasAtoms atoms => BinPkgName -> atoms -> atoms
 missingDependency b deb = doDependencyHint (\ x -> x {missingDependencies = b : missingDependencies x}) deb

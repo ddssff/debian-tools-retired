@@ -75,7 +75,7 @@ Build-Depends-Indep: ghc-doc
 Standards-Version: 3.9.4
 Homepage: http://www.clckwrks.com/
 
-Package: clckwrks-dot-com-backups
+Package: clckwrks-dot-com-production
 Architecture: any
 Section: misc
 Depends: ${shlibs:Depends}
@@ -83,7 +83,7 @@ Depends: ${shlibs:Depends}
          , ${misc:Depends}
 Conflicts: ${haskell:Conflicts}
 
-Package: clckwrks-dot-com-production
+Package: clckwrks-dot-com-backups
 Architecture: any
 Section: misc
 Depends: ${shlibs:Depends}

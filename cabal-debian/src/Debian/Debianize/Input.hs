@@ -13,13 +13,12 @@ import Control.Exception (SomeException, catch)
 import Control.Monad (foldM, filterM)
 import Data.Char (isSpace)
 import Data.Maybe (fromMaybe, mapMaybe)
-import Data.Monoid (mempty)
 import Data.Set (fromList, insert)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), HasAtoms, insertAtom, insertAtoms')
+import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), HasAtoms, insertAtom, insertAtoms', defaultAtoms)
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                              VersionControlSpec(..), XField(..), newSourceDebDescription, newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')
@@ -39,7 +38,7 @@ inputDebianization top =
                            <*> inputRulesFile debian
                            <*> inputCompat debian
                            <*> (Right <$> inputCopyright debian)
-                           <*> pure mempty
+                           <*> pure (defaultAtoms)
        inputAtomsFromDirectory debian xs `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
     where
       debian = top </> "debian"

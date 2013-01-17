@@ -6,7 +6,8 @@ module Debian.Debianize.Types.Atoms
     , defaultFlags
     , DebAction(..)
     , HasAtoms(..)
-    , AtomMap
+    , Atoms(..)
+    , defaultAtoms
     , insertAtom
     , insertAtoms
     , insertAtoms'
@@ -27,7 +28,7 @@ import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, sing
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Debianize.Utility (setMapMaybe)
-import Debian.Debianize.Types.Dependencies (DependencyHints(..))
+import Debian.Debianize.Types.Dependencies (DependencyHints(..), defaultDependencyHints)
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Orphans ()
@@ -83,10 +84,6 @@ data DebAtom
     | UtilsPackageName BinPkgName                 -- ^ Name to give the package for left-over data files and executables
     | SourcePackageName SrcPkgName                -- ^ Name to give to debian source package.  If not supplied name is constructed
                                                   -- from the cabal package name.
-    | DHDependencyHints DependencyHints           -- ^ Information about the mapping from cabal package names and
-                                                  -- versions to debian package names and versions.  (This could be
-                                                  -- broken up into smaller atoms, many of which would be attached to
-                                                  -- binary packages.)
     | DHMaintainer NameAddr			  -- ^ Value for the maintainer field in the control file.  Note that
                                                   -- the cabal maintainer field can have multiple addresses, but debian
                                                   -- only one.  If this is not explicitly set, it is obtained from the
@@ -154,19 +151,34 @@ defaultFlags =
     , validate = False
     }
 
-type AtomMap = Map DebAtomKey (Set DebAtom)
+data Atoms =
+    Atoms
+    { atoms :: Map DebAtomKey (Set DebAtom)
+    , hints :: DependencyHints
+    -- ^ Information about the mapping from cabal package names and
+    -- versions to debian package names and versions.  (This could be
+    -- broken up into smaller atoms, many of which would be attached to
+    -- binary packages.)
+    } deriving (Eq, Ord, Show)
+
+defaultAtoms :: Atoms
+defaultAtoms = Atoms {atoms = mempty, hints = defaultDependencyHints}
 
 class HasAtoms atoms where
     getAtoms :: atoms -> Map DebAtomKey (Set DebAtom)
     putAtoms :: Map DebAtomKey (Set DebAtom) -> atoms -> atoms
+    getHints :: atoms -> DependencyHints
+    modifyHints :: (DependencyHints -> DependencyHints) -> atoms -> atoms
 
-instance HasAtoms (Map DebAtomKey (Set DebAtom)) where
-    getAtoms x = x
-    putAtoms x _ = x
+instance HasAtoms Atoms where
+    getAtoms = atoms
+    putAtoms mp x = x {atoms = mp}
+    getHints = hints
+    modifyHints f x = x {hints = f (hints x)}
 
 lookupAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Maybe a
 lookupAtom mbin from atoms =
-    case maxView (lookupAtoms mbin from (getAtoms atoms)) of
+    case maxView (lookupAtoms mbin from atoms) of
       Nothing -> Nothing
       Just (x, s) | Set.null s -> Just x
       Just (x, s) -> error $ "lookupAtom - multiple: " ++ show (x : toList s)
@@ -194,7 +206,7 @@ foldAtoms f r0 xs = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (getAtoms
 
 -- | Map each atom of a HasAtoms instance to zero or more new atoms.
 mapAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> Set DebAtom) -> atoms -> atoms
-mapAtoms f xs = foldAtoms (\ k atom xs' -> insertAtoms k (f k atom) xs') (putAtoms mempty xs) (getAtoms xs)
+mapAtoms f xs = foldAtoms (\ k atom xs' -> insertAtoms k (f k atom) xs') (putAtoms mempty xs) xs
 
 -- | Split atoms out of a HasAtoms instance by predicate.
 partitionAtoms :: (HasAtoms atoms, Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> atoms -> (Set a, atoms)
@@ -203,4 +215,4 @@ partitionAtoms f deb =
                                         Just x -> (Set.insert x xs, deb')
                                         Nothing -> (xs, insertAtom k atom deb'))
               (mempty, putAtoms mempty deb)
-              (getAtoms deb)
+              deb

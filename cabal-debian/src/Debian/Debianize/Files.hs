@@ -19,7 +19,7 @@ import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Fiel
 import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, dependencyHints, putBinaryPackageDep)
 import Debian.Debianize.Combinators (describe, extraDeps, buildDeps, setArchitecture)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms, backupAtoms)
-import Debian.Debianize.Types.Atoms (HasAtoms(getAtoms, putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom)
+import Debian.Debianize.Types.Atoms (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                        VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Types.Dependencies (DependencyHints (binaryPackageDeps, binaryPackageConflicts))
@@ -180,7 +180,7 @@ toFileMap d =
 -- this function is not idempotent.  (Exported for use in unit tests.)
 finalizeDebianization  :: Debianization -> Debianization
 finalizeDebianization deb =
-    makeUtilsPackage $ librarySpecs $ buildDeps $ foldAtomsFinalized f (putAtoms mempty deb) (getAtoms deb)
+    makeUtilsPackage $ librarySpecs $ buildDeps $ foldAtomsFinalized f (putAtoms mempty deb) deb
     where
       f k@(Binary b) a@(DHWebsite _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
       f k@(Binary b) a@(DHServer _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
@@ -196,7 +196,7 @@ foldAtomsFinalized :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -
 foldAtomsFinalized f r0 atoms =
     foldr (\ (k, a) r -> f k a r) r0 (expandAtoms pairs)
     where
-      pairs = foldAtoms (\ k a xs -> (k, a) : xs) [] (getAtoms atoms)
+      pairs = foldAtoms (\ k a xs -> (k, a) : xs) [] atoms
       builddir = buildDir "dist-ghc/build" atoms
       datadir = dataDir (error "foldAtomsFinalized") atoms
 
@@ -272,7 +272,7 @@ anyrel' x = [D.Rel x Nothing Nothing]
 
 rules :: Debianization -> Text
 rules deb =
-    foldAtoms append (rulesHead deb) (getAtoms deb)
+    foldAtoms append (rulesHead deb) deb
     where
       append Source (DebRulesFragment x) text = text <> "\n" <> x
       append _ _ text = text
@@ -457,7 +457,7 @@ makeUtilsPackage deb =
       available = Set.union (Set.fromList (map DataFile (Cabal.dataFiles pkgDesc)))
                             (Set.fromList (map (CabalExecutable . exeName) (filter (Cabal.buildable . Cabal.buildInfo) (Cabal.executables pkgDesc))))
       installed :: Set FileInfo
-      installed = foldAtoms cabalFile mempty (t3 (getAtoms deb))
+      installed = foldAtoms cabalFile mempty (t3 deb)
       cabalFile :: DebAtomKey -> DebAtom -> Set FileInfo -> Set FileInfo
       cabalFile _ (DHInstallCabalExec name _) xs = Set.insert (CabalExecutable name) xs
       cabalFile _ (DHInstallCabalExecTo name _) xs = Set.insert (CabalExecutable name) xs

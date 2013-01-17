@@ -14,12 +14,11 @@ module Debian.Debianize.Types.Debianization
     ) where
 
 import Data.Generics (Data, Typeable)
-import Data.Map as Map (Map)
 import Data.Monoid (mempty)
 import Data.Set as Set (Set, empty)
 import Data.Text (Text)
 import Debian.Changes (ChangeLog(..))
-import Debian.Debianize.Types.Atoms (DebAtomKey, DebAtom, HasAtoms(..))
+import Debian.Debianize.Types.Atoms (Atoms(atoms), HasAtoms(..))
 import Debian.Debianize.Types.PackageType (PackageType(..))
 import Debian.Orphans ()
 import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures(..), Section)
@@ -46,7 +45,7 @@ data Debianization
       , copyright :: Either License Text
       -- ^ Copyright information, either as a Cabal License value or
       -- the full text.
-      , debAtoms :: Map DebAtomKey (Set DebAtom)
+      , debAtoms :: Atoms
       -- ^ Information about the source and binary packages that will
       -- be transformed into values for the fields that represent the
       -- actual debianization files.  Binary values are associated
@@ -62,8 +61,10 @@ data Debianization
       } deriving (Eq, Show)
 
 instance HasAtoms Debianization where
-    getAtoms = debAtoms
-    putAtoms ats x = x {debAtoms = ats}
+    getAtoms = getAtoms . debAtoms
+    putAtoms ats x = x {debAtoms = (debAtoms x) {atoms = ats}}
+    getHints = getHints . debAtoms
+    modifyHints f x = x {debAtoms = modifyHints f (debAtoms x)}
 
 -- | This type represents the debian/control file, which is the core
 -- of the source package debianization.  It includes the information

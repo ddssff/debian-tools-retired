@@ -8,7 +8,7 @@ import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Map as Map (differenceWithKey, intersectionWithKey)
 import qualified Data.Map as Map
-import Data.Monoid (mempty, mconcat, (<>))
+import Data.Monoid (mconcat, (<>))
 import Data.Set as Set (fromList)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
@@ -19,7 +19,7 @@ import Debian.Debianize.Atoms (tightDependencyFixup, missingDependency, setRevis
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization, writeDebianization)
-import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), insertAtom)
+import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), insertAtom, defaultAtoms)
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..),
                                              PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
@@ -87,7 +87,7 @@ test1 =
                                     , "" ]
               , compat = 9 -- This will change as new version of debhelper are released
               , copyright = Left BSD3
-              , debAtoms = mempty }
+              , debAtoms = defaultAtoms }
 
 test2 :: Test
 test2 =
@@ -136,7 +136,7 @@ test2 =
                            ""],
             compat = 9,
             copyright = Left BSD3,
-            debAtoms = mempty}
+            debAtoms = defaultAtoms }
 
 test3 :: Test
 test3 =
@@ -220,7 +220,7 @@ test3 =
           , rulesHead = "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n"
           , compat = 7
           , copyright = Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n"
-          , debAtoms = mempty }
+          , debAtoms = defaultAtoms }
 
 test4 :: Test
 test4 =
