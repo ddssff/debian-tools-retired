@@ -9,24 +9,28 @@ module Debian.Debianize.Debianize
     , callDebianize
     , runDebianize
     , cabalToDebianization
+    , newDebianization
     ) where
 
 import Data.Maybe
-import Data.Text (Text)
-import Debian.Debianize.Atoms (packageDescription, dependencyHints, defaultAtoms, flags, watchAtom)
+import Data.Monoid ((<>), mempty)
+import Data.Text (Text, pack, unlines)
+import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
+import Debian.Debianize.Atoms (packageDescription, defaultAtoms, flags, watchAtom)
 import Debian.Debianize.Cabal (withSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (cdbsRules, putCopyright, versionInfo, addExtraLibDependencies,
-                                     putStandards, setSourcePriority, setSourceSection, buildDeps, setSourceBinaries)
+                                     putStandards, setSourcePriority, setSourceSection, setSourceBinaries)
 import Debian.Debianize.Flags (flagOptions, atomOptions)
 import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.SubstVars (substvars)
-import Debian.Debianize.Types.Atoms (HasAtoms(getAtoms, putAtoms), Flags(..), DebAction(..), AtomMap)
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..))
-import Debian.Debianize.Types.Dependencies (missingDependencies)
+import Debian.Debianize.Types.Atoms (HasAtoms, Flags(..), DebAction(..), AtomMap)
+import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), newSourceDebDescription)
 import Debian.Debianize.Utility (withCurrentDirectory)
-import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection))
+import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection), parseMaintainer)
+import Debian.Relation (SrcPkgName(SrcPkgName))
 import Debian.Time (getCurrentLocalRFC822Time)
+import Distribution.License (License)
 import Distribution.Package (PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (writeFile, unlines)

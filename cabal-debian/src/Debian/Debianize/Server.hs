@@ -1,9 +1,10 @@
 -- | Debianization support for server programs, web server programs in particular.
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings, RecordWildCards #-}
 {-# OPTIONS_GHC -Wall #-}
 module Debian.Debianize.Server
        ( siteAtoms
        , serverAtoms
+       , backupAtoms
        , execAtoms
        , fileAtoms
        , oldClckwrksSiteFlags
@@ -11,11 +12,13 @@ module Debian.Debianize.Server
        ) where
 
 import Data.Maybe (fromMaybe)
-import Data.Text (pack)
+import Data.Monoid ((<>))
+import Data.Text (pack, unlines)
 import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..))
 import Debian.Debianize.Types.PackageHints (Server(..), Site(..), InstallFile(..))
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName)
+import Prelude hiding (unlines)
 import System.FilePath ((</>))
 import System.Process (showCommandForUser)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -27,15 +30,15 @@ siteAtoms k@(Binary b) site =
     [(Binary b, DHLink ("/etc/apache2/sites-available/" ++ domain site) ("/etc/apache2/sites-enabled/" ++ domain site)),
      (Binary b, DHInstallDir (apacheLogDirectory b)),  -- Server won't start if log directory doesn't exist
      (Binary b, DHFile ("/etc/apache2/sites-available" </> domain site) apacheConfig),
-     (Binary b, DHLogrotateStanza (pack . unlines $
-                                              [ apacheAccessLog b ++ " {"
+     (Binary b, DHLogrotateStanza (unlines $
+                                              [ pack (apacheAccessLog b) <> " {"
                                               , "  weekly"
                                               , "  rotate 5"
                                               , "  compress"
                                               , "  missingok"
                                               , "}"])),
-     (Binary b, DHLogrotateStanza (pack . unlines $
-                                              [ apacheErrorLog b ++ " {"
+     (Binary b, DHLogrotateStanza (unlines $
+                                              [ pack (apacheErrorLog b) <> " {"
                                               , "  weekly"
                                               , "  rotate 5"
                                               , "  compress"
@@ -46,14 +49,14 @@ siteAtoms k@(Binary b) site =
       -- An apache site configuration file.  This is installed via a line
       -- in debianFiles.
       apacheConfig =
-          pack . unlines $
+          unlines $
                    [  "<VirtualHost *:80>"
-                   , "    ServerAdmin " ++ serverAdmin site
-                   , "    ServerName www." ++ domain site
-                   , "    ServerAlias " ++ domain site
+                   , "    ServerAdmin " <> pack (serverAdmin site)
+                   , "    ServerName www." <> pack (domain site)
+                   , "    ServerAlias " <> pack (domain site)
                    , ""
-                   , "    ErrorLog " ++ apacheErrorLog b
-                   , "    CustomLog " ++ apacheAccessLog b ++ " combined"
+                   , "    ErrorLog " <> pack (apacheErrorLog b)
+                   , "    CustomLog " <> pack (apacheAccessLog b) <> " combined"
                    , ""
                    , "    ProxyRequests Off"
                    , "    AllowEncodedSlashes NoDecode"
@@ -66,7 +69,7 @@ siteAtoms k@(Binary b) site =
                    , "                #Allow from all"
                    , "    </Proxy>"
                    , ""
-                   , "    <Proxy http://127.0.0.1:" ++ show (port (server site)) ++ "/*>"
+                   , "    <Proxy http://127.0.0.1:" <> port' <> "/*>"
                    , "                AddDefaultCharset off"
                    , "                Order deny,allow"
                    , "                #Allow from .example.com"
@@ -76,9 +79,10 @@ siteAtoms k@(Binary b) site =
                    , ""
                    , "    SetEnv proxy-sendcl 1"
                    , ""
-                   , "    ProxyPass / http://127.0.0.1:" ++ show (port (server site)) ++ "/ nocanon"
-                   , "    ProxyPassReverse / http://127.0.0.1:" ++ show (port (server site)) ++ "/"
+                   , "    ProxyPass / http://127.0.0.1:" <> port' <> "/ nocanon"
+                   , "    ProxyPassReverse / http://127.0.0.1:" <> port' <> "/"
                    , "</VirtualHost>" ]
+      port' = pack (show (port (server site)))
 
 serverAtoms :: DebAtomKey -> Server -> Bool -> [(DebAtomKey, DebAtom)]
 serverAtoms k@(Binary b) server isSite =
@@ -89,22 +93,22 @@ serverAtoms k@(Binary b) server isSite =
     where
       exec = installFile server
       debianInit =
-          pack . unlines $
+          unlines $
                    [ "#! /bin/sh -e"
                    , ""
                    , ". /lib/lsb/init-functions"
                    , ""
                    , "case \"$1\" in"
                    , "  start)"
-                   , "    test -x /usr/bin/" ++ destName exec ++ " || exit 0"
-                   , "    log_begin_msg \"Starting " ++ destName exec ++ "...\""
-                   , "    mkdir -p " ++ databaseDirectory b
-                   , "    " ++ startCommand
+                   , "    test -x /usr/bin/" <> pack (destName exec) <> " || exit 0"
+                   , "    log_begin_msg \"Starting " <> pack (destName exec) <> "...\""
+                   , "    mkdir -p " <> pack (databaseDirectory b)
+                   , "    " <> startCommand
                    , "    log_end_msg $?"
                    , "    ;;"
                    , "  stop)"
-                   , "    log_begin_msg \"Stopping " ++ destName exec ++ "...\""
-                   , "    " ++ stopCommand
+                   , "    log_begin_msg \"Stopping " <> pack (destName exec) <> "...\""
+                   , "    " <> stopCommand
                    , "    log_end_msg $?"
                    , "    ;;"
                    , "  *)"
@@ -113,8 +117,8 @@ serverAtoms k@(Binary b) server isSite =
                    , "esac"
                    , ""
                    , "exit 0" ]
-      startCommand = showCommandForUser "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
-      stopCommand = showCommandForUser "start-stop-daemon" (stopOptions ++ commonOptions)
+      startCommand = pack $ showCommandForUser "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
+      stopCommand = pack $ showCommandForUser "start-stop-daemon" (stopOptions ++ commonOptions)
       commonOptions = ["--pidfile", "/var/run/" ++ destName exec]
       startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory b, "--exec", "/usr/bin" </> destName exec]
       stopOptions = ["--stop", "--oknodo"] ++ if retry server /= "" then ["--retry=" ++ retry server ] else []
@@ -123,14 +127,14 @@ serverAtoms k@(Binary b) server isSite =
       commonServerOptions = ["+RTS", "-IO", "-RTS"]
 
       debianPostinst =
-          pack . unlines $
+          unlines $
                    ([ "#!/bin/sh"
                     , ""
                     , "case \"$1\" in"
                     , "  configure)" ] ++
                     (if isSite
                      then [ "    # Apache won't start if this directory doesn't exist"
-                          , "    mkdir -p " ++ apacheLogDirectory b
+                          , "    mkdir -p " <> pack (apacheLogDirectory b)
                           , "    # Restart apache so it sees the new file in /etc/apache2/sites-enabled"
                           , "    /usr/sbin/a2enmod proxy"
                           , "    /usr/sbin/a2enmod proxy_http"
@@ -147,20 +151,35 @@ serverAtoms k@(Binary b) server isSite =
 -- in debianFiles.
 serverLogrotate :: BinPkgName -> [(DebAtomKey, DebAtom)]
 serverLogrotate b =
-    [(Binary b, (DHLogrotateStanza . pack . unlines $
-                   [ serverAccessLog b ++ " {"
+    [(Binary b, (DHLogrotateStanza . unlines $
+                   [ pack (serverAccessLog b) <> " {"
                    , "  weekly"
                    , "  rotate 5"
                    , "  compress"
                    , "  missingok"
                    , "}" ])),
-     (Binary b, (DHLogrotateStanza . pack . unlines $
-                   [ serverAppLog b ++ " {"
+     (Binary b, (DHLogrotateStanza . unlines $
+                   [ pack (serverAppLog b) <> " {"
                    , "  weekly"
                    , "  rotate 5"
                    , "  compress"
                    , "  missingok"
                    , "}" ]))]
+
+backupAtoms :: DebAtomKey -> String -> [(DebAtomKey, DebAtom)]
+backupAtoms k name =
+    [(k, DHPostInst . unlines $
+                  [ "#!/bin/sh"
+                  , ""
+                  , "case \"$1\" in"
+                  , "  configure)"
+                  , "    " <> pack ("/etc/cron.hourly" </> name) <> " --initialize"
+                  , "    ;;"
+                  , "esac" ])] ++
+    execAtoms k (InstallFile { execName = name
+                             , destName = name
+                             , sourceDir = Nothing
+                             , destDir = Just "/etc/cron.hourly" })
 
 -- | Generate the atom that installs the executable.  Trickier than it should
 -- be due to limitations in the dh_install script, and the fact that we don't

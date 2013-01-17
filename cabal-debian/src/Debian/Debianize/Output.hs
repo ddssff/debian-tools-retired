@@ -7,6 +7,7 @@
 module Debian.Debianize.Output
     ( outputDebianization
     , describeDebianization
+    , writeDebianization
     ) where
 
 import Control.Monad.Trans (MonadIO, liftIO)

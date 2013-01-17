@@ -7,7 +7,7 @@ Build-Depends: debhelper (>= 7.0)
                , cdbs
                , ghc
                , ghc-prof
-	       , libghc-base-dev (>> 4) | ghc
+               , libghc-base-dev (>> 4) | ghc
                , libghc-base-dev (<< 5) | ghc
                , libghc-base-prof (>> 4) | ghc-prof
                , libghc-base-prof (<< 5) | ghc-prof

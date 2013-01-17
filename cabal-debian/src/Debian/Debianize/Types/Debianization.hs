@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances #-}
 module Debian.Debianize.Types.Debianization
     ( Debianization(..)
-    , newDebianization
     , SourceDebDescription(..)
     , newSourceDebDescription
     , VersionControlSpec(..)
@@ -18,15 +17,15 @@ import Data.Generics (Data, Typeable)
 import Data.Map as Map (Map)
 import Data.Monoid (mempty)
 import Data.Set as Set (Set, empty)
-import Data.Text (Text, pack)
-import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
+import Data.Text (Text)
+import Debian.Changes (ChangeLog(..))
 import Debian.Debianize.Types.Atoms (DebAtomKey, DebAtom, HasAtoms(..))
 import Debian.Debianize.Types.PackageType (PackageType(..))
 import Debian.Orphans ()
-import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures(..), Section, parseMaintainer)
+import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures(..), Section)
 import Debian.Relation (Relations, SrcPkgName(..), BinPkgName)
 import Distribution.License (License)
-import Prelude hiding (init)
+import Prelude hiding (init, log)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 -- | The full debianization.
@@ -65,26 +64,6 @@ data Debianization
 instance HasAtoms Debianization where
     getAtoms = debAtoms
     putAtoms ats x = x {debAtoms = ats}
-
--- | Create a Debianization based on a changelog entry and a license
--- value.  Uses the currently installed versions of debhelper and
--- debian-policy to set the compatibility levels.
-newDebianization :: ChangeLogEntry -> Either License Text -> Int -> StandardsVersion -> Debianization
-newDebianization (WhiteSpace {}) _ _ _ = error "defaultDebianization: Invalid changelog entry"
-newDebianization entry@(Entry {}) copy level standards =
-    Debianization
-      { sourceDebDescription = newSourceDebDescription (SrcPkgName (logPackage entry)) (either error id (parseMaintainer (logWho entry))) standards
-      , changelog = ChangeLog [entry]
-      , rulesHead = pack $ unlines [ "#!/usr/bin/make -f"
-                                   , ""
-                                   , "DEB_CABAL_PACKAGE = " ++ logPackage entry
-                                   , ""
-                                   , "include /usr/share/cdbs/1/rules/debhelper.mk"
-                                   , "include /usr/share/cdbs/1/class/hlibrary.mk"
-                                   , "" ]
-      , compat = level
-      , copyright = copy
-      , debAtoms = mempty }
 
 -- | This type represents the debian/control file, which is the core
 -- of the source package debianization.  It includes the information

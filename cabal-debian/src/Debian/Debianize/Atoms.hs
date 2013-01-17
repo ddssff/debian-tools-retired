@@ -20,6 +20,7 @@ module Debian.Debianize.Atoms
     , doExecutable
     , doServer
     , doWebsite
+    , doBackups
     , setSourcePackageName
     , debMaintainer
     , buildDir
@@ -121,6 +122,7 @@ doDependencyHint f deb =
     where
       (hints, deb') = partitionAtoms p deb
       p Source (DHDependencyHints x) = Just x
+      p (Binary _) (DHDependencyHints _) = error "doDependencyHint"
       p _ _ = Nothing
 
 dependencyHints :: HasAtoms atoms => atoms -> DependencyHints
@@ -154,6 +156,9 @@ doServer bin x deb = insertAtom (Binary bin) (DHServer x) deb
 
 doWebsite :: HasAtoms atoms => BinPkgName -> Site -> atoms -> atoms
 doWebsite bin x deb = insertAtom (Binary bin) (DHWebsite x) deb
+
+doBackups :: HasAtoms atoms => BinPkgName -> String -> atoms -> atoms
+doBackups bin s deb = insertAtom (Binary bin) (DHBackups s) deb
 
 setSourcePackageName :: HasAtoms atoms => SrcPkgName -> atoms -> atoms
 setSourcePackageName src deb = insertAtom Source (SourcePackageName src) deb

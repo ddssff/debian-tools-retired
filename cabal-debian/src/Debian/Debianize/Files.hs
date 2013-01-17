@@ -2,10 +2,11 @@
 -- written out.
 {-# LANGUAGE OverloadedStrings #-}
 module Debian.Debianize.Files
-    ( toFileMap
+    ( finalizeDebianization
+    , toFileMap
     ) where
 
-import Debug.Trace
+-- import Debug.Trace
 
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
@@ -15,9 +16,9 @@ import Data.Set (toList, member)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack, unlines)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, dependencyHints)
-import Debian.Debianize.Combinators (describe, extraDeps)
-import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms)
+import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, dependencyHints, putBinaryPackageDep)
+import Debian.Debianize.Combinators (describe, extraDeps, buildDeps, setArchitecture)
+import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms, backupAtoms)
 import Debian.Debianize.Types.Atoms (HasAtoms(getAtoms, putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                        VersionControlSpec(..), XField(..), XFieldDest(..))
@@ -120,7 +121,7 @@ postinst :: Debianization -> [(FilePath, Text)]
 postinst deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Binary name) (DHPostInst t) files = Map.insertWith (with2 "postinst") (pathf name) t files
+      atomf (Binary name) (DHPostInst t) files = Map.insertWith (with2 ("postinst: " ++ show (pretty name))) (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postinst"
 
@@ -151,7 +152,7 @@ prerm deb =
 -- | Turn the DebAtoms into a list of files, making sure the text
 -- associated with each path is unique.
 toFileMap :: Debianization -> Map.Map FilePath Text
-toFileMap d0 =
+toFileMap d =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
       [("debian/control", pack (show (pretty (control (sourceDebDescription d))))),
        ("debian/changelog", pack (show (pretty (changelog d)))),
@@ -170,8 +171,26 @@ toFileMap d0 =
       preinst d ++
       prerm d ++
       intermediate d
+
+-- | Eliminate atoms that can be expressed as simpler ones now that we
+-- know the build directory, and merge the text of all the atoms that
+-- contribute to the rules file into the rulesHead field.  The atoms
+-- are not removed from the list because they may contribute to the
+-- debianization in other ways, so be careful not to do this twice,
+-- this function is not idempotent.  (Exported for use in unit tests.)
+finalizeDebianization  :: Debianization -> Debianization
+finalizeDebianization deb =
+    makeUtilsPackage $ librarySpecs $ buildDeps $ foldAtomsFinalized f (putAtoms mempty deb) (getAtoms deb)
     where
-      d = makeUtilsPackage (librarySpecs (finalizeDebianization d0))
+      f k@(Binary b) a@(DHWebsite _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
+      f k@(Binary b) a@(DHServer _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
+      f k@(Binary b) a@(DHBackups _) deb' =
+          insertAtom k a $
+          setArchitecture b Any $
+          putBinaryPackageDep b (D.BinPkgName "anacron") $
+          cabalExecBinaryPackage b deb'
+      f k@(Binary b) a@(DHExecutable _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
+      f k a deb' = insertAtom k a deb'
 
 foldAtomsFinalized :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
 foldAtomsFinalized f r0 atoms =
@@ -179,7 +198,7 @@ foldAtomsFinalized f r0 atoms =
     where
       pairs = foldAtoms (\ k a xs -> (k, a) : xs) [] (getAtoms atoms)
       builddir = buildDir "dist-ghc/build" atoms
-      datadir = dataDir (error "finalizeDebianization") atoms
+      datadir = dataDir (error "foldAtomsFinalized") atoms
 
       -- | Fully expand a list of atom pairs, returning a list containing
       -- both the original and the expansion.
@@ -212,24 +231,11 @@ foldAtomsFinalized f r0 atoms =
           siteAtoms k x
       expandAtom k (DHServer x) =
           serverAtoms k x False
+      expandAtom k (DHBackups s) =
+          backupAtoms k s
       expandAtom k (DHExecutable x) =
           execAtoms k x
       expandAtom _ _ = []
-
--- | Eliminate atoms that can be expressed as simpler ones now that we
--- know the build directory, and merge the text of all the atoms that
--- contribute to the rules file into the rulesHead field.  The atoms
--- are not removed from the list because they may contribute to the
--- debianization in other ways, so be careful not to do this twice,
--- this function is not idempotent.  (Exported for use in unit tests.)
-finalizeDebianization  :: Debianization -> Debianization
-finalizeDebianization deb =
-    foldAtomsFinalized f (putAtoms mempty deb) (getAtoms deb)
-    where
-      f k@(Binary b) a@(DHWebsite _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
-      f k@(Binary b) a@(DHServer _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
-      f k@(Binary b) a@(DHExecutable _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
-      f k a deb' = insertAtom k a deb'
 
 cabalExecBinaryPackage :: BinPkgName -> Debianization -> Debianization
 cabalExecBinaryPackage b deb =
@@ -282,7 +288,7 @@ control src =
             (case dmUploadAllowed src of True -> [Field ("DM-Upload-Allowed", " yes")]; False -> []) ++
             mField "Priority" (priority src) ++
             mField "Section" (section src) ++
-            depField "Build-Depends" (buildDepends src) ++
+            t5 (depField "Build-Depends" (buildDepends src)) ++
             depField "Build-Depends-Indep" (buildDependsIndep src) ++
             depField "Build-Conflicts" (buildConflicts src) ++
             depField "Build-Conflicts-Indep" (buildConflictsIndep src) ++
@@ -401,15 +407,15 @@ librarySpec atoms arch typ pkgId =
             }
 
 t1 :: Show a => a -> a
-t1 x = trace ("available: " ++ show x) x
+t1 x = {- trace ("available: " ++ show x) -} x
 t2 :: Show a => a -> a
-t2 x = trace ("installed: " ++ show x) x
+t2 x = {- trace ("installed: " ++ show x) -} x
 t3 :: Show a => a -> a
 t3 x = {- trace ("t3: " ++ show x) -} x
 t4 :: Show a => a -> a
-t4 x = trace ("t4: " ++ show x) x
+t4 x = {- trace ("t4: " ++ show x) -} x
 t5 :: Show a => a -> a
-t5 x = trace ("t5: " ++ show x) x
+t5 x = {- trace ("t5: " ++ show x) -} x
 
 -- | Create a package to hold any executables and data files not
 -- assigned to some other package.
@@ -418,7 +424,7 @@ makeUtilsPackage deb | isNothing (packageDescription deb) = deb
 makeUtilsPackage deb =
     case Set.difference (t1 available) (t2 installed) of
       s | Set.null s -> deb
-      s ->      let p = t4 (fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (t5 (utilsPackageName deb))) in
+      s ->      let p = t4 (fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)) in
                 makeUtilsAtoms p s $
                 deb { sourceDebDescription =
                           (sourceDebDescription deb)
@@ -449,7 +455,7 @@ makeUtilsPackage deb =
       pkgDesc = fromMaybe (error "makeUtilsPackage: no PackageDescription") $ packageDescription deb
       available :: Set FileInfo
       available = Set.union (Set.fromList (map DataFile (Cabal.dataFiles pkgDesc)))
-                            (Set.fromList (map (CabalExecutable . exeName) (Cabal.executables pkgDesc)))
+                            (Set.fromList (map (CabalExecutable . exeName) (filter (Cabal.buildable . Cabal.buildInfo) (Cabal.executables pkgDesc))))
       installed :: Set FileInfo
       installed = foldAtoms cabalFile mempty (t3 (getAtoms deb))
       cabalFile :: DebAtomKey -> DebAtom -> Set FileInfo -> Set FileInfo

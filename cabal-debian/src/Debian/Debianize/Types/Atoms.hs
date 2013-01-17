@@ -117,6 +117,7 @@ data DebAtom
     | DHExecutable InstallFile                    -- ^ Create a binary package to hold a cabal executable
     | DHServer Server                             -- ^ Like DHExecutable, but configure the executable as a server process
     | DHWebsite Site                              -- ^ Like DHServer, but configure the server as a web server
+    | DHBackups String                            -- ^ Configure the executable to do incremental backups
     deriving (Eq, Ord, Show)
 
 -- | This record supplies information about the task we want done -

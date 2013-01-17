@@ -72,7 +72,7 @@ parseSourceDebDescription (Paragraph fields) binaryParagraphs =
       readField (Field ("DM-Upload-Allowed", value)) (desc, unrecognized) = (desc {dmUploadAllowed = yes value}, unrecognized)
       readField (Field ("Priority", value)) (desc, unrecognized) = (desc {priority = Just (readPriority value)}, unrecognized)
       readField (Field ("Section", value)) (desc, unrecognized) = (desc {section = Just (MainSection value)}, unrecognized)
-      readField (Field ("Build-Depends", value)) (desc, unrecognized) = (desc {buildDepends = rels value}, unrecognized)
+      readField (Field ("Build-Depends", value)) (desc, unrecognized) = t9 ((t8 desc) {buildDepends = rels (t7 value)}, unrecognized)
       readField (Field ("Build-Conflicts", value)) (desc, unrecognized) = (desc {buildConflicts = rels value}, unrecognized)
       readField (Field ("Build-Depends-Indep", value)) (desc, unrecognized) = (desc {buildDependsIndep = rels value}, unrecognized)
       readField (Field ("Build-Conflicts-Indep", value)) (desc, unrecognized) = (desc {buildConflictsIndep = rels value}, unrecognized)
@@ -90,6 +90,11 @@ parseSourceDebDescription (Paragraph fields) binaryParagraphs =
             (xs, '-' : more) -> (desc {xFields = insert (XField (fromList (map (read' . (: [])) xs)) (pack more) (pack value)) (xFields desc)}, unrecognized)
             _ -> (desc, field : unrecognized)
       readField field (desc, unrecognized) = (desc, field : unrecognized)
+
+t9 x = {- trace ("t9: " ++ show x) -} x
+t8 x = {- trace ("t8: " ++ show x) -} x
+t7 x = {- trace ("t7: " ++ show x) -} x
+t6 x = {- trace ("t6: " ++ show x) -} x
 
 parseBinaryDebDescription :: Paragraph' String -> (BinaryDebDescription, [Field])
 parseBinaryDebDescription (Paragraph fields) =

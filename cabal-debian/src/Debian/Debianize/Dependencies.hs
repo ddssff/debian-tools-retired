@@ -112,29 +112,31 @@ debianBuildDeps deb =
            anyrel "ghc"] ++
             (map anyrel' (buildDeps (dependencyHints deb))) ++
             (if noProfilingLibrary deb then [] else [anyrel "ghc-prof"]) ++
-            (concat $ map (buildDependencies deb)
-                    $ filter (not . selfDependency (Cabal.package pkgDesc))
-                    $ allBuildDepends
+            cabalDeps (packageDescription deb)
+    where
+      cabalDeps Nothing = []
+      cabalDeps (Just pkgDesc) =
+          (concat $ map (buildDependencies deb)
+                  $ filter (not . selfDependency (Cabal.package pkgDesc))
+                  $ allBuildDepends
                           deb (Cabal.buildDepends pkgDesc) (concatMap buildTools . allBuildInfo $ pkgDesc)
                           (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc)
                           (concatMap extraLibs . allBuildInfo $ pkgDesc))
-    where
-      pkgDesc = fromMaybe (error "debianBuildDeps: no PackageDescription") $ packageDescription deb
 
 debianBuildDepsIndep :: Debianization -> D.Relations
 debianBuildDepsIndep deb =
     filterMissing (dependencyHints deb) $
     if noDocumentationLibrary deb
     then []
-    else nub $
-          [anyrel "ghc-doc"] ++
+    else nub $ [anyrel "ghc-doc"] ++ cabalDeps (packageDescription deb)
+    where
+      cabalDeps Nothing = []
+      cabalDeps (Just pkgDesc) =
           (concat . map (docDependencies deb)
                       $ filter (not . selfDependency (Cabal.package pkgDesc))
                       $ allBuildDepends
                             deb (Cabal.buildDepends pkgDesc) (concatMap buildTools . allBuildInfo $ pkgDesc)
                             (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc) (concatMap extraLibs . allBuildInfo $ pkgDesc))
-    where
-      pkgDesc = fromMaybe (error "debianBuildDeps: no PackageDescription") $ packageDescription deb
 
 -- | The documentation dependencies for a package include the
 -- documentation package for any libraries which are build
