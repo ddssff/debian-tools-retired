@@ -89,4 +89,5 @@ Section: misc
 Depends: ${shlibs:Depends}
          , ${haskell:Depends}
          , ${misc:Depends}
+         , anacron
 Conflicts: ${haskell:Conflicts}

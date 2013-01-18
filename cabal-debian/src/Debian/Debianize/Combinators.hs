@@ -10,15 +10,16 @@ module Debian.Debianize.Combinators
     , describe
     , extraDeps
     , addExtraLibDependencies
-    , setSourcePriority
-    , setSourceSection
     , setSourceBinaries
     , setChangelog
-    , modifyBinaryDeb
+{-
+    , setSourcePriority
+    , setSourceSection
     , setArchitecture
     , setBinaryPriority
     , setBinarySection
     , setDescription
+-}
     ) where
 
 import Data.List as List (nub, intercalate)
@@ -31,12 +32,12 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Atoms (packageDescription, dependencyHints)
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), HasAtoms, foldAtoms)
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), newBinaryDebDescription,
+import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..),
                                                        PackageRelations(..))
 import Debian.Debianize.Types.Dependencies (DependencyHints (extraLibMap, epochMap, revision, debVersion))
 import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Utility (trim)
-import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures(Names), Section, PackageArchitectures)
+import Debian.Policy (StandardsVersion)
 import qualified Debian.Relation as D
 import Debian.Relation (BinPkgName, SrcPkgName(..), Relation(Rel))
 import Debian.Release (parseReleaseName)
@@ -249,17 +250,18 @@ oldFilterMissing missing deb =
                                 , replaces = f (replaces rels)
                                 , builtUsing = f (builtUsing rels) }
 
-setSourcePriority :: Maybe PackagePriority -> Debianization -> Debianization
-setSourcePriority x deb = deb {sourceDebDescription = (sourceDebDescription deb) {priority = x}}
-
-setSourceSection :: Maybe Section -> Debianization -> Debianization
-setSourceSection x deb = deb {sourceDebDescription = (sourceDebDescription deb) {section = x}}
-
 setSourceBinaries :: [BinaryDebDescription] -> Debianization -> Debianization
 setSourceBinaries xs deb = deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = xs}}
 
 setChangelog :: ChangeLog -> Debianization -> Debianization
 setChangelog log' deb = deb { changelog = log' }
+
+{-
+setSourcePriority :: Maybe PackagePriority -> Debianization -> Debianization
+setSourcePriority x deb = deb {sourceDebDescription = (sourceDebDescription deb) {priority = x}}
+
+setSourceSection :: Maybe Section -> Debianization -> Debianization
+setSourceSection x deb = deb {sourceDebDescription = (sourceDebDescription deb) {section = x}}
 
 setArchitecture :: BinPkgName -> PackageArchitectures -> Debianization -> Debianization
 setArchitecture bin x deb = modifyBinaryDeb bin (\ b -> b {architecture = x}) deb
@@ -282,3 +284,4 @@ modifyBinaryDeb bin f deb =
       g (xs, found') x = if Debian.package x == bin then (f x : xs, True) else (x : xs, found')
       -- If we didn't find the target package create it and apply f
       xs'' = if found then xs' else f (newBinaryDebDescription bin (Names [])) : xs'
+-}

@@ -6,8 +6,6 @@ module Debian.Debianize.Files
     , toFileMap
     ) where
 
--- import Debug.Trace
-
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
 import qualified Data.Map as Map
@@ -16,16 +14,16 @@ import Data.Set (toList, member)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack, unlines)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, dependencyHints, putBinaryPackageDep)
-import Debian.Debianize.Combinators (describe, extraDeps, buildDeps, setArchitecture)
+import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, dependencyHints, setArchitecture)
+import Debian.Debianize.Combinators (describe, extraDeps, buildDeps)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms, backupAtoms)
 import Debian.Debianize.Types.Atoms (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                                       VersionControlSpec(..), XField(..), XFieldDest(..))
+                                                       VersionControlSpec(..), XField(..), XFieldDest(..), newBinaryDebDescription)
 import Debian.Debianize.Types.Dependencies (DependencyHints (binaryPackageDeps, binaryPackageConflicts))
 import Debian.Debianize.Types.PackageType (PackageType(Exec))
 import Debian.Debianize.Utility (showDeps')
-import Debian.Policy (PackageArchitectures(Any), Section(..))
+import Debian.Policy (PackageArchitectures(Any, Names), Section(..))
 import Debian.Relation (Relations, BinPkgName)
 import qualified Debian.Relation as D
 import qualified Distribution.PackageDescription as Cabal
@@ -149,8 +147,12 @@ prerm deb =
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".prerm"
 
--- | Turn the DebAtoms into a list of files, making sure the text
--- associated with each path is unique.
+-- | Turn the Debianization into a list of files, making sure the text
+-- associated with each path is unique.  Assumes that
+-- finalizeDebianization has already been called.  (Yes, I'm
+-- considering building one into the other, but it is handy to look at
+-- the Debianization produced by finalizeDebianization in the unit
+-- tests.)
 toFileMap :: Debianization -> Map.Map FilePath Text
 toFileMap d =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
@@ -172,25 +174,48 @@ toFileMap d =
       prerm d ++
       intermediate d
 
--- | Eliminate atoms that can be expressed as simpler ones now that we
--- know the build directory, and merge the text of all the atoms that
--- contribute to the rules file into the rulesHead field.  The atoms
--- are not removed from the list because they may contribute to the
+-- | Now that we know the build and data directories, we can expand
+-- some atoms into sets of simpler atoms which can eventually be
+-- turned into the files of the debianization.  The original atoms are
+-- not removed from the list because they may contribute to the
 -- debianization in other ways, so be careful not to do this twice,
 -- this function is not idempotent.  (Exported for use in unit tests.)
 finalizeDebianization  :: Debianization -> Debianization
-finalizeDebianization deb =
-    makeUtilsPackage $ librarySpecs $ buildDeps $ foldAtomsFinalized f (putAtoms mempty deb) deb
+finalizeDebianization deb0 =
+    foldAtomsFinalized g deb' deb' -- Apply tweaks to the debianization
     where
-      f k@(Binary b) a@(DHWebsite _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
-      f k@(Binary b) a@(DHServer _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
-      f k@(Binary b) a@(DHBackups _) deb' =
-          insertAtom k a $
-          setArchitecture b Any $
-          putBinaryPackageDep b (D.BinPkgName "anacron") $
-          cabalExecBinaryPackage b deb'
-      f k@(Binary b) a@(DHExecutable _) deb' = insertAtom k a $ cabalExecBinaryPackage b deb'
-      f k a deb' = insertAtom k a deb'
+      deb' = makeUtilsPackage $ librarySpecs $ buildDeps $ foldAtomsFinalized f (putAtoms mempty deb0) deb0
+
+      -- Create the binary packages
+      f :: DebAtomKey -> DebAtom -> Debianization -> Debianization
+      f k@(Binary b) a@(DHWebsite _) = insertAtom k a . cabalExecBinaryPackage b
+      f k@(Binary b) a@(DHServer _) = insertAtom k a . cabalExecBinaryPackage b
+      f k@(Binary b) a@(DHBackups _) =
+          insertAtom k a .
+          setArchitecture (Binary b) Any .
+          cabalExecBinaryPackage b
+      f k@(Binary b) a@(DHExecutable _) = insertAtom k a . cabalExecBinaryPackage b
+      f k a = insertAtom k a
+
+      -- Apply the hints in the atoms to the debianization
+      g :: DebAtomKey -> DebAtom -> Debianization -> Debianization
+      g (Binary b) (DHArch x) deb = modifyBinaryDeb b (\ bin -> bin {architecture = x}) deb
+      g (Binary b) (DHPriority x) deb = modifyBinaryDeb b (\ bin -> bin {binaryPriority = Just x}) deb
+      g Source (DHPriority x) deb = deb {sourceDebDescription = (sourceDebDescription deb) {priority = Just x}}
+      g (Binary b) (DHSection x) deb = modifyBinaryDeb b (\ bin -> bin {binarySection = Just x}) deb
+      g Source (DHSection x) deb = deb {sourceDebDescription = (sourceDebDescription deb) {section = Just x}}
+      g (Binary b) (DHDescription x) deb = modifyBinaryDeb b (\ bin -> bin {Debian.description = x}) deb
+      g _ _ deb = deb
+
+modifyBinaryDeb :: BinPkgName -> (BinaryDebDescription -> BinaryDebDescription) -> Debianization -> Debianization
+modifyBinaryDeb bin f deb =
+    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = xs''}}
+    where
+      -- scan the binary debs and apply f to the target, recording whether we found it
+      (xs', found) = foldl g ([], False) (binaryPackages (sourceDebDescription deb))
+      g (xs, found') x = if Debian.package x == bin then (f x : xs, True) else (x : xs, found')
+      -- If we didn't find the target package create it and apply f
+      xs'' = if found then xs' else f (newBinaryDebDescription bin (Names [])) : xs'
 
 foldAtomsFinalized :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
 foldAtomsFinalized f r0 atoms =

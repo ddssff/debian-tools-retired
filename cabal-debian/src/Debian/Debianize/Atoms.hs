@@ -16,6 +16,10 @@ module Debian.Debianize.Atoms
     , putExecMap
     , putExtraDevDep
     , putBinaryPackageDep
+    , setArchitecture
+    , setPriority
+    , setSection
+    , setDescription
     , doExecutable
     , doServer
     , doWebsite
@@ -39,14 +43,15 @@ import Data.Map as Map (insert)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty, (<>))
 import Data.Set as Set (Set, maxView, toList, null, union, unions)
-import Data.Text (pack, unlines)
+import Data.Text (Text, pack, unlines)
 import Data.Version (Version)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags, defaultFlags,
                                      lookupAtom, lookupAtomDef, lookupAtoms, foldAtoms, hasAtom, insertAtom, partitionAtoms)
 import Debian.Debianize.Types.Dependencies (DependencyHints(..))
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Orphans ()
-import Debian.Relation (BinPkgName, SrcPkgName)
+import Debian.Policy (PackageArchitectures, PackagePriority, Section)
+import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName)
 import Distribution.Package (PackageName(..))
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
@@ -153,6 +158,18 @@ putBinaryPackageDep :: HasAtoms atoms => BinPkgName -> BinPkgName -> atoms -> at
 putBinaryPackageDep pkg dep deb =
     doDependencyHint (\ x -> x {binaryPackageDeps = (pkg, dep) : binaryPackageDeps x}) deb
 
+setArchitecture :: HasAtoms atoms => DebAtomKey -> PackageArchitectures -> atoms -> atoms
+setArchitecture k x deb = insertAtom k (DHArch x) deb
+
+setPriority :: HasAtoms atoms => DebAtomKey -> PackagePriority -> atoms -> atoms
+setPriority k x deb = insertAtom k (DHPriority x) deb
+
+setSection :: HasAtoms atoms => DebAtomKey -> Section -> atoms -> atoms
+setSection k x deb = insertAtom k (DHSection x) deb
+
+setDescription :: HasAtoms atoms => DebAtomKey -> Text -> atoms -> atoms
+setDescription k x deb = insertAtom k (DHDescription x) deb
+
 doExecutable :: HasAtoms atoms => BinPkgName -> InstallFile -> atoms -> atoms
 doExecutable bin x deb = insertAtom (Binary bin) (DHExecutable x) deb
 
@@ -163,7 +180,10 @@ doWebsite :: HasAtoms atoms => BinPkgName -> Site -> atoms -> atoms
 doWebsite bin x deb = insertAtom (Binary bin) (DHWebsite x) deb
 
 doBackups :: HasAtoms atoms => BinPkgName -> String -> atoms -> atoms
-doBackups bin s deb = insertAtom (Binary bin) (DHBackups s) deb
+doBackups bin s deb =
+    insertAtom (Binary bin) (DHBackups s) $
+    putBinaryPackageDep bin (BinPkgName "anacron") $
+    deb
 
 setSourcePackageName :: HasAtoms atoms => SrcPkgName -> atoms -> atoms
 setSourcePackageName src deb = insertAtom Source (SourcePackageName src) deb

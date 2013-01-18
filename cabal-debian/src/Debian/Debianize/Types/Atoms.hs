@@ -32,7 +32,7 @@ import Debian.Debianize.Types.Dependencies (DependencyHints(..), defaultDependen
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Orphans ()
-import Debian.Policy (SourceFormat)
+import Debian.Policy (SourceFormat, PackageArchitectures, PackagePriority, Section)
 import Debian.Relation (BinPkgName, SrcPkgName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
@@ -103,6 +103,10 @@ data DebAtom
     | DHPostRm Text                     	  -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
     | DHPreInst Text                    	  -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
     | DHPreRm Text                      	  -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
+    | DHArch PackageArchitectures       	  -- ^ Set the Architecture field of source or binary
+    | DHPriority PackagePriority	       	  -- ^ Set the Priority field of source or binary
+    | DHSection Section			       	  -- ^ Set the Section field of source or binary
+    | DHDescription Text		       	  -- ^ Set the description of source or binary
     | DHInstall FilePath FilePath       	  -- ^ Install a build file into the binary package
     | DHInstallTo FilePath FilePath     	  -- ^ Install a build file into the binary package at an exact location
     | DHInstallData FilePath FilePath   	  -- ^ DHInstallTo the package's data directory: /usr/share/package-version/
@@ -177,14 +181,14 @@ instance HasAtoms Atoms where
     modifyHints f x = x {hints = f (hints x)}
 
 lookupAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Maybe a
-lookupAtom mbin from atoms =
-    case maxView (lookupAtoms mbin from atoms) of
+lookupAtom mbin from xs =
+    case maxView (lookupAtoms mbin from xs) of
       Nothing -> Nothing
       Just (x, s) | Set.null s -> Just x
       Just (x, s) -> error $ "lookupAtom - multiple: " ++ show (x : toList s)
 
 lookupAtomDef :: (HasAtoms atoms, Show a, Ord a) => a -> DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> a
-lookupAtomDef def key from atoms = fromMaybe def $ lookupAtom key from atoms
+lookupAtomDef def key from xs = fromMaybe def $ lookupAtom key from xs
 
 lookupAtoms :: HasAtoms atoms => (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Set a
 lookupAtoms mbin from x = maybe empty (setMapMaybe from) (Map.lookup mbin (getAtoms x))
@@ -193,13 +197,13 @@ insertAtom :: HasAtoms atoms => DebAtomKey -> DebAtom -> atoms -> atoms
 insertAtom mbin atom x = putAtoms (insertWith union mbin (singleton atom) (getAtoms x)) x
 
 insertAtoms :: HasAtoms atoms => DebAtomKey -> Set DebAtom -> atoms -> atoms
-insertAtoms mbin atoms x = putAtoms (insertWith union mbin atoms (getAtoms x)) x
+insertAtoms mbin xs x = putAtoms (insertWith union mbin xs (getAtoms x)) x
 
 insertAtoms' :: HasAtoms atoms => DebAtomKey -> [DebAtom] -> atoms -> atoms
-insertAtoms' mbin atoms x = insertAtoms mbin (fromList atoms) x
+insertAtoms' mbin xs x = insertAtoms mbin (fromList xs) x
 
 hasAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Bool
-hasAtom key p atoms = not . Set.null . lookupAtoms key p $ atoms
+hasAtom key p xs = not . Set.null . lookupAtoms key p $ xs
 
 foldAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
 foldAtoms f r0 xs = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (getAtoms xs)

@@ -13,18 +13,18 @@ module Debian.Debianize.Debianize
     ) where
 
 import Data.Maybe
-import Data.Monoid ((<>), mempty)
+import Data.Monoid ((<>))
 import Data.Text (Text, pack, unlines)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.Atoms (packageDescription, flags, watchAtom)
+import Debian.Debianize.Atoms (packageDescription, flags, watchAtom, setPriority, setSection)
 import Debian.Debianize.Cabal (withSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (cdbsRules, putCopyright, versionInfo, addExtraLibDependencies,
-                                     putStandards, setSourcePriority, setSourceSection, setSourceBinaries)
+                                     putStandards, setSourceBinaries)
 import Debian.Debianize.Flags (flagOptions, atomOptions)
 import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.SubstVars (substvars)
-import Debian.Debianize.Types.Atoms (HasAtoms, Flags(..), DebAction(..), Atoms, defaultAtoms)
+import Debian.Debianize.Types.Atoms (HasAtoms, DebAtomKey(Source), Flags(..), DebAction(..), Atoms, defaultAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), newSourceDebDescription)
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection), parseMaintainer)
