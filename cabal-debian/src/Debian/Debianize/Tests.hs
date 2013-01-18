@@ -15,7 +15,7 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Combinators (setArchitecture)
 import Debian.Debianize.Debianize (cabalToDebianization, newDebianization)
 import Debian.Debianize.Atoms (tightDependencyFixup, missingDependency, setRevision, putExecMap, putBinaryPackageDep,
-                               doExecutable, doWebsite, doBackups)
+                               doExecutable, doWebsite, doServer, doBackups)
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization, writeDebianization)
@@ -245,7 +245,6 @@ test4 =
                  -- assertEqual "test4" "" desc
                  -- assertEqual "test4" [] (gdiff old (finalizeDebianization "dist-ghc/build" dataDir new'))
                  -- assertEqual "test4" (toFileMap "dist-ghc/build" "<datadir>" old) (toFileMap "dist-ghc/build" "<datadir>" new')
-                 withCurrentDirectory "/tmp" (writeDebianization new')
                  assertEqual "test4" [] (diffDebianizations old new')
              )
     where
@@ -318,23 +317,30 @@ test4 =
 test5 :: Test
 test5 =
     TestLabel "test5" $
-    TestCase (     do oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
-                      old <- inputDebianization "test-data/creativeprompts/output" >>= \ x -> return (x {changelog = oldlog})
-                      new <- cabalToDebianization "test-data/creativeprompts/input" old
+    TestCase (     do -- oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
+                      old <- inputDebianization "test-data/creativeprompts/output" -- >>= \ x -> return (x {changelog = oldlog})
+                      new <- cabalToDebianization "test-data/creativeprompts/input"
+                               (newDebianization (changelog old) (copyright old) (compat old) (standardsVersion (sourceDebDescription old)))
                       let new' = finalizeDebianization $
+{-
+                                 setArchitecture (BinPkgName "creativeprompts-server") Any $
+                                 setArchitecture (BinPkgName "creativeprompts-data") All $
                                  setArchitecture (BinPkgName "creativeprompts-development") All $
                                  setArchitecture (BinPkgName "creativeprompts-production") All $
+-}
                                  insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
                                  copyFirstLogEntry old $
                                  putBinaryPackageDep (BinPkgName "creativeprompts-server") (BinPkgName "markdown") $
                                  putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
                                  doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" $
-                                 doExecutable (BinPkgName "creativeprompts-development") (InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") $
-                                 doExecutable (BinPkgName "creativeprompts-production") (InstallFile "creativeprompts-production" Nothing Nothing "creativeprompts-production") $
+                                 -- doExecutable (BinPkgName "creativeprompts-development") (InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") $
+                                 doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production")) $
+                                 doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) $
                                  doExecutable (BinPkgName "creativeprompts-server") (InstallFile "creativeprompts-server" Nothing Nothing "creativeprompts-server") $
                                  new
                       desc <- describeDebianization "test-data/creativeprompts/output" new'
-                      writeFile "/tmp/foo" desc
+                      withCurrentDirectory "/tmp" (writeDebianization new')
+                      -- writeFile "/tmp/foo" desc
                       -- assertEqual "Convert creativeprompts" [] (gdiff (dropFirstLogEntry old) (addMarkdownDependency (dropFirstLogEntry (finalizeDebianization "dist-ghc/build" new))))
                       -- assertEqual "test5" "" desc
                       -- assertEqual "test5" (toFileMap "dist-ghc/build" "<datadir>" old) (toFileMap "dist-ghc/build" "<datadir>" new')
@@ -354,6 +360,47 @@ test5 =
       addMarkdownDependency' :: BinaryDebDescription -> BinaryDebDescription
       addMarkdownDependency' deb = deb {relations = (relations deb) {depends = [[Rel (BinPkgName "markdown") Nothing Nothing]] ++ depends (relations deb)}}
 -}
+      theSite :: BinPkgName -> Site
+      theSite deb =
+          Site { domain = hostname'
+               , serverAdmin = "logic@seereason.com"
+               , server = theServer deb }
+      theServer :: BinPkgName -> Server
+      theServer deb =
+          Server { hostname =
+                       case deb of
+                         BinPkgName "clckwrks-dot-com-production" -> hostname'
+                         _ -> hostname'
+                 , port = portNum deb
+                 , headerMessage = "Generated by clckwrks-dot-com/Setup.hs"
+                 , retry = "60"
+                 , serverFlags =
+                     [ "--http-port", show (portNum deb)
+                     , "--hide-port"
+                     , "--hostname", hostname'
+                     , "--top", databaseDirectory deb
+                     , "--enable-analytics"
+                     , "--jquery-path", "/usr/share/javascript/jquery/"
+                     , "--jqueryui-path", "/usr/share/javascript/jquery-ui/"
+                     , "--jstree-path", jstreePath
+                     , "--json2-path",json2Path
+                     ]
+                 , installFile =
+                     InstallFile { execName   = "creativeprompts-server"
+                                 , destName   = show (pretty deb)
+                                 , sourceDir  = Nothing
+                                 , destDir    = Nothing }
+                 }
+      hostname' = "clckwrks.com"
+      portNum :: BinPkgName -> Int
+      portNum (BinPkgName deb) =
+          case deb of
+            "creativeprompts-production"  -> 9022
+            "creativeprompts-staging"     -> 9033
+            "creativeprompts-development" -> 9034
+            _ -> error $ "Unexpected package name: " ++ deb
+      jstreePath = "/usr/share/clckwrks-0.13.2/jstree"
+      json2Path = "/usr/share/clckwrks-0.13.2/json2"
 
 
 {-

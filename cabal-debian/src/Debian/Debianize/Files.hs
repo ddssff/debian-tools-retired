@@ -121,7 +121,7 @@ postinst :: Debianization -> [(FilePath, Text)]
 postinst deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Binary name) (DHPostInst t) files = Map.insertWith (with2 ("postinst: " ++ show (pretty name))) (pathf name) t files
+      atomf (Binary name) (DHPostInst t) files = Map.insertWith (<>) (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postinst"
 
@@ -129,7 +129,7 @@ postrm :: Debianization -> [(FilePath, Text)]
 postrm deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Binary name) (DHPostRm t) files = Map.insertWith (with2 "postrm") (pathf name) t files
+      atomf (Binary name) (DHPostRm t) files = Map.insertWith (<>) (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postrm"
 
@@ -137,7 +137,7 @@ preinst :: Debianization -> [(FilePath, Text)]
 preinst deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Binary name) (DHPreInst t) files = Map.insertWith (with2 "preinst") (pathf name) t files
+      atomf (Binary name) (DHPreInst t) files = Map.insertWith (<>) (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".preinst"
 
@@ -145,7 +145,7 @@ prerm :: Debianization -> [(FilePath, Text)]
 prerm deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
-      atomf (Binary name) (DHPreRm t) files = Map.insertWith (with2 "prerm") (pathf name) t files
+      atomf (Binary name) (DHPreRm t) files = Map.insertWith (<>) (pathf name) t files
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".prerm"
 
