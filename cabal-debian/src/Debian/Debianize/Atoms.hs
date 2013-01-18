@@ -26,6 +26,7 @@ module Debian.Debianize.Atoms
     , doWebsite
     , doBackups
     , setSourcePackageName
+    , sourceFormat
     , debMaintainer
     , buildDir
     , setBuildDir
@@ -51,7 +52,7 @@ import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), 
 import Debian.Debianize.Types.Dependencies (DependencyHints(..))
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Orphans ()
-import Debian.Policy (PackageArchitectures, PackagePriority, Section)
+import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat)
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName, Relation(..))
 import Distribution.Package (PackageName(..))
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
@@ -192,6 +193,9 @@ doBackups bin s deb =
 
 setSourcePackageName :: HasAtoms atoms => SrcPkgName -> atoms -> atoms
 setSourcePackageName src deb = insertAtom Source (SourcePackageName src) deb
+
+sourceFormat :: HasAtoms atoms => SourceFormat -> atoms -> atoms
+sourceFormat format deb = insertAtom Source (DebSourceFormat format) deb
 
 debMaintainer :: HasAtoms atoms => atoms -> Maybe NameAddr
 debMaintainer atoms =

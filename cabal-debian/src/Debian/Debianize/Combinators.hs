@@ -12,14 +12,6 @@ module Debian.Debianize.Combinators
     , addExtraLibDependencies
     , setSourceBinaries
     , setChangelog
-{-
-    , setSourcePriority
-    , setSourceSection
-    , setArchitecture
-    , setBinaryPriority
-    , setBinarySection
-    , setDescription
--}
     ) where
 
 import Data.List as List (nub, intercalate)
@@ -49,12 +41,6 @@ import Distribution.Text (display)
 import Prelude hiding (writeFile, init, unlines)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
-
-{-
-sourceFormatAtom :: SourceFormat -> Debianization -> Debianization
-sourceFormatAtom format deb =
-    insertAtom Source (DebSourceFormat format) deb
--}
 
 -- | Set the debianization's version info - everything that goes into
 -- the new changelog entry, source package name, exact debian version,
@@ -254,33 +240,3 @@ setSourceBinaries xs deb = deb {sourceDebDescription = (sourceDebDescription deb
 
 setChangelog :: ChangeLog -> Debianization -> Debianization
 setChangelog log' deb = deb { changelog = log' }
-
-{-
-setSourcePriority :: Maybe PackagePriority -> Debianization -> Debianization
-setSourcePriority x deb = deb {sourceDebDescription = (sourceDebDescription deb) {priority = x}}
-
-setSourceSection :: Maybe Section -> Debianization -> Debianization
-setSourceSection x deb = deb {sourceDebDescription = (sourceDebDescription deb) {section = x}}
-
-setArchitecture :: BinPkgName -> PackageArchitectures -> Debianization -> Debianization
-setArchitecture bin x deb = modifyBinaryDeb bin (\ b -> b {architecture = x}) deb
-
-setBinaryPriority :: BinPkgName -> Maybe PackagePriority -> Debianization -> Debianization
-setBinaryPriority bin x deb = modifyBinaryDeb bin (\ b -> b {binaryPriority = x}) deb
-
-setBinarySection :: BinPkgName -> Maybe Section -> Debianization -> Debianization
-setBinarySection bin x deb = modifyBinaryDeb bin (\ b -> b {binarySection = x}) deb
-
-setDescription :: BinPkgName -> Text -> Debianization -> Debianization
-setDescription bin x deb = modifyBinaryDeb bin (\ b -> b {Debian.description = x}) deb
-
-modifyBinaryDeb :: BinPkgName -> (BinaryDebDescription -> BinaryDebDescription) -> Debianization -> Debianization
-modifyBinaryDeb bin f deb =
-    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = xs''}}
-    where
-      -- scan the binary debs and apply f to the target, recording whether we found it
-      (xs', found) = foldl g ([], False) (binaryPackages (sourceDebDescription deb))
-      g (xs, found') x = if Debian.package x == bin then (f x : xs, True) else (x : xs, found')
-      -- If we didn't find the target package create it and apply f
-      xs'' = if found then xs' else f (newBinaryDebDescription bin (Names [])) : xs'
--}

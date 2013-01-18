@@ -13,7 +13,7 @@ import Data.Set as Set (fromList)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization, newDebianization)
-import Debian.Debianize.Atoms as Atom (tightDependencyFixup, missingDependency, setRevision, putExecMap,
+import Debian.Debianize.Atoms as Atom (tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
                                        depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture)
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
@@ -145,7 +145,7 @@ test3 =
     where
       testDeb2 :: Debianization
       testDeb2 =
-          insertAtom Source (DebSourceFormat Native3) $
+          sourceFormat Native3 $
           Debianization
           { sourceDebDescription =
                 SourceDebDescription
@@ -230,7 +230,7 @@ test4 =
                  let new' =
                          finalizeDebianization $
                          (\ x -> x {sourceDebDescription = (sourceDebDescription x) {homepage = Just "http://www.clckwrks.com/"}}) $
-                         insertAtom Source (DebSourceFormat Native3) $
+                         sourceFormat Native3 $
                          missingDependency (BinPkgName "libghc-clckwrks-theme-clckwrks-doc") $
                          setRevision "" $
                          doWebsite (BinPkgName "clckwrks-dot-com-production") (theSite (BinPkgName "clckwrks-dot-com-production")) $
@@ -325,7 +325,7 @@ test5 =
                       new <- cabalToDebianization "test-data/creativeprompts/input"
                                (newDebianization (changelog old) (copyright old) (compat old) (standardsVersion (sourceDebDescription old)))
                       let new' = finalizeDebianization $
-                                 insertAtom Source (DebSourceFormat Native3) $
+                                 sourceFormat Native3 $
                                  -- setArchitecture (Binary (BinPkgName "creativeprompts-server")) Any $
                                  setArchitecture (Binary (BinPkgName "creativeprompts-data")) All $
                                  setArchitecture (Binary (BinPkgName "creativeprompts-development")) All $

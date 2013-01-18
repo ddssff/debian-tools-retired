@@ -8,8 +8,8 @@ import qualified Data.Map as Map
 import Data.Set (fromList)
 import Data.Version (parseVersion)
 import Debian.Debianize.Atoms (doDependencyHint, missingDependency, doExecutable, setSourcePackageName,
-                               setBuildDir, putCabalFlagAssignments, mapFlags)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DebSourceFormat, DHMaintainer),
+                               setBuildDir, putCabalFlagAssignments, mapFlags, sourceFormat)
+import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DHMaintainer),
                                      insertAtom, Flags(..), DebAction(..))
 import Debian.Debianize.Types.Dependencies (DependencyHints (..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..))
@@ -101,7 +101,7 @@ atomOptions =
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
       Option "" ["omit-lt-deps"] (NoArg (\ atoms -> doDependencyHint (\ x -> x { omitLTDeps = True }) atoms))
              "Don't generate the << dependency when we see a cabal equals dependency.",
-      Option "" ["quilt"] (NoArg (\ x -> insertAtom Source (DebSourceFormat Quilt3) x))
+      Option "" ["quilt"] (NoArg (sourceFormat Quilt3))
              "The package has an upstream tarball, write '3.0 (quilt)' into source/format.",
       Option "" ["builddir"] (ReqArg (\ s atoms -> setBuildDir (s </> "build") atoms) "PATH")
              "Subdirectory where cabal does its build, dist/build by default, dist-ghc when run by haskell-devscripts.  The build subdirectory is added to match the behavior of the --builddir option in the Setup script."
