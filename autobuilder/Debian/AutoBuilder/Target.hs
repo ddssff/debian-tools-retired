@@ -514,7 +514,7 @@ prepareBuildImage cache dependOS sourceFingerprint buildOS target =
           findOneDebianBuildTree newPath >>=
           maybe (error ("prepareBuildImage: could not find build tree in " ++ newPath)) return
 
-      downloadDeps buildTree = downloadDependencies dependOS buildTree buildDepends sourceFingerprint >>
+      downloadDeps buildTree = withTmp dependOS (downloadDependencies dependOS buildTree buildDepends sourceFingerprint) >>
                                return buildTree
 
       syncEnv False buildTree =
@@ -527,7 +527,18 @@ prepareBuildImage cache dependOS sourceFingerprint buildOS target =
           installDependencies buildOS buildTree buildDepends sourceFingerprint >> return buildTree
       buildDepends = P.buildDepends (P.params cache)
       noClean = P.noClean (P.params cache)
-      newPath = rootPath (rootDir buildOS) ++ fromJust (dropPrefix (rootPath (rootDir cleanOS)) (topdir (cleanSource target)))
+      newPath = rootPath (rootDir buildOS) ++ fromJust (dropPrefix (rootPath (rootDir dependOS)) (topdir (cleanSource target)))
+
+-- | Perform an IO operation with /proc mounted
+withTmp :: forall a. OSImage -> IO a -> IO a
+withTmp buildOS task =
+    do createDirectoryIfMissing True dir
+       _ <- quieter 1 $ runProcessF (proc "mount" ["--bind", "/tmp", dir]) L.empty
+       result <- try task :: IO (Either SomeException a)
+       _ <- quieter 1 $ runProcessF (proc "umount" [dir]) L.empty
+       either throw return result
+    where
+      dir = rootPath (rootDir buildOS) ++ "/tmp"
 
 -- | Get the control info for the newest version of a source package
 -- available in a release.  Make sure that the files for this build
