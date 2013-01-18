@@ -25,9 +25,10 @@ import Control.Exception as E (catch, try, bracket, IOException)
 import Control.Monad (when)
 import Control.Monad.Reader (ReaderT, ask)
 import Data.Char (isSpace)
-import Data.List (isSuffixOf, intercalate, intersperse)
+import Data.List (isSuffixOf, intercalate)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, mapMaybe)
+import Data.Set (Set, fromList, toList)
 import qualified Data.Set as Set
 import Data.Text as Text (Text, unpack, lines)
 import Data.Text.IO (hGetContents)
@@ -41,7 +42,7 @@ import System.FilePath ((</>), dropExtension)
 import System.IO (IOMode (ReadMode), withFile, openFile, hSetBinaryMode)
 import System.IO.Error (isDoesNotExistError)
 import System.Process (readProcessWithExitCode, showCommandForUser)
-import Text.PrettyPrint.ANSI.Leijen (pretty, text)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 type DebMap = Map.Map D.BinPkgName (Maybe DebianVersion)
 
@@ -142,11 +143,12 @@ readFile' path =
        hSetBinaryMode file True
        hGetContents file
 
+-- Would like to call pretty instead of D.prettyRelations, but the
+-- Pretty instance for [a] doesn't work for us.
 showDeps :: [[D.Relation]] -> String
-showDeps = show . mconcat . intersperse (text ", ") . map D.prettyOrRelation
+showDeps = show . D.prettyRelations
 
--- | Format dependencies on multiple lines, indenting enough to line
--- up under the given label.
+-- The extra space after prefix' is here for historical reasons(?)
 showDeps' :: [a] -> [[D.Relation]] -> String
 showDeps' prefix xss =
     intercalate  ("\n" ++ prefix' ++ " ") . Prelude.lines . show . D.prettyRelations $ xss
