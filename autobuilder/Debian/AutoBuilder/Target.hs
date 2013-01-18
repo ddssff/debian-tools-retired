@@ -145,12 +145,12 @@ partitionFailing xs =
 -- and then the function to process the incoming queue is called.
 buildTargets :: (MonadApt m, MonadTop m, AptCache t) => P.CacheRec -> OSImage -> Relations -> LocalRepository -> t -> [Buildable] -> m (LocalRepository, [Target])
 buildTargets _ _ _ localRepo _ [] = return (localRepo, [])
-buildTargets cache cleanOS globalBuildDeps localRepo poolOS targetSpecs =
+buildTargets cache dependOS globalBuildDeps localRepo poolOS targetSpecs =
     do
       qPutStrLn "\nAssembling source trees:\n"
-      targets <- prepareTargets cache cleanOS globalBuildDeps targetSpecs
+      targets <- prepareTargets cache dependOS globalBuildDeps targetSpecs
       qPutStrLn "\nBuilding all targets:"
-      failed <- buildLoop cache globalBuildDeps localRepo poolOS cleanOS targets
+      failed <- buildLoop cache globalBuildDeps localRepo poolOS dependOS targets
       return (localRepo, failed)
     where
       -- targetList <- liftIO $ countAndPrepareTargets cache globalBuildDeps cleanOS targetSpecs
@@ -482,9 +482,9 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog ta
 -- of builds.  For lax: dependencies, then image copy, then source
 -- copy.  For other: image copy, then source copy, then dependencies.
 prepareBuildImage :: P.CacheRec -> OSImage -> Fingerprint -> OSImage -> Target -> IO DebianBuildTree
-prepareBuildImage cache cleanOS sourceFingerprint buildOS target | P.strictness (P.params cache) == P.Lax =
+prepareBuildImage cache dependOS sourceFingerprint buildOS target | P.strictness (P.params cache) == P.Lax =
     -- Install dependencies directly into the clean environment
-    installDependencies cleanOS (cleanSource target) buildDepends sourceFingerprint >>=
+    installDependencies dependOS (cleanSource target) buildDepends sourceFingerprint >>=
     prepareTree noClean
     where
       prepareTree True _ =
@@ -493,13 +493,13 @@ prepareBuildImage cache cleanOS sourceFingerprint buildOS target | P.strictness 
           maybe (error ("No build tree at " ++ show newPath)) return
       prepareTree False _ =
           (\ x -> qPutStrLn "Copying build tree..." >> quieter 1 x) $
-          Debian.Repo.syncEnv cleanOS buildOS >>
+          Debian.Repo.syncEnv dependOS buildOS >>
           copySourceTree (cleanSource target) newPath
       buildDepends = (P.buildDepends (P.params cache))
       noClean = P.noClean (P.params cache)
-      newPath = rootPath (rootDir buildOS) ++ fromJust (dropPrefix (rootPath (rootDir cleanOS)) oldPath)
+      newPath = rootPath (rootDir buildOS) ++ fromJust (dropPrefix (rootPath (rootDir dependOS)) oldPath)
       oldPath = topdir . cleanSource $ target
-prepareBuildImage cache cleanOS sourceFingerprint buildOS target =
+prepareBuildImage cache dependOS sourceFingerprint buildOS target =
     -- Install dependencies directly into the build environment
     findTree noClean >>=
     downloadDeps >>=
@@ -514,12 +514,12 @@ prepareBuildImage cache cleanOS sourceFingerprint buildOS target =
           findOneDebianBuildTree newPath >>=
           maybe (error ("prepareBuildImage: could not find build tree in " ++ newPath)) return
 
-      downloadDeps buildTree = downloadDependencies cleanOS buildTree buildDepends sourceFingerprint >>
+      downloadDeps buildTree = downloadDependencies dependOS buildTree buildDepends sourceFingerprint >>
                                return buildTree
 
       syncEnv False buildTree =
           (\ x -> qPutStrLn "Syncing buildOS" >> quieter 1 x) $
-              Debian.Repo.syncEnv cleanOS buildOS >>= (\ os -> return (os, buildTree))
+              Debian.Repo.syncEnv dependOS buildOS >>= (\ os -> return (os, buildTree))
       syncEnv True buildTree =
           return (buildOS, buildTree)
 
