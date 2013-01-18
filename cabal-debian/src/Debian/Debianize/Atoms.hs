@@ -15,7 +15,8 @@ module Debian.Debianize.Atoms
     , setRevision
     , putExecMap
     , putExtraDevDep
-    , putBinaryPackageDep
+    , depends
+    , conflicts
     , setArchitecture
     , setPriority
     , setSection
@@ -51,7 +52,7 @@ import Debian.Debianize.Types.Dependencies (DependencyHints(..))
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, PackagePriority, Section)
-import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName)
+import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName, Relation(..))
 import Distribution.Package (PackageName(..))
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
@@ -154,9 +155,13 @@ putExecMap cabal debian deb = doDependencyHint (\ x -> x {execMap = Map.insert c
 putExtraDevDep :: HasAtoms atoms => BinPkgName -> atoms -> atoms
 putExtraDevDep bin deb = doDependencyHint (\ x -> x {extraDevDeps = bin : extraDevDeps x}) deb
 
-putBinaryPackageDep :: HasAtoms atoms => BinPkgName -> BinPkgName -> atoms -> atoms
-putBinaryPackageDep pkg dep deb =
-    doDependencyHint (\ x -> x {binaryPackageDeps = (pkg, dep) : binaryPackageDeps x}) deb
+depends :: HasAtoms atoms => BinPkgName -> Relation -> atoms -> atoms
+depends pkg rel deb =
+    doDependencyHint (\ x -> x {binaryPackageDeps = (pkg, rel) : binaryPackageDeps x}) deb
+
+conflicts :: HasAtoms atoms => BinPkgName -> Relation -> atoms -> atoms
+conflicts pkg rel deb =
+    doDependencyHint (\ x -> x {binaryPackageConflicts = (pkg, rel) : binaryPackageConflicts x}) deb
 
 setArchitecture :: HasAtoms atoms => DebAtomKey -> PackageArchitectures -> atoms -> atoms
 setArchitecture k x deb = insertAtom k (DHArch x) deb
@@ -182,7 +187,7 @@ doWebsite bin x deb = insertAtom (Binary bin) (DHWebsite x) deb
 doBackups :: HasAtoms atoms => BinPkgName -> String -> atoms -> atoms
 doBackups bin s deb =
     insertAtom (Binary bin) (DHBackups s) $
-    putBinaryPackageDep bin (BinPkgName "anacron") $
+    depends bin (Rel (BinPkgName "anacron") Nothing Nothing) $
     deb
 
 setSourcePackageName :: HasAtoms atoms => SrcPkgName -> atoms -> atoms

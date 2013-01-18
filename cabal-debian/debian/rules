@@ -6,7 +6,3 @@ include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/hlibrary.mk
 
 build/cabal-debian:: build-ghc-stamp
-
-# How to install an extra file into the documentation package
-#binary-fixup/libghc-cabal-debian-doc::
-#	echo "Some informative text" > debian/libghc-cabal-debian-doc/usr/share/doc/libghc-cabal-debian-doc/AnExtraDocFile

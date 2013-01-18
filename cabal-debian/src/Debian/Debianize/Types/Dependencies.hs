@@ -15,7 +15,7 @@ import Data.Maybe (catMaybes, listToMaybe)
 import Debian.Control
 import Debian.Debianize.Types.PackageType (DebType(Dev, Prof, Doc), VersionSplits(..), knownVersionSplits)
 import Debian.Orphans ()
-import Debian.Relation (BinPkgName)
+import Debian.Relation (BinPkgName, Relation)
 import qualified Debian.Relation as D
 import Debian.Version (DebianVersion)
 import Distribution.Package (PackageName)
@@ -63,11 +63,11 @@ data DependencyHints
       -- E.g., when building the haskell-terminfo package we put
       -- "libncurses5-dev" into this list to make it an install
       -- dependency of libghc-terminfo-dev.
-      , binaryPackageDeps :: [(BinPkgName, BinPkgName)]
+      , binaryPackageDeps :: [(BinPkgName, Relation)]
       -- ^ An entry (a, b) says that debian package a should have a
       -- dependency on b, e.g. ("cabal-debian", "apt-file") says that
       -- cabal-debian program needs apt-file to be installed.
-      , binaryPackageConflicts :: [(BinPkgName, BinPkgName)]
+      , binaryPackageConflicts :: [(BinPkgName, Relation)]
       -- ^ An entry (a, b) says that two debian packages should both
       -- have Conflicts entries referring to each other.  For example
       -- [("libghc-quickcheck1-doc", "libghc-quickcheck2-doc")] says

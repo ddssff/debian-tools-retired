@@ -13,14 +13,14 @@ import Data.Set as Set (fromList)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization, newDebianization)
-import Debian.Debianize.Atoms (tightDependencyFixup, missingDependency, setRevision, putExecMap, putBinaryPackageDep,
-                               doExecutable, doWebsite, doServer, doBackups, setArchitecture)
+import Debian.Debianize.Atoms as Atom (tightDependencyFixup, missingDependency, setRevision, putExecMap,
+                                       depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture)
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (describeDebianization, writeDebianization)
 import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), insertAtom, defaultAtoms)
-import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..),
-                                             PackageRelations(..), VersionControlSpec(..))
+import Debian.Debianize.Types.Debianization as Deb (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..),
+                                                    PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
@@ -184,20 +184,21 @@ test3 =
                                                                            " package in the Debian temporary area as part of the build process."])
                                                          , relations =
                                                              PackageRelations
-                                                             { depends = [ [Rel (BinPkgName {unBinPkgName = "dctrl-tools"}) Nothing Nothing]
-                                                                         , [Rel (BinPkgName {unBinPkgName = "debhelper"}) Nothing Nothing]
-                                                                         , [Rel (BinPkgName {unBinPkgName = "dh-buildinfo"}) Nothing Nothing]
-                                                                         , [Rel (BinPkgName {unBinPkgName = "ghc"}) (Just (GRE (Debian.Version.parseDebianVersion ("7.6" :: String)))) Nothing]
-                                                                         , [Rel (BinPkgName {unBinPkgName = "cdbs"}) Nothing Nothing]
-                                                                         , [Rel (BinPkgName {unBinPkgName = "${misc:Depends}"}) Nothing Nothing]
-                                                                         , [Rel (BinPkgName {unBinPkgName = "html-xml-utils"}) Nothing Nothing]
-                                                                         , [Rel (BinPkgName {unBinPkgName = "hscolour"}) (Just (GRE (Debian.Version.parseDebianVersion ("1.8" :: String)))) Nothing]
-                                                                         , [Rel (BinPkgName {unBinPkgName = "ghc-haddock"}) (Just (GRE (Debian.Version.parseDebianVersion ("7.4" :: String)))) Nothing] ]
+                                                             { Deb.depends =
+                                                                   [ [Rel (BinPkgName {unBinPkgName = "dctrl-tools"}) Nothing Nothing]
+                                                                   , [Rel (BinPkgName {unBinPkgName = "debhelper"}) Nothing Nothing]
+                                                                   , [Rel (BinPkgName {unBinPkgName = "dh-buildinfo"}) Nothing Nothing]
+                                                                   , [Rel (BinPkgName {unBinPkgName = "ghc"}) (Just (GRE (Debian.Version.parseDebianVersion ("7.6" :: String)))) Nothing]
+                                                                   , [Rel (BinPkgName {unBinPkgName = "cdbs"}) Nothing Nothing]
+                                                                   , [Rel (BinPkgName {unBinPkgName = "${misc:Depends}"}) Nothing Nothing]
+                                                                   , [Rel (BinPkgName {unBinPkgName = "html-xml-utils"}) Nothing Nothing]
+                                                                   , [Rel (BinPkgName {unBinPkgName = "hscolour"}) (Just (GRE (Debian.Version.parseDebianVersion ("1.8" :: String)))) Nothing]
+                                                                   , [Rel (BinPkgName {unBinPkgName = "ghc-haddock"}) (Just (GRE (Debian.Version.parseDebianVersion ("7.4" :: String)))) Nothing] ]
                                                              , recommends = []
                                                              , suggests = []
                                                              , preDepends = []
                                                              , breaks = []
-                                                             , conflicts = []
+                                                             , Deb.conflicts = []
                                                              , provides = []
                                                              , replaces = []
                                                              , builtUsing = [] }}]}
@@ -313,6 +314,9 @@ test4 =
       jstreePath = "/usr/share/clckwrks-0.13.2/jstree"
       json2Path = "/usr/share/clckwrks-0.13.2/json2"
 
+anyrel :: BinPkgName -> Relation
+anyrel b = Rel b Nothing Nothing
+
 test5 :: Test
 test5 =
     TestLabel "test5" $
@@ -328,7 +332,7 @@ test5 =
                                  setArchitecture (Binary (BinPkgName "creativeprompts-production")) All $
                                  insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
                                  copyFirstLogEntry old $ -- Get rid of the "debianization generated by..." message so we match
-                                 putBinaryPackageDep (BinPkgName "creativeprompts-server") (BinPkgName "markdown") $
+                                 Atom.depends (BinPkgName "creativeprompts-server") (anyrel (BinPkgName "markdown")) $
                                  putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
                                  doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" $
                                  -- doExecutable (BinPkgName "creativeprompts-development") (InstallFile "creativeprompts-development" Nothing Nothing "creativeprompts-development") $
@@ -408,6 +412,12 @@ dropFirstLogEntry (deb@(Debianization {changelog = ChangeLog (_ : tl)})) = deb {
 copyFirstLogEntry :: Debianization -> Debianization -> Debianization
 copyFirstLogEntry (Debianization {changelog = ChangeLog (hd1 : _)}) (deb2@(Debianization {changelog = ChangeLog (_ : tl2)})) = deb2 {changelog = ChangeLog (hd1 : tl2)}
 
+copyChangelog :: Debianization -> Debianization -> Debianization
+copyChangelog (Debianization {changelog = x}) deb = deb {changelog = x}
+
+copyCopyright :: Debianization -> Debianization -> Debianization
+copyCopyright (Debianization {copyright = x}) deb = deb {copyright = x}
+
 test6 :: Test
 test6 =
     TestLabel "test6" $
@@ -421,7 +431,7 @@ test6 =
                                  -- setSourcePackageName (SrcPkgName "haskell-creativeprompts") $
                                  -- setChangelog oldLog $
                                  putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
-                                 putBinaryPackageDep (BinPkgName "creativeprompts-server") (BinPkgName "markdown") $
+                                 Atom.depends (BinPkgName "creativeprompts-server") (anyrel (BinPkgName "markdown")) $
                                  setArchitecture (Binary (BinPkgName "creativeprompts-server")) Any $
                                  setArchitecture (Binary (BinPkgName "creativeprompts-development")) All $
                                  setArchitecture (Binary (BinPkgName "creativeprompts-production")) All $
@@ -449,7 +459,13 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase ( do old <- inputDebianization "."
-                  new <- cabalToDebianization "test-data/cabal-debian/input" old
+                  new <- cabalToDebianization "test-data/cabal-debian/input" old >>=
+                         return . insertAtom Source (UtilsPackageName (BinPkgName "cabal-debian")) >>=
+                         return . Atom.depends (BinPkgName "cabal-debian") (anyrel (BinPkgName "apt-file"))  >>=
+                         return . Atom.conflicts (BinPkgName "cabal-debian") (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing)  >>=
+                         return . copyChangelog old >>=
+                         return . copyCopyright old >>=
+                         return . finalizeDebianization
                   assertEqual "test7" [] (diffDebianizations old new)
              )
 

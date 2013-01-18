@@ -221,12 +221,11 @@ debianDescriptionBase synopsis' description' author' maintainer' url =
       list :: b -> ([a] -> b) -> [a] -> b
       list d f l = case l of [] -> d; _ -> f l
 
-extraDeps :: [(D.BinPkgName, D.BinPkgName)] -> D.BinPkgName -> [[D.Relation]]
+extraDeps :: [(D.BinPkgName, D.Relation)] -> D.BinPkgName -> [[D.Relation]]
 extraDeps deps p =
     case filter ((== p) . fst) deps of
       [] -> []
-      pairs -> map (mkDep . snd) pairs
-    where mkDep name = [D.Rel name Nothing Nothing]
+      pairs -> map ((: []) . snd) pairs
 
 anyrel' :: D.BinPkgName -> [D.Relation]
 anyrel' x = [D.Rel x Nothing Nothing]

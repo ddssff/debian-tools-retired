@@ -70,7 +70,6 @@ Build-Depends-Indep: ghc-doc
                      , libghc-mtl-doc
                      , libghc-network-doc
                      , libghc-parsec3-doc (>= 3)
-                     , libghc-pretty-doc | ghc-doc
                      , libghc-process-doc | ghc-doc
                      , libghc-puremd5-doc
                      , libghc-regex-tdfa-doc
@@ -147,4 +146,4 @@ Description: Create a debianization for a cabal package
  .
   Author: David Fox <dsf@seereason.com>
   Upstream-Maintainer: David Fox <dsf@seereason.com>
-Conflicts: haskell-debian-utils (<< 3.59)
+Conflicts: ${haskell:Conflicts}, haskell-debian-utils (<< 3.59)

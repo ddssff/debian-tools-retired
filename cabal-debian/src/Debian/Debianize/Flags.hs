@@ -15,7 +15,7 @@ import Debian.Debianize.Types.Dependencies (DependencyHints (..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..))
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
-import Debian.Relation (BinPkgName(..), SrcPkgName(..))
+import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relation(..))
 import Debian.Version (parseDebianVersion)
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
@@ -107,6 +107,9 @@ atomOptions =
              "Subdirectory where cabal does its build, dist/build by default, dist-ghc when run by haskell-devscripts.  The build subdirectory is added to match the behavior of the --builddir option in the Setup script."
     ]
 
+anyrel :: BinPkgName -> Relation
+anyrel x = Rel x Nothing Nothing
+
 -- | Process a --executable command line argument
 executableOption :: String -> (BinPkgName -> InstallFile -> a) -> a
 executableOption arg f =
@@ -119,7 +122,7 @@ executableOption arg f =
                          , sourceDir = case sd of "./" -> Nothing; _ -> Just sd
                          , destDir = case md of (':' : dd) -> Just dd; _ -> Nothing })
 
-parseDeps :: String -> [(BinPkgName, BinPkgName)]
+parseDeps :: String -> [(BinPkgName, Relation)]
 parseDeps arg =
     map pair (split arg)
     where
@@ -130,7 +133,7 @@ parseDeps arg =
             _ -> error $ "Invalid dependency: " ++ show s
       pair s =
           case s =~ "^[ \t:]*([^ \t:]+)[ \t]*:[ \t]*(.+)[ \t]*" :: (String, String, String, [String]) of
-            (_, _, _, [x, y]) -> (b x, b y)
+            (_, _, _, [x, y]) -> (b x, anyrel (b y))
             _ -> error $ "Invalid dependency: " ++ show s
 
 -- Lifted from Distribution.Simple.Setup, since it's not exported.
