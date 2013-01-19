@@ -109,7 +109,7 @@ data DebAtom
     | DHDescription Text		       	  -- ^ Set the description of source or binary
     | DHInstall FilePath FilePath       	  -- ^ Install a build file into the binary package
     | DHInstallTo FilePath FilePath     	  -- ^ Install a build file into the binary package at an exact location
-    | DHInstallData FilePath FilePath   	  -- ^ DHInstallTo the package's data directory: /usr/share/package-version/
+    | DHInstallData FilePath FilePath   	  -- ^ DHInstallTo somewhere relative to DataDir (see above)
     | DHFile FilePath Text              	  -- ^ Create a file with the given text at the given path
     | DHInstallCabalExec String FilePath	  -- ^ Install a cabal executable into the binary package
     | DHInstallCabalExecTo String FilePath	  -- ^ Install a cabal executable into the binary package at an exact location

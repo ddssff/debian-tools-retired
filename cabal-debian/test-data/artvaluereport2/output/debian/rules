@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/hlibrary.mk
+
+#makebuilddir::
+#	SITENAME=appraisalreportonline.com SERVERADMIN=clifford.beshers@gmail.com HOSTNAME=localhost PROXYPORT=9027 TESTINGPORT=8000 /usr/bin/happstack-debianization-install
+
+build/artvaluereport2-production:: build-ghc-stamp
+
+binary-fixup/artvaluereport2-server::
+	for i in Udon.js flexbox.css DataTables-1.8.2 html5sortable jGFeed searchMag.png Clouds.jpg tweaks.css verticalTabs.css blueprint jquery.blockUI jquery.tinyscrollbar ; do \
+	  find $$i -type f -print | while read i; do install -D $$i debian/artvaluereport2-server/usr/share/artvaluereport2-data/$$i; done; done
+	for i in ArtValueReport_SunsetSpectrum.ico; do install -D theme/$$i debian/artvaluereport2-server/usr/share/artvaluereport2-data/$$i; done
+
+binary-fixup/artvaluereport2-backups::
+	install -Dps -m 755 dist-ghc/build/artvaluereport2-backups/artvaluereport2-backups debian/artvaluereport2-backups/etc/cron.hourly/artvaluereport2

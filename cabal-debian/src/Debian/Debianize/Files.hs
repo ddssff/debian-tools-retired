@@ -6,24 +6,26 @@ module Debian.Debianize.Files
     , toFileMap
     ) where
 
+import Debug.Trace
+
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
 import qualified Data.Map as Map
 import Data.Monoid (Monoid, (<>), mempty)
-import Data.Set (toList, member)
+import Data.Set as Set (toList, member, filter)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack, unlines)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, dependencyHints, setArchitecture)
+import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, dependencyHints, setArchitecture, setPackageDescription)
 import Debian.Debianize.Combinators (describe, extraDeps, buildDeps)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms, backupAtoms)
-import Debian.Debianize.Types.Atoms (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom)
+import Debian.Debianize.Types.Atoms (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom, defaultAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                                       VersionControlSpec(..), XField(..), XFieldDest(..), newBinaryDebDescription)
+                                                       VersionControlSpec(..), XField(..), XFieldDest(..), newBinaryDebDescription, modifyBinaryDeb)
 import Debian.Debianize.Types.Dependencies (DependencyHints (binaryPackageDeps, binaryPackageConflicts))
 import Debian.Debianize.Types.PackageType (PackageType(Exec))
 import Debian.Debianize.Utility (showDeps')
-import Debian.Policy (PackageArchitectures(Any, Names), Section(..))
+import Debian.Policy (PackageArchitectures(Any), Section(..))
 import Debian.Relation (Relations, BinPkgName)
 import qualified Debian.Relation as D
 import qualified Distribution.PackageDescription as Cabal
@@ -35,16 +37,14 @@ import Data.Maybe
 import Data.Set as Set (Set, difference, union, fromList, null, insert, toList)
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, utilsPackageName)
-import Debian.Debianize.Types.Atoms (insertAtoms')
 import Debian.Debianize.Types.Dependencies (DependencyHints (extraDevDeps))
-import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.Types.PackageHints (InstallFile(..))
 import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Utilities))
 import Debian.Policy (PackageArchitectures(All))
 import Distribution.Package (PackageIdentifier(..))
-import Distribution.PackageDescription as Cabal (PackageDescription, BuildInfo(buildable), Executable(exeName, buildInfo))
-import Distribution.Text (display)
+import Distribution.PackageDescription as Cabal (Executable(exeName))
 import Prelude hiding (writeFile, init, unlines)
-import System.FilePath (takeDirectory)
+import System.FilePath (takeDirectory, takeFileName)
 
 sourceFormat :: Debianization -> [(FilePath, Text)]
 sourceFormat deb =
@@ -182,9 +182,11 @@ toFileMap d =
 -- this function is not idempotent.  (Exported for use in unit tests.)
 finalizeDebianization  :: Debianization -> Debianization
 finalizeDebianization deb0 =
-    foldAtomsFinalized g deb' deb' -- Apply tweaks to the debianization
+    foldAtomsFinalized g deb'' deb'' -- Apply tweaks to the debianization
     where
-      deb' = makeUtilsPackage $ librarySpecs $ buildDeps $ foldAtomsFinalized f (putAtoms mempty deb0) deb0
+      -- Fixme - makeUtilsPackage does stuff that needs to go through foldAtomsFinalized
+      deb' = foldAtomsFinalized f (putAtoms mempty deb0) deb0
+      deb'' = makeUtilsPackage $ librarySpecs $ buildDeps $ deb'
 
       -- Create the binary packages
       f :: DebAtomKey -> DebAtom -> Debianization -> Debianization
@@ -199,23 +201,13 @@ finalizeDebianization deb0 =
 
       -- Apply the hints in the atoms to the debianization
       g :: DebAtomKey -> DebAtom -> Debianization -> Debianization
-      g (Binary b) (DHArch x) deb = modifyBinaryDeb b (\ bin -> bin {architecture = x}) deb
-      g (Binary b) (DHPriority x) deb = modifyBinaryDeb b (\ bin -> bin {binaryPriority = Just x}) deb
+      g (Binary b) (DHArch x) deb = modifyBinaryDeb b (\ (Just bin) -> bin {architecture = x}) deb
+      g (Binary b) (DHPriority x) deb = modifyBinaryDeb b (\ (Just bin) -> bin {binaryPriority = Just x}) deb
       g Source (DHPriority x) deb = deb {sourceDebDescription = (sourceDebDescription deb) {priority = Just x}}
-      g (Binary b) (DHSection x) deb = modifyBinaryDeb b (\ bin -> bin {binarySection = Just x}) deb
+      g (Binary b) (DHSection x) deb = modifyBinaryDeb b (\ (Just bin) -> bin {binarySection = Just x}) deb
       g Source (DHSection x) deb = deb {sourceDebDescription = (sourceDebDescription deb) {section = Just x}}
-      g (Binary b) (DHDescription x) deb = modifyBinaryDeb b (\ bin -> bin {Debian.description = x}) deb
+      g (Binary b) (DHDescription x) deb = modifyBinaryDeb b (\ (Just bin) -> bin {Debian.description = x}) deb
       g _ _ deb = deb
-
-modifyBinaryDeb :: BinPkgName -> (BinaryDebDescription -> BinaryDebDescription) -> Debianization -> Debianization
-modifyBinaryDeb bin f deb =
-    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = xs''}}
-    where
-      -- scan the binary debs and apply f to the target, recording whether we found it
-      (xs', found) = foldl g ([], False) (binaryPackages (sourceDebDescription deb))
-      g (xs, found') x = if Debian.package x == bin then (f x : xs, True) else (x : xs, found')
-      -- If we didn't find the target package create it and apply f
-      xs'' = if found then xs' else f (newBinaryDebDescription bin (Names [])) : xs'
 
 foldAtomsFinalized :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
 foldAtomsFinalized f r0 atoms =
@@ -242,7 +234,9 @@ foldAtomsFinalized f r0 atoms =
           [(Source, DebRulesFragment (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
                                               , "\tinstall -Dp " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]))]
       expandAtom (Binary p) (DHInstallData s d) =
-          [(Binary p, DHInstallTo s (datadir </> makeRelative "/" d))]
+          [(Binary p, if takeFileName s == takeFileName d
+                      then DHInstall s (datadir </> makeRelative "/" (takeDirectory d))
+                      else DHInstallTo s (datadir </> makeRelative "/" d))]
       expandAtom (Binary p) (DHInstallTo s d) =
           [(Source, (DebRulesFragment (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
                                                , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])))]
@@ -313,7 +307,7 @@ control src =
             (case dmUploadAllowed src of True -> [Field ("DM-Upload-Allowed", " yes")]; False -> []) ++
             mField "Priority" (priority src) ++
             mField "Section" (section src) ++
-            t5 (depField "Build-Depends" (buildDepends src)) ++
+            depField "Build-Depends" (buildDepends src) ++
             depField "Build-Depends-Indep" (buildDependsIndep src) ++
             depField "Build-Conflicts" (buildConflicts src) ++
             depField "Build-Conflicts-Indep" (buildConflictsIndep src) ++
@@ -328,8 +322,8 @@ control src =
       binary bin =
           Paragraph
            ([Field ("Package", " " ++ show (pretty (package bin))),
-             Field ("Architecture", " " ++ show (pretty (architecture bin))),
-             Field ("Section", " " ++ show (pretty (binarySection bin)))] ++
+             Field ("Architecture", " " ++ show (pretty (architecture bin)))] ++
+            mField "Section" (binarySection bin) ++
             mField "Priority" (binaryPriority bin) ++
             bField "Essential" (essential bin) ++
             relFields (relations bin))
@@ -432,11 +426,11 @@ librarySpec atoms arch typ pkgId =
             }
 
 t1 :: Show a => a -> a
-t1 x = {- trace ("available: " ++ show x) -} x
+t1 x = trace ("install: " ++ show x) x
 t2 :: Show a => a -> a
-t2 x = {- trace ("installed: " ++ show x) -} x
+t2 x = trace ("fileInfoAtoms: " ++ show x) x
 t3 :: Show a => a -> a
-t3 x = {- trace ("t3: " ++ show x) -} x
+t3 x = trace ("utils package files: " ++ show x) x
 t4 :: Show a => a -> a
 t4 x = {- trace ("t4: " ++ show x) -} x
 t5 :: Show a => a -> a
@@ -447,62 +441,88 @@ t5 x = {- trace ("t5: " ++ show x) -} x
 makeUtilsPackage :: Debianization -> Debianization
 makeUtilsPackage deb | isNothing (packageDescription deb) = deb
 makeUtilsPackage deb =
-    case Set.difference (t1 available) (t2 installed) of
+    case Set.difference available installed of
       s | Set.null s -> deb
-      s ->      let p = t4 (fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)) in
-                makeUtilsAtoms p s $
-                deb { sourceDebDescription =
-                          (sourceDebDescription deb)
-                          { binaryPackages =
-                               binaryPackages (sourceDebDescription deb) ++
-                               [BinaryDebDescription
-                                { Debian.package = p
-                                , architecture = Any
-                                , binarySection = Just (MainSection "misc")
-                                , binaryPriority = Nothing
-                                , essential = False
-                                , Debian.description = describe deb Utilities (Cabal.package pkgDesc)
-                                , relations =
-                                    PackageRelations
-                                    { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                                                extraDeps (binaryPackageDeps (dependencyHints deb)) p
-                                    , recommends = []
-                                    , suggests = []
-                                    , preDepends = []
-                                    , breaks = []
-                                    , conflicts = [anyrel "${haskell:Conflicts}"] ++ extraDeps (binaryPackageConflicts (dependencyHints deb)) p
-                                    , provides = []
-                                    , replaces = []
-                                    , builtUsing = []
-                                    }
-                                }]} }
+      s -> let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)
+               -- Generate the atoms of the utils package
+               atoms = foldr (uncurry insertAtom) (setPackageDescription pkgDesc defaultAtoms) (makeUtilsAtoms p s)
+               -- add them to deb
+               deb' = foldAtomsFinalized insertAtom deb atoms in
+               -- Passing id to modify will cause the package to be created if necessary
+               modifyBinaryDeb p (f p s) deb'
     where
+      f _ _ (Just bin) = bin
+      f p s Nothing = let bin = newBinaryDebDescription p (arch s) in bin {binarySection = Just (MainSection "misc"), relations = g (relations bin)}
+      arch s = if Set.null (Set.filter isCabalExecutable s) then All else Any
+      isCabalExecutable (CabalExecutable _) = True
+      isCabalExecutable _ = False
+      g rels = rels { depends = depends rels ++ [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"]
+                    , conflicts = conflicts rels ++ [anyrel "${haskell:Conflicts}"] }
+{-
+               deb' { sourceDebDescription =
+                         (sourceDebDescription deb')
+                         { binaryPackages =
+                               binaryPackages (sourceDebDescription deb') ++
+                                   [BinaryDebDescription
+                                    { Debian.package = p
+                                    , architecture = Any
+                                    , binarySection = Just (MainSection "misc")
+                                    , binaryPriority = Nothing
+                                    , essential = False
+                                    , Debian.description = describe deb' Utilities (Cabal.package pkgDesc)
+                                    , relations =
+                                        PackageRelations
+                                        { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
+                                                    extraDeps (binaryPackageDeps (dependencyHints deb')) p
+                                        , recommends = []
+                                        , suggests = []
+                                        , preDepends = []
+                                        , breaks = []
+                                        , conflicts = [anyrel "${haskell:Conflicts}"] ++ extraDeps (binaryPackageConflicts (dependencyHints deb')) p
+                                        , provides = []
+                                        , replaces = []
+                                        , builtUsing = []
+                                        }
+                                    }]} }
+-}
       pkgDesc = fromMaybe (error "makeUtilsPackage: no PackageDescription") $ packageDescription deb
       available :: Set FileInfo
       available = Set.union (Set.fromList (map DataFile (Cabal.dataFiles pkgDesc)))
-                            (Set.fromList (map (CabalExecutable . exeName) (filter (Cabal.buildable . Cabal.buildInfo) (Cabal.executables pkgDesc))))
+                            (Set.fromList (map (CabalExecutable . exeName) (Prelude.filter (Cabal.buildable . Cabal.buildInfo) (Cabal.executables pkgDesc))))
       installed :: Set FileInfo
-      installed = foldAtoms cabalFile mempty (t3 deb)
+      installed = foldAtoms cabalFile mempty deb
       cabalFile :: DebAtomKey -> DebAtom -> Set FileInfo -> Set FileInfo
       cabalFile _ (DHInstallCabalExec name _) xs = Set.insert (CabalExecutable name) xs
       cabalFile _ (DHInstallCabalExecTo name _) xs = Set.insert (CabalExecutable name) xs
       cabalFile k (DHExecutable f@(InstallFile {})) xs = foldr (uncurry cabalFile) xs (fileAtoms k f)
-      -- cabalFile p (DHExecutable f@(InstallFile {}) xs = Set.insert (CabalExecutable name) xs
       cabalFile _ (DHInstall path _) xs = Set.insert (DataFile path) xs
       cabalFile _ (DHInstallTo path _) xs = Set.insert (DataFile path) xs
       cabalFile _ (DHInstallData path _) xs = Set.insert (DataFile path) xs
       cabalFile _ _ xs = xs
-      makeUtilsAtoms :: BinPkgName -> Set FileInfo -> Debianization -> Debianization
-      makeUtilsAtoms p s deb' =
-          case (bundledExecutables deb' pkgDesc, Cabal.dataFiles pkgDesc) of
-            ([], []) -> deb'
-            _ -> insertAtom Source (DebRulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))) $
-                 insertAtoms' (Binary p) (map fileInfoAtom (Set.toList s)) $
-                 deb'
-      fileInfoAtom (DataFile path) = DHInstall path (takeDirectory ("usr/share" </> display (Cabal.package pkgDesc) </> path))
+
+makeUtilsAtoms :: BinPkgName -> Set FileInfo -> [(DebAtomKey, DebAtom)]
+makeUtilsAtoms p s =
+    if Set.null s
+    then []
+    else (Source, DebRulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))) :
+         map (\ x -> (Binary p, x)) (map fileInfoAtom (Set.toList s))
+    where
+      fileInfoAtom (DataFile path) = DHInstallData path path
       fileInfoAtom (CabalExecutable name) = DHInstallCabalExec name "usr/bin"
 
--- | The list of executables without a corresponding cabal package to put them into
+{-
+makeUtilsAtoms :: BinPkgName -> Set FileInfo -> Debianization -> Debianization
+makeUtilsAtoms p s deb =
+    case (bundledExecutables deb pkgDesc, Cabal.dataFiles pkgDesc) of
+      ([], []) -> deb
+      _ -> insertAtom Source (DebRulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))) $
+           insertAtoms' (Binary p) (map fileInfoAtom (Set.toList s)) $
+           deb
+    where
+      fileInfoAtom (DataFile path) = DHInstallData path (takeDirectory path)
+      fileInfoAtom (CabalExecutable name) = DHInstallCabalExec name "usr/bin"
+
+-- | The list of executables without a corresponding debian package to put them into
 bundledExecutables :: HasAtoms atoms => atoms -> PackageDescription -> [Executable]
 bundledExecutables atoms pkgDesc =
     filter nopackage (filter (buildable . buildInfo) (Cabal.executables pkgDesc))
@@ -512,7 +532,9 @@ bundledExecutables atoms pkgDesc =
       execNameOfHint (Binary _) (DHExecutable e) xs = execName e : xs
       execNameOfHint (Binary _) (DHServer s) xs = execName (installFile s) : xs
       execNameOfHint (Binary _) (DHWebsite s) xs = execName (installFile (server s)) : xs
+      execNameOfHint (Binary _) (DHBackups s) xs = s : xs
       execNameOfHint _ _ xs = xs
+-}
 
 data FileInfo
     = DataFile FilePath

@@ -9,6 +9,8 @@ module Debian.Debianize.Types.Debianization
     , XFieldDest(..)
     , BinaryDebDescription(..)
     , newBinaryDebDescription
+    , modifyBinaryDeb
+    -- , modifyBinaryDescription
     , PackageRelations(..)
     , packageArch
     ) where
@@ -98,7 +100,7 @@ data SourceDebDescription
       , buildConflicts :: Relations
       , buildDependsIndep :: Relations
       , buildConflictsIndep :: Relations
-      , binaryPackages :: [BinaryDebDescription] -- This should perhaps be a set
+      , binaryPackages :: [BinaryDebDescription] -- This should perhaps be a set, or a map
       } deriving (Eq, Show, Data, Typeable)
 
 newSourceDebDescription :: SrcPkgName -> NameAddr -> StandardsVersion -> SourceDebDescription
@@ -175,6 +177,29 @@ newBinaryDebDescription name arch =
       , essential = False
       , description = mempty
       , relations = newPackageRelations }
+
+{-
+modifyBinaryDescription :: BinPkgName -> PackageArchitectures -> (BinaryDebDescription -> BinaryDebDescription) -> Debianization -> Debianization
+modifyBinaryDescription name arch f deb =
+    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = bins'}}
+    where
+      bins' = case partition ((== name) . package) (binaryPackages (sourceDebDescription deb)) of
+                ([], _) -> f (newBinaryDebDescription name arch) : binaryPackages (sourceDebDescription deb)
+                ([x], xs) -> f x : xs
+                _ -> error "binaryPackages should really be a map"
+-}
+
+-- | Like modifyBinaryDescription, but doesn't change the package
+-- order and intializes the architecture to Any.
+modifyBinaryDeb :: BinPkgName -> (Maybe BinaryDebDescription -> BinaryDebDescription) -> Debianization -> Debianization
+modifyBinaryDeb bin f deb =
+    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = bins'}}
+    where
+      bins' = if any (\ x -> package x == bin) bins
+             then map g (binaryPackages (sourceDebDescription deb))
+             else binaryPackages (sourceDebDescription deb) ++ [f Nothing]
+      g x = if package x == bin then f (Just x) else x
+      bins = binaryPackages (sourceDebDescription deb)
 
 -- ^ Package interrelationship information.
 data PackageRelations

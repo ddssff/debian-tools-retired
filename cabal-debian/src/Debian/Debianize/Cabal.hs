@@ -11,14 +11,13 @@ import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Maybe
 import Data.Set (toList)
 import Data.Text (Text, pack)
-import Data.Version (showVersion)
-import Debian.Debianize.Atoms (compilerVersion, cabalFlagAssignments, flags, setCompiler, setPackageDescription, setDataDir)
+import Debian.Debianize.Atoms (compilerVersion, cabalFlagAssignments, flags, setCompiler, setPackageDescription)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
 import Debian.Debianize.Types.Atoms (HasAtoms, DebAtomKey(Source), DebAtom(DHMaintainer), Flags(verbosity), lookupAtom)
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
-import Distribution.Package (Package(packageId), PackageIdentifier(pkgName, pkgVersion), PackageName(PackageName))
-import Distribution.PackageDescription as Cabal (PackageDescription(package, licenseFile, license, package, maintainer))
+import Distribution.Package (Package(packageId))
+import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, license, maintainer))
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), Compiler(..))
@@ -30,7 +29,6 @@ import Distribution.Verbosity (Verbosity, intToVerbosity)
 import System.Cmd (system)
 import System.Directory
 import System.Exit (ExitCode(..))
-import System.FilePath((</>))
 import System.IO.Error (catchIOError)
 import System.Posix.Files (setFileCreationMask)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
@@ -41,16 +39,8 @@ intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
 withSimplePackageDescription :: HasAtoms atoms => FilePath -> atoms -> (atoms -> IO a) -> IO a
 withSimplePackageDescription top atoms action =
     do (pkgDesc, compiler) <- getSimplePackageDescription top atoms
-       let atoms' = setDataDir (dataDirectory pkgDesc) $ setCompiler compiler . setPackageDescription pkgDesc $ atoms
+       let atoms' = setCompiler compiler . setPackageDescription pkgDesc $ atoms
        action atoms'
-
--- | This is the directory where the files listed in the Data-Files
--- section of the .cabal file need to be installed.
-dataDirectory :: PackageDescription -> FilePath
-dataDirectory pkgDesc =
-    "usr/share" </> (pkgname ++ "-" ++ (showVersion . pkgVersion . package $ pkgDesc))
-    where
-      PackageName pkgname = pkgName . package $ pkgDesc
 
 getSimplePackageDescription :: HasAtoms atoms => FilePath -> atoms -> IO (PackageDescription, Compiler)
 getSimplePackageDescription top atoms =

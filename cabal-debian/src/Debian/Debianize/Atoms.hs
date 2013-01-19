@@ -3,6 +3,7 @@ module Debian.Debianize.Atoms
     ( compiler
     , setCompiler
     , packageDescription
+    , dataDir
     , setPackageDescription
     , compilerVersion
     , noProfilingLibrary
@@ -30,8 +31,6 @@ module Debian.Debianize.Atoms
     , debMaintainer
     , buildDir
     , setBuildDir
-    , dataDir
-    , setDataDir
     , cabalFlagAssignments
     , putCabalFlagAssignments
     , flags
@@ -46,7 +45,7 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty, (<>))
 import Data.Set as Set (Set, maxView, toList, null, union, unions)
 import Data.Text (Text, pack, unlines)
-import Data.Version (Version)
+import Data.Version (Version, showVersion)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags, defaultFlags,
                                      lookupAtom, lookupAtomDef, lookupAtoms, foldAtoms, hasAtom, insertAtom, partitionAtoms)
 import Debian.Debianize.Types.Dependencies (DependencyHints(..))
@@ -54,10 +53,11 @@ import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat)
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName, Relation(..))
-import Distribution.Package (PackageName(..))
-import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
+import Distribution.Package (PackageName(..), PackageIdentifier(pkgName, pkgVersion))
+import Distribution.PackageDescription as Cabal (FlagName, PackageDescription(package))
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init, unlines)
+import System.FilePath ((</>))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
@@ -85,6 +85,18 @@ packageDescription deb =
     lookupAtom Source from deb
     where from (DHPackageDescription x) = Just x
           from _ = Nothing
+
+dataDir :: HasAtoms atoms => FilePath -> atoms -> FilePath
+dataDir def atoms =
+    maybe def dataDirectory $ packageDescription atoms
+    where
+      -- This is the directory where the files listed in the Data-Files
+      -- section of the .cabal file need to be installed.
+      dataDirectory :: PackageDescription -> FilePath
+      dataDirectory pkgDesc =
+          "usr/share" </> (pkgname ++ "-" ++ (showVersion . pkgVersion . package $ pkgDesc))
+          where
+            PackageName pkgname = pkgName . package $ pkgDesc
 
 setPackageDescription :: HasAtoms atoms => PackageDescription -> atoms -> atoms
 setPackageDescription desc atoms =
@@ -219,22 +231,6 @@ setBuildDir path atoms =
     where
       (_, atoms') = partitionAtoms p atoms
       p Source (BuildDir x) = Just x
-      p _ _ = Nothing
-
-dataDir :: HasAtoms atoms => FilePath -> atoms -> FilePath
-dataDir def atoms =
-    fromMaybe def $ foldAtoms from Nothing atoms
-    where
-      from Source (DataDir path') (Just path) | path /= path' = error $ "Conflicting dataDir atoms: " ++ show path ++ " vs. " ++ show path'
-      from Source (DataDir path') _ = Just path'
-      from _ _ x = x
-
-setDataDir :: HasAtoms atoms => FilePath -> atoms -> atoms
-setDataDir path atoms =
-    insertAtom Source (DataDir path) atoms'
-    where
-      (_, atoms') = partitionAtoms p atoms
-      p Source (DataDir x) = Just x
       p _ _ = Nothing
 
 cabalFlagAssignments :: HasAtoms atoms => atoms -> Set (FlagName, Bool)

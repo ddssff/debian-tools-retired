@@ -170,28 +170,15 @@ Build-Depends-Indep: ghc-doc
                      , libghc-xss-sanitize-doc (>= 0.3.0.1)
 Standards-Version: 3.8.1
 
-Package: creativeprompts-backups
-Architecture: any
-Section: misc
-Depends: ${shlibs:Depends}
-         , ${haskell:Depends}
-         , ${misc:Depends}
-         , anacron
-Conflicts: ${haskell:Conflicts}
-Description: backup program for creativeprompts.com
-  Install this somewhere other than creativeprompts.com to run automated
-  backups of the database.
-
-Package: creativeprompts-development
+Package: creativeprompts-data
 Architecture: all
 Section: misc
 Depends: ${shlibs:Depends}
          , ${haskell:Depends}
          , ${misc:Depends}
 Conflicts: ${haskell:Conflicts}
-Description:  Configuration for running the creativeprompts.com server
-  Testing version of the blog server, runs on port
-  8000 with HTML validation turned on.
+Description:  creativeprompts.com data files
+  Static data files for creativeprompts.com
 
 Package: creativeprompts-production
 Architecture: all
@@ -204,12 +191,25 @@ Description:  Configuration for running the creativeprompts.com server
   Production version of the blog server, runs on port
   9021 with HTML validation turned off.
 
-Package: creativeprompts-data
+Package: creativeprompts-development
 Architecture: all
 Section: misc
 Depends: ${shlibs:Depends}
          , ${haskell:Depends}
          , ${misc:Depends}
 Conflicts: ${haskell:Conflicts}
-Description:  creativeprompts.com data files
-  Static data files for creativeprompts.com
+Description:  Configuration for running the creativeprompts.com server
+  Testing version of the blog server, runs on port
+  8000 with HTML validation turned on.
+
+Package: creativeprompts-backups
+Architecture: any
+Section: misc
+Depends: ${shlibs:Depends}
+         , ${haskell:Depends}
+         , ${misc:Depends}
+         , anacron
+Conflicts: ${haskell:Conflicts}
+Description: backup program for creativeprompts.com
+  Install this somewhere other than creativeprompts.com to run automated
+  backups of the database.

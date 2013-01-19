@@ -1,0 +1,23 @@
+#! /bin/sh -e
+
+. /lib/lsb/init-functions
+
+case "$1" in
+  start)
+    test -x /usr/bin/artvaluereport2-server || exit 0
+    log_begin_msg "Starting artvaluereport2-staging..."
+    mkdir -p /srv/artvaluereport2-staging
+    'start-stop-daemon' '--start' '-b' '--quiet' '--make-pidfile' '-d' '/srv/artvaluereport2-staging' '--exec' '/usr/bin/artvaluereport2-server' '--pidfile' '/var/run/artvaluereport2-staging' '--' '--base-uri' 'http://seereason.com:9031/' '--http-port' '9031' '--top' '/srv/artvaluereport2-staging' '--logs' '/var/log/artvaluereport2-staging' '--log-mode' 'Production' '--static' '/usr/share/artvaluereport2-data' '--no-validate' '+RTS' '-IO' '-RTS'
+    log_end_msg $?
+    ;;
+  stop)
+    log_begin_msg "Stopping artvaluereport2-staging..."
+    'start-stop-daemon' '--stop' '--quiet' '--retry' '60' '--oknodo' '--pidfile' '/var/run/artvaluereport2-staging'
+    log_end_msg $?
+    ;;
+  *)
+    log_success_msg "Usage: ${0} {start|stop}"
+    exit 1
+esac
+
+exit 0
