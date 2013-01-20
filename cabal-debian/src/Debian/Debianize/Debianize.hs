@@ -8,6 +8,8 @@ module Debian.Debianize.Debianize
     ( cabalDebian
     , callDebianize
     , runDebianize
+    , debianize
+    , compileArgs
     , cabalToDebianization
     , newDebianization
     ) where
@@ -98,8 +100,8 @@ debianize top args =
 
 -- | Given a Flags record, get any additional configuration
 -- information from the environment, read the cabal package
--- description, read the existing debianization, and then generate and
--- return the new debianization (along with the data directory
+-- description and possibly the debian/changelog file, then generate
+-- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
 cabalToDebianization :: FilePath -> Debianization -> IO Debianization
 cabalToDebianization top old =
