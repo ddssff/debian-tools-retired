@@ -9,6 +9,18 @@ Synopsis:       Haskell modules for fine art appraisal applications
 Description:    Haskell modules for fine art appraisal applications
 Cabal-version:  >= 1.2.3.0
 build-type:     Custom
+Data-files:     Udon.js
+                flexbox.css
+                DataTables-1.8.2
+                html5sortable
+                jGFeed
+                searchMag.png
+                Clouds.jpg
+                tweaks.css
+                verticalTabs.css
+                blueprint
+                jquery.blockUI
+                jquery.tinyscrollbar
 
 flag local-artvaluereport-data
   Description: Build with local copy of the artvaluereport-data library

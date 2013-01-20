@@ -1,11 +1,24 @@
 #!/usr/bin/make -f
+
+DEB_CABAL_PACKAGE = artvaluereport2
+
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/hlibrary.mk
 
-#makebuilddir::
-#	SITENAME=appraisalreportonline.com SERVERADMIN=clifford.beshers@gmail.com HOSTNAME=localhost PROXYPORT=9027 TESTINGPORT=8000 /usr/bin/happstack-debianization-install
-
+build/artvaluereport2-staging:: build-ghc-stamp
+build/artvaluereport2-server:: build-ghc-stamp
 build/artvaluereport2-production:: build-ghc-stamp
+build/artvaluereport2-development:: build-ghc-stamp
+build/artvaluereport2-backups:: build-ghc-stamp
+
+binary-fixup/artvaluereport2-staging::
+	install -Dp dist-ghc/build/artvaluereport2-server/artvaluereport2-server debian/artvaluereport2-staging/usr/bin/artvaluereport2-staging
+
+binary-fixup/artvaluereport2-production::
+	install -Dp dist-ghc/build/artvaluereport2-server/artvaluereport2-server debian/artvaluereport2-production/usr/bin/artvaluereport2-production
+
+binary-fixup/artvaluereport2-development::
+	install -Dp dist-ghc/build/artvaluereport2-server/artvaluereport2-server debian/artvaluereport2-development/usr/bin/artvaluereport2-development
 
 binary-fixup/artvaluereport2-server::
 	for i in Udon.js flexbox.css DataTables-1.8.2 html5sortable jGFeed searchMag.png Clouds.jpg tweaks.css verticalTabs.css blueprint jquery.blockUI jquery.tinyscrollbar ; do \

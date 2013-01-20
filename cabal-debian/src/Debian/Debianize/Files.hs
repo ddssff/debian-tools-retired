@@ -217,7 +217,7 @@ foldAtomsFinalized f r0 atoms =
       builddir = buildDir "dist-ghc/build" atoms
       datadir = dataDir (error "foldAtomsFinalized") atoms
 
-      -- | Fully expand a list of atom pairs, returning a list containing
+      -- | Fully expand an atom set, returning a set containing
       -- both the original and the expansion.
       expandAtoms :: [(DebAtomKey, DebAtom)] -> [(DebAtomKey, DebAtom)]
       expandAtoms [] = []
@@ -426,11 +426,11 @@ librarySpec atoms arch typ pkgId =
             }
 
 t1 :: Show a => a -> a
-t1 x = trace ("install: " ++ show x) x
+t1 x = trace ("util files: " ++ show x) x
 t2 :: Show a => a -> a
-t2 x = trace ("fileInfoAtoms: " ++ show x) x
+t2 x = trace ("available: " ++ show x) x
 t3 :: Show a => a -> a
-t3 x = trace ("utils package files: " ++ show x) x
+t3 x = trace ("installed: " ++ show x) x
 t4 :: Show a => a -> a
 t4 x = {- trace ("t4: " ++ show x) -} x
 t5 :: Show a => a -> a
@@ -441,11 +441,11 @@ t5 x = {- trace ("t5: " ++ show x) -} x
 makeUtilsPackage :: Debianization -> Debianization
 makeUtilsPackage deb | isNothing (packageDescription deb) = deb
 makeUtilsPackage deb =
-    case Set.difference available installed of
+    case Set.difference (t2 available) (t3 installed) of
       s | Set.null s -> deb
       s -> let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)
                -- Generate the atoms of the utils package
-               atoms = foldr (uncurry insertAtom) (setPackageDescription pkgDesc defaultAtoms) (makeUtilsAtoms p s)
+               atoms = foldr (uncurry insertAtom) (setPackageDescription pkgDesc defaultAtoms) (makeUtilsAtoms p (t1 s))
                -- add them to deb
                deb' = foldAtomsFinalized insertAtom deb atoms in
                -- Passing id to modify will cause the package to be created if necessary

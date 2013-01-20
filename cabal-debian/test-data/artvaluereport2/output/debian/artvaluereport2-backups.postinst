@@ -2,7 +2,7 @@
 
 case "$1" in
   configure)
-    service artvaluereport2-staging start
+    /etc/cron.hourly/artvaluereport2-backups --initialize
     ;;
 esac
 

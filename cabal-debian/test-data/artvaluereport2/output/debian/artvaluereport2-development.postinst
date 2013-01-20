@@ -5,3 +5,7 @@ case "$1" in
     service artvaluereport2-development start
     ;;
 esac
+
+#DEBHELPER#
+
+exit 0
