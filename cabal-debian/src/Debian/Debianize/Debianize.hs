@@ -92,7 +92,7 @@ runDebianize args =
 -- preserved.
 debianize :: FilePath -> [String] -> IO ()
 debianize top args =
-    do old <- inputDebianization "."
+    do old <- inputDebianization top
        new <- compileEnvironmentArgs (compileArgs old args) >>= cabalToDebianization top
        outputDebianization old new
 
