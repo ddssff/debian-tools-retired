@@ -23,6 +23,11 @@ flag local-debian-repo
   Default: False
   Manual: True
 
+flag local-cabal-debian
+  Description: Link directly to the source of the cabal-debian library
+  Default: False
+  Manual: True
+
 flag local-debian
   Description: Link directly to the source of the debian library
   Default: False
@@ -39,6 +44,12 @@ Library
   else
     Build-Depends: debian-repo >= 5.39, debian >= 3.70
 
+  if flag(local-cabal-debian)
+    Hs-Source-Dirs: ., ../cabal-debian/src
+    Build-Depends: hsemail, text, syb
+  else
+    Build-Depends: cabal-debian >= 2.6.3
+
   Build-Depends:
         ansi-wl-pprint
       , applicative-extras >= 0.1.8
@@ -46,7 +57,6 @@ Library
       , bytestring
       , bzlib
       , Cabal
-      , cabal-debian >= 2.6.3
       , containers
       , directory
       , Extra
