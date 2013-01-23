@@ -2,6 +2,7 @@
 
 case "$1" in
   configure)
+    service creativeprompts-development start
     ;;
 esac
 

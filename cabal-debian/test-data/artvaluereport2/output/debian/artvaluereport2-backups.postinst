@@ -5,7 +5,3 @@ case "$1" in
     /etc/cron.hourly/artvaluereport2-backups --initialize
     ;;
 esac
-
-#DEBHELPER#
-
-exit 0

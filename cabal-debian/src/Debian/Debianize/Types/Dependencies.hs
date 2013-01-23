@@ -31,6 +31,8 @@ data DependencyHints
       -- ^ Add a debian binary package to the debianization's list of
       -- build dependencies.  These will be in addition to dependencies
       -- derived from the cabal build-depends list.
+      , buildDepsIndep :: [BinPkgName]
+      -- ^ Like buildDeps, but for architecture independent build dependencies.
       , missingDependencies :: [BinPkgName]
       -- ^ Mark a package missing, do not add it to any dependency lists
       -- in the debianization.  If some cabal build dependency foo has
@@ -127,6 +129,7 @@ defaultDependencyHints =
     , execMap = Map.empty
     , omitLTDeps = False
     , buildDeps = []
+    , buildDepsIndep = []
     , epochMap = Map.empty
     -- Setting revision to @-1~hackage1@ produces a version number
     -- that is slightly older looking than an initial version from

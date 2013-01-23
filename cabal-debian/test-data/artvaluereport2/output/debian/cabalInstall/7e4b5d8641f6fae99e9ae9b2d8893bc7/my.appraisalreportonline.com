@@ -1,7 +1,7 @@
 <VirtualHost *:80>
     ServerAdmin logic@seereason.com
-    ServerName www.appraisalreportonline.com
-    ServerAlias appraisalreportonline.com
+    ServerName www.my.appraisalreportonline.com
+    ServerAlias my.appraisalreportonline.com
 
     ErrorLog /var/log/apache2/artvaluereport2-production/error.log
     CustomLog /var/log/apache2/artvaluereport2-production/access.log combined

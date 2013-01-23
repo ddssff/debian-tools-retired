@@ -34,7 +34,7 @@ import System.FilePath ((</>), makeRelative, splitFileName)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 import Data.Maybe
-import Data.Set as Set (Set, difference, union, fromList, null, insert, toList)
+import Data.Set as Set (Set, difference, union, fromList, null, insert)
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, utilsPackageName)
 import Debian.Debianize.Types.Dependencies (DependencyHints (extraDevDeps))

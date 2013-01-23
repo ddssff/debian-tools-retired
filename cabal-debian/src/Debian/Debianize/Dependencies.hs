@@ -128,7 +128,9 @@ debianBuildDepsIndep deb =
     filterMissing (dependencyHints deb) $
     if noDocumentationLibrary deb
     then []
-    else nub $ [anyrel "ghc-doc"] ++ cabalDeps (packageDescription deb)
+    else nub $ [anyrel "ghc-doc"] ++
+               (map anyrel' (buildDepsIndep (dependencyHints deb))) ++
+               cabalDeps (packageDescription deb)
     where
       cabalDeps Nothing = []
       cabalDeps (Just pkgDesc) =

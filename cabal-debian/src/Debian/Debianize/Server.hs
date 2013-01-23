@@ -27,9 +27,10 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- server or web site.
 siteAtoms :: DebAtomKey -> Site -> [(DebAtomKey, DebAtom)]
 siteAtoms k@(Binary b) site =
-    [(Binary b, DHLink ("/etc/apache2/sites-available/" ++ domain site) ("/etc/apache2/sites-enabled/" ++ domain site)),
-     (Binary b, DHInstallDir (apacheLogDirectory b)),  -- Server won't start if log directory doesn't exist
+    [(Binary b, DHInstallDir "/etc/apache2/sites-available"),
+     (Binary b, DHLink ("/etc/apache2/sites-available/" ++ domain site) ("/etc/apache2/sites-enabled/" ++ domain site)),
      (Binary b, DHFile ("/etc/apache2/sites-available" </> domain site) apacheConfig),
+     (Binary b, DHInstallDir (apacheLogDirectory b)),  -- Server won't start if log directory doesn't exist
      (Binary b, DHLogrotateStanza (unlines $
                                               [ pack (apacheAccessLog b) <> " {"
                                               , "  weekly"
@@ -140,7 +141,8 @@ serverAtoms k@(Binary b) server isSite =
                           , "    /usr/sbin/a2enmod proxy_http"
                           , "    service apache2 restart" ]
                      else []) ++
-                    [ "    ;;"
+                    [ "    service " <> pack (show (pretty b)) <> " start"
+                    , "    ;;"
                     , "esac"
                     , ""
                     , "#DEBHELPER#"

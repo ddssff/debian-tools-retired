@@ -75,6 +75,8 @@ atomOptions =
              "Override the Maintainer name and email in $DEBEMAIL/$EMAIL/$DEBFULLNAME/$FULLNAME",
       Option "" ["build-dep"] (ReqArg (\ name atoms -> doDependencyHint (\ x -> x {buildDeps = BinPkgName name : (buildDeps x)}) atoms) "Debian binary package name")
              "Specify a package to add to the build dependency list for this source package, e.g. '--build-dep libglib2.0-dev'.",
+      Option "" ["build-dep-indep"] (ReqArg (\ name atoms -> doDependencyHint (\ x -> x {buildDepsIndep = BinPkgName name : (buildDepsIndep x)}) atoms) "Debian binary package name")
+             "Specify a package to add to the architecture independent build dependency list for this source package, e.g. '--build-dep-indep perl'.",
       Option "" ["dev-dep"] (ReqArg (\ name atoms -> doDependencyHint (\ x -> x {extraDevDeps = BinPkgName name : (extraDevDeps x)}) atoms) "Debian binary package name")
              "Specify a package to add to the Depends: list of the -dev package, e.g. '--dev-dep libncurses5-dev'.  It might be good if this implied --build-dep.",
       Option "" ["depends"] (ReqArg (\ arg atoms -> doDependencyHint (\ x -> x {binaryPackageDeps = parseDeps arg ++ binaryPackageDeps x}) atoms) "deb:deb,deb:deb,...")

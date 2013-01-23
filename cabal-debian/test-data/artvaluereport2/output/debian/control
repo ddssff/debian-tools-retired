@@ -156,6 +156,9 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-xhtml-dev
                , libghc-xhtml-prof
 Build-Depends-Indep: ghc-doc
+                     , libjs-jcrop
+                     , libjs-jquery
+                     , libjs-jquery-u
                      , libghc-extra-doc (>= 1.35)
                      , libghc-hjscript-doc
                      , libghc-hatex-doc
@@ -229,9 +232,6 @@ Build-Depends-Indep: ghc-doc
                      , libghc-web-routes-happstack-doc
                      , libghc-web-routes-hsp-doc
                      , libghc-web-routes-th-doc
-                     , libjs-jcrop
-                     , libjs-jquery
-                     , libjs-jquery-u
                      , libghc-xhtml-doc
 Standards-Version: 3.9.1
 Homepage: http://appraisalreportonline.com
@@ -270,7 +270,7 @@ Description: Haskell modules for fine art appraisal applications
 Package: artvaluereport2-server
 Architecture: any
 Section: misc
-Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, libjs-jquery, libjs-jquery-ui, libjs-jcrop, texlive-latex-recommended, texlive-latex-extra, texlive-fonts-recommended, texlive-fonts-extra, libjpeg-progs, netpbm
+Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, libjs-jquery, libjs-jquery-ui, libjs-jcrop, libjpeg-progs, netpbm, texlive-latex-recommended, texlive-latex-extra, texlive-fonts-recommended, texlive-fonts-extra
 Conflicts: ${haskell:Conflicts}
 Description: Haskell modules for fine art appraisal applications
  Haskell modules for fine art appraisal applications
