@@ -3,6 +3,7 @@ module Debian.Debianize.Types.Atoms
     ( DebAtomKey(..)
     , DebAtom(..)
     , Flags(..)
+    , PackageInfo(..)
     , defaultFlags
     , DebAction(..)
     , HasAtoms(..)
@@ -129,6 +130,7 @@ data DebAtom
                                                   -- cabal build-tool list.
     | EpochMapping PackageName Int		  -- ^ Specify epoch numbers for the debian package generated from a
                                                   -- cabal package.  Example: @EpochMapping (PackageName "HTTP") 1@.
+    | DebPackageInfo PackageInfo		  -- ^ Supply some info about a cabal package.
     -- From here down are atoms to be associated with a Debian binary
     -- package.  This could be done with more type safety, separate
     -- maps for the Source atoms and the Binary atoms.
@@ -185,6 +187,11 @@ data Flags = Flags
     } deriving (Eq, Ord, Show)
 
 data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq, Ord)
+
+data PackageInfo = PackageInfo { cabalName :: String
+                               , devDeb :: Maybe (BinPkgName, DebianVersion)
+                               , profDeb :: Maybe (BinPkgName, DebianVersion)
+                               , docDeb :: Maybe (BinPkgName, DebianVersion) } deriving (Eq, Ord, Show)
 
 defaultFlags :: Flags
 defaultFlags =

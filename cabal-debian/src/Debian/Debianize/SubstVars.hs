@@ -8,6 +8,7 @@ module Debian.Debianize.SubstVars
     ) where
 
 import Control.Exception (SomeException, try)
+import Control.Monad (foldM)
 import Control.Monad.Reader (ReaderT(runReaderT))
 import Control.Monad.Trans (lift)
 import Data.List
@@ -15,17 +16,18 @@ import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
-import Debian.Debianize.Atoms (flags, compiler, filterMissing)
+import Debian.Debianize.Atoms (flags, compiler, filterMissing, packageInfo)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps)
-import Debian.Debianize.Types.Atoms (HasAtoms, Flags(dryRun))
-import Debian.Debianize.Types.Dependencies (PackageInfo(..), debNameFromType)
+import Debian.Debianize.Types.Atoms (HasAtoms, Flags(dryRun), insertAtom, DebAtomKey(Source), DebAtom(DebPackageInfo),
+                                     PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb))
+import Debian.Debianize.Types.Dependencies (debNameFromType)
 import Debian.Debianize.Cabal (withSimplePackageDescription)
 import Debian.Control
 import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps,
                                     dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
 import qualified Debian.Relation as D
-import Distribution.Package (PackageName(..), Dependency(..))
+import Distribution.Package (Dependency(..))
 import Distribution.Simple.Compiler (CompilerFlavor(..), compilerFlavor, Compiler(..))
 import Distribution.Simple.Utils (die)
 import Distribution.Text (display)
@@ -50,12 +52,12 @@ substvars :: HasAtoms atoms =>
 substvars atoms debType =
     withSimplePackageDescription "." atoms $ \ atoms' -> do
       debVersions <- buildDebVersionMap
-      cabalPackages <- libPaths (compiler (error "substvars") atoms') debVersions >>= return . Map.fromList . map (\ p -> (cabalName p, p))
+      atoms'' <- libPaths (compiler (error "substvars") atoms') debVersions atoms'
       control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
-      substvars' atoms debType cabalPackages control
+      substvars' atoms'' debType control
 
-substvars' :: HasAtoms atoms => atoms -> DebType -> Map.Map String PackageInfo -> Control' String -> IO ()
-substvars' atoms debType cabalPackages control =
+substvars' :: HasAtoms atoms => atoms -> DebType -> Control' String -> IO ()
+substvars' atoms debType control =
     case (missingBuildDeps, path) of
       -- There should already be a .substvars file produced by dh_haskell_prep,
       -- keep the relations listed there.  They will contain something like this:
@@ -85,13 +87,13 @@ substvars' atoms debType cabalPackages control =
                   _ -> unlines (map (++ (", " ++ showDeps (filterMissing atoms deps))) hdeps ++ more)
       path = fmap (\ (D.BinPkgName x) -> "debian/" ++ x ++ ".substvars") name
       name = debNameFromType control debType
-      deps = debDeps debType atoms cabalPackages control
+      deps = debDeps debType atoms control
       -- We must have build dependencies on the profiling and documentation packages
       -- of all the cabal packages.
       missingBuildDeps =
           let requiredDebs =
-                  concat (map (\ (Dependency (PackageName name) _) ->
-                               case Map.lookup name cabalPackages :: Maybe PackageInfo of
+                  concat (map (\ (Dependency name _) ->
+                               case packageInfo name atoms of
                                  Just info ->
                                      let prof = maybe (devDeb info) Just (profDeb info) in
                                      let doc = docDeb info in
@@ -106,37 +108,33 @@ substvars' atoms debType cabalPackages control =
       bd = maybe "" (\ (Field (_a, b)) -> stripWS b) . lookupP "Build-Depends" . head . unControl $ control
       bdi = maybe "" (\ (Field (_a, b)) -> stripWS b) . lookupP "Build-Depends-Indep" . head . unControl $ control
 
--- | Collect library information for the packages in the deb
-libPaths :: Compiler -> DebMap -> IO [PackageInfo]
-libPaths compiler debVersions
+libPaths :: HasAtoms atoms => Compiler -> DebMap -> atoms -> IO atoms
+libPaths compiler debVersions atoms
     | compilerFlavor compiler == GHC =
         do a <- getDirPaths "/usr/lib"
            b <- getDirPaths "/usr/lib/haskell-packages/ghc/lib"
            -- Build a map from names of installed debs to version numbers
-           dpkgFileMap >>= runReaderT (mapM (packageInfo compiler debVersions) (a ++ b)) >>= return . catMaybes
+           dpkgFileMap >>= runReaderT (foldM (packageInfo' compiler debVersions) atoms (a ++ b))
     | True = error $ "Can't handle compiler flavor: " ++ show (compilerFlavor compiler)
     where
       getDirPaths path = try (getDirectoryContents path) >>= return . map (\ x -> (path, x)) . either (\ (_ :: SomeException) -> []) id
 
--- | Retrieve the package information from the cabal library directory.
-packageInfo :: Compiler ->  DebMap -> (FilePath, String) -> ReaderT (Map.Map FilePath (Set.Set D.BinPkgName)) IO (Maybe PackageInfo)
-packageInfo compiler debVersions (d, f) =
+packageInfo' :: HasAtoms atoms => Compiler ->  DebMap -> atoms -> (FilePath, String) -> ReaderT (Map.Map FilePath (Set.Set D.BinPkgName)) IO atoms
+packageInfo' compiler debVersions atoms (d, f) =
     case parseNameVersion f of
-      Nothing -> return Nothing
-      Just (p, v) -> lift (doesDirectoryExist (d </> f </> cdir)) >>= cond (return Nothing) (info (p, v))
+      Nothing -> return atoms
+      Just (p, v) -> lift (doesDirectoryExist (d </> f </> cdir)) >>= cond (return atoms) (info (p, v))
     where
+      parseNameVersion s =
+          case (break (== '-') (reverse s)) of
+            (_a, "") -> Nothing
+            (a, b) -> Just (reverse (tail b), reverse a)
       cdir = display (compilerId compiler)
       info (p, v) =
           do dev <- debOfFile ("^" ++ d </> p ++ "-" ++ v </> cdir </> "libHS" ++ p ++ "-" ++ v ++ ".a$")
              prof <- debOfFile ("^" ++ d </> p ++ "-" ++ v </> cdir </> "libHS" ++ p ++ "-" ++ v ++ "_p.a$")
              doc <- debOfFile ("/" ++ p ++ ".haddock$")
-             return (Just (PackageInfo { libDir = d
-                                       , cabalName = p
-                                       , cabalVersion = v
-                                       , devDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) dev
-                                       , profDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) prof
-                                       , docDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) doc }))
-      parseNameVersion s =
-          case (break (== '-') (reverse s)) of
-            (_a, "") -> Nothing
-            (a, b) -> Just (reverse (tail b), reverse a)
+             return (insertAtom Source (DebPackageInfo (PackageInfo { cabalName = p
+                                                                    , devDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) dev
+                                                                    , profDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) prof
+                                                                    , docDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) doc })) atoms)

@@ -20,12 +20,12 @@ import qualified Data.Set as Set
 import Data.Version (Version, showVersion)
 import Debian.Control
 import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, versionSplits,
-                               filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap)
+                               filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
-import Debian.Debianize.Types.Atoms (HasAtoms)
+import Debian.Debianize.Types.Atoms (HasAtoms, PackageInfo(devDeb, profDeb, docDeb))
 import Debian.Debianize.Types.Debianization as Debian (Debianization)
-import Debian.Debianize.Types.Dependencies (PackageInfo(..), debNameFromType)
+import Debian.Debianize.Types.Dependencies (debNameFromType)
 import Debian.Debianize.Types.PackageType (DebType(Dev, Prof, Doc), PackageType(..), mkPkgName, VersionSplits(..))
 import qualified Debian.Relation as D
 import Debian.Relation (Relations, Relation, BinPkgName, PkgName)
@@ -63,23 +63,23 @@ unboxDependency (ExtraLibs _) = Nothing -- Dependency (PackageName d) anyVersion
 
 -- Make a list of the debian devel packages corresponding to cabal packages
 -- which are build dependencies
-debDeps :: HasAtoms atoms => DebType -> atoms -> Map.Map String PackageInfo -> Control' String -> D.Relations
-debDeps debType atoms cabalPackages control =
+debDeps :: HasAtoms atoms => DebType -> atoms -> Control' String -> D.Relations
+debDeps debType atoms control =
     case debType of
       Dev ->
-          catMaybes (map (\ (Dependency (PackageName name) _) ->
-                          case Map.lookup name cabalPackages :: Maybe PackageInfo of
+          catMaybes (map (\ (Dependency name _) ->
+                          case packageInfo name atoms of
                             Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (devDeb p)
                             Nothing -> Nothing) (cabalDependencies atoms))
       Prof ->
           maybe [] (\ name -> [[D.Rel name Nothing Nothing]]) (debNameFromType control Dev) ++
-          catMaybes (map (\ (Dependency (PackageName name) _) ->
-                          case Map.lookup name cabalPackages :: Maybe PackageInfo of
+          catMaybes (map (\ (Dependency name _) ->
+                          case packageInfo name atoms of
                             Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (profDeb p)
                             Nothing -> Nothing) (cabalDependencies atoms))
       Doc ->
-          catMaybes (map (\ (Dependency (PackageName name) _) ->
-                              case Map.lookup name cabalPackages :: Maybe PackageInfo of
+          catMaybes (map (\ (Dependency name _) ->
+                              case packageInfo name atoms of
                                 Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (docDeb p)
                                 Nothing -> Nothing) (cabalDependencies atoms))
 

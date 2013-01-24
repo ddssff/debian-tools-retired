@@ -46,6 +46,7 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 type DebMap = Map.Map D.BinPkgName (Maybe DebianVersion)
 
+-- | Read and parse the status file for installed debian packages.
 buildDebVersionMap :: IO DebMap
 buildDebVersionMap =
     readFile "/var/lib/dpkg/status" >>=

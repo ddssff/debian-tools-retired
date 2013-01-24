@@ -1,8 +1,7 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -Wall -Wwarn -fno-warn-name-shadowing -fno-warn-orphans #-}
 module Debian.Debianize.Types.Dependencies
-    ( PackageInfo(..)
-    , debNameFromType
+    ( debNameFromType
     ) where
 
 import Data.List (isSuffixOf)
@@ -12,13 +11,6 @@ import Debian.Debianize.Types.PackageType (DebType(Dev, Prof, Doc))
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Version (DebianVersion)
-
-data PackageInfo = PackageInfo { libDir :: FilePath
-                               , cabalName :: String
-                               , cabalVersion :: String
-                               , devDeb :: Maybe (BinPkgName, DebianVersion)
-                               , profDeb :: Maybe (BinPkgName, DebianVersion)
-                               , docDeb :: Maybe (BinPkgName, DebianVersion) }
 
 -- | Given a control file and a DebType, look for the binary deb with
 -- the corresponding suffix and return its name.

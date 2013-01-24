@@ -32,6 +32,7 @@ module Debian.Debianize.Atoms
     , conflicts
     , binaryPackageDeps
     , binaryPackageConflicts
+    , packageInfo
     , setArchitecture
     , setPriority
     , setSection
@@ -62,7 +63,8 @@ import Data.Text (Text, pack, unlines)
 import Data.Version (Version, showVersion)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags, defaultFlags,
                                      lookupAtom, lookupAtomDef, lookupAtoms, foldAtoms, hasAtom, insertAtom,
-                                     replaceAtoms, modifyAtoms', getSingleton, getMaybeSingleton, partitionAtoms')
+                                     replaceAtoms, modifyAtoms', getSingleton, getMaybeSingleton, partitionAtoms',
+                                     PackageInfo(cabalName))
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Debianize.Types.PackageType (VersionSplits)
 import Debian.Orphans ()
@@ -227,6 +229,14 @@ extraLibMap atoms =
 
 putExecMap :: HasAtoms atoms => String -> BinPkgName -> atoms -> atoms
 putExecMap cabal debian deb = insertAtom Source (ExecMapping cabal debian) deb
+
+packageInfo :: HasAtoms atoms => PackageName -> atoms -> Maybe PackageInfo
+packageInfo (PackageName name) atoms =
+    foldAtoms from Nothing atoms
+    where
+      from Source (DebPackageInfo p) Nothing | cabalName p == name = Just p
+      from Source (DebPackageInfo p') (Just _) | cabalName p' == name = error $ "Multiple DebPackageInfo entries for " ++ name
+      from _ _ x = x
 
 execMap :: HasAtoms atoms => atoms -> Map.Map String BinPkgName
 execMap atoms =
