@@ -14,6 +14,7 @@ module Debian.Debianize.Atoms
     , doDependencyHint
     , missingDependency
     , setRevision
+    , revision
     , putExecMap
     , putExtraDevDep
     , depends
@@ -42,12 +43,13 @@ module Debian.Debianize.Atoms
 import Data.List (intersperse)
 import Data.Map as Map (insert)
 import Data.Maybe (fromMaybe)
-import Data.Monoid (mempty, (<>))
-import Data.Set as Set (Set, maxView, toList, null, union, unions)
+import Data.Monoid (mempty, (<>), mconcat)
+import Data.Set as Set (Set, maxView, toList, null, union, singleton)
 import Data.Text (Text, pack, unlines)
 import Data.Version (Version, showVersion)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags, defaultFlags,
-                                     lookupAtom, lookupAtomDef, lookupAtoms, foldAtoms, hasAtom, insertAtom, partitionAtoms)
+                                     lookupAtom, lookupAtomDef, lookupAtoms, foldAtoms, hasAtom, insertAtom,
+                                     replaceAtoms, modifyAtoms', getSingleton)
 import Debian.Debianize.Types.Dependencies (DependencyHints(..))
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Orphans ()
@@ -74,11 +76,10 @@ compiler def deb =
 
 setCompiler :: forall atoms. HasAtoms atoms => Compiler -> atoms -> atoms
 setCompiler comp atoms =
-    insertAtom Source (DHCompiler comp) atoms'
+    replaceAtoms f Source (DHCompiler comp) atoms
     where
-      (_, atoms') = partitionAtoms p atoms
-      p Source (DHCompiler x) = Just x
-      p _ _ = Nothing
+      f Source (DHCompiler _) = True
+      f _ _ = False
 
 packageDescription :: HasAtoms atoms => atoms -> Maybe PackageDescription
 packageDescription deb =
@@ -100,11 +101,10 @@ dataDir def atoms =
 
 setPackageDescription :: HasAtoms atoms => PackageDescription -> atoms -> atoms
 setPackageDescription desc atoms =
-    insertAtom Source (DHPackageDescription desc) atoms'
+    replaceAtoms f Source (DHPackageDescription desc) atoms
     where
-      (_, atoms') = partitionAtoms p atoms
-      p Source (DHPackageDescription x) = Just x
-      p _ _ = Nothing
+      f Source (DHPackageDescription _) = True
+      f _ _ = False
 
 compilerVersion :: HasAtoms atoms => atoms -> Maybe Version
 compilerVersion deb =
@@ -136,31 +136,27 @@ utilsPackageName deb =
 
 doDependencyHint :: HasAtoms atoms => (DependencyHints -> DependencyHints) -> atoms -> atoms
 doDependencyHint = modifyHints
-{-
-    if Set.null hints
-    then insertAtom Source (DHDependencyHints (f defaultDependencyHints)) deb'
-    else insertAtoms' Source (map (DHDependencyHints . f) (Set.toList hints)) deb'
-    where
-      (hints, deb') = partitionAtoms p deb
-      p Source (DHDependencyHints x) = Just x
-      p (Binary _) (DHDependencyHints _) = error "doDependencyHint"
-      p _ _ = Nothing
--}
 
 dependencyHints :: HasAtoms atoms => atoms -> DependencyHints
 dependencyHints = getHints
-{-
-    fromMaybe defaultDependencyHints $ lookupAtom Source from deb
-    where
-      from (DHDependencyHints x) = Just x
-      from _ = Nothing
--}
 
 missingDependency :: HasAtoms atoms => BinPkgName -> atoms -> atoms
 missingDependency b deb = doDependencyHint (\ x -> x {missingDependencies = b : missingDependencies x}) deb
 
 setRevision :: HasAtoms atoms => String -> atoms -> atoms
-setRevision s deb = doDependencyHint (\ x -> x {revision = s}) deb
+setRevision s deb =
+    replaceAtoms from Source (DebRevision s) deb
+    where
+      from :: DebAtomKey -> DebAtom -> Bool
+      from Source (DebRevision _) = True
+      from _ _ = False
+
+revision :: HasAtoms atoms => atoms -> String
+revision atoms =
+    getSingleton "" from atoms
+    where
+      from Source (DebRevision s) = Just s
+      from _ _ = Nothing
 
 putExecMap :: HasAtoms atoms => String -> BinPkgName -> atoms -> atoms
 putExecMap cabal debian deb = doDependencyHint (\ x -> x {execMap = Map.insert cabal debian (execMap x)}) deb
@@ -227,11 +223,10 @@ buildDir def atoms =
 
 setBuildDir :: HasAtoms atoms => FilePath -> atoms -> atoms
 setBuildDir path atoms =
-    insertAtom Source (BuildDir path) atoms'
+    replaceAtoms f Source (BuildDir path) atoms
     where
-      (_, atoms') = partitionAtoms p atoms
-      p Source (BuildDir x) = Just x
-      p _ _ = Nothing
+      f Source (BuildDir _) = True
+      f _ _ = False
 
 cabalFlagAssignments :: HasAtoms atoms => atoms -> Set (FlagName, Bool)
 cabalFlagAssignments atoms =
@@ -242,11 +237,11 @@ cabalFlagAssignments atoms =
 
 putCabalFlagAssignments :: HasAtoms atoms => Set (FlagName, Bool) -> atoms -> atoms
 putCabalFlagAssignments xs atoms =
-    insertAtom Source (DHCabalFlagAssignments (unions (xs : toList ys))) atoms'
+    modifyAtoms' f g atoms
     where
-      (ys, atoms') = partitionAtoms p atoms
-      p Source (DHCabalFlagAssignments zs) = Just zs
-      p _ _ = Nothing
+      f Source (DHCabalFlagAssignments xs') = Just (union xs xs')
+      f _ _ = Nothing
+      g xss = singleton (Source, DHCabalFlagAssignments (mconcat (Set.toList xss)))
 
 flags :: HasAtoms atoms => atoms -> Flags
 flags atoms =
@@ -258,6 +253,15 @@ flags atoms =
 
 mapFlags :: HasAtoms atoms => (Flags -> Flags) -> atoms -> atoms
 mapFlags f atoms =
+    modifyAtoms' g h atoms
+    where
+      g Source (DHFlags x) = Just x
+      g _ _ = Nothing
+      h xs = singleton (Source, DHFlags (f (case maxView xs of
+                                              Just (_, s) | not (Set.null s) -> error "Conflicting Flag atoms"
+                                              Just (x, _) -> x
+                                              Nothing -> defaultFlags)))
+{-
     insertAtom Source (DHFlags (f fs)) atoms'
     where
       fs = case maxView flagss of
@@ -266,6 +270,7 @@ mapFlags f atoms =
       (flagss, atoms') = partitionAtoms p atoms
       p Source (DHFlags x) = Just x
       p _ _ = Nothing
+-}
 
 watchAtom :: HasAtoms atoms => PackageName -> atoms -> atoms
 watchAtom (PackageName pkgname) deb =

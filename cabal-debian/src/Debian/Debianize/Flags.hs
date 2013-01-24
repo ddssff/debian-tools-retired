@@ -8,7 +8,7 @@ import qualified Data.Map as Map
 import Data.Set (fromList)
 import Data.Version (parseVersion)
 import Debian.Debianize.Atoms (doDependencyHint, missingDependency, doExecutable, setSourcePackageName,
-                               setBuildDir, putCabalFlagAssignments, mapFlags, sourceFormat)
+                               setBuildDir, putCabalFlagAssignments, mapFlags, sourceFormat, setRevision)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DHMaintainer),
                                      insertAtom, Flags(..), DebAction(..))
 import Debian.Debianize.Types.Dependencies (DependencyHints (..))
@@ -89,7 +89,7 @@ atomOptions =
              "Specify a mapping from the name appearing in the Extra-Library field of the cabal file to a debian binary package name, e.g. --dep-map cryptopp=libcrypto-dev",
       Option "" ["deb-version"] (ReqArg (\ version atoms -> doDependencyHint (\ x -> x {debVersion = Just (parseDebianVersion version)}) atoms) "VERSION")
              "Specify the version number for the debian package.  This will pin the version and should be considered dangerous.",
-      Option "" ["revision"] (ReqArg (\ rev atoms -> doDependencyHint (\ x -> x {revision = rev}) atoms) "REVISION")
+      Option "" ["revision"] (ReqArg setRevision "REVISION")
              "Add this string to the cabal version to get the debian version number.  By default this is '-1~hackage1'.  Debian policy says this must either be empty (--revision '') or begin with a dash.",
       Option "" ["epoch-map"] (ReqArg (\ pair atoms -> doDependencyHint (\ x -> x {epochMap =
                                                                                        case break (== '=') pair of

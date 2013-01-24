@@ -18,6 +18,12 @@ module Debian.Debianize.Types.Atoms
     , foldAtoms
     , mapAtoms
     , partitionAtoms
+    , replaceAtoms
+    , modifyAtoms
+    , partitionAtoms'
+    , modifyAtoms'
+    , getMaybeSingleton
+    , getSingleton
     ) where
 
 import Data.Generics (Data, Typeable)
@@ -92,6 +98,8 @@ data DebAtom
     | DHCabalFlagAssignments (Set (FlagName, Bool)) -- ^ Flags to pass to Cabal function finalizePackageDescription, this
                                                   -- can be used to control the flags in the cabal file.
     | DHFlags Flags                               -- ^ Information regarding mode of operation - verbosity, dry-run, usage, etc
+    | DebRevision String			  -- ^ Specify the revision string to use when converting the cabal
+                                                  -- version to debian.
 
     -- From here down are atoms to be associated with a Debian binary
     -- package.  This could be done with more type safety, separate
@@ -157,7 +165,7 @@ defaultFlags =
 
 data Atoms =
     Atoms
-    { atoms :: Map DebAtomKey (Set DebAtom)
+    { atomMap :: Map DebAtomKey (Set DebAtom)
     , hints :: DependencyHints
     -- ^ Information about the mapping from cabal package names and
     -- versions to debian package names and versions.  (This could be
@@ -166,7 +174,7 @@ data Atoms =
     } deriving (Eq, Ord, Show)
 
 defaultAtoms :: Atoms
-defaultAtoms = Atoms {atoms = mempty, hints = defaultDependencyHints}
+defaultAtoms = Atoms {atomMap = mempty, hints = defaultDependencyHints}
 
 class HasAtoms atoms where
     getAtoms :: atoms -> Map DebAtomKey (Set DebAtom)
@@ -175,8 +183,8 @@ class HasAtoms atoms where
     modifyHints :: (DependencyHints -> DependencyHints) -> atoms -> atoms
 
 instance HasAtoms Atoms where
-    getAtoms = atoms
-    putAtoms mp x = x {atoms = mp}
+    getAtoms = atomMap
+    putAtoms mp x = x {atomMap = mp}
     getHints = hints
     modifyHints f x = x {hints = f (hints x)}
 
@@ -196,11 +204,14 @@ lookupAtoms mbin from x = maybe empty (setMapMaybe from) (Map.lookup mbin (getAt
 insertAtom :: HasAtoms atoms => DebAtomKey -> DebAtom -> atoms -> atoms
 insertAtom mbin atom x = putAtoms (insertWith union mbin (singleton atom) (getAtoms x)) x
 
-insertAtoms :: HasAtoms atoms => DebAtomKey -> Set DebAtom -> atoms -> atoms
-insertAtoms mbin xs x = putAtoms (insertWith union mbin xs (getAtoms x)) x
+insertAtoms :: HasAtoms atoms => Set (DebAtomKey, DebAtom) -> atoms -> atoms
+insertAtoms s atoms =
+    case maxView s of
+      Nothing -> atoms
+      Just ((k, a), s') -> insertAtoms s' (insertAtom k a atoms)
 
-insertAtoms' :: HasAtoms atoms => DebAtomKey -> [DebAtom] -> atoms -> atoms
-insertAtoms' mbin xs x = insertAtoms mbin (fromList xs) x
+insertAtoms' :: HasAtoms atoms => [(DebAtomKey, DebAtom)] -> atoms -> atoms
+insertAtoms' xs atoms = insertAtoms (fromList xs) atoms
 
 hasAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Bool
 hasAtom key p xs = not . Set.null . lookupAtoms key p $ xs
@@ -209,14 +220,62 @@ foldAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -
 foldAtoms f r0 xs = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (getAtoms xs)
 
 -- | Map each atom of a HasAtoms instance to zero or more new atoms.
-mapAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> Set DebAtom) -> atoms -> atoms
-mapAtoms f xs = foldAtoms (\ k atom xs' -> insertAtoms k (f k atom) xs') (putAtoms mempty xs) xs
+mapAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> Set (DebAtomKey, DebAtom)) -> atoms -> atoms
+mapAtoms f xs = foldAtoms (\ k atom xs' -> insertAtoms (f k atom) xs') (putAtoms mempty xs) xs
 
 -- | Split atoms out of a HasAtoms instance by predicate.
-partitionAtoms :: (HasAtoms atoms, Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> atoms -> (Set a, atoms)
+partitionAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> Bool) -> atoms -> (Set (DebAtomKey, DebAtom), atoms)
 partitionAtoms f deb =
-    foldAtoms (\ k atom (xs, deb') -> case f k atom of
-                                        Just x -> (Set.insert x xs, deb')
-                                        Nothing -> (xs, insertAtom k atom deb'))
-              (mempty, putAtoms mempty deb)
-              deb
+    foldAtoms g (mempty, putAtoms mempty deb) deb
+    where
+      g k atom (atoms, deb') =
+          case f k atom of
+            True -> (Set.insert (k, atom) atoms, deb')
+            False -> (atoms, insertAtom k atom deb')
+
+replaceAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> Bool) -> DebAtomKey -> DebAtom -> atoms -> atoms
+replaceAtoms f k atom atoms = insertAtom k atom (snd (partitionAtoms f atoms))
+
+modifyAtoms :: HasAtoms atoms =>
+               (DebAtomKey -> DebAtom -> Bool)
+            -> (Set (DebAtomKey, DebAtom) -> Set (DebAtomKey, DebAtom))
+            -> atoms
+            -> atoms
+modifyAtoms f g atoms =
+    insertAtoms (g s) atoms'
+    where
+      (s, atoms') = partitionAtoms f atoms
+
+-- | Split atoms out of a HasAtoms instance by predicate.
+partitionAtoms' :: (HasAtoms atoms, Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> atoms -> (Set a, atoms)
+partitionAtoms' f deb =
+    foldAtoms g (mempty, putAtoms mempty deb) deb
+    where
+      g k atom (xs, deb') =
+          case f k atom of
+            Just x -> (Set.insert x xs, deb')
+            Nothing -> (xs, insertAtom k atom deb')
+
+modifyAtoms' :: (HasAtoms atoms, Ord a) =>
+               (DebAtomKey -> DebAtom -> Maybe a)
+            -> (Set a -> Set (DebAtomKey, DebAtom))
+            -> atoms
+            -> atoms
+modifyAtoms' f g atoms =
+    insertAtoms (g s) atoms'
+    where
+      (s, atoms') = partitionAtoms' f atoms
+
+getMaybeSingleton :: (HasAtoms atoms, Eq a) => Maybe a -> (DebAtomKey -> DebAtom -> Maybe a) -> atoms -> Maybe a
+getMaybeSingleton multiple f atoms =
+    foldAtoms from Nothing atoms
+    where
+      from k a (Just x) =
+          case f k a of
+            Just x' -> if x /= x' then multiple else Just x
+            Nothing -> Just x
+      from k a Nothing =
+          f k a
+
+getSingleton :: (HasAtoms atoms, Eq a) => a -> (DebAtomKey -> DebAtom -> Maybe a) -> atoms -> a
+getSingleton def f atoms = fromMaybe def (getMaybeSingleton Nothing f atoms)

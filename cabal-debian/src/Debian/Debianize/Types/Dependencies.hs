@@ -96,9 +96,6 @@ data DependencyHints
       , epochMap :: Map.Map PackageName Int
       -- ^ Specify epoch numbers for the debian package generated from a
       -- cabal package.  Example: @Map.insert epochMap "HTTP" 1@. 
-      , revision :: String
-      -- ^ Specify the revision string to use when converting the cabal
-      -- version to debian.
       , debVersion :: Maybe DebianVersion
       -- ^ Specify the exact debian version of the resulting package,
       -- including epoch.  One use case is to work around the the
@@ -136,7 +133,6 @@ defaultDependencyHints =
     -- debian, which will have revision @-1@.  However, it really
     -- ought to be a site policy.
     -- , revision = "-1~hackage1"
-    , revision = ""
     , debVersion = Nothing
     , versionSplits = knownVersionSplits
     }

@@ -431,10 +431,12 @@ t2 :: Show a => a -> a
 t2 x = trace ("available: " ++ show x) x
 t3 :: Show a => a -> a
 t3 x = trace ("installed: " ++ show x) x
+{-
 t4 :: Show a => a -> a
 t4 x = {- trace ("t4: " ++ show x) -} x
 t5 :: Show a => a -> a
 t5 x = {- trace ("t5: " ++ show x) -} x
+-}
 
 -- | Create a package to hold any executables and data files not
 -- assigned to some other package.
@@ -494,7 +496,7 @@ makeUtilsPackage deb =
       cabalFile :: DebAtomKey -> DebAtom -> Set FileInfo -> Set FileInfo
       cabalFile _ (DHInstallCabalExec name _) xs = Set.insert (CabalExecutable name) xs
       cabalFile _ (DHInstallCabalExecTo name _) xs = Set.insert (CabalExecutable name) xs
-      cabalFile k (DHExecutable f@(InstallFile {})) xs = foldr (uncurry cabalFile) xs (fileAtoms k f)
+      cabalFile k (DHExecutable i@(InstallFile {})) xs = foldr (uncurry cabalFile) xs (fileAtoms k i)
       cabalFile _ (DHInstall path _) xs = Set.insert (DataFile path) xs
       cabalFile _ (DHInstallTo path _) xs = Set.insert (DataFile path) xs
       cabalFile _ (DHInstallData path _) xs = Set.insert (DataFile path) xs

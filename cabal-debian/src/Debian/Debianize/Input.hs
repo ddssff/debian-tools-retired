@@ -71,7 +71,7 @@ parseSourceDebDescription (Paragraph fields) binaryParagraphs =
       readField (Field ("DM-Upload-Allowed", value)) (desc, unrecognized) = (desc {dmUploadAllowed = yes value}, unrecognized)
       readField (Field ("Priority", value)) (desc, unrecognized) = (desc {priority = Just (readPriority value)}, unrecognized)
       readField (Field ("Section", value)) (desc, unrecognized) = (desc {section = Just (MainSection value)}, unrecognized)
-      readField (Field ("Build-Depends", value)) (desc, unrecognized) = t9 ((t8 desc) {buildDepends = rels (t7 value)}, unrecognized)
+      readField (Field ("Build-Depends", value)) (desc, unrecognized) = (desc {buildDepends = rels value}, unrecognized)
       readField (Field ("Build-Conflicts", value)) (desc, unrecognized) = (desc {buildConflicts = rels value}, unrecognized)
       readField (Field ("Build-Depends-Indep", value)) (desc, unrecognized) = (desc {buildDependsIndep = rels value}, unrecognized)
       readField (Field ("Build-Conflicts-Indep", value)) (desc, unrecognized) = (desc {buildConflictsIndep = rels value}, unrecognized)
@@ -89,11 +89,6 @@ parseSourceDebDescription (Paragraph fields) binaryParagraphs =
             (xs, '-' : more) -> (desc {xFields = insert (XField (fromList (map (read' . (: [])) xs)) (pack more) (pack value)) (xFields desc)}, unrecognized)
             _ -> (desc, field : unrecognized)
       readField field (desc, unrecognized) = (desc, field : unrecognized)
-
-t9 x = {- trace ("t9: " ++ show x) -} x
-t8 x = {- trace ("t8: " ++ show x) -} x
-t7 x = {- trace ("t7: " ++ show x) -} x
-t6 x = {- trace ("t6: " ++ show x) -} x
 
 parseBinaryDebDescription :: Paragraph' String -> (BinaryDebDescription, [Field])
 parseBinaryDebDescription (Paragraph fields) =
@@ -187,11 +182,11 @@ inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ tex
 inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ insertAtom Source (DebWatch text) xs
 inputAtoms debian name xs =
     case (BinPkgName (dropExtension name), takeExtension name) of
-      (p, ".install") ->   readFile (debian </> name) >>= \ text -> return $ insertAtoms' (Binary p) (mapMaybe (readInstall p) (lines text)) xs
-      (p, ".dirs") ->      readFile (debian </> name) >>= \ text -> return $ insertAtoms' (Binary p) (map readDir (lines text)) xs
+      (p, ".install") ->   readFile (debian </> name) >>= \ text -> return $ insertAtoms' (mapMaybe (\ l -> readInstall p l) (lines text)) xs
+      (p, ".dirs") ->      readFile (debian </> name) >>= \ text -> return $ insertAtoms' (map (readDir p) (lines text)) xs
       (p, ".init") ->      readFile (debian </> name) >>= \ text -> return $ insertAtom (Binary p) (DHInstallInit text) xs
       (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> return $ insertAtom (Binary p) (DHLogrotateStanza text) xs
-      (p, ".links") ->     readFile (debian </> name) >>= \ text -> return $ insertAtoms' (Binary p) (mapMaybe readLink (lines text)) xs
+      (p, ".links") ->     readFile (debian </> name) >>= \ text -> return $ insertAtoms' (mapMaybe (readLink p) (lines text)) xs
       (p, ".postinst") ->  readFile (debian </> name) >>= \ text -> return $ insertAtom (Binary p) (DHPostInst text) xs
       (p, ".postrm") ->    readFile (debian </> name) >>= \ text -> return $ insertAtom (Binary p) (DHPostRm text) xs
       (p, ".preinst") ->   readFile (debian </> name) >>= \ text -> return $ insertAtom (Binary p) (DHPreInst text) xs
@@ -205,18 +200,18 @@ inputAtoms debian name xs =
       (_, x) | last x == '~' -> return xs -- backup file
       _ -> trace ("Ignored: " ++ debian </> name) (return xs)
 
-readLink :: Text -> Maybe DebAtom
-readLink line =
+readLink :: BinPkgName -> Text -> Maybe (DebAtomKey, DebAtom)
+readLink p line =
     case words line of
-      [a, b] -> Just $ DHLink (unpack a) (unpack b)
+      [a, b] -> Just $ (Binary p, DHLink (unpack a) (unpack b))
       [] -> Nothing
       _ -> trace ("readLink: " ++ show line) Nothing
 
-readInstall :: BinPkgName -> Text -> Maybe DebAtom
-readInstall name line =
+readInstall :: BinPkgName -> Text -> Maybe (DebAtomKey, DebAtom)
+readInstall p line =
     case break isSpace line of
-      (_, b) | null b -> error $ "readInstall: syntax error in .install file for " ++ show name ++ ": " ++ show line
-      (a, b) -> Just $ DHInstall (unpack (strip a)) (unpack (strip b))
+      (_, b) | null b -> error $ "readInstall: syntax error in .install file for " ++ show p ++ ": " ++ show line
+      (a, b) -> Just $ (Binary p, DHInstall (unpack (strip a)) (unpack (strip b)))
 
-readDir :: Text -> DebAtom
-readDir line = DHInstallDir (unpack line)
+readDir :: BinPkgName -> Text -> (DebAtomKey, DebAtom)
+readDir p line = (Binary p, DHInstallDir (unpack line))

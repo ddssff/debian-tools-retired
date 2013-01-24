@@ -20,7 +20,7 @@ import Data.Monoid (mempty)
 import Data.Set as Set (Set, empty)
 import Data.Text (Text)
 import Debian.Changes (ChangeLog(..))
-import Debian.Debianize.Types.Atoms (Atoms(atoms), HasAtoms(..))
+import Debian.Debianize.Types.Atoms (Atoms(atomMap), HasAtoms(..))
 import Debian.Debianize.Types.PackageType (PackageType(..))
 import Debian.Orphans ()
 import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures(..), Section)
@@ -64,7 +64,7 @@ data Debianization
 
 instance HasAtoms Debianization where
     getAtoms = getAtoms . debAtoms
-    putAtoms ats x = x {debAtoms = (debAtoms x) {atoms = ats}}
+    putAtoms ats x = x {debAtoms = (debAtoms x) {atomMap = ats}}
     getHints = getHints . debAtoms
     modifyHints f x = x {debAtoms = modifyHints f (debAtoms x)}
 
