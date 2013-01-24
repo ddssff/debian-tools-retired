@@ -11,40 +11,31 @@ import Debug.Trace
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
 import qualified Data.Map as Map
+import Data.Maybe
 import Data.Monoid (Monoid, (<>), mempty)
-import Data.Set as Set (toList, member, filter)
+import Data.Set as Set (Set, difference, union, fromList, null, insert, toList, member, filter)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack, unlines)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, dependencyHints, setArchitecture, setPackageDescription)
-import Debian.Debianize.Combinators (describe, extraDeps, buildDeps)
+import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, setArchitecture, setPackageDescription, binaryPackageDeps,
+                               binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps)
+import Debian.Debianize.Combinators (describe, buildDeps)
+import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms, backupAtoms)
 import Debian.Debianize.Types.Atoms (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom, defaultAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                        VersionControlSpec(..), XField(..), XFieldDest(..), newBinaryDebDescription, modifyBinaryDeb)
-import Debian.Debianize.Types.Dependencies (DependencyHints (binaryPackageDeps, binaryPackageConflicts))
-import Debian.Debianize.Types.PackageType (PackageType(Exec))
+import Debian.Debianize.Types.PackageHints (InstallFile(..))
+import Debian.Debianize.Types.PackageType (PackageType(Exec, Development, Profiling, Documentation, Utilities))
 import Debian.Debianize.Utility (showDeps')
-import Debian.Policy (PackageArchitectures(Any), Section(..))
+import Debian.Policy (PackageArchitectures(Any, All), Section(..))
 import Debian.Relation (Relations, BinPkgName)
 import qualified Debian.Relation as D
-import qualified Distribution.PackageDescription as Cabal
-import Prelude hiding (init, unlines)
-import System.FilePath ((</>), makeRelative, splitFileName)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
-
-import Data.Maybe
-import Data.Set as Set (Set, difference, union, fromList, null, insert)
-import Debian.Debianize.Dependencies (debianName)
-import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, utilsPackageName)
-import Debian.Debianize.Types.Dependencies (DependencyHints (extraDevDeps))
-import Debian.Debianize.Types.PackageHints (InstallFile(..))
-import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Utilities))
-import Debian.Policy (PackageArchitectures(All))
 import Distribution.Package (PackageIdentifier(..))
-import Distribution.PackageDescription as Cabal (Executable(exeName))
-import Prelude hiding (writeFile, init, unlines)
-import System.FilePath (takeDirectory, takeFileName)
+import qualified Distribution.PackageDescription as Cabal
+import Prelude hiding (init, unlines, writeFile)
+import System.FilePath ((</>), makeRelative, splitFileName, takeDirectory, takeFileName)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 sourceFormat :: Debianization -> [(FilePath, Text)]
 sourceFormat deb =
@@ -270,12 +261,12 @@ cabalExecBinaryPackage b deb =
             , relations =
                 PackageRelations
                 { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                            extraDeps (binaryPackageDeps (dependencyHints deb)) b
+                            binaryPackageDeps b deb
                 , recommends = []
                 , suggests = []
                 , preDepends = []
                 , breaks = []
-                , conflicts = [anyrel "${haskell:Conflicts}"] ++ extraDeps (binaryPackageConflicts (dependencyHints deb)) b
+                , conflicts = [anyrel "${haskell:Conflicts}"] ++ binaryPackageConflicts b deb
                 , provides = []
                 , replaces = []
                 , builtUsing = []
@@ -388,7 +379,7 @@ docSpecsParagraph atoms pkgId =
             , relations =
                 PackageRelations
                 { depends = [anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                            extraDeps (binaryPackageDeps (dependencyHints atoms)) (debianName atoms Documentation pkgId)
+                            binaryPackageDeps (debianName atoms Documentation pkgId) atoms
                 , recommends = [anyrel "${haskell:Recommends}"]
                 , Debian.suggests = [anyrel "${haskell:Suggests}"]
                 , preDepends = []
@@ -411,9 +402,8 @@ librarySpec atoms arch typ pkgId =
             , Debian.description = describe atoms typ pkgId
             , relations =
                 PackageRelations
-                { depends = (if typ == Development then [anyrel "${shlibs:Depends}"] ++ map anyrel' (extraDevDeps (dependencyHints atoms)) else []) ++
-                            ([anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                             extraDeps (binaryPackageDeps (dependencyHints atoms)) (debianName atoms typ pkgId))
+                { depends = (if typ == Development then [anyrel "${shlibs:Depends}"] ++ map anyrel' (toList (extraDevDeps atoms)) else []) ++
+                            ([anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ binaryPackageDeps (debianName atoms typ pkgId) atoms)
                 , recommends = [anyrel "${haskell:Recommends}"]
                 , suggests = [anyrel "${haskell:Suggests}"]
                 , preDepends = []
@@ -490,7 +480,7 @@ makeUtilsPackage deb =
       pkgDesc = fromMaybe (error "makeUtilsPackage: no PackageDescription") $ packageDescription deb
       available :: Set FileInfo
       available = Set.union (Set.fromList (map DataFile (Cabal.dataFiles pkgDesc)))
-                            (Set.fromList (map (CabalExecutable . exeName) (Prelude.filter (Cabal.buildable . Cabal.buildInfo) (Cabal.executables pkgDesc))))
+                            (Set.fromList (map (CabalExecutable . Cabal.exeName) (Prelude.filter (Cabal.buildable . Cabal.buildInfo) (Cabal.executables pkgDesc))))
       installed :: Set FileInfo
       installed = foldAtoms cabalFile mempty deb
       cabalFile :: DebAtomKey -> DebAtom -> Set FileInfo -> Set FileInfo

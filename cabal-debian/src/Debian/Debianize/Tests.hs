@@ -15,7 +15,7 @@ import Data.Set as Set (fromList)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization, newDebianization)
-import Debian.Debianize.Atoms as Atom (tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat, doDependencyHint,
+import Debian.Debianize.Atoms as Atom (tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
                                        depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName)
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
 import Debian.Debianize.Input (inputDebianization)
@@ -23,7 +23,6 @@ import Debian.Debianize.Output (writeDebianization)
 import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), insertAtom, defaultAtoms)
 import Debian.Debianize.Types.Debianization as Deb (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..),
                                                     PackageRelations(..), VersionControlSpec(..))
-import Debian.Debianize.Types.Dependencies (DependencyHints(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
@@ -435,7 +434,9 @@ test6 =
                              setArchitecture (Binary (BinPkgName "artvaluereport2-development")) All $
                              setArchitecture (Binary (BinPkgName "artvaluereport2-production")) All $
                              setArchitecture (Binary (BinPkgName "artvaluereport2-staging")) All $
-                             doDependencyHint (\ x -> x {buildDepsIndep = [BinPkgName "libjs-jcrop", BinPkgName "libjs-jquery", BinPkgName "libjs-jquery-u"] ++ buildDepsIndep x}) $
+                             insertAtom Source (BuildDepIndep (BinPkgName "libjs-jcrop")) $
+                             insertAtom Source (BuildDepIndep (BinPkgName "libjs-jquery")) $
+                             insertAtom Source (BuildDepIndep (BinPkgName "libjs-jquery-u")) $
 
                              Atom.depends (BinPkgName "artvaluereport2-development") (anyrel (BinPkgName "artvaluereport2-server")) $
                              Atom.depends (BinPkgName "artvaluereport2-production") (anyrel (BinPkgName "artvaluereport2-server")) $

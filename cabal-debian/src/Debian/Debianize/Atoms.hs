@@ -10,15 +10,28 @@ module Debian.Debianize.Atoms
     , noDocumentationLibrary
     , utilsPackageName
     -- * DependencyHint getter and setters
-    , dependencyHints
-    , doDependencyHint
     , missingDependency
     , setRevision
     , revision
+    , setDebVersion
+    , debVersion
+    , setOmitLTDeps
+    , omitLTDeps
+    , versionSplits
+    , buildDeps
+    , buildDepsIndep
+    , missingDependencies
+    , extraLibMap
+    , execMap
+    , filterMissing
     , putExecMap
     , putExtraDevDep
+    , extraDevDeps
+    , epochMap
     , depends
     , conflicts
+    , binaryPackageDeps
+    , binaryPackageConflicts
     , setArchitecture
     , setPriority
     , setSection
@@ -41,20 +54,21 @@ module Debian.Debianize.Atoms
     ) where
 
 import Data.List (intersperse)
-import Data.Map as Map (insert)
+import Data.Map as Map (Map, insertWith)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty, (<>), mconcat)
-import Data.Set as Set (Set, maxView, toList, null, union, singleton)
+import Data.Set as Set (Set, maxView, toList, null, union, singleton, insert, member)
 import Data.Text (Text, pack, unlines)
 import Data.Version (Version, showVersion)
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags, defaultFlags,
                                      lookupAtom, lookupAtomDef, lookupAtoms, foldAtoms, hasAtom, insertAtom,
-                                     replaceAtoms, modifyAtoms', getSingleton)
-import Debian.Debianize.Types.Dependencies (DependencyHints(..))
+                                     replaceAtoms, modifyAtoms', getSingleton, getMaybeSingleton, partitionAtoms')
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
+import Debian.Debianize.Types.PackageType (VersionSplits)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat)
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName, Relation(..))
+import Debian.Version (DebianVersion)
 import Distribution.Package (PackageName(..), PackageIdentifier(pkgName, pkgVersion))
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription(package))
 import Distribution.Simple.Compiler (Compiler)
@@ -134,14 +148,8 @@ utilsPackageName deb =
       from Source (UtilsPackageName _) (Just _) = error "Multiple values for UtilsPackageName"
       from _ _ r = r
 
-doDependencyHint :: HasAtoms atoms => (DependencyHints -> DependencyHints) -> atoms -> atoms
-doDependencyHint = modifyHints
-
-dependencyHints :: HasAtoms atoms => atoms -> DependencyHints
-dependencyHints = getHints
-
 missingDependency :: HasAtoms atoms => BinPkgName -> atoms -> atoms
-missingDependency b deb = doDependencyHint (\ x -> x {missingDependencies = b : missingDependencies x}) deb
+missingDependency b deb = insertAtom Source (MissingDependency b) deb
 
 setRevision :: HasAtoms atoms => String -> atoms -> atoms
 setRevision s deb =
@@ -158,19 +166,126 @@ revision atoms =
       from Source (DebRevision s) = Just s
       from _ _ = Nothing
 
+setDebVersion :: HasAtoms atoms => DebianVersion -> atoms -> atoms
+setDebVersion v deb =
+    replaceAtoms from Source (DebVersion v) deb
+    where
+      from :: DebAtomKey -> DebAtom -> Bool
+      from Source (DebVersion _) = True
+      from _ _ = False
+
+debVersion :: HasAtoms atoms => atoms -> Maybe DebianVersion
+debVersion atoms =
+    getMaybeSingleton (error "Conflicting DebVersion values") from atoms
+    where
+      from Source (DebVersion v) = Just v
+      from _ _ = Nothing
+
+setOmitLTDeps :: HasAtoms atoms => atoms -> atoms
+setOmitLTDeps deb =
+    replaceAtoms from Source OmitLTDeps deb
+    where
+      from :: DebAtomKey -> DebAtom -> Bool
+      from Source OmitLTDeps = True
+      from _ _ = False
+
+omitLTDeps :: HasAtoms atoms => atoms -> Bool
+omitLTDeps atoms =
+    not $ Set.null $ fst $ partitionAtoms' from atoms
+    where
+      from Source OmitLTDeps = Just ()
+      from _ _ = Nothing
+
+buildDeps :: HasAtoms atoms => atoms -> Set BinPkgName
+buildDeps atoms =
+    foldAtoms from mempty atoms
+    where
+      from Source (BuildDep x) s = Set.insert x s
+      from _ _ s = s
+
+buildDepsIndep :: HasAtoms atoms => atoms -> Set BinPkgName
+buildDepsIndep atoms =
+    foldAtoms from mempty atoms
+    where
+      from Source (BuildDepIndep x) s = Set.insert x s
+      from _ _ s = s
+
+missingDependencies :: HasAtoms atoms => atoms -> Set BinPkgName
+missingDependencies atoms =
+    foldAtoms from mempty atoms
+    where
+      from Source (MissingDependency x) s = Set.insert x s
+      from _ _ s = s
+
+extraLibMap :: HasAtoms atoms => atoms -> Map.Map String (Set BinPkgName)
+extraLibMap atoms =
+    foldAtoms from mempty atoms
+    where
+      from Source (ExtraLibMapping cabal debian) m =
+          Map.insertWith union cabal (singleton debian) m
+      from _ _ m = m
+
 putExecMap :: HasAtoms atoms => String -> BinPkgName -> atoms -> atoms
-putExecMap cabal debian deb = doDependencyHint (\ x -> x {execMap = Map.insert cabal debian (execMap x)}) deb
+putExecMap cabal debian deb = insertAtom Source (ExecMapping cabal debian) deb
+
+execMap :: HasAtoms atoms => atoms -> Map.Map String BinPkgName
+execMap atoms =
+    foldAtoms from mempty atoms
+    where
+      from Source (ExecMapping cabal debian) m =
+          Map.insertWith (\ a b -> if a /= b
+                                   then error $ "Conflicting mapping for Build-Tool " ++ cabal ++ ": " ++ show (a, b)
+                                   else a) cabal debian m
+      from _ _ m = m
+
+epochMap :: HasAtoms atoms => atoms -> Map.Map PackageName Int
+epochMap atoms =
+    foldAtoms from mempty atoms
+    where
+      from Source (EpochMapping name epoch) m =
+          Map.insertWith (\ a b -> if a /= b
+                                   then error $ "Conflicting epochs for " ++ show name ++ ": " ++ show (a, b)
+                                   else a) name epoch m
+      from _ _ m = m
+
+filterMissing :: HasAtoms atoms => atoms -> [[Relation]] -> [[Relation]]
+filterMissing atoms rels =
+    filter (/= []) (map (filter (\ (Rel name _ _) -> not (Set.member name (missingDependencies atoms)))) rels)
+
+versionSplits :: HasAtoms atoms => atoms -> [VersionSplits]
+versionSplits atoms =
+    getSingleton (error "versionSplits") from atoms
+    where
+      from Source (VersionSplits x) = Just x
+      from _ _ = Nothing
 
 putExtraDevDep :: HasAtoms atoms => BinPkgName -> atoms -> atoms
-putExtraDevDep bin deb = doDependencyHint (\ x -> x {extraDevDeps = bin : extraDevDeps x}) deb
+putExtraDevDep bin atoms = insertAtom Source (DevDepends bin) atoms
+
+extraDevDeps :: HasAtoms atoms => atoms -> Set BinPkgName
+extraDevDeps atoms =
+    foldAtoms f mempty atoms
+    where
+      f Source (DevDepends p) s = Set.insert p s
+      f _ _ s = s
 
 depends :: HasAtoms atoms => BinPkgName -> Relation -> atoms -> atoms
-depends pkg rel deb =
-    doDependencyHint (\ x -> x {binaryPackageDeps = (pkg, rel) : binaryPackageDeps x}) deb
+depends pkg rel atoms = insertAtom (Binary pkg) (Depends rel) atoms
 
 conflicts :: HasAtoms atoms => BinPkgName -> Relation -> atoms -> atoms
-conflicts pkg rel deb =
-    doDependencyHint (\ x -> x {binaryPackageConflicts = (pkg, rel) : binaryPackageConflicts x}) deb
+conflicts pkg rel atoms = insertAtom (Binary pkg) (Conflicts rel) atoms
+
+binaryPackageDeps :: HasAtoms atoms => BinPkgName -> atoms -> [[Relation]]
+binaryPackageDeps p atoms =
+    foldAtoms f [] atoms
+    where f (Binary p') (Depends rel) rels | p == p' = [rel] : rels
+          f _ _ rels = rels
+
+binaryPackageConflicts :: HasAtoms atoms => BinPkgName -> atoms -> [[Relation]]
+binaryPackageConflicts p atoms =
+    foldAtoms f [] atoms
+    where f (Binary p') (Conflicts rel) rels | p == p' = [rel] : rels
+          f _ _ rels = rels
 
 setArchitecture :: HasAtoms atoms => DebAtomKey -> PackageArchitectures -> atoms -> atoms
 setArchitecture k x deb = insertAtom k (DHArch x) deb

@@ -4,14 +4,12 @@ module Debian.Debianize.Flags
     ) where
 
 import Data.Char (toLower, isDigit, ord)
-import qualified Data.Map as Map
 import Data.Set (fromList)
 import Data.Version (parseVersion)
-import Debian.Debianize.Atoms (doDependencyHint, missingDependency, doExecutable, setSourcePackageName,
-                               setBuildDir, putCabalFlagAssignments, mapFlags, sourceFormat, setRevision)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DHMaintainer),
+import Debian.Debianize.Atoms (missingDependency, doExecutable, setSourcePackageName,
+                               setBuildDir, putCabalFlagAssignments, mapFlags, sourceFormat, setRevision, setDebVersion, setOmitLTDeps, putExtraDevDep)
+import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DHMaintainer, BuildDep, BuildDepIndep, ExtraLibMapping, ExecMapping, EpochMapping, Depends, Conflicts),
                                      insertAtom, Flags(..), DebAction(..))
-import Debian.Debianize.Types.Dependencies (DependencyHints (..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..))
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
@@ -73,35 +71,34 @@ atomOptions =
              "Set given flags in Cabal conditionals",
       Option "" ["maintainer"] (ReqArg (\ maint x -> insertAtom Source (DHMaintainer (either (error ("Invalid maintainer string: " ++ show maint)) id (parseMaintainer maint))) x) "Maintainer Name <email addr>")
              "Override the Maintainer name and email in $DEBEMAIL/$EMAIL/$DEBFULLNAME/$FULLNAME",
-      Option "" ["build-dep"] (ReqArg (\ name atoms -> doDependencyHint (\ x -> x {buildDeps = BinPkgName name : (buildDeps x)}) atoms) "Debian binary package name")
+      Option "" ["build-dep"] (ReqArg (\ name atoms -> insertAtom Source (BuildDep (BinPkgName name)) atoms) "Debian binary package name")
              "Specify a package to add to the build dependency list for this source package, e.g. '--build-dep libglib2.0-dev'.",
-      Option "" ["build-dep-indep"] (ReqArg (\ name atoms -> doDependencyHint (\ x -> x {buildDepsIndep = BinPkgName name : (buildDepsIndep x)}) atoms) "Debian binary package name")
+      Option "" ["build-dep-indep"] (ReqArg (\ name atoms -> insertAtom Source (BuildDepIndep (BinPkgName name)) atoms) "Debian binary package name")
              "Specify a package to add to the architecture independent build dependency list for this source package, e.g. '--build-dep-indep perl'.",
-      Option "" ["dev-dep"] (ReqArg (\ name atoms -> doDependencyHint (\ x -> x {extraDevDeps = BinPkgName name : (extraDevDeps x)}) atoms) "Debian binary package name")
+      Option "" ["dev-dep"] (ReqArg (\ name atoms -> putExtraDevDep (BinPkgName name) atoms) "Debian binary package name")
              "Specify a package to add to the Depends: list of the -dev package, e.g. '--dev-dep libncurses5-dev'.  It might be good if this implied --build-dep.",
-      Option "" ["depends"] (ReqArg (\ arg atoms -> doDependencyHint (\ x -> x {binaryPackageDeps = parseDeps arg ++ binaryPackageDeps x}) atoms) "deb:deb,deb:deb,...")
+      Option "" ["depends"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> insertAtom (Binary p) (Depends r) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
              "Generalized --dev-dep - specify pairs A:B of debian binary package names, each A gets a Depends: B",
-      Option "" ["conflicts"] (ReqArg (\ arg atoms -> doDependencyHint (\ x -> x {binaryPackageConflicts = parseDeps arg ++ binaryPackageConflicts x}) atoms) "deb:deb,deb:deb,...")
+      Option "" ["conflicts"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> insertAtom (Binary p) (Conflicts r) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
              "Specify pairs A:B of debian binary package names, each A gets a Conflicts: B.  Note that B can have debian style version relations",
-      Option "" ["map-dep"] (ReqArg (\ pair atoms -> doDependencyHint (\ x -> x {extraLibMap = case break (== '=') pair of
-                                                                                                 (cab, (_ : deb)) -> Map.insertWith (++) cab [b deb] (extraLibMap x)
-                                                                                                 (_, "") -> error "usage: --dep-map CABALNAME=DEBIANNAME"}) atoms) "CABALNAME=DEBIANNAME")
+      Option "" ["map-dep"] (ReqArg (\ pair atoms -> insertAtom Source (case break (== '=') pair of
+                                                                          (cab, (_ : deb)) -> ExtraLibMapping cab (b deb)
+                                                                          (_, "") -> error "usage: --map-dep CABALNAME=DEBIANNAME") atoms) "CABALNAME=DEBIANNAME")
              "Specify a mapping from the name appearing in the Extra-Library field of the cabal file to a debian binary package name, e.g. --dep-map cryptopp=libcrypto-dev",
-      Option "" ["deb-version"] (ReqArg (\ version atoms -> doDependencyHint (\ x -> x {debVersion = Just (parseDebianVersion version)}) atoms) "VERSION")
+      Option "" ["deb-version"] (ReqArg (\ version atoms -> setDebVersion (parseDebianVersion version) atoms) "VERSION")
              "Specify the version number for the debian package.  This will pin the version and should be considered dangerous.",
       Option "" ["revision"] (ReqArg setRevision "REVISION")
              "Add this string to the cabal version to get the debian version number.  By default this is '-1~hackage1'.  Debian policy says this must either be empty (--revision '') or begin with a dash.",
-      Option "" ["epoch-map"] (ReqArg (\ pair atoms -> doDependencyHint (\ x -> x {epochMap =
-                                                                                       case break (== '=') pair of
-                                                                                         (_, (_ : ['0'])) -> epochMap x
-                                                                                         (cab, (_ : [d])) | isDigit d -> Map.insert (PackageName cab) (ord d - ord '0') (epochMap x)
-                                                                                         _ -> error "usage: --epoch-map CABALNAME=DIGIT"}) atoms) "CABALNAME=DIGIT")
+      Option "" ["epoch-map"] (ReqArg (\ pair atoms -> case break (== '=') pair of
+                                                         (_, (_ : ['0'])) -> atoms
+                                                         (cab, (_ : [d])) | isDigit d -> insertAtom Source (EpochMapping (PackageName cab) (ord d - ord '0')) atoms
+                                                         _ -> error "usage: --epoch-map CABALNAME=DIGIT") "CABALNAME=DIGIT")
              "Specify a mapping from the cabal package name to a digit to use as the debian package epoch number, e.g. --epoch-map HTTP=1",
-      Option "" ["exec-map"] (ReqArg (\ s atoms -> doDependencyHint (\ x -> x {execMap = case break (== '=') s of
-                                                                                           (cab, (_ : deb)) -> Map.insert cab (b deb) (execMap x)
-                                                                                           _ -> error "usage: --exec-map CABALNAME=DEBNAME"}) atoms) "EXECNAME=DEBIANNAME")
+      Option "" ["exec-map"] (ReqArg (\ s atoms -> insertAtom Source (case break (== '=') s of
+                                                                        (cab, (_ : deb)) -> ExecMapping cab (b deb)
+                                                                        _ -> error "usage: --exec-map CABALNAME=DEBNAME") atoms) "EXECNAME=DEBIANNAME")
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
-      Option "" ["omit-lt-deps"] (NoArg (\ atoms -> doDependencyHint (\ x -> x { omitLTDeps = True }) atoms))
+      Option "" ["omit-lt-deps"] (NoArg setOmitLTDeps)
              "Don't generate the << dependency when we see a cabal equals dependency.",
       Option "" ["quilt"] (NoArg (sourceFormat Quilt3))
              "The package has an upstream tarball, write '3.0 (quilt)' into source/format.",

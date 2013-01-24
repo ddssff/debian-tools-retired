@@ -16,14 +16,16 @@ import Data.Function (on)
 import Data.List (nub, minimumBy)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, catMaybes)
+import qualified Data.Set as Set
 import Data.Version (Version, showVersion)
 import Debian.Control
-import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, dependencyHints)
+import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, versionSplits,
+                               filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
 import Debian.Debianize.Types.Atoms (HasAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization)
-import Debian.Debianize.Types.Dependencies (DependencyHints(..), PackageInfo(..), devDeb, debNameFromType, filterMissing)
+import Debian.Debianize.Types.Dependencies (PackageInfo(..), debNameFromType)
 import Debian.Debianize.Types.PackageType (DebType(Dev, Prof, Doc), PackageType(..), mkPkgName, VersionSplits(..))
 import qualified Debian.Relation as D
 import Debian.Relation (Relations, Relation, BinPkgName, PkgName)
@@ -99,18 +101,18 @@ allBuildDepends atoms buildDepends buildTools pkgconfigDepends extraLibs =
           map ExtraLibs (fixDeps extraLibs)
     where
       fixDeps :: [String] -> [D.BinPkgName]
-      fixDeps xs = concatMap (\ cab -> fromMaybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] (Map.lookup cab (extraLibMap (dependencyHints atoms)))) xs
+      fixDeps xs = concatMap (\ cab -> maybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] Set.toList (Map.lookup cab (extraLibMap atoms))) xs
 
 -- The haskell-cdbs package contains the hlibrary.mk file with
 -- the rules for building haskell packages.
 debianBuildDeps :: HasAtoms atoms => atoms -> D.Relations
 debianBuildDeps deb =
-    filterMissing (dependencyHints deb) $
+    filterMissing deb $
     nub $ [[D.Rel (D.BinPkgName "debhelper") (Just (D.GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
            [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
            anyrel "cdbs",
            anyrel "ghc"] ++
-            (map anyrel' (buildDeps (dependencyHints deb))) ++
+            (map anyrel' (Set.toList (buildDeps deb))) ++
             (if noProfilingLibrary deb then [] else [anyrel "ghc-prof"]) ++
             cabalDeps (packageDescription deb)
     where
@@ -125,11 +127,11 @@ debianBuildDeps deb =
 
 debianBuildDepsIndep :: Debianization -> D.Relations
 debianBuildDepsIndep deb =
-    filterMissing (dependencyHints deb) $
+    filterMissing deb $
     if noDocumentationLibrary deb
     then []
     else nub $ [anyrel "ghc-doc"] ++
-               (map anyrel' (buildDepsIndep (dependencyHints deb))) ++
+               (map anyrel' (Set.toList (buildDepsIndep deb))) ++
                cabalDeps (packageDescription deb)
     where
       cabalDeps Nothing = []
@@ -156,11 +158,11 @@ buildDependencies atoms (BuildDepends (Dependency name ranges)) =
     dependencies atoms Development name ranges ++
     dependencies atoms Profiling name ranges
 buildDependencies atoms dep@(ExtraLibs _) =
-    concat (map dependency $ adapt (execMap (dependencyHints atoms)) dep)
+    concat (map dependency $ adapt (execMap atoms) dep)
 buildDependencies atoms dep =
     case unboxDependency dep of
       Just (Dependency _name _ranges) ->
-          concat (map dependency $ adapt (execMap (dependencyHints atoms)) dep)
+          concat (map dependency $ adapt (execMap atoms) dep)
       Nothing ->
           []
 
@@ -212,7 +214,7 @@ dependencies atoms typ name cabalRange =
       -- we may need to distribute any "and" dependencies implied
       -- by a version range over these "or" dependences.
       alts :: [(BinPkgName, VersionRange)]
-      alts = case Map.lookup name (packageSplits (versionSplits (dependencyHints atoms))) of
+      alts = case Map.lookup name (packageSplits (versionSplits atoms)) of
                -- If there are no splits for this package just return the single dependency for the package
                Nothing -> [(mkPkgName name typ, cabalRange')]
                -- If there are splits create a list of (debian package name, VersionRange) pairs
@@ -259,7 +261,7 @@ dependencies atoms typ name cabalRange =
             id
             cabalRange
       -- Convert a cabal version to a debian version, adding an epoch number if requested
-      dv v = parseDebianVersion (maybe "" (\ n -> show n ++ ":") (Map.lookup name (epochMap (dependencyHints atoms))) ++ showVersion v)
+      dv v = parseDebianVersion (maybe "" (\ n -> show n ++ ":") (Map.lookup name (epochMap atoms)) ++ showVersion v)
       simpler v1 v2 = minimumBy (compare `on` (length . asVersionIntervals)) [v1, v2]
       -- Simplify a VersionRange
       canon = fromVersionIntervals . toVersionIntervals
@@ -312,7 +314,7 @@ packageRangesFromVersionSplits splits =
 debianName :: (HasAtoms atoms, PkgName name) => atoms -> PackageType -> PackageIdentifier -> name
 debianName atoms typ pkgDesc =
     (\ pname -> mkPkgName pname typ) $
-    case filter (\ x -> pname == packageName x) (versionSplits (dependencyHints atoms)) of
+    case filter (\ x -> pname == packageName x) (versionSplits atoms) of
       [] -> pname
       [splits] ->
           foldTriples' (\ ltName v geName debName ->

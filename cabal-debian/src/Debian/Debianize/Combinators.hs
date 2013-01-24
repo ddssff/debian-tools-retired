@@ -8,7 +8,7 @@ module Debian.Debianize.Combinators
     , putLicense
     , buildDeps
     , describe
-    , extraDeps
+    -- , extraDeps
     , addExtraLibDependencies
     , setSourceBinaries
     , setChangelog
@@ -18,15 +18,15 @@ import Data.List as List (nub, intercalate)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid ((<>))
+import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, intercalate, unlines)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.Atoms (packageDescription, dependencyHints, revision)
+import Debian.Debianize.Atoms (packageDescription, revision, debVersion, extraLibMap, epochMap)
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), HasAtoms, foldAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..),
                                                        PackageRelations(..))
-import Debian.Debianize.Types.Dependencies (DependencyHints (extraLibMap, epochMap, debVersion))
 import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Utility (trim)
 import Debian.Policy (StandardsVersion)
@@ -79,8 +79,8 @@ versionInfo debianMaintainer date deb@(Debianization {changelog = ChangeLog oldE
       merge old new =
           old { logComments = logComments old ++ logComments new
               , logDate = date }
-      debinfo = maybe (Right (epoch, revision deb)) Left (debVersion (dependencyHints deb))
-      epoch = Map.lookup (pkgName pkgId) (epochMap (dependencyHints deb))
+      debinfo = maybe (Right (epoch, revision deb)) Left (debVersion deb)
+      epoch = Map.lookup (pkgName pkgId) (epochMap deb)
       pkgId = Cabal.package pkgDesc
       pkgDesc = fromMaybe (error "versionInfo: no PackageDescription") $ packageDescription deb
 
@@ -148,7 +148,7 @@ addExtraLibDependencies deb =
       f bin = bin
       g :: Debian.PackageRelations -> Debian.PackageRelations
       g rels = rels { depends = depends rels ++
-                                map anyrel' (concatMap (\ cab -> fromMaybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] (Map.lookup cab (extraLibMap (dependencyHints deb))))
+                                map anyrel' (concatMap (\ cab -> maybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] Set.toList (Map.lookup cab (extraLibMap deb)))
                                                        (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc)) }
       pkgDesc = fromMaybe (error "addExtraLibDependencies: no PackageDescription") $ packageDescription deb
 
@@ -207,11 +207,13 @@ debianDescriptionBase synopsis' description' author' maintainer' url =
       list :: b -> ([a] -> b) -> [a] -> b
       list d f l = case l of [] -> d; _ -> f l
 
+{-
 extraDeps :: [(D.BinPkgName, D.Relation)] -> D.BinPkgName -> [[D.Relation]]
 extraDeps deps p =
     case filter ((== p) . fst) deps of
       [] -> []
       pairs -> map ((: []) . snd) pairs
+-}
 
 anyrel' :: D.BinPkgName -> [D.Relation]
 anyrel' x = [D.Rel x Nothing Nothing]

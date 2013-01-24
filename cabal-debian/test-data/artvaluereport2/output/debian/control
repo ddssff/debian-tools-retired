@@ -259,7 +259,7 @@ Description: Haskell modules for fine art appraisal applications
 Package: artvaluereport2-production
 Architecture: all
 Section: misc
-Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, artvaluereport2-server, apache2
+Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, apache2, artvaluereport2-server
 Conflicts: ${haskell:Conflicts}
 Description: Haskell modules for fine art appraisal applications
  Haskell modules for fine art appraisal applications
@@ -270,7 +270,7 @@ Description: Haskell modules for fine art appraisal applications
 Package: artvaluereport2-server
 Architecture: any
 Section: misc
-Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, libjs-jquery, libjs-jquery-ui, libjs-jcrop, libjpeg-progs, netpbm, texlive-latex-recommended, texlive-latex-extra, texlive-fonts-recommended, texlive-fonts-extra
+Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, libjpeg-progs, libjs-jcrop, libjs-jquery, libjs-jquery-ui, netpbm, texlive-fonts-extra, texlive-fonts-recommended, texlive-latex-extra, texlive-latex-recommended
 Conflicts: ${haskell:Conflicts}
 Description: Haskell modules for fine art appraisal applications
  Haskell modules for fine art appraisal applications

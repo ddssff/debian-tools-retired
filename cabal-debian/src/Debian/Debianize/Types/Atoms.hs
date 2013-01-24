@@ -6,7 +6,7 @@ module Debian.Debianize.Types.Atoms
     , defaultFlags
     , DebAction(..)
     , HasAtoms(..)
-    , Atoms(..)
+    , Atoms(atomMap) -- FIXME: don't export atomMap
     , defaultAtoms
     , insertAtom
     , insertAtoms
@@ -34,12 +34,13 @@ import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, sing
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Debianize.Utility (setMapMaybe)
-import Debian.Debianize.Types.Dependencies (DependencyHints(..), defaultDependencyHints)
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
-import Debian.Debianize.Types.PackageType (DebType)
+import Debian.Debianize.Types.PackageType (DebType, VersionSplits, knownVersionSplits)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat, PackageArchitectures, PackagePriority, Section)
-import Debian.Relation (BinPkgName, SrcPkgName)
+import Debian.Relation (BinPkgName, SrcPkgName, Relation)
+import Debian.Version (DebianVersion)
+import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init)
@@ -101,6 +102,33 @@ data DebAtom
     | DebRevision String			  -- ^ Specify the revision string to use when converting the cabal
                                                   -- version to debian.
 
+    | OmitLTDeps				  -- ^ If present, don't generate the << dependency when we see a cabal
+                                                  -- equals dependency.  (The implementation of this was somehow lost.)
+    | DebVersion DebianVersion			  -- ^ Specify the exact debian version of the resulting package,
+                                                  -- including epoch.  One use case is to work around the the
+                                                  -- "buildN" versions that are often uploaded to the debian and
+                                                  -- ubuntu repositories.  Say the latest cabal version of
+                                                  -- transformers is 0.3.0.0, but the debian repository contains
+                                                  -- version 0.3.0.0-1build3, we need to specify
+                                                  -- debVersion="0.3.0.0-1build3" or the version we produce will
+                                                  -- look older than the one already available upstream.
+    | VersionSplits [VersionSplits]		  -- ^ Instances where the debian package name is different (for
+                                                  -- some range of version numbers) from the default constructed
+                                                  -- by mkPkgName.
+    | BuildDep BinPkgName			  -- ^ Add a build dependency (FIXME: should be a Rel, or an OrRelation, not a BinPkgName)
+    | BuildDepIndep BinPkgName			  -- ^ Add an arch independent build dependency
+    | MissingDependency BinPkgName		  -- ^ Lets cabal-debian know that a package it might expect to exist
+                                                  -- actually does not, so omit all uses in resulting debianization.
+    | ExtraLibMapping String BinPkgName		  -- ^ Map a cabal Extra-Library name to a debian binary package name,
+                                                  -- e.g. @ExtraLibMapping extraLibMap "cryptopp" "libcrypto-dev"@ adds a
+                                                  -- build dependency on @libcrypto-dev@ to any package that has @cryptopp@
+                                                  -- in its cabal Extra-Library list.
+    | ExecMapping String BinPkgName		  -- ^ Map a cabal Build-Tool name to a debian binary package name,
+                                                  -- e.g. @ExecMapping "trhsx" "haskell-hsx-utils"@ adds a build
+                                                  -- dependency on @haskell-hsx-utils@ to any package that has @trhsx@ in its
+                                                  -- cabal build-tool list.
+    | EpochMapping PackageName Int		  -- ^ Specify epoch numbers for the debian package generated from a
+                                                  -- cabal package.  Example: @EpochMapping (PackageName "HTTP") 1@.
     -- From here down are atoms to be associated with a Debian binary
     -- package.  This could be done with more type safety, separate
     -- maps for the Source atoms and the Binary atoms.
@@ -127,6 +155,10 @@ data DebAtom
     | DHServer Server                             -- ^ Like DHExecutable, but configure the executable as a server process
     | DHWebsite Site                              -- ^ Like DHServer, but configure the server as a web server
     | DHBackups String                            -- ^ Configure the executable to do incremental backups
+    | Depends Relation				  -- ^ Says that the debian package should have this relation in Depends
+    | Conflicts Relation			  -- ^ Says that the debian package should have this relation in Conflicts
+    | DevDepends BinPkgName			  -- ^ Limited version of Depends, put a dependency on the dev library package.  The only
+                                                  -- reason to use this is because we don't yet know the name of the dev library package.
     deriving (Eq, Ord, Show)
 
 -- | This record supplies information about the task we want done -
@@ -166,7 +198,6 @@ defaultFlags =
 data Atoms =
     Atoms
     { atomMap :: Map DebAtomKey (Set DebAtom)
-    , hints :: DependencyHints
     -- ^ Information about the mapping from cabal package names and
     -- versions to debian package names and versions.  (This could be
     -- broken up into smaller atoms, many of which would be attached to
@@ -174,19 +205,15 @@ data Atoms =
     } deriving (Eq, Ord, Show)
 
 defaultAtoms :: Atoms
-defaultAtoms = Atoms {atomMap = mempty, hints = defaultDependencyHints}
+defaultAtoms = insertAtom Source (VersionSplits knownVersionSplits) $ Atoms {atomMap = mempty}
 
 class HasAtoms atoms where
     getAtoms :: atoms -> Map DebAtomKey (Set DebAtom)
     putAtoms :: Map DebAtomKey (Set DebAtom) -> atoms -> atoms
-    getHints :: atoms -> DependencyHints
-    modifyHints :: (DependencyHints -> DependencyHints) -> atoms -> atoms
 
 instance HasAtoms Atoms where
     getAtoms = atomMap
     putAtoms mp x = x {atomMap = mp}
-    getHints = hints
-    modifyHints f x = x {hints = f (hints x)}
 
 lookupAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Maybe a
 lookupAtom mbin from xs =

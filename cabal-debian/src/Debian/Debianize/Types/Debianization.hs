@@ -65,8 +65,6 @@ data Debianization
 instance HasAtoms Debianization where
     getAtoms = getAtoms . debAtoms
     putAtoms ats x = x {debAtoms = (debAtoms x) {atomMap = ats}}
-    getHints = getHints . debAtoms
-    modifyHints f x = x {debAtoms = modifyHints f (debAtoms x)}
 
 -- | This type represents the debian/control file, which is the core
 -- of the source package debianization.  It includes the information
