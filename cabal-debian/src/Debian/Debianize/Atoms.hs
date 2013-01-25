@@ -47,6 +47,7 @@ module Debian.Debianize.Atoms
     , setChangeLog
     , setChangeLog'
     , changeLog
+    , compat
     , sourcePackageName
     , sourceFormat
     , debMaintainer
@@ -418,6 +419,14 @@ buildDir def atoms =
     where
       from Source (BuildDir path') (Just path) | path /= path' = error $ "Conflicting buildDir atoms: " ++ show path ++ " vs. " ++ show path'
       from Source (BuildDir path') _ = Just path'
+      from _ _ x = x
+
+compat :: HasAtoms atoms => Int -> atoms -> Int
+compat def atoms =
+    fromMaybe def $ foldAtoms from Nothing atoms
+    where
+      from Source (DebCompat n') (Just n) | n /= n' = error $ "Conflicting compat levels: " ++ show (n, n')
+      from Source (DebCompat n) _ = Just n
       from _ _ x = x
 
 setBuildDir :: HasAtoms atoms => FilePath -> atoms -> atoms

@@ -18,7 +18,7 @@ import Data.String (IsString)
 import Data.Text (Text, pack, unpack, unlines)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, setArchitecture, setPackageDescription, binaryPackageDeps, changeLog,
-                               binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps, rulesHead)
+                               binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps, rulesHead, compat)
 import Debian.Debianize.Combinators (describe, buildDeps)
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms, backupAtoms)
@@ -150,7 +150,7 @@ toFileMap d =
       [("debian/control", pack (show (pretty (control (sourceDebDescription d))))),
        ("debian/changelog", pack (show (pretty (changeLog d)))),
        ("debian/rules", rules d),
-       ("debian/compat", pack (show (compat d) <> "\n")),
+       ("debian/compat", pack (show (compat (error "Missing DebCompat atom") d) <> "\n")),
        ("debian/copyright", either (\ x -> pack (show x) <> "\n") id (Debian.copyright d))] ++
       sourceFormat d ++
       watch d ++

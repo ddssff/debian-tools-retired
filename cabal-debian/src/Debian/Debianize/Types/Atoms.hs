@@ -135,6 +135,7 @@ data DebAtom
     | EpochMapping PackageName Int		  -- ^ Specify epoch numbers for the debian package generated from a
                                                   -- cabal package.  Example: @EpochMapping (PackageName "HTTP") 1@.
     | DebPackageInfo PackageInfo		  -- ^ Supply some info about a cabal package.
+    | DebCompat Int				  -- ^ The debhelper compatibility level, from debian/compat.
     -- From here down are atoms to be associated with a Debian binary
     -- package.  This could be done with more type safety, separate
     -- maps for the Source atoms and the Binary atoms.
@@ -273,16 +274,6 @@ partitionAtoms f deb =
 
 replaceAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> Bool) -> DebAtomKey -> DebAtom -> atoms -> atoms
 replaceAtoms f k atom atoms = insertAtom k atom (snd (partitionAtoms f atoms))
-
-modifyAtoms :: HasAtoms atoms =>
-               (DebAtomKey -> DebAtom -> Bool)
-            -> (Set (DebAtomKey, DebAtom) -> Set (DebAtomKey, DebAtom))
-            -> atoms
-            -> atoms
-modifyAtoms f g atoms =
-    insertAtoms (g s) atoms'
-    where
-      (s, atoms') = partitionAtoms f atoms
 
 -- | Split atoms out of a HasAtoms instance by predicate.
 partitionAtoms' :: (HasAtoms atoms, Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> atoms -> (Set a, atoms)

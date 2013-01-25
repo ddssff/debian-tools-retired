@@ -17,7 +17,7 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization, newDebianization)
 import Debian.Debianize.Atoms as Atom (tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
                                        depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
-                                       setChangeLog, changeLog, setChangeLog', setRulesHead)
+                                       setChangeLog, changeLog, setChangeLog', setRulesHead, compat)
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
 import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Output (writeDebianization)
@@ -67,6 +67,7 @@ test1 =
                                    , logComments = "  * Fix a bug constructing the destination pathnames that was dropping\n    files that were supposed to be installed into packages.\n"
                                    , logWho = "David Fox <dsf@seereason.com>"
                                    , logDate = "Thu, 20 Dec 2012 06:49:25 -0800" }]) $
+          insertAtom Source (DebCompat 9) $ -- This will change as new version of debhelper are released
           Debianization
               { sourceDebDescription =
                   SourceDebDescription
@@ -86,7 +87,6 @@ test1 =
                       , vcsFields = Set.fromList []
                       , xFields = Set.fromList []
                       , binaryPackages = [] }
-              , compat = 9 -- This will change as new version of debhelper are released
               , copyright = Left BSD3
               , debAtoms = defaultAtoms }
 
@@ -115,6 +115,7 @@ test2 =
                                                          "    files that were supposed to be installed into packages."],
                                   logWho = "David Fox <dsf@seereason.com>",
                                   logDate = "Thu, 20 Dec 2012 06:49:25 -0800"}]) $
+          insertAtom Source (DebCompat 9) $
           Debianization
           { sourceDebDescription =
                 SourceDebDescription
@@ -134,7 +135,6 @@ test2 =
                   vcsFields = Set.fromList [],
                   xFields = Set.fromList [],
                   binaryPackages = [] },
-            compat = 9,
             copyright = Left BSD3,
             debAtoms = defaultAtoms }
 
@@ -163,6 +163,7 @@ test3 =
                                , logComments = "  * Depend on ghc >= 7.4, adjusting to its haddock --interface-version\n    behaviour.\n"
                                , logWho = "Joachim Breitner <nomeata@debian.org>"
                                , logDate = "Sat, 04 Feb 2012 10:50:33 +0100"}]) $
+          insertAtom Source (DebCompat 7) $
           Debianization
           { sourceDebDescription =
                 SourceDebDescription
@@ -219,7 +220,6 @@ test3 =
                                                              , provides = []
                                                              , replaces = []
                                                              , builtUsing = [] }}]}
-          , compat = 7
           , copyright = Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n"
           , debAtoms = defaultAtoms }
 
@@ -330,7 +330,7 @@ test5 =
     TestCase (     do -- oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" -- >>= \ x -> return (x {changelog = oldlog})
                       new <- cabalToDebianization "test-data/creativeprompts/input"
-                               (newDebianization (changeLog old) (copyright old) (compat old) (standardsVersion (sourceDebDescription old)))
+                               (newDebianization (changeLog old) (copyright old) (compat (error "Missing debian/compat file") old) (standardsVersion (sourceDebDescription old)))
                       let new' = finalizeDebianization $
                                  sourceFormat Native3 $
                                  -- setArchitecture (Binary (BinPkgName "creativeprompts-server")) Any $

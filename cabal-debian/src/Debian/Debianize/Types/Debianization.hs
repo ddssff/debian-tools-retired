@@ -34,8 +34,6 @@ data Debianization
       { sourceDebDescription :: SourceDebDescription
       -- ^ Represents the debian/control file -
       -- <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-sourcecontrolfiles>
-      , compat :: Int
-      -- ^ The debhelper compatibility level from debian/compat.
       , copyright :: Either License Text
       -- ^ Copyright information, either as a Cabal License value or
       -- the full text.
