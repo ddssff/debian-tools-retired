@@ -24,7 +24,6 @@ import Debian.Debianize.Types.PackageType (PackageType(..))
 import Debian.Orphans ()
 import Debian.Policy (StandardsVersion, PackagePriority, PackageArchitectures(..), Section)
 import Debian.Relation (Relations, SrcPkgName(..), BinPkgName)
-import Distribution.License (License)
 import Prelude hiding (init, log)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
@@ -34,9 +33,6 @@ data Debianization
       { sourceDebDescription :: SourceDebDescription
       -- ^ Represents the debian/control file -
       -- <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-sourcecontrolfiles>
-      , copyright :: Either License Text
-      -- ^ Copyright information, either as a Cabal License value or
-      -- the full text.
       , debAtoms :: Atoms
       -- ^ Information about the source and binary packages that will
       -- be transformed into values for the fields that represent the

@@ -10,7 +10,6 @@ import Debian.Control
 import Debian.Debianize.Types.PackageType (DebType(Dev, Prof, Doc))
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName(BinPkgName))
-import Debian.Version (DebianVersion)
 
 -- | Given a control file and a DebType, look for the binary deb with
 -- the corresponding suffix and return its name.

@@ -36,7 +36,6 @@ inputDebianization :: FilePath -> IO Debianization
 inputDebianization top =
     do xs <- Debianization <$> (fst <$> inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e)))
                            -- <*> inputChangeLog debian `catchIOError` (\ e -> error ("Failure parsing changelog: " ++ show e))
-                           <*> (Right <$> inputCopyright debian)
                            <*> pure (defaultAtoms)
        inputAtomsFromDirectory debian xs `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
     where
@@ -149,9 +148,6 @@ yes x = error $ "Expecting yes or no: " ++ x
 inputChangeLog :: FilePath -> IO ChangeLog
 inputChangeLog debian = readFile (debian </> "changelog") >>= return . parseChangeLog . unpack  -- `catch` handleDoesNotExist :: IO ChangeLog
 
-inputCopyright :: FilePath -> IO Text
-inputCopyright debian = readFile (debian </> "copyright")
-
 inputAtomsFromDirectory :: HasAtoms atoms => FilePath -> atoms -> IO atoms -- .install files, .init files, etc.
 inputAtomsFromDirectory debian xs =
     debianFiles xs >>= intermediateFiles (debian </> "cabalInstall")
@@ -170,11 +166,12 @@ inputAtomsFromDirectory debian xs =
              foldM (\ xs'' (path, file) -> return $ insertAtom Source (DHIntermediate ("debian/cabalInstall" </> path) file) xs'') xs' (zip paths files)
 
 inputAtoms :: HasAtoms atoms => FilePath -> FilePath -> atoms -> IO atoms
-inputAtoms _ path xs | elem path ["control", "copyright"] = return xs
+inputAtoms _ path xs | elem path ["control"] = return xs
 inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ insertAtom Source (either Warning DebSourceFormat (readSourceFormat text)) xs
 inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ insertAtom Source (DebWatch text) xs
 inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> return $ setRulesHead text xs
 inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= return . DebCompat . read . unpack >>= \ atom -> return $ insertAtom Source atom xs
+inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= return . DebCopyright . Right >>= \ atom -> return $ insertAtom Source atom xs
 inputAtoms debian name@"changelog" xs =
     readFile (debian </> name) >>= return . parseChangeLog . unpack >>= \ log -> return $ insertAtom Source (DebChangeLog log) xs
 inputAtoms debian name xs =

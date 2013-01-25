@@ -13,8 +13,8 @@ import Debian.Control (Field'(..))
 import Debian.Relation (Relation(..), VersionReq(..), ArchitectureReq(..),
                         BinPkgName(..), SrcPkgName(..))
 import Debian.Version (DebianVersion, prettyDebianVersion, parseDebianVersion)
-import Distribution.License (License(..))
 import Distribution.Compiler (CompilerId(..), CompilerFlavor(..))
+import Distribution.License (License(..))
 import Distribution.PackageDescription (PackageDescription(package))
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Version (VersionRange(..), foldVersionRange')
@@ -42,6 +42,7 @@ deriving instance Ord Extension
 deriving instance Eq Compiler
 deriving instance Ord Compiler
 deriving instance Ord NameAddr
+deriving instance Ord License
 
 instance Ord PackageDescription where
     compare = compare `on` package

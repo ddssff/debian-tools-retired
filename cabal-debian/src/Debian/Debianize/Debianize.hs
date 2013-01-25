@@ -18,9 +18,9 @@ import Data.Maybe
 import Data.Text (Text)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Atoms (packageDescription, flags, watchAtom, setPriority, setSection, setChangeLog, compilerVersion,
-                               cabalFlagAssignments)
+                               cabalFlagAssignments, putCopyright)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
-import Debian.Debianize.Combinators (cdbsRules, putCopyright, versionInfo, addExtraLibDependencies,
+import Debian.Debianize.Combinators (cdbsRules, versionInfo, addExtraLibDependencies,
                                      putStandards, setSourceBinaries)
 import Debian.Debianize.Flags (flagOptions, atomOptions)
 import Debian.Debianize.Input (inputDebianization)
@@ -32,7 +32,6 @@ import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection), parseMaintainer)
 import Debian.Relation (SrcPkgName(SrcPkgName))
 import Debian.Time (getCurrentLocalRFC822Time)
-import Distribution.License (License)
 import Distribution.Package (PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (writeFile, unlines)
@@ -128,7 +127,7 @@ debianization date copyright' maint standards oldDeb =
     setSection Source (MainSection "haskell") $
     -- setSourceBinaries [] $
     watchAtom (pkgName $ Cabal.package $ pkgDesc)  $
-    putCopyright copyright' $
+    putCopyright (Right copyright') $
     putStandards standards $
     versionInfo maint date $
     addExtraLibDependencies $
@@ -144,14 +143,13 @@ debianization date copyright' maint standards oldDeb =
 -- | Create a Debianization based on a changelog entry and a license
 -- value.  Uses the currently installed versions of debhelper and
 -- debian-policy to set the compatibility levels.
-newDebianization :: ChangeLog -> Either License Text -> Int -> StandardsVersion -> Debianization
-newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ _ = error "defaultDebianization: Invalid changelog entry"
-newDebianization (log@(ChangeLog (entry : _))) copy level standards =
+newDebianization :: ChangeLog -> Int -> StandardsVersion -> Debianization
+newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ = error "defaultDebianization: Invalid changelog entry"
+newDebianization (log@(ChangeLog (entry : _))) level standards =
     setChangeLog log $
     insertAtom Source (DebCompat level) $
     Debianization
       { sourceDebDescription = newSourceDebDescription (SrcPkgName (logPackage entry)) (either error id (parseMaintainer (logWho entry))) standards
-      , copyright = copy
       , debAtoms = defaultAtoms }
 
 compileEnvironmentArgs :: HasAtoms atoms => atoms -> IO atoms

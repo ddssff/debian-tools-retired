@@ -28,8 +28,9 @@ import Distribution.Simple.Utils (defaultPackageDesc, die, setupMessage)
 import Distribution.System (Platform(..), buildOS, buildArch)
 import Distribution.Verbosity (Verbosity, intToVerbosity)
 import System.Cmd (system)
-import System.Directory
+import System.Directory (doesFileExist {-, getCurrentDirectory-})
 import System.Exit (ExitCode(..))
+-- import System.IO (hPutStrLn, stderr)
 import System.IO.Error (catchIOError)
 import System.Posix.Files (setFileCreationMask)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
@@ -78,7 +79,11 @@ autoreconf verbose pkgDesc = do
 -- | Try to read the license file specified in the cabal package,
 -- otherwise return a text representation of the License field.
 inputCopyright :: PackageDescription -> IO Text
-inputCopyright pkgDesc = readFile' (licenseFile pkgDesc) `catchIOError` (\ _ -> return . pack . showLicense . license $ pkgDesc)
+inputCopyright pkgDesc = readFile' (licenseFile pkgDesc) `catchIOError` handle
+    where handle _e =
+              do -- here <- getCurrentDirectory
+                 -- hPutStrLn stderr ("Error reading " ++ licenseFile pkgDesc ++ " from " ++ here ++ ": " ++ show _e)
+                 return . pack . showLicense . license $ pkgDesc
 
 -- | Convert from license to RPM-friendly (now Debian-friendly?)
 -- description.  The strings are taken from TagsCheck.py in the

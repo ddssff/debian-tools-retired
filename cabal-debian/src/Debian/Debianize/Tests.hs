@@ -17,11 +17,11 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization, newDebianization)
 import Debian.Debianize.Atoms as Atom (tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
                                        depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
-                                       setChangeLog, changeLog, setChangeLog', setRulesHead, compat)
+                                       setChangeLog, changeLog, setChangeLog', setRulesHead, compat, putCopyright, copyright)
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
 import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Output (writeDebianization)
-import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), insertAtom, defaultAtoms, mapAtoms)
+import Debian.Debianize.Types.Atoms (HasAtoms, DebAtomKey(..), DebAtom(..), insertAtom, defaultAtoms, mapAtoms)
 import Debian.Debianize.Types.Debianization as Deb (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..),
                                                     PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
@@ -47,7 +47,7 @@ test1 =
     TestLabel "test1" $
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion
-                 let deb = newDebianization (ChangeLog [testEntry]) (Left BSD3) level standards
+                 let deb = putCopyright (Left BSD3) $ newDebianization (ChangeLog [testEntry]) level standards
                  assertEqual "test1" [] (diffDebianizations testDeb1 deb))
     where
       testDeb1 :: Debianization
@@ -68,6 +68,7 @@ test1 =
                                    , logWho = "David Fox <dsf@seereason.com>"
                                    , logDate = "Thu, 20 Dec 2012 06:49:25 -0800" }]) $
           insertAtom Source (DebCompat 9) $ -- This will change as new version of debhelper are released
+          putCopyright (Left BSD3) $
           Debianization
               { sourceDebDescription =
                   SourceDebDescription
@@ -87,7 +88,6 @@ test1 =
                       , vcsFields = Set.fromList []
                       , xFields = Set.fromList []
                       , binaryPackages = [] }
-              , copyright = Left BSD3
               , debAtoms = defaultAtoms }
 
 test2 :: Test
@@ -95,7 +95,7 @@ test2 =
     TestLabel "test2" $
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion
-                 let deb = newDebianization (ChangeLog [testEntry]) (Left BSD3) level standards
+                 let deb = putCopyright (Left BSD3) $ newDebianization (ChangeLog [testEntry]) level standards
                  assertEqual "test2" [] (diffDebianizations expect deb))
     where
       expect =
@@ -116,6 +116,7 @@ test2 =
                                   logWho = "David Fox <dsf@seereason.com>",
                                   logDate = "Thu, 20 Dec 2012 06:49:25 -0800"}]) $
           insertAtom Source (DebCompat 9) $
+          putCopyright (Left BSD3) $
           Debianization
           { sourceDebDescription =
                 SourceDebDescription
@@ -135,7 +136,6 @@ test2 =
                   vcsFields = Set.fromList [],
                   xFields = Set.fromList [],
                   binaryPackages = [] },
-            copyright = Left BSD3,
             debAtoms = defaultAtoms }
 
 test3 :: Test
@@ -164,6 +164,7 @@ test3 =
                                , logWho = "Joachim Breitner <nomeata@debian.org>"
                                , logDate = "Sat, 04 Feb 2012 10:50:33 +0100"}]) $
           insertAtom Source (DebCompat 7) $
+          putCopyright (Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n") $
           Debianization
           { sourceDebDescription =
                 SourceDebDescription
@@ -220,14 +221,13 @@ test3 =
                                                              , provides = []
                                                              , replaces = []
                                                              , builtUsing = [] }}]}
-          , copyright = Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n"
           , debAtoms = defaultAtoms }
 
 test4 :: Test
 test4 =
     TestLabel "test4" $
     TestCase (do old <- inputDebianization "test-data/clckwrks-dot-com/output" -- >>= \ x -> return (x {changelog = oldlog})
-                 new <- cabalToDebianization "test-data/clckwrks-dot-com/input" (newDebianization (changeLog old) (Left BSD3) 7 (StandardsVersion 3 9 4 Nothing))
+                 new <- cabalToDebianization "test-data/clckwrks-dot-com/input" (newDebianization (changeLog old) 7 (StandardsVersion 3 9 4 Nothing))
                  let new' =
                          finalizeDebianization $
                          (\ x -> x {sourceDebDescription = (sourceDebDescription x) {homepage = Just "http://www.clckwrks.com/"}}) $
@@ -330,7 +330,7 @@ test5 =
     TestCase (     do -- oldlog <- inputChangeLog "test-data/creativeprompts/input/debian"
                       old <- inputDebianization "test-data/creativeprompts/output" -- >>= \ x -> return (x {changelog = oldlog})
                       new <- cabalToDebianization "test-data/creativeprompts/input"
-                               (newDebianization (changeLog old) (copyright old) (compat (error "Missing debian/compat file") old) (standardsVersion (sourceDebDescription old)))
+                               (newDebianization (changeLog old) (compat (error "Missing debian/compat file") old) (standardsVersion (sourceDebDescription old)))
                       let new' = finalizeDebianization $
                                  sourceFormat Native3 $
                                  -- setArchitecture (Binary (BinPkgName "creativeprompts-server")) Any $
@@ -422,11 +422,12 @@ copyFirstLogEntry deb1 deb2 =
       ChangeLog (hd1 : _) = changeLog deb1
       ChangeLog (_ : tl2) = changeLog deb2
 
-copyChangelog :: Debianization -> Debianization -> Debianization
+-- copyChangelog :: Debianization -> Debianization -> Debianization
+copyChangelog :: (HasAtoms a, HasAtoms b) => a -> b -> b
 copyChangelog deb1 deb2 = setChangeLog' (changeLog deb1) deb2
 
-copyCopyright :: Debianization -> Debianization -> Debianization
-copyCopyright (Debianization {copyright = x}) deb = deb {copyright = x}
+copyCopyright :: (HasAtoms a, HasAtoms b) => a -> b -> b
+copyCopyright a b = putCopyright (copyright (error "Missing copyright atom") a) b
 
 test6 :: Test
 test6 =
@@ -435,7 +436,7 @@ test6 =
                   let log = changeLog old
                       standards = StandardsVersion 3 9 1 Nothing
                       compat' = 7
-                  new <- cabalToDebianization "test-data/artvaluereport2/input" (newDebianization log (Left BSD3) compat' standards)
+                  new <- cabalToDebianization "test-data/artvaluereport2/input" (newDebianization log compat' standards)
                   let new' = finalizeDebianization $
                              (\ x -> x {sourceDebDescription = (sourceDebDescription x) {homepage = Just "http://appraisalreportonline.com"}}) $
                              setSourcePackageName (SrcPkgName "haskell-artvaluereport2") $
@@ -542,10 +543,8 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase ( do old <- inputDebianization "."
-                  let log = changeLog old
-                      standards = StandardsVersion 3 9 3 Nothing
-                      compat = 7
-                  new <- cabalToDebianization "test-data/cabal-debian/input" (newDebianization log (Left BSD3) compat standards)
+                  new <- cabalToDebianization "test-data/cabal-debian/input"
+                           (newDebianization (changeLog old) 7 (StandardsVersion 3 9 3 Nothing))
                   let new' = finalizeDebianization $
                              (\ x -> x {sourceDebDescription = (sourceDebDescription x) {homepage = Just "http://src.seereason.com/cabal-debian"}}) $
                              sourceFormat Native3 $
@@ -555,7 +554,7 @@ test7 =
                              Atom.conflicts (BinPkgName "cabal-debian")
                                      (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing) $
                              copyChangelog old $
-                             copyCopyright old $
+                             -- copyCopyright old $
                              new
                   assertEqual "test7" [] (diffDebianizations old new')
              )

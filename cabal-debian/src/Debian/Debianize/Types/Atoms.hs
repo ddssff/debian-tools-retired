@@ -42,6 +42,7 @@ import Debian.Orphans ()
 import Debian.Policy (SourceFormat, PackageArchitectures, PackagePriority, Section)
 import Debian.Relation (BinPkgName, SrcPkgName, Relation)
 import Debian.Version (DebianVersion)
+import Distribution.License (License)
 import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
@@ -136,6 +137,8 @@ data DebAtom
                                                   -- cabal package.  Example: @EpochMapping (PackageName "HTTP") 1@.
     | DebPackageInfo PackageInfo		  -- ^ Supply some info about a cabal package.
     | DebCompat Int				  -- ^ The debhelper compatibility level, from debian/compat.
+    | DebCopyright (Either License Text)	  -- ^ Copyright information, either as a Cabal License value or
+                                                  -- the full text.
     -- From here down are atoms to be associated with a Debian binary
     -- package.  This could be done with more type safety, separate
     -- maps for the Source atoms and the Binary atoms.

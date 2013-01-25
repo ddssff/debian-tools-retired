@@ -48,6 +48,8 @@ module Debian.Debianize.Atoms
     , setChangeLog'
     , changeLog
     , compat
+    , putCopyright
+    , copyright
     , sourcePackageName
     , sourceFormat
     , debMaintainer
@@ -79,6 +81,7 @@ import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat)
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName), Relation(..))
 import Debian.Version (DebianVersion)
+import Distribution.License (License)
 import Distribution.Package (PackageName(..), PackageIdentifier(pkgName, pkgVersion))
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription(package))
 import Distribution.Simple.Compiler (Compiler)
@@ -393,6 +396,17 @@ changeLog deb =
       f Source (DebChangeLog log') _ = Just log'
       f _ _ x = x
       g (ChangeLog (hd : tl)) = ChangeLog (hd {logPackage = fromMaybe (logPackage hd) (sourcePackageName deb)} : tl)
+
+putCopyright :: HasAtoms atoms => Either License Text -> atoms -> atoms
+putCopyright copy deb = insertAtom Source (DebCopyright copy) deb
+
+copyright :: HasAtoms atoms => Either License Text -> atoms -> Either License Text
+copyright def atoms =
+    fromMaybe def $ foldAtoms from Nothing atoms
+    where
+      from Source (DebCopyright x') (Just x) | x /= x' = error $ "Conflicting copyright atoms: " ++ show x ++ " vs. " ++ show x'
+      from Source (DebCopyright x) _ = Just x
+      from _ _ x = x
 
 sourcePackageName :: HasAtoms atoms => atoms -> Maybe String
 sourcePackageName atoms =

@@ -3,9 +3,7 @@
 module Debian.Debianize.Combinators
     ( versionInfo
     , cdbsRules
-    , putCopyright
     , putStandards
-    , putLicense
     , buildDeps
     , describe
     -- , extraDeps
@@ -33,7 +31,6 @@ import qualified Debian.Relation as D
 import Debian.Relation (BinPkgName, SrcPkgName(..), Relation(Rel))
 import Debian.Release (parseReleaseName)
 import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
-import Distribution.License (License)
 import Distribution.Package (PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
 import Distribution.Text (display)
@@ -113,14 +110,8 @@ cdbsRules pkgId deb =
                                               "include /usr/share/cdbs/1/rules/debhelper.mk",
                                               "include /usr/share/cdbs/1/class/hlibrary.mk" ]) deb
 
-putCopyright :: Text -> Debianization -> Debianization
-putCopyright text deb = deb {copyright = Right text}
-
 putStandards :: StandardsVersion -> Debianization -> Debianization
 putStandards x deb = deb {sourceDebDescription = (sourceDebDescription deb) {standardsVersion = x}}
-
-putLicense :: License -> Debianization -> Debianization
-putLicense license deb = deb {copyright = Left license}
 
 describe :: HasAtoms atoms => atoms -> PackageType -> PackageIdentifier -> Text
 describe atoms typ ident =
