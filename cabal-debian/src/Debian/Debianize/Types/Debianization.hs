@@ -19,7 +19,6 @@ import Data.Generics (Data, Typeable)
 import Data.Monoid (mempty)
 import Data.Set as Set (Set, empty)
 import Data.Text (Text)
-import Debian.Changes (ChangeLog(..))
 import Debian.Debianize.Types.Atoms (Atoms(atomMap), HasAtoms(..))
 import Debian.Debianize.Types.PackageType (PackageType(..))
 import Debian.Orphans ()
@@ -35,13 +34,6 @@ data Debianization
       { sourceDebDescription :: SourceDebDescription
       -- ^ Represents the debian/control file -
       -- <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-sourcecontrolfiles>
-      , changelog :: ChangeLog
-      -- ^ The first entry of the changelog determine's the package's
-      -- name and version number, along with several other pieces of
-      -- information.
-      , rulesHead :: Text
-      -- ^ The beginning of the debian/rules file.  The remainder is
-      -- assembled from DebRulesFragment values in the atom list.
       , compat :: Int
       -- ^ The debhelper compatibility level from debian/compat.
       , copyright :: Either License Text
@@ -176,19 +168,8 @@ newBinaryDebDescription name arch =
       , description = mempty
       , relations = newPackageRelations }
 
-{-
-modifyBinaryDescription :: BinPkgName -> PackageArchitectures -> (BinaryDebDescription -> BinaryDebDescription) -> Debianization -> Debianization
-modifyBinaryDescription name arch f deb =
-    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = bins'}}
-    where
-      bins' = case partition ((== name) . package) (binaryPackages (sourceDebDescription deb)) of
-                ([], _) -> f (newBinaryDebDescription name arch) : binaryPackages (sourceDebDescription deb)
-                ([x], xs) -> f x : xs
-                _ -> error "binaryPackages should really be a map"
--}
-
--- | Like modifyBinaryDescription, but doesn't change the package
--- order and intializes the architecture to Any.
+-- | Modify the description of one of the binary debs without changing
+-- the package order.
 modifyBinaryDeb :: BinPkgName -> (Maybe BinaryDebDescription -> BinaryDebDescription) -> Debianization -> Debianization
 modifyBinaryDeb bin f deb =
     deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = bins'}}

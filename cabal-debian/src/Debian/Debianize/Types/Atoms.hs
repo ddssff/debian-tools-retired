@@ -18,9 +18,9 @@ module Debian.Debianize.Types.Atoms
     , hasAtom
     , foldAtoms
     , mapAtoms
-    , partitionAtoms
+    -- , partitionAtoms
     , replaceAtoms
-    , modifyAtoms
+    -- , modifyAtoms
     , partitionAtoms'
     , modifyAtoms'
     , getMaybeSingleton
@@ -34,6 +34,7 @@ import Data.Monoid (mempty)
 import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert)
 import Data.Text (Text)
 import Data.Version (Version)
+import Debian.Changes (ChangeLog)
 import Debian.Debianize.Utility (setMapMaybe)
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Debianize.Types.PackageType (DebType, VersionSplits, knownVersionSplits)
@@ -87,9 +88,12 @@ data DebAtom
     | DebSourceFormat SourceFormat                -- ^ Write debian/source/format
     | DebWatch Text                               -- ^ Write debian/watch
     | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
+    | DebRulesHead Text				  -- ^ The header of the debian/rules file.  The remainder is assembled
+                                                  -- from DebRulesFragment values in the atom list.
     | DebRulesFragment Text                       -- ^ A Fragment of debian/rules
     | Warning Text                                -- ^ A warning to be reported later
     | UtilsPackageName BinPkgName                 -- ^ Name to give the package for left-over data files and executables
+    | DebChangeLog ChangeLog			  -- ^ The changelog, first entry contains the source package name and version
     | SourcePackageName SrcPkgName                -- ^ Name to give to debian source package.  If not supplied name is constructed
                                                   -- from the cabal package name.
     | DHMaintainer NameAddr			  -- ^ Value for the maintainer field in the control file.  Note that
@@ -290,6 +294,7 @@ partitionAtoms' f deb =
             Just x -> (Set.insert x xs, deb')
             Nothing -> (xs, insertAtom k atom deb')
 
+-- | Like modifyAtoms, but 
 modifyAtoms' :: (HasAtoms atoms, Ord a) =>
                (DebAtomKey -> DebAtom -> Maybe a)
             -> (Set a -> Set (DebAtomKey, DebAtom))

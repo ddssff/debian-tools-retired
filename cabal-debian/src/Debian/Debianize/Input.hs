@@ -18,6 +18,7 @@ import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
+import Debian.Debianize.Atoms (setRulesHead)
 import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), HasAtoms, insertAtom, insertAtoms', defaultAtoms)
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                              VersionControlSpec(..), XField(..), newSourceDebDescription, newBinaryDebDescription)
@@ -34,8 +35,7 @@ import System.IO.Error (catchIOError)
 inputDebianization :: FilePath -> IO Debianization
 inputDebianization top =
     do xs <- Debianization <$> (fst <$> inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e)))
-                           <*> inputChangeLog debian `catchIOError` (\ e -> error ("Failure parsing changelog: " ++ show e))
-                           <*> inputRulesFile debian
+                           -- <*> inputChangeLog debian `catchIOError` (\ e -> error ("Failure parsing changelog: " ++ show e))
                            <*> inputCompat debian
                            <*> (Right <$> inputCopyright debian)
                            <*> pure (defaultAtoms)
@@ -150,9 +150,6 @@ yes x = error $ "Expecting yes or no: " ++ x
 inputChangeLog :: FilePath -> IO ChangeLog
 inputChangeLog debian = readFile (debian </> "changelog") >>= return . parseChangeLog . unpack  -- `catch` handleDoesNotExist :: IO ChangeLog
 
-inputRulesFile :: FilePath -> IO Text
-inputRulesFile debian = readFile (debian </> "rules") -- Treat the whole thing as the head.
-
 inputCompat :: FilePath -> IO Int
 inputCompat debian = read . unpack <$> readFile (debian </> "compat")
 
@@ -177,9 +174,12 @@ inputAtomsFromDirectory debian xs =
              foldM (\ xs'' (path, file) -> return $ insertAtom Source (DHIntermediate ("debian/cabalInstall" </> path) file) xs'') xs' (zip paths files)
 
 inputAtoms :: HasAtoms atoms => FilePath -> FilePath -> atoms -> IO atoms
-inputAtoms _ path xs | elem path ["changelog", "control", "compat", "copyright", "rules"] = return xs
+inputAtoms _ path xs | elem path ["control", "compat", "copyright"] = return xs
 inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ insertAtom Source (either Warning DebSourceFormat (readSourceFormat text)) xs
 inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ insertAtom Source (DebWatch text) xs
+inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> return $ setRulesHead text xs
+inputAtoms debian name@"changelog" xs =
+    readFile (debian </> name) >>= return . parseChangeLog . unpack >>= \ log -> return $ insertAtom Source (DebChangeLog log) xs
 inputAtoms debian name xs =
     case (BinPkgName (dropExtension name), takeExtension name) of
       (p, ".install") ->   readFile (debian </> name) >>= \ text -> return $ insertAtoms' (mapMaybe (\ l -> readInstall p l) (lines text)) xs

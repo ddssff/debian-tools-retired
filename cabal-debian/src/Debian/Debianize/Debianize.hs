@@ -15,10 +15,9 @@ module Debian.Debianize.Debianize
     ) where
 
 import Data.Maybe
-import Data.Monoid ((<>))
-import Data.Text (Text, pack, unlines)
+import Data.Text (Text)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.Atoms (packageDescription, flags, watchAtom, setPriority, setSection)
+import Debian.Debianize.Atoms (packageDescription, flags, watchAtom, setPriority, setSection, setChangeLog)
 import Debian.Debianize.Cabal (withSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (cdbsRules, putCopyright, versionInfo, addExtraLibDependencies,
                                      putStandards, setSourceBinaries)
@@ -147,16 +146,9 @@ debianization date copyright' maint standards oldDeb =
 newDebianization :: ChangeLog -> Either License Text -> Int -> StandardsVersion -> Debianization
 newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ _ = error "defaultDebianization: Invalid changelog entry"
 newDebianization (log@(ChangeLog (entry : _))) copy level standards =
+    setChangeLog log $
     Debianization
       { sourceDebDescription = newSourceDebDescription (SrcPkgName (logPackage entry)) (either error id (parseMaintainer (logWho entry))) standards
-      , changelog = log
-      , rulesHead = unlines [ "#!/usr/bin/make -f"
-                            , ""
-                            , "DEB_CABAL_PACKAGE = " <> pack (logPackage entry)
-                            , ""
-                            , "include /usr/share/cdbs/1/rules/debhelper.mk"
-                            , "include /usr/share/cdbs/1/class/hlibrary.mk"
-                            , "" ]
       , compat = level
       , copyright = copy
       , debAtoms = defaultAtoms }

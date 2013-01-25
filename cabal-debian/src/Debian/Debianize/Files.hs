@@ -17,8 +17,8 @@ import Data.Set as Set (Set, difference, union, fromList, null, insert, toList, 
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack, unlines)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, setArchitecture, setPackageDescription, binaryPackageDeps,
-                               binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps)
+import Debian.Debianize.Atoms (buildDir, dataDir, packageDescription, setArchitecture, setPackageDescription, binaryPackageDeps, changeLog,
+                               binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps, rulesHead)
 import Debian.Debianize.Combinators (describe, buildDeps)
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms, backupAtoms)
@@ -148,7 +148,7 @@ toFileMap :: Debianization -> Map.Map FilePath Text
 toFileMap d =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
       [("debian/control", pack (show (pretty (control (sourceDebDescription d))))),
-       ("debian/changelog", pack (show (pretty (changelog d)))),
+       ("debian/changelog", pack (show (pretty (changeLog d)))),
        ("debian/rules", rules d),
        ("debian/compat", pack (show (compat d) <> "\n")),
        ("debian/copyright", either (\ x -> pack (show x) <> "\n") id (Debian.copyright d))] ++
@@ -416,11 +416,11 @@ librarySpec atoms arch typ pkgId =
             }
 
 t1 :: Show a => a -> a
-t1 x = trace ("util files: " ++ show x) x
+t1 x = {-trace ("util files: " ++ show x)-} x
 t2 :: Show a => a -> a
-t2 x = trace ("available: " ++ show x) x
+t2 x = {-trace ("available: " ++ show x)-} x
 t3 :: Show a => a -> a
-t3 x = trace ("installed: " ++ show x) x
+t3 x = {-trace ("installed: " ++ show x)-} x
 {-
 t4 :: Show a => a -> a
 t4 x = {- trace ("t4: " ++ show x) -} x
@@ -436,11 +436,8 @@ makeUtilsPackage deb =
     case Set.difference (t2 available) (t3 installed) of
       s | Set.null s -> deb
       s -> let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)
-               -- Generate the atoms of the utils package
                atoms = foldr (uncurry insertAtom) (setPackageDescription pkgDesc defaultAtoms) (makeUtilsAtoms p (t1 s))
-               -- add them to deb
                deb' = foldAtomsFinalized insertAtom deb atoms in
-               -- Passing id to modify will cause the package to be created if necessary
                modifyBinaryDeb p (f p s) deb'
     where
       f _ _ (Just bin) = bin
@@ -450,33 +447,6 @@ makeUtilsPackage deb =
       isCabalExecutable _ = False
       g rels = rels { depends = depends rels ++ [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"]
                     , conflicts = conflicts rels ++ [anyrel "${haskell:Conflicts}"] }
-{-
-               deb' { sourceDebDescription =
-                         (sourceDebDescription deb')
-                         { binaryPackages =
-                               binaryPackages (sourceDebDescription deb') ++
-                                   [BinaryDebDescription
-                                    { Debian.package = p
-                                    , architecture = Any
-                                    , binarySection = Just (MainSection "misc")
-                                    , binaryPriority = Nothing
-                                    , essential = False
-                                    , Debian.description = describe deb' Utilities (Cabal.package pkgDesc)
-                                    , relations =
-                                        PackageRelations
-                                        { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                                                    extraDeps (binaryPackageDeps (dependencyHints deb')) p
-                                        , recommends = []
-                                        , suggests = []
-                                        , preDepends = []
-                                        , breaks = []
-                                        , conflicts = [anyrel "${haskell:Conflicts}"] ++ extraDeps (binaryPackageConflicts (dependencyHints deb')) p
-                                        , provides = []
-                                        , replaces = []
-                                        , builtUsing = []
-                                        }
-                                    }]} }
--}
       pkgDesc = fromMaybe (error "makeUtilsPackage: no PackageDescription") $ packageDescription deb
       available :: Set FileInfo
       available = Set.union (Set.fromList (map DataFile (Cabal.dataFiles pkgDesc)))
@@ -502,32 +472,8 @@ makeUtilsAtoms p s =
       fileInfoAtom (DataFile path) = DHInstallData path path
       fileInfoAtom (CabalExecutable name) = DHInstallCabalExec name "usr/bin"
 
-{-
-makeUtilsAtoms :: BinPkgName -> Set FileInfo -> Debianization -> Debianization
-makeUtilsAtoms p s deb =
-    case (bundledExecutables deb pkgDesc, Cabal.dataFiles pkgDesc) of
-      ([], []) -> deb
-      _ -> insertAtom Source (DebRulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))) $
-           insertAtoms' (Binary p) (map fileInfoAtom (Set.toList s)) $
-           deb
-    where
-      fileInfoAtom (DataFile path) = DHInstallData path (takeDirectory path)
-      fileInfoAtom (CabalExecutable name) = DHInstallCabalExec name "usr/bin"
-
--- | The list of executables without a corresponding debian package to put them into
-bundledExecutables :: HasAtoms atoms => atoms -> PackageDescription -> [Executable]
-bundledExecutables atoms pkgDesc =
-    filter nopackage (filter (buildable . buildInfo) (Cabal.executables pkgDesc))
-    where
-      nopackage p = not (elem (exeName p) (foldAtoms execNameOfHint [] atoms))
-      execNameOfHint :: DebAtomKey -> DebAtom -> [String] -> [String]
-      execNameOfHint (Binary _) (DHExecutable e) xs = execName e : xs
-      execNameOfHint (Binary _) (DHServer s) xs = execName (installFile s) : xs
-      execNameOfHint (Binary _) (DHWebsite s) xs = execName (installFile (server s)) : xs
-      execNameOfHint (Binary _) (DHBackups s) xs = s : xs
-      execNameOfHint _ _ xs = xs
--}
-
+-- | This is onlyu used to represent files during the computation of
+-- @installed@ and @available@ in makeUtilsPackage.
 data FileInfo
     = DataFile FilePath
     -- ^ A file that is going to be installed into the package's data

@@ -11,7 +11,6 @@ module Debian.Debianize.Combinators
     -- , extraDeps
     , addExtraLibDependencies
     , setSourceBinaries
-    , setChangelog
     ) where
 
 import Data.List as List (nub, intercalate)
@@ -22,7 +21,7 @@ import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, intercalate, unlines)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.Atoms (packageDescription, revision, debVersion, extraLibMap, epochMap)
+import Debian.Debianize.Atoms (packageDescription, revision, debVersion, extraLibMap, epochMap, changeLog, setChangeLog', setRulesHead)
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), HasAtoms, foldAtoms)
 import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..),
@@ -46,13 +45,14 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 -- the new changelog entry, source package name, exact debian version,
 -- log comments, maintainer name, revision date.
 versionInfo :: NameAddr -> String -> Debianization -> Debianization
-versionInfo debianMaintainer date deb@(Debianization {changelog = ChangeLog oldEntries}) =
-    deb { changelog = newLog
-        , sourceDebDescription =
+versionInfo debianMaintainer date deb =
+    setChangeLog' newLog $
+    deb { sourceDebDescription =
             (sourceDebDescription deb)
               { source = sourceName
               , Debian.maintainer = debianMaintainer }}
     where
+      ChangeLog oldEntries = changeLog deb
       newLog =
           case dropWhile (\ entry -> logVersion entry > logVersion newEntry) oldEntries of
             -- If the new package version number matches the old, merge the new and existing log entries
@@ -104,15 +104,14 @@ convertVersion debinfo cabalVersion =
                              (Just debianRevision)
 
 -- | Generate the head of the debian/rules file.
-cdbsRules :: PackageIdentifier -> Debianization -> Debianization
+cdbsRules :: HasAtoms atoms => PackageIdentifier -> atoms -> atoms
 cdbsRules pkgId deb =
-    deb { rulesHead =
-              unlines ["#!/usr/bin/make -f",
-                       "",
-                       "DEB_CABAL_PACKAGE = " <> pack (show (pretty (debianName deb Cabal pkgId :: BinPkgName))),
-                       "",
-                       "include /usr/share/cdbs/1/rules/debhelper.mk",
-                       "include /usr/share/cdbs/1/class/hlibrary.mk" ] }
+    setRulesHead (unlines ["#!/usr/bin/make -f",
+                                              "",
+                                              "DEB_CABAL_PACKAGE = " <> pack (show (pretty (debianName deb Cabal pkgId :: BinPkgName))),
+                                              "",
+                                              "include /usr/share/cdbs/1/rules/debhelper.mk",
+                                              "include /usr/share/cdbs/1/class/hlibrary.mk" ]) deb
 
 putCopyright :: Text -> Debianization -> Debianization
 putCopyright text deb = deb {copyright = Right text}
@@ -239,6 +238,3 @@ oldFilterMissing missing deb =
 
 setSourceBinaries :: [BinaryDebDescription] -> Debianization -> Debianization
 setSourceBinaries xs deb = deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = xs}}
-
-setChangelog :: ChangeLog -> Debianization -> Debianization
-setChangelog log' deb = deb { changelog = log' }

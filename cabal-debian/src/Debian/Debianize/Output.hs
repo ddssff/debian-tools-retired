@@ -14,10 +14,10 @@ import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Map as Map (toList)
 import Data.Text (Text, unpack)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logVersion))
-import Debian.Debianize.Atoms (flags)
+import Debian.Debianize.Atoms (flags, changeLog)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Types.Atoms (Flags(validate, dryRun))
-import Debian.Debianize.Types.Debianization as Debian (Debianization(changelog, sourceDebDescription),
+import Debian.Debianize.Types.Debianization as Debian (Debianization(sourceDebDescription),
                                                        SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
 import Debian.Debianize.Utility (replaceFile, diffFile)
 import System.Directory (Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing, doesFileExist)
@@ -37,8 +37,8 @@ outputDebianization old new =
        -- autobuilder configuration.
        case () of
          _ | validate (flags new) ->
-               do let oldVersion = logVersion (head (unChangeLog (changelog old)))
-                      newVersion = logVersion (head (unChangeLog (changelog new)))
+               do let oldVersion = logVersion (head (unChangeLog (changeLog old)))
+                      newVersion = logVersion (head (unChangeLog (changeLog new)))
                       oldSource = source . sourceDebDescription $ old
                       newSource = source . sourceDebDescription $ new
                       oldPackages = map Debian.package . binaryPackages . sourceDebDescription $ old

@@ -33,6 +33,8 @@ module Debian.Debianize.Atoms
     , binaryPackageDeps
     , binaryPackageConflicts
     , packageInfo
+    , rulesHead
+    , setRulesHead
     , setArchitecture
     , setPriority
     , setSection
@@ -42,6 +44,10 @@ module Debian.Debianize.Atoms
     , doWebsite
     , doBackups
     , setSourcePackageName
+    , setChangeLog
+    , setChangeLog'
+    , changeLog
+    , sourcePackageName
     , sourceFormat
     , debMaintainer
     , buildDir
@@ -61,6 +67,7 @@ import Data.Monoid (mempty, (<>), mconcat)
 import Data.Set as Set (Set, maxView, toList, null, union, singleton, insert, member)
 import Data.Text (Text, pack, unlines)
 import Data.Version (Version, showVersion)
+import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logPackage))
 import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags, defaultFlags,
                                      lookupAtom, lookupAtomDef, lookupAtoms, foldAtoms, hasAtom, insertAtom,
                                      replaceAtoms, modifyAtoms', getSingleton, getMaybeSingleton, partitionAtoms',
@@ -69,12 +76,12 @@ import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Debianize.Types.PackageType (VersionSplits)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat)
-import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName, Relation(..))
+import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName), Relation(..))
 import Debian.Version (DebianVersion)
 import Distribution.Package (PackageName(..), PackageIdentifier(pkgName, pkgVersion))
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription(package))
 import Distribution.Simple.Compiler (Compiler)
-import Prelude hiding (init, unlines)
+import Prelude hiding (init, unlines, log)
 import System.FilePath ((</>))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
@@ -238,6 +245,39 @@ packageInfo (PackageName name) atoms =
       from Source (DebPackageInfo p') (Just _) | cabalName p' == name = error $ "Multiple DebPackageInfo entries for " ++ name
       from _ _ x = x
 
+rulesHead :: HasAtoms atoms => atoms -> Text
+rulesHead atoms =
+    fromMaybe (defaultRulesHead atoms) $ foldAtoms from Nothing atoms
+    where
+      from Source (DebRulesHead text') (Just text) | text' /= text = error $ "Conflicting values for DebRulesHead: " ++ show text ++ " vs. " ++ show text'
+      from Source (DebRulesHead text) _ = Just text
+      from _ _ x = x
+
+setRulesHead :: HasAtoms atoms => Text -> atoms -> atoms
+setRulesHead text atoms =
+    modifyAtoms' f g atoms
+    where
+      f :: DebAtomKey -> DebAtom -> Maybe Text
+      f Source (DebRulesHead x) = Just x
+      f _ _ = Nothing
+      g :: Set Text -> Set (DebAtomKey, DebAtom)
+      g s | Set.null s || s == singleton text = singleton (Source, DebRulesHead text)
+      g s = error $ "setRulesHead: " ++ show (s, text)
+
+defaultRulesHead :: HasAtoms atoms => atoms -> Text
+defaultRulesHead atoms =
+    unlines $ [ "#!/usr/bin/make -f"
+              , ""
+              , "DEB_CABAL_PACKAGE = " <> pack (show (pretty name))
+              , ""
+              , "include /usr/share/cdbs/1/rules/debhelper.mk"
+              , "include /usr/share/cdbs/1/class/hlibrary.mk"
+              , "" ]
+    where
+      name = fromMaybe logName (sourcePackageName atoms)
+      logName = let ChangeLog (hd : _) = changeLog atoms in logPackage hd
+
+
 execMap :: HasAtoms atoms => atoms -> Map.Map String BinPkgName
 execMap atoms =
     foldAtoms from mempty atoms
@@ -326,6 +366,40 @@ doBackups bin s deb =
 
 setSourcePackageName :: HasAtoms atoms => SrcPkgName -> atoms -> atoms
 setSourcePackageName src deb = insertAtom Source (SourcePackageName src) deb
+
+setChangeLog :: HasAtoms atoms => ChangeLog -> atoms -> atoms
+-- setChangeLog log deb = insertAtom Source (DebChangeLog log) deb
+setChangeLog log deb =
+    modifyAtoms' f g deb
+    where
+      f Source (DebChangeLog x) = Just x
+      f _ _ = Nothing
+      g s | Set.null s = singleton (Source, DebChangeLog log)
+      g s = error $ "Multiple changelogs: " ++ show (log, s)
+
+-- | Like setChangeLog, but replacing the current log is not an error.
+setChangeLog' :: HasAtoms atoms => ChangeLog -> atoms -> atoms
+setChangeLog' log deb =
+    replaceAtoms f Source (DebChangeLog log) deb
+    where f Source (DebChangeLog _) = True
+          f _ _ = False
+
+changeLog :: HasAtoms atoms => atoms -> ChangeLog
+changeLog deb =
+    maybe (error "No changelog") g $ foldAtoms f Nothing deb
+    where
+      f Source (DebChangeLog log') (Just log) | log' /= log = error "Conflicting changelogs"
+      f Source (DebChangeLog log') _ = Just log'
+      f _ _ x = x
+      g (ChangeLog (hd : tl)) = ChangeLog (hd {logPackage = fromMaybe (logPackage hd) (sourcePackageName deb)} : tl)
+
+sourcePackageName :: HasAtoms atoms => atoms -> Maybe String
+sourcePackageName atoms =
+    foldAtoms from Nothing atoms
+    where
+      from Source (SourcePackageName (SrcPkgName src')) (Just src) | src' /= src = error $ "Conflicting source package names: " ++ show (src, src')
+      from Source (SourcePackageName (SrcPkgName src)) _ = Just src
+      from _ _ x = x
 
 sourceFormat :: HasAtoms atoms => SourceFormat -> atoms -> atoms
 sourceFormat format deb = insertAtom Source (DebSourceFormat format) deb
