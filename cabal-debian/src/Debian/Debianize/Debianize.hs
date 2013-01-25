@@ -17,8 +17,9 @@ module Debian.Debianize.Debianize
 import Data.Maybe
 import Data.Text (Text)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.Atoms (packageDescription, flags, watchAtom, setPriority, setSection, setChangeLog)
-import Debian.Debianize.Cabal (withSimplePackageDescription, inputCopyright, inputMaintainer)
+import Debian.Debianize.Atoms (packageDescription, flags, watchAtom, setPriority, setSection, setChangeLog, compilerVersion,
+                               cabalFlagAssignments)
+import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (cdbsRules, putCopyright, versionInfo, addExtraLibDependencies,
                                      putStandards, setSourceBinaries)
 import Debian.Debianize.Flags (flagOptions, atomOptions)
@@ -104,13 +105,13 @@ debianize top args =
 -- computed from the cabal package description.)
 cabalToDebianization :: FilePath -> Debianization -> IO Debianization
 cabalToDebianization top old =
-    withSimplePackageDescription top old $ \ old' -> do
-      let pkgDesc = fromMaybe (error "debianizationWithIO") $ packageDescription old'
-      date <- getCurrentLocalRFC822Time
-      copyright <- withCurrentDirectory top $ inputCopyright pkgDesc
-      maint <- inputMaintainer pkgDesc old' >>= maybe (error "Missing value for --maintainer") return
-      let standards = standardsVersion (sourceDebDescription old')
-      return $ debianization date copyright maint standards (scrub old')
+    do old' <- getSimplePackageDescription (verbosity (flags old)) (compilerVersion old) (cabalFlagAssignments old) top old
+       let pkgDesc = fromMaybe (error "cabalToDebianization") (packageDescription old')
+       date <- getCurrentLocalRFC822Time
+       copyright <- withCurrentDirectory top $ inputCopyright pkgDesc
+       maint <- inputMaintainer pkgDesc old' >>= maybe (error "Missing value for --maintainer") return
+       let standards = standardsVersion (sourceDebDescription old')
+       return $ debianization date copyright maint standards (scrub old')
     where
       -- We really don't want to inherit very much information from
       -- the old debianization, so we should do more here.

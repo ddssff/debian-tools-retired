@@ -123,10 +123,10 @@ putLicense :: License -> Debianization -> Debianization
 putLicense license deb = deb {copyright = Left license}
 
 describe :: HasAtoms atoms => atoms -> PackageType -> PackageIdentifier -> Text
-describe atoms =
-    debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc)
+describe atoms typ ident =
+    debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc) typ ident
     where
-      pkgDesc = fromMaybe (error "describe") $ packageDescription atoms
+      pkgDesc = fromMaybe (error $ "describe " ++ show ident) $ packageDescription atoms
 
 buildDeps :: Debianization -> Debianization
 buildDeps deb =

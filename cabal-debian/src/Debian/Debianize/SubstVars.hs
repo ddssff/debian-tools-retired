@@ -16,12 +16,12 @@ import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
-import Debian.Debianize.Atoms (flags, compiler, filterMissing, packageInfo)
+import Debian.Debianize.Atoms (flags, filterMissing, packageInfo, compilerVersion, cabalFlagAssignments, compiler)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps)
 import Debian.Debianize.Types.Atoms (HasAtoms, Flags(dryRun), insertAtom, DebAtomKey(Source), DebAtom(DebPackageInfo),
-                                     PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb))
+                                     PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), Flags(verbosity))
 import Debian.Debianize.Types.Dependencies (debNameFromType)
-import Debian.Debianize.Cabal (withSimplePackageDescription)
+import Debian.Debianize.Cabal (getSimplePackageDescription)
 import Debian.Control
 import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps,
@@ -50,11 +50,11 @@ substvars :: HasAtoms atoms =>
           -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> IO ()
 substvars atoms debType =
-    withSimplePackageDescription "." atoms $ \ atoms' -> do
-      debVersions <- buildDebVersionMap
-      atoms'' <- libPaths (compiler (error "substvars") atoms') debVersions atoms'
-      control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
-      substvars' atoms'' debType control
+    do atoms' <- getSimplePackageDescription (verbosity (flags atoms)) (compilerVersion atoms) (cabalFlagAssignments atoms) "." atoms
+       debVersions <- buildDebVersionMap
+       atoms'' <- libPaths (compiler (error "substvars") atoms') debVersions atoms'
+       control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
+       substvars' atoms'' debType control
 
 substvars' :: HasAtoms atoms => atoms -> DebType -> Control' String -> IO ()
 substvars' atoms debType control =

@@ -176,7 +176,10 @@ Section: misc
 Depends: ${shlibs:Depends}
          , ${haskell:Depends}
          , ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
+Provides: ${haskell:Provides}
 Description:  creativeprompts.com data files
   Static data files for creativeprompts.com
 
@@ -186,7 +189,10 @@ Section: misc
 Depends: ${shlibs:Depends}
          , ${haskell:Depends}
          , ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
+Provides: ${haskell:Provides}
 Description:  Configuration for running the creativeprompts.com server
   Production version of the blog server, runs on port
   9021 with HTML validation turned off.
@@ -197,7 +203,10 @@ Section: misc
 Depends: ${shlibs:Depends}
          , ${haskell:Depends}
          , ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
+Provides: ${haskell:Provides}
 Description:  Configuration for running the creativeprompts.com server
   Testing version of the blog server, runs on port
   8000 with HTML validation turned on.
@@ -209,7 +218,10 @@ Depends: ${shlibs:Depends}
          , ${haskell:Depends}
          , ${misc:Depends}
          , anacron
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
+Provides: ${haskell:Provides}
 Description: backup program for creativeprompts.com
   Install this somewhere other than creativeprompts.com to run automated
   backups of the database.

@@ -65,23 +65,20 @@ unboxDependency (ExtraLibs _) = Nothing -- Dependency (PackageName d) anyVersion
 -- which are build dependencies
 debDeps :: HasAtoms atoms => DebType -> atoms -> Control' String -> D.Relations
 debDeps debType atoms control =
-    case debType of
-      Dev ->
+    interdependencies ++ otherdependencies
+    where
+      interdependencies =
+          case debType of
+            Prof -> maybe [] (\ name -> [[D.Rel name Nothing Nothing]]) (debNameFromType control Dev)
+            _ -> []
+      otherdependencies =
           catMaybes (map (\ (Dependency name _) ->
                           case packageInfo name atoms of
-                            Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (devDeb p)
+                            Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (case debType of
+                                                                                                             Dev -> devDeb p
+                                                                                                             Prof -> profDeb p
+                                                                                                             Doc -> docDeb p)
                             Nothing -> Nothing) (cabalDependencies atoms))
-      Prof ->
-          maybe [] (\ name -> [[D.Rel name Nothing Nothing]]) (debNameFromType control Dev) ++
-          catMaybes (map (\ (Dependency name _) ->
-                          case packageInfo name atoms of
-                            Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (profDeb p)
-                            Nothing -> Nothing) (cabalDependencies atoms))
-      Doc ->
-          catMaybes (map (\ (Dependency name _) ->
-                              case packageInfo name atoms of
-                                Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (docDeb p)
-                                Nothing -> Nothing) (cabalDependencies atoms))
 
 cabalDependencies :: HasAtoms atoms => atoms -> [Dependency]
 cabalDependencies atoms =

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 module Debian.Debianize.Cabal
-    ( withSimplePackageDescription
+    ( getSimplePackageDescription
     , inputCopyright
     , inputMaintainer
     ) where
@@ -9,15 +9,16 @@ import Control.Exception (bracket)
 import Control.Monad (when)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Maybe
-import Data.Set (toList)
+import Data.Set (Set, toList)
 import Data.Text (Text, pack)
-import Debian.Debianize.Atoms (compilerVersion, cabalFlagAssignments, flags, setCompiler, setPackageDescription)
+import Data.Version (Version)
+import Debian.Debianize.Atoms (setCompiler, setPackageDescription)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
-import Debian.Debianize.Types.Atoms (HasAtoms, DebAtomKey(Source), DebAtom(DHMaintainer), Flags(verbosity), lookupAtom)
+import Debian.Debianize.Types.Atoms (HasAtoms, DebAtomKey(Source), DebAtom(DHMaintainer), lookupAtom)
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
 import Distribution.Package (Package(packageId))
-import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, license, maintainer))
+import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, license, maintainer), FlagName)
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), Compiler(..))
@@ -36,28 +37,30 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 intToVerbosity' :: Int -> Verbosity
 intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
 
-withSimplePackageDescription :: HasAtoms atoms => FilePath -> atoms -> (atoms -> IO a) -> IO a
-withSimplePackageDescription top atoms action =
-    do (pkgDesc, compiler) <- getSimplePackageDescription top atoms
+{-
+withSimplePackageDescription :: HasAtoms atoms => Int -> Maybe Version -> Set (FlagName, Bool) -> FilePath -> atoms -> (atoms -> IO a) -> IO a
+withSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top atoms action =
+    do (pkgDesc, compiler) <- getSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top
        let atoms' = setCompiler compiler . setPackageDescription pkgDesc $ atoms
        action atoms'
+-}
 
-getSimplePackageDescription :: HasAtoms atoms => FilePath -> atoms -> IO (PackageDescription, Compiler)
-getSimplePackageDescription top atoms =
+getSimplePackageDescription :: HasAtoms atoms => Int -> Maybe Version -> Set (FlagName, Bool) -> FilePath -> atoms -> IO atoms
+getSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top atoms =
     withCurrentDirectory top $ do
       descPath <- defaultPackageDesc vb
       genPkgDesc <- readPackageDescription vb descPath
       (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
-      let compiler = case compilerVersion atoms of
+      let compiler = case compilerVersion of
                        (Just ver) -> compiler' {compilerId = CompilerId GHC ver}
                        _ -> compiler'
-      pkgDesc <- case finalizePackageDescription (toList (cabalFlagAssignments atoms)) (const True) (Platform buildArch buildOS) (compilerId compiler) [] genPkgDesc of
+      pkgDesc <- case finalizePackageDescription (toList cabalFlagAssignments) (const True) (Platform buildArch buildOS) (compilerId compiler) [] genPkgDesc of
                    Left e -> error $ "finalize failed: " ++ show e
                    Right (pd, _) -> return pd
       liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
-      return (pkgDesc, compiler)
+      return $ setCompiler compiler $ setPackageDescription pkgDesc $ atoms
     where
-      vb = intToVerbosity' (verbosity (flags atoms))
+      vb = intToVerbosity' verbosity
 
 -- | Run the package's configuration script.
 autoreconf :: Verbosity -> PackageDescription -> IO ()

@@ -101,7 +101,8 @@ Description: Create a debianization for a cabal package
 
 Package: libghc-cabal-debian-prof
 Architecture: any
-Depends: ${haskell:Depends}
+Depends: ${shlibs:Depends}
+         , ${haskell:Depends}
          , ${misc:Depends}
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
@@ -120,11 +121,13 @@ Description: Create a debianization for a cabal package
 Package: libghc-cabal-debian-doc
 Architecture: all
 Section: doc
-Depends: ${haskell:Depends}
+Depends: ${shlibs:Depends}
+         , ${haskell:Depends}
          , ${misc:Depends}
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
+Provides: ${haskell:Provides}
 Description: Create a debianization for a cabal package
  Tool for creating debianizations of Haskell packages based on the .cabal
  file.  If apt-file is installed it will use it to discover what is the
@@ -138,7 +141,14 @@ Description: Create a debianization for a cabal package
 Package: cabal-debian
 Architecture: any
 Section: misc
-Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, apt-file
+Depends: ${shlibs:Depends}
+         , ${haskell:Depends}
+	 , ${misc:Depends}
+	 , apt-file
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
+Conflicts: ${haskell:Conflicts}, haskell-debian-utils (<< 3.59)
+Provides: ${haskell:Provides}
 Description: Create a debianization for a cabal package
  Tool for creating debianizations of Haskell packages based on the .cabal
  file.  If apt-file is installed it will use it to discover what is the
@@ -146,4 +156,3 @@ Description: Create a debianization for a cabal package
  .
   Author: David Fox <dsf@seereason.com>
   Upstream-Maintainer: David Fox <dsf@seereason.com>
-Conflicts: ${haskell:Conflicts}, haskell-debian-utils (<< 3.59)

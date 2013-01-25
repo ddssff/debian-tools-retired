@@ -258,21 +258,25 @@ cabalExecBinaryPackage b deb =
             , binaryPriority = Nothing
             , essential = False
             , Debian.description = describe deb Exec (Cabal.package pkgDesc)
-            , relations =
-                PackageRelations
-                { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                            binaryPackageDeps b deb
-                , recommends = []
-                , suggests = []
-                , preDepends = []
-                , breaks = []
-                , conflicts = [anyrel "${haskell:Conflicts}"] ++ binaryPackageConflicts b deb
-                , provides = []
-                , replaces = []
-                , builtUsing = []
-                }
+            , relations = binaryPackageRelations b Exec deb
             }
       pkgDesc = fromMaybe (error "cabalExecBinaryPackage: no PackageDescription") $ packageDescription deb
+
+binaryPackageRelations :: HasAtoms atoms => BinPkgName -> PackageType -> atoms -> PackageRelations
+binaryPackageRelations b typ deb =
+    PackageRelations
+    { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
+                (if typ == Development then map anyrel' (toList (extraDevDeps deb)) else []) ++
+                binaryPackageDeps b deb
+    , recommends = [anyrel "${haskell:Recommends}"]
+    , suggests = [anyrel "${haskell:Suggests}"]
+    , preDepends = []
+    , breaks = []
+    , conflicts = [anyrel "${haskell:Conflicts}"] ++ binaryPackageConflicts b deb
+    , provides = [anyrel "${haskell:Provides}"]
+    , replaces = []
+    , builtUsing = []
+    }
 
 anyrel :: String -> [D.Relation]
 anyrel x = anyrel' (D.BinPkgName x)
@@ -376,19 +380,7 @@ docSpecsParagraph atoms pkgId =
             , binaryPriority = Nothing
             , essential = False
             , Debian.description = describe atoms Documentation pkgId
-            , relations =
-                PackageRelations
-                { depends = [anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                            binaryPackageDeps (debianName atoms Documentation pkgId) atoms
-                , recommends = [anyrel "${haskell:Recommends}"]
-                , Debian.suggests = [anyrel "${haskell:Suggests}"]
-                , preDepends = []
-                , breaks = []
-                , Debian.conflicts = [anyrel "${haskell:Conflicts}"]
-                , provides = []
-                , replaces = []
-                , builtUsing = []
-                }
+            , relations = binaryPackageRelations (debianName atoms Documentation pkgId) Development atoms
             }
 
 librarySpec :: HasAtoms atoms => atoms -> PackageArchitectures -> PackageType -> PackageIdentifier -> BinaryDebDescription
@@ -400,19 +392,7 @@ librarySpec atoms arch typ pkgId =
             , binaryPriority = Nothing
             , essential = False
             , Debian.description = describe atoms typ pkgId
-            , relations =
-                PackageRelations
-                { depends = (if typ == Development then [anyrel "${shlibs:Depends}"] ++ map anyrel' (toList (extraDevDeps atoms)) else []) ++
-                            ([anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++ binaryPackageDeps (debianName atoms typ pkgId) atoms)
-                , recommends = [anyrel "${haskell:Recommends}"]
-                , suggests = [anyrel "${haskell:Suggests}"]
-                , preDepends = []
-                , breaks = []
-                , Debian.conflicts = [anyrel "${haskell:Conflicts}"]
-                , provides = [anyrel "${haskell:Provides}"]
-                , replaces = []
-                , builtUsing = []
-                }
+            , relations = binaryPackageRelations (debianName atoms typ pkgId) Development atoms
             }
 
 t1 :: Show a => a -> a
@@ -421,12 +401,10 @@ t2 :: Show a => a -> a
 t2 x = {-trace ("available: " ++ show x)-} x
 t3 :: Show a => a -> a
 t3 x = {-trace ("installed: " ++ show x)-} x
-{-
 t4 :: Show a => a -> a
-t4 x = {- trace ("t4: " ++ show x) -} x
+t4 x = trace ("utils package atoms: " ++ show x) x
 t5 :: Show a => a -> a
 t5 x = {- trace ("t5: " ++ show x) -} x
--}
 
 -- | Create a package to hold any executables and data files not
 -- assigned to some other package.
@@ -438,10 +416,13 @@ makeUtilsPackage deb =
       s -> let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)
                atoms = foldr (uncurry insertAtom) (setPackageDescription pkgDesc defaultAtoms) (makeUtilsAtoms p (t1 s))
                deb' = foldAtomsFinalized insertAtom deb atoms in
-               modifyBinaryDeb p (f p s) deb'
+           modifyBinaryDeb p (f deb' p s) deb'
     where
-      f _ _ (Just bin) = bin
-      f p s Nothing = let bin = newBinaryDebDescription p (arch s) in bin {binarySection = Just (MainSection "misc"), relations = g (relations bin)}
+      f _ _ _ (Just bin) = bin
+      f deb' p s Nothing =
+          let bin = newBinaryDebDescription p (arch s) in
+          bin {binarySection = Just (MainSection "misc"),
+               relations = binaryPackageRelations p Utilities deb'}
       arch s = if Set.null (Set.filter isCabalExecutable s) then All else Any
       isCabalExecutable (CabalExecutable _) = True
       isCabalExecutable _ = False

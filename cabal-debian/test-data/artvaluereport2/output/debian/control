@@ -240,7 +240,10 @@ Package: artvaluereport2-backups
 Architecture: any
 Section: misc
 Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, anacron
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
+Provides: ${haskell:Provides}
 Description: backup program for the appraisalreportonline.com site
   Install this somewhere other than where the server is running get
   automated backups of the database.
@@ -249,7 +252,10 @@ Package: artvaluereport2-development
 Architecture: all
 Section: misc
 Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, artvaluereport2-server
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
+Provides: ${haskell:Provides}
 Description: Haskell modules for fine art appraisal applications
  Haskell modules for fine art appraisal applications
  .
@@ -260,7 +266,10 @@ Package: artvaluereport2-production
 Architecture: all
 Section: misc
 Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, apache2, artvaluereport2-server
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
+Provides: ${haskell:Provides}
 Description: Haskell modules for fine art appraisal applications
  Haskell modules for fine art appraisal applications
  .
@@ -271,7 +280,10 @@ Package: artvaluereport2-server
 Architecture: any
 Section: misc
 Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, libjpeg-progs, libjs-jcrop, libjs-jquery, libjs-jquery-ui, netpbm, texlive-fonts-extra, texlive-fonts-recommended, texlive-latex-extra, texlive-latex-recommended
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
+Provides: ${haskell:Provides}
 Description: Haskell modules for fine art appraisal applications
  Haskell modules for fine art appraisal applications
  .
@@ -282,7 +294,10 @@ Package: artvaluereport2-staging
 Architecture: all
 Section: misc
 Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, artvaluereport2-server
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
+Provides: ${haskell:Provides}
 Description: Haskell modules for fine art appraisal applications
  Haskell modules for fine art appraisal applications
  .
