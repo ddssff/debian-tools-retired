@@ -9,6 +9,7 @@ module Debian.Debianize.Combinators
     -- , extraDeps
     , addExtraLibDependencies
     , setSourceBinaries
+    , oldFilterMissing
     ) where
 
 import Data.List as List (nub, intercalate)

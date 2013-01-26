@@ -151,6 +151,7 @@ newDebianization (log@(ChangeLog (entry : _))) level standards =
     Debianization
       { sourceDebDescription = newSourceDebDescription (SrcPkgName (logPackage entry)) (either error id (parseMaintainer (logWho entry))) standards
       , debAtoms = defaultAtoms }
+newDebianization _ _ _ = error "Invalid changelog"
 
 compileEnvironmentArgs :: HasAtoms atoms => atoms -> IO atoms
 compileEnvironmentArgs atoms0 =

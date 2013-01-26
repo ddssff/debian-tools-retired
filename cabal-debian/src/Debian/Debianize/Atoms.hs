@@ -29,6 +29,7 @@ module Debian.Debianize.Atoms
     , extraDevDeps
     , putEpochMapping
     , epochMap
+    , knownEpochMappings
     , depends
     , conflicts
     , binaryPackageDeps
@@ -90,11 +91,6 @@ import Prelude hiding (init, unlines, log)
 import System.FilePath ((</>))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
-
-{-
-defaultAtoms :: Map DebAtomKey (Set DebAtom)
-defaultAtoms = mempty
--}
 
 compiler :: HasAtoms atoms => Compiler -> atoms -> Compiler
 compiler def deb =
@@ -306,6 +302,11 @@ epochMap atoms =
                                    else a) name epoch m
       from _ _ m = m
 
+-- | We should always call this, just as we should always apply
+-- knownVersionSplits.
+knownEpochMappings :: HasAtoms atoms => atoms -> atoms
+knownEpochMappings = putEpochMapping (PackageName "HaXml") 1
+
 filterMissing :: HasAtoms atoms => atoms -> [[Relation]] -> [[Relation]]
 filterMissing atoms rels =
     filter (/= []) (map (filter (\ (Rel name _ _) -> not (Set.member name (missingDependencies atoms)))) rels)
@@ -400,6 +401,7 @@ changeLog deb =
       f Source (DebChangeLog log') _ = Just log'
       f _ _ x = x
       g (ChangeLog (hd : tl)) = ChangeLog (hd {logPackage = fromMaybe (logPackage hd) (sourcePackageName deb)} : tl)
+      g _ = error $ "Invalid changelog"
 
 putCopyright :: HasAtoms atoms => Either License Text -> atoms -> atoms
 putCopyright copy deb = insertAtom Source (DebCopyright copy) deb

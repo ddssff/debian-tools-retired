@@ -6,7 +6,7 @@ module Debian.Debianize.Files
     , toFileMap
     ) where
 
-import Debug.Trace
+-- import Debug.Trace
 
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Char (toLower)
@@ -360,17 +360,18 @@ depField tag rels = case rels of [] -> []; _ -> [Field (tag, " " ++ showDeps' (t
 librarySpecs :: Debianization -> Debianization
 librarySpecs deb | isNothing (packageDescription deb) = deb
 librarySpecs deb =
-    (if noDocumentationLibrary deb then id else insertAtom (Binary (debName)) (DHLink ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt") ("/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt"))) $
+    (if doc then insertAtom (Binary (debName)) (DHLink ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt") ("/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")) else id) $
     deb { sourceDebDescription =
             (sourceDebDescription deb)
               { binaryPackages =
-                    maybe []
-                          (const ([librarySpec deb Any Development (Cabal.package pkgDesc)] ++
-                                  if noProfilingLibrary deb then [] else [librarySpec deb Any Profiling (Cabal.package pkgDesc)] ++
-                                  if noDocumentationLibrary deb then [] else [docSpecsParagraph deb (Cabal.package pkgDesc)]))
-                          (Cabal.library pkgDesc) ++
-                    binaryPackages (sourceDebDescription deb) } }
+                    (if dev then [librarySpec deb Any Development (Cabal.package pkgDesc)] else []) ++
+                    (if prof then [librarySpec deb Any Profiling (Cabal.package pkgDesc)] else []) ++
+                    (if doc then [docSpecsParagraph deb (Cabal.package pkgDesc)] else []) ++
+                    (binaryPackages (sourceDebDescription deb)) } }
     where
+      doc = dev && not (noDocumentationLibrary deb)
+      prof = dev && not (noProfilingLibrary deb)
+      dev = isJust (Cabal.library pkgDesc)
       pkgDesc = fromMaybe (error "librarySpecs: no PackageDescription") $ packageDescription deb
       PackageName cabal = pkgName (Cabal.package pkgDesc)
       debName :: BinPkgName
@@ -407,10 +408,10 @@ t2 :: Show a => a -> a
 t2 x = {-trace ("available: " ++ show x)-} x
 t3 :: Show a => a -> a
 t3 x = {-trace ("installed: " ++ show x)-} x
-t4 :: Show a => a -> a
-t4 x = trace ("utils package atoms: " ++ show x) x
-t5 :: Show a => a -> a
-t5 x = {- trace ("t5: " ++ show x) -} x
+-- t4 :: Show a => a -> a
+-- t4 x = trace ("utils package atoms: " ++ show x) x
+-- t5 :: Show a => a -> a
+-- t5 x = {- trace ("t5: " ++ show x) -} x
 
 -- | Create a package to hold any executables and data files not
 -- assigned to some other package.
@@ -432,8 +433,6 @@ makeUtilsPackage deb =
       arch s = if Set.null (Set.filter isCabalExecutable s) then All else Any
       isCabalExecutable (CabalExecutable _) = True
       isCabalExecutable _ = False
-      g rels = rels { depends = depends rels ++ [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"]
-                    , conflicts = conflicts rels ++ [anyrel "${haskell:Conflicts}"] }
       pkgDesc = fromMaybe (error "makeUtilsPackage: no PackageDescription") $ packageDescription deb
       available :: Set FileInfo
       available = Set.union (Set.fromList (map DataFile (Cabal.dataFiles pkgDesc)))
