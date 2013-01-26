@@ -77,7 +77,7 @@ import Data.Set as Set (Set, maxView, toList, null, union, singleton, insert, me
 import Data.Text (Text, pack, unlines)
 import Data.Version (Version, showVersion)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logPackage))
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags, defaultFlags,
+import Debian.Debianize.AtomsType (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags, defaultFlags,
                                      lookupAtom, lookupAtomDef, lookupAtoms, foldAtoms, hasAtom, insertAtom,
                                      replaceAtoms, modifyAtoms', getSingleton, getMaybeSingleton, partitionAtoms',
                                      PackageInfo(cabalName))

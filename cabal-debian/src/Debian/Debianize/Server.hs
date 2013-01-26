@@ -14,7 +14,7 @@ module Debian.Debianize.Server
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Text (pack, unlines)
-import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..))
+import Debian.Debianize.AtomsType (DebAtomKey(..), DebAtom(..))
 import Debian.Debianize.Types.PackageHints (Server(..), Site(..), InstallFile(..))
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName)

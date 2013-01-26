@@ -8,7 +8,7 @@ import Data.Set (fromList)
 import Data.Version (parseVersion)
 import Debian.Debianize.Atoms (missingDependency, doExecutable, setSourcePackageName,
                                setBuildDir, putCabalFlagAssignments, mapFlags, sourceFormat, setRevision, setDebVersion, setOmitLTDeps, putExtraDevDep)
-import Debian.Debianize.Types.Atoms (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DHMaintainer, BuildDep, BuildDepIndep, ExtraLibMapping, ExecMapping, EpochMapping, Depends, Conflicts),
+import Debian.Debianize.AtomsType (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DHMaintainer, BuildDep, BuildDepIndep, ExtraLibMapping, ExecMapping, EpochMapping, Depends, Conflicts),
                                      insertAtom, Flags(..), DebAction(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..))
 import Debian.Orphans ()

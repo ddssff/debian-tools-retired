@@ -19,7 +19,7 @@ import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import Debian.Debianize.Atoms (setRulesHead)
-import Debian.Debianize.Types.Atoms (DebAtomKey(..), DebAtom(..), HasAtoms, insertAtom, insertAtoms', defaultAtoms)
+import Debian.Debianize.AtomsType (DebAtomKey(..), DebAtom(..), HasAtoms, insertAtom, insertAtoms', defaultAtoms)
 import Debian.Debianize.Types.Debianization (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                              VersionControlSpec(..), XField(..), newSourceDebDescription, newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')

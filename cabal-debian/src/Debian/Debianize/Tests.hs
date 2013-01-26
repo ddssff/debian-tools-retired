@@ -18,10 +18,10 @@ import Debian.Debianize.Debianize (cabalToDebianization, newDebianization)
 import Debian.Debianize.Atoms as Atom (tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
                                        depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
                                        setChangeLog, changeLog, setChangeLog', setRulesHead, compat, putCopyright, knownEpochMappings)
+import Debian.Debianize.AtomsType (HasAtoms, DebAtomKey(..), DebAtom(..), insertAtom, defaultAtoms, mapAtoms)
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (writeDebianization)
-import Debian.Debianize.Types.Atoms (HasAtoms, DebAtomKey(..), DebAtom(..), insertAtom, defaultAtoms, mapAtoms)
 import Debian.Debianize.Types.Debianization as Deb (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..),
                                                     PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))

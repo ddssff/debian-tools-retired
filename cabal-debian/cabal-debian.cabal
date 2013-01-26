@@ -51,6 +51,7 @@ Library
    Debian.Cabal
    Debian.Debianize
    Debian.Debianize.Atoms
+   Debian.Debianize.AtomsType
    Debian.Debianize.Bundled
    Debian.Debianize.Cabal
    Debian.Debianize.Combinators
@@ -65,7 +66,6 @@ Library
    Debian.Debianize.Server
    Debian.Debianize.SubstVars
    Debian.Debianize.Tests
-   Debian.Debianize.Types.Atoms
    Debian.Debianize.Types.Debianization
    Debian.Debianize.Types.Dependencies
    Debian.Debianize.Types.PackageHints

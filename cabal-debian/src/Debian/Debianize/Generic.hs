@@ -14,7 +14,7 @@ import Data.List (sort)
 import Data.Map (Map)
 import qualified Data.Text as T
 import Data.Set as Set (Set, toList, fromList, difference)
-import Debian.Debianize.Types.Atoms (DebAtomKey, DebAtom(..))
+import Debian.Debianize.AtomsType (DebAtomKey, DebAtom(..))
 import Debian.Debianize.Types.Debianization (Debianization(..), VersionControlSpec, XField)
 import Debian.Debianize.Utility (showDeps)
 import Debian.Relation (Relation)

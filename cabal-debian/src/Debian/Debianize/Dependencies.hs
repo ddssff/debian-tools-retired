@@ -21,9 +21,9 @@ import Data.Version (Version, showVersion)
 import Debian.Control
 import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, versionSplits,
                                filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
+import Debian.Debianize.AtomsType (HasAtoms, PackageInfo(devDeb, profDeb, docDeb))
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
-import Debian.Debianize.Types.Atoms (HasAtoms, PackageInfo(devDeb, profDeb, docDeb))
 import Debian.Debianize.Types.Debianization as Debian (Debianization)
 import Debian.Debianize.Types.Dependencies (debNameFromType)
 import Debian.Debianize.Types.PackageType (DebType(Dev, Prof, Doc), PackageType(..), mkPkgName, VersionSplits(..))

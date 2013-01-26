@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances #-}
-module Debian.Debianize.Types.Atoms
+module Debian.Debianize.AtomsType
     ( DebAtomKey(..)
     , DebAtom(..)
     , Flags(..)

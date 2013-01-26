@@ -1,5 +1,6 @@
 module Debian.Debianize
     ( module Debian.Debianize.Atoms
+    , module Debian.Debianize.AtomsType
     , module Debian.Debianize.Bundled
     , module Debian.Debianize.Cabal
     , module Debian.Debianize.Combinators
@@ -14,7 +15,6 @@ module Debian.Debianize
     , module Debian.Debianize.Server
     , module Debian.Debianize.SubstVars
     , module Debian.Debianize.Tests
-    , module Debian.Debianize.Types.Atoms
     , module Debian.Debianize.Types.Debianization
     , module Debian.Debianize.Types.Dependencies
     , module Debian.Debianize.Types.PackageHints
@@ -24,6 +24,7 @@ module Debian.Debianize
     ) where
 
 import Debian.Debianize.Atoms
+import Debian.Debianize.AtomsType
 import Debian.Debianize.Bundled
 import Debian.Debianize.Cabal
 import Debian.Debianize.Combinators hiding (buildDeps)
@@ -38,7 +39,6 @@ import Debian.Debianize.Output
 import Debian.Debianize.Server
 import Debian.Debianize.SubstVars
 import Debian.Debianize.Tests
-import Debian.Debianize.Types.Atoms
 import Debian.Debianize.Types.Debianization hiding (depends, conflicts)
 import Debian.Debianize.Types.Dependencies
 import Debian.Debianize.Types.PackageHints
