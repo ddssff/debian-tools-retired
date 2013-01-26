@@ -17,9 +17,9 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization, newDebianization)
 import Debian.Debianize.Atoms as Atom (tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
                                        depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
-                                       setChangeLog, changeLog, setChangeLog', setRulesHead, compat, putCopyright, copyright)
+                                       setChangeLog, changeLog, setChangeLog', setRulesHead, compat, putCopyright, putEpochMapping)
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
-import Debian.Debianize.Input (inputDebianization)
+import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (writeDebianization)
 import Debian.Debianize.Types.Atoms (HasAtoms, DebAtomKey(..), DebAtom(..), insertAtom, defaultAtoms, mapAtoms)
 import Debian.Debianize.Types.Debianization as Deb (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..),
@@ -33,6 +33,7 @@ import Debian.Relation (Relation(..), VersionReq(..), SrcPkgName(..), BinPkgName
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Version (buildDebianVersion, parseDebianVersion)
 import Distribution.License (License(BSD3))
+import Distribution.Package (PackageName(PackageName))
 import Prelude hiding (log)
 import System.FilePath ((</>))
 import Test.HUnit
@@ -40,7 +41,7 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..))
 import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
 
 tests :: Test
-tests = TestLabel "Debianization Tests" (TestList [test1, test2, test3, test4, test5, test6, test7])
+tests = TestLabel "Debianization Tests" (TestList [test1, test2, test3, test4, test5, test6, test7, test8])
 
 test1 :: Test
 test1 =
@@ -426,8 +427,8 @@ copyFirstLogEntry deb1 deb2 =
 copyChangelog :: (HasAtoms a, HasAtoms b) => a -> b -> b
 copyChangelog deb1 deb2 = setChangeLog' (changeLog deb1) deb2
 
-copyCopyright :: (HasAtoms a, HasAtoms b) => a -> b -> b
-copyCopyright a b = putCopyright (copyright (error "Missing copyright atom") a) b
+-- copyCopyright :: (HasAtoms a, HasAtoms b) => a -> b -> b
+-- copyCopyright a b = putCopyright (copyright (error "Missing copyright atom") a) b
 
 test6 :: Test
 test6 =
@@ -557,6 +558,21 @@ test7 =
                              -- copyCopyright old $
                              new
                   assertEqual "test7" [] (diffDebianizations old new')
+             )
+
+test8 :: Test
+test8 =
+    TestLabel "test7" $
+    TestCase ( do old <- inputDebianization "test-data/artvaluereport-data/output"
+                  log <- inputChangeLog "test-data/artvaluereport-data/input/debian"
+                  new <- cabalToDebianization "test-data/artvaluereport-data/input" (newDebianization log 7 (StandardsVersion 3 9 3 Nothing))
+                  let new' = finalizeDebianization $
+                             putEpochMapping (PackageName "HaXml") 1 $
+                             insertAtom Source (BuildDep (BinPkgName "haskell-hsx-utils")) $
+                             (\ x -> x {sourceDebDescription = (sourceDebDescription x) {homepage = Just "http://artvaluereportonline.com"}}) $
+                             sourceFormat Native3 $
+                             new
+                  assertEqual "test8" [] (diffDebianizations old new')
              )
 
 data Change k a
