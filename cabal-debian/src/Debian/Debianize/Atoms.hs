@@ -37,6 +37,10 @@ module Debian.Debianize.Atoms
     , packageInfo
     , rulesHead
     , setRulesHead
+    , setSourceArchitecture
+    , setSourcePriority
+    , setSourceSection
+    , setSourceDescription
     , setArchitecture
     , setPriority
     , setSection
@@ -278,7 +282,6 @@ defaultRulesHead atoms =
       name = fromMaybe logName (sourcePackageName atoms)
       logName = let ChangeLog (hd : _) = changeLog atoms in logPackage hd
 
-
 execMap :: HasAtoms atoms => atoms -> Map.Map String BinPkgName
 execMap atoms =
     foldAtoms from mempty atoms
@@ -346,17 +349,29 @@ binaryPackageConflicts p atoms =
     where f (Binary p') (Conflicts rel) rels | p == p' = [rel] : rels
           f _ _ rels = rels
 
-setArchitecture :: HasAtoms atoms => DebAtomKey -> PackageArchitectures -> atoms -> atoms
-setArchitecture k x deb = insertAtom k (DHArch x) deb
+setSourceArchitecture :: HasAtoms atoms => PackageArchitectures -> atoms -> atoms
+setSourceArchitecture x deb = insertAtom Source (DHArch x) deb
 
-setPriority :: HasAtoms atoms => DebAtomKey -> PackagePriority -> atoms -> atoms
-setPriority k x deb = insertAtom k (DHPriority x) deb
+setSourcePriority :: HasAtoms atoms => PackagePriority -> atoms -> atoms
+setSourcePriority x deb = insertAtom Source (DHPriority x) deb
 
-setSection :: HasAtoms atoms => DebAtomKey -> Section -> atoms -> atoms
-setSection k x deb = insertAtom k (DHSection x) deb
+setSourceSection :: HasAtoms atoms => Section -> atoms -> atoms
+setSourceSection x deb = insertAtom Source (DHSection x) deb
 
-setDescription :: HasAtoms atoms => DebAtomKey -> Text -> atoms -> atoms
-setDescription k x deb = insertAtom k (DHDescription x) deb
+setSourceDescription :: HasAtoms atoms => Text -> atoms -> atoms
+setSourceDescription x deb = insertAtom Source (DHDescription x) deb
+
+setArchitecture :: HasAtoms atoms => BinPkgName -> PackageArchitectures -> atoms -> atoms
+setArchitecture k x deb = insertAtom (Binary k) (DHArch x) deb
+
+setPriority :: HasAtoms atoms => BinPkgName -> PackagePriority -> atoms -> atoms
+setPriority k x deb = insertAtom (Binary k) (DHPriority x) deb
+
+setSection :: HasAtoms atoms => BinPkgName -> Section -> atoms -> atoms
+setSection k x deb = insertAtom (Binary k) (DHSection x) deb
+
+setDescription :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+setDescription k x deb = insertAtom (Binary k) (DHDescription x) deb
 
 doExecutable :: HasAtoms atoms => BinPkgName -> InstallFile -> atoms -> atoms
 doExecutable bin x deb = insertAtom (Binary bin) (DHExecutable x) deb

@@ -186,7 +186,7 @@ finalizeDebianization deb0 =
       f k@(Binary b) a@(DHServer _) = insertAtom k a . cabalExecBinaryPackage b
       f k@(Binary b) a@(DHBackups _) =
           insertAtom k a .
-          setArchitecture (Binary b) Any .
+          setArchitecture b Any .
           cabalExecBinaryPackage b
       f k@(Binary b) a@(DHExecutable _) = insertAtom k a . cabalExecBinaryPackage b
       f k a = insertAtom k a

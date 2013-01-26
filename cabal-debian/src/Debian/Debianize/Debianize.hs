@@ -17,7 +17,7 @@ module Debian.Debianize.Debianize
 import Data.Maybe
 import Data.Text (Text)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.Atoms (packageDescription, flags, watchAtom, setPriority, setSection, setChangeLog, compilerVersion,
+import Debian.Debianize.Atoms (packageDescription, flags, watchAtom, setSourcePriority, setSourceSection, setChangeLog, compilerVersion,
                                cabalFlagAssignments, putCopyright)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (cdbsRules, versionInfo, addExtraLibDependencies,
@@ -123,8 +123,8 @@ debianization :: String              -- ^ current date
               -> Debianization       -- ^ Existing debianization
               -> Debianization       -- ^ New debianization
 debianization date copyright' maint standards oldDeb =
-    setPriority Source Optional $
-    setSection Source (MainSection "haskell") $
+    setSourcePriority Optional $
+    setSourceSection (MainSection "haskell") $
     -- setSourceBinaries [] $
     watchAtom (pkgName $ Cabal.package $ pkgDesc)  $
     putCopyright (Right copyright') $
