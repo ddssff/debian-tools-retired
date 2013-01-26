@@ -49,6 +49,7 @@ Library
    Data.Algorithm.Diff.Context
    Data.Algorithm.Diff.Pretty
    Debian.Cabal
+   Debian.Debianize
    Debian.Debianize.Atoms
    Debian.Debianize.Bundled
    Debian.Debianize.Cabal
