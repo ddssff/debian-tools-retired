@@ -9,6 +9,7 @@ module Debian.Debianize.Files
 import Debug.Trace
 
 import Data.ByteString.Lazy.UTF8 (fromString)
+import Data.Char (toLower)
 import Data.Digest.Pure.MD5 (md5)
 import qualified Data.Map as Map
 import Data.Maybe
@@ -31,10 +32,10 @@ import Debian.Debianize.Utility (showDeps')
 import Debian.Policy (PackageArchitectures(Any, All), Section(..))
 import Debian.Relation (Relations, BinPkgName)
 import qualified Debian.Relation as D
-import Distribution.Package (PackageIdentifier(..))
+import Distribution.Package (PackageName(PackageName), PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (init, unlines, writeFile)
-import System.FilePath ((</>), makeRelative, splitFileName, takeDirectory, takeFileName)
+import System.FilePath ((</>), (<.>), makeRelative, splitFileName, takeDirectory, takeFileName)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 sourceFormat :: Debianization -> [(FilePath, Text)]
@@ -359,6 +360,7 @@ depField tag rels = case rels of [] -> []; _ -> [Field (tag, " " ++ showDeps' (t
 librarySpecs :: Debianization -> Debianization
 librarySpecs deb | isNothing (packageDescription deb) = deb
 librarySpecs deb =
+    (if noDocumentationLibrary deb then id else insertAtom (Binary (debName)) (DHLink ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt") ("/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt"))) $
     deb { sourceDebDescription =
             (sourceDebDescription deb)
               { binaryPackages =
@@ -370,6 +372,10 @@ librarySpecs deb =
                     binaryPackages (sourceDebDescription deb) } }
     where
       pkgDesc = fromMaybe (error "librarySpecs: no PackageDescription") $ packageDescription deb
+      PackageName cabal = pkgName (Cabal.package pkgDesc)
+      debName :: BinPkgName
+      debName = debianName deb Documentation (Cabal.package pkgDesc)
+      hoogle = map toLower cabal
 
 docSpecsParagraph :: HasAtoms atoms => atoms -> PackageIdentifier -> BinaryDebDescription
 docSpecsParagraph atoms pkgId =

@@ -27,6 +27,7 @@ module Debian.Debianize.Atoms
     , putExecMap
     , putExtraDevDep
     , extraDevDeps
+    , putEpochMapping
     , epochMap
     , depends
     , conflicts
@@ -291,6 +292,9 @@ execMap atoms =
                                    then error $ "Conflicting mapping for Build-Tool " ++ cabal ++ ": " ++ show (a, b)
                                    else a) cabal debian m
       from _ _ m = m
+
+putEpochMapping :: HasAtoms atoms => PackageName -> Int -> atoms -> atoms
+putEpochMapping cab n atoms = insertAtom Source (EpochMapping cab n) atoms
 
 epochMap :: HasAtoms atoms => atoms -> Map.Map PackageName Int
 epochMap atoms =
