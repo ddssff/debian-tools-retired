@@ -1,13 +1,13 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables #-}
 module Debian.Debianize.AtomsType
-    ( DebAtomKey(..)
+    ( Atoms
+    , DebAtomKey(..)
     , DebAtom(..)
     , Flags(..)
     , PackageInfo(..)
     , defaultFlags
     , DebAction(..)
     , HasAtoms(..)
-    , Atoms(atomMap) -- FIXME: don't export atomMap
     , defaultAtoms
     , insertAtom
     , insertAtoms
@@ -300,25 +300,22 @@ defaultFlags =
     , validate = False
     }
 
-data Atoms =
-    Atoms
-    { atomMap :: Map DebAtomKey (Set DebAtom)
-    -- ^ Information about the mapping from cabal package names and
-    -- versions to debian package names and versions.  (This could be
-    -- broken up into smaller atoms, many of which would be attached to
-    -- binary packages.)
-    } deriving (Eq, Ord, Show)
+-- | Information about the mapping from cabal package names and
+-- versions to debian package names and versions.  (This could be
+-- broken up into smaller atoms, many of which would be attached to
+-- binary packages.
+type Atoms = Map DebAtomKey (Set DebAtom)
 
 defaultAtoms :: Atoms
-defaultAtoms = insertAtom Source (VersionSplits knownVersionSplits) $ Atoms {atomMap = mempty}
+defaultAtoms = insertAtom Source (VersionSplits knownVersionSplits) $ mempty
 
 class HasAtoms atoms where
     getAtoms :: atoms -> Map DebAtomKey (Set DebAtom)
     putAtoms :: Map DebAtomKey (Set DebAtom) -> atoms -> atoms
 
 instance HasAtoms Atoms where
-    getAtoms = atomMap
-    putAtoms mp x = x {atomMap = mp}
+    getAtoms = id
+    putAtoms mp _ = mp
 
 lookupAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Maybe a
 lookupAtom mbin from xs =
