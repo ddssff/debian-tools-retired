@@ -2,19 +2,17 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, ScopedTypeVariables, UndecidableInstances #-}
 module Debian.Debianize.Types.Debianization
     ( Deb(..)
-    , Debianization'
     , newDebianization
     , inputDebianization
     , modifySourceDebDescription
     ) where
 
-import Control.Applicative (pure, (<$>), (<*>))
 import Control.Exception (SomeException, catch)
 import Data.Maybe (fromMaybe)
 import Data.Set as Set (map)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.AtomsType (Atoms(atomMap), HasAtoms(..), DebAtomKey(Source), Atoms, defaultAtoms, insertAtom,
-                                   DebAtom(DebCompat, DebControl), setChangeLog, debControl, putDebControl, modifyAtoms')
+import Debian.Debianize.AtomsType (Atoms, HasAtoms(..), DebAtomKey(Source), Atoms, defaultAtoms, insertAtom,
+                                   DebAtom(DebCompat, DebControl), setChangeLog, debControl, modifyAtoms')
 import Debian.Debianize.Input (inputSourceDebDescription, inputAtomsFromDirectory)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), newSourceDebDescription)
 import Debian.Orphans ()
@@ -30,6 +28,7 @@ class Deb deb where
     debAtoms :: deb -> Atoms
     setDebAtoms :: Atoms -> deb -> deb
 
+{-
 -- | The full debianization.
 data Debianization'
     = Debianization'
@@ -60,10 +59,11 @@ instance Deb Debianization' where
 instance HasAtoms Debianization' where
     getAtoms = getAtoms . debAtoms
     putAtoms ats x = setDebAtoms ((debAtoms x) {atomMap = ats}) x
+-}
 
 instance Deb Atoms where
-    sourceDebDescription = fromMaybe (error "No Source Deb Description") . debControl
-    setSourceDebDescription = putDebControl
+    sourceDebDescription = fromMaybe newSourceDebDescription . debControl
+    setSourceDebDescription d x = modifySourceDebDescription (const d) x
     debAtoms = id
     setDebAtoms x _ = x
 
@@ -76,23 +76,29 @@ instance Deb deb => HasAtoms deb where
 -- | Create a Debianization based on a changelog entry and a license
 -- value.  Uses the currently installed versions of debhelper and
 -- debian-policy to set the compatibility levels.
-newDebianization :: ChangeLog -> Int -> StandardsVersion -> Debianization'
+newDebianization :: ChangeLog -> Int -> StandardsVersion -> Atoms
 newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ = error "defaultDebianization: Invalid changelog entry"
 newDebianization (log@(ChangeLog (entry : _))) level standards =
     setChangeLog log $
     insertAtom Source (DebCompat level) $
-    Debianization'
-      { sourceDebDescription_ = newSourceDebDescription (SrcPkgName (logPackage entry)) (either error id (parseMaintainer (logWho entry))) standards
-      , debAtoms_ = defaultAtoms }
+    modifySourceDebDescription (\ x -> x { source = Just (SrcPkgName (logPackage entry))
+                                         , maintainer = (either error Just (parseMaintainer (logWho entry)))
+                                         , standardsVersion = Just standards }) $
+    defaultAtoms
 newDebianization _ _ _ = error "Invalid changelog"
 
-inputDebianization :: FilePath -> IO Debianization'
+inputDebianization :: FilePath -> IO Atoms
 inputDebianization top =
+    do (deb, _) <- inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e))
+       -- Different from snd of above?
+       atoms <- inputAtomsFromDirectory debian defaultAtoms `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
+       return $ modifySourceDebDescription (const deb) atoms
+{-
     do xs <- Debianization'
-               <$> (fst <$> inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e)))
+               <$> (fst <$> )
                -- <*> inputChangeLog debian `catchIOError` (\ e -> error ("Failure parsing changelog: " ++ show e))
                <*> pure (defaultAtoms)
-       inputAtomsFromDirectory debian xs `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
+-}
     where
       debian = top </> "debian"
 

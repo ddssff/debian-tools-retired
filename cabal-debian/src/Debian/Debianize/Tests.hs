@@ -17,14 +17,14 @@ import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
 import Debian.Debianize.AtomsType as Atom
-    (HasAtoms, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms,
+    (HasAtoms, Atoms, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms,
      tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
      changeLog, setChangeLog', setRulesHead, compat, putCopyright, knownEpochMappings)
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
 import Debian.Debianize.Input (inputChangeLog)
 import Debian.Debianize.Output (writeDebianization)
-import Debian.Debianize.Types.Debianization as Deb (Debianization', Deb(..), newDebianization, inputDebianization)
+import Debian.Debianize.Types.Debianization as Deb (Deb(..), newDebianization, inputDebianization)
 import Debian.Debianize.Types.DebControl as Deb (SourceDebDescription(..), BinaryDebDescription(..),
                                                  PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
@@ -53,7 +53,7 @@ test1 =
                  let deb = putCopyright (Left BSD3) $ newDebianization (ChangeLog [testEntry]) level standards
                  assertEqual "test1" [] (diffDebianizations testDeb1 deb))
     where
-      testDeb1 :: Debianization'
+      testDeb1 :: Atoms
       testDeb1 =
           setRulesHead (T.pack . unlines $ [ "#!/usr/bin/make -f"
                                            , ""
@@ -143,7 +143,7 @@ test3 =
     TestCase (do deb <- inputDebianization "test-data/haskell-devscripts"
                  assertEqual "test3" [] (diffDebianizations testDeb2 deb))
     where
-      testDeb2 :: Debianization'
+      testDeb2 :: Atoms
       testDeb2 =
           sourceFormat Native3 $
           setRulesHead "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n" $

@@ -19,7 +19,7 @@ import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import Debian.Debianize.AtomsType (DebAtomKey(..), DebAtom(..), HasAtoms, insertAtom, insertAtoms', setRulesHead)
 import Debian.Debianize.Types.DebControl (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                          VersionControlSpec(..), XField(..), newSourceDebDescription, newBinaryDebDescription)
+                                          VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
@@ -43,7 +43,7 @@ parseSourceDebDescription (Paragraph fields) binaryParagraphs =
     foldr readField (src, []) fields'
     where
       fields' = map stripField fields
-      src = (newSourceDebDescription findSource findMaint findStandards) {binaryPackages = bins}
+      src = (newSourceDebDescription' findSource findMaint findStandards) {binaryPackages = bins}
       findSource = findMap "Source" SrcPkgName fields'
       findMaint = findMap "Maintainer" (either error id . parseMaintainer) fields'
       findStandards = findMap "Standards-Version" parseStandardsVersion fields'

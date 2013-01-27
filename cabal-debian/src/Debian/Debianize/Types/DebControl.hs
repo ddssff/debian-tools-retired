@@ -3,6 +3,7 @@
 module Debian.Debianize.Types.DebControl
     ( SourceDebDescription(..)
     , newSourceDebDescription
+    , newSourceDebDescription'
     , VersionControlSpec(..)
     , XField(..)
     , XFieldDest(..)
@@ -60,11 +61,11 @@ data SourceDebDescription
       , binaryPackages :: [BinaryDebDescription] -- This should perhaps be a set, or a map
       } deriving (Eq, Ord, Show, Data, Typeable)
 
-newSourceDebDescription :: SrcPkgName -> NameAddr -> StandardsVersion -> SourceDebDescription
-newSourceDebDescription src who standards =
+newSourceDebDescription :: SourceDebDescription
+newSourceDebDescription =
     SourceDebDescription
-      { source = Just src
-      , maintainer = Just who
+      { source = Nothing
+      , maintainer = Nothing
       , changedBy = Nothing
       , uploaders = []
       , dmUploadAllowed = False
@@ -74,11 +75,18 @@ newSourceDebDescription src who standards =
       , buildConflicts = []
       , buildDependsIndep  = []
       , buildConflictsIndep  = []
-      , standardsVersion = Just standards
+      , standardsVersion = Nothing
       , homepage = Nothing
       , vcsFields = Set.empty
       , xFields = Set.empty
       , binaryPackages = [] }
+
+newSourceDebDescription' :: SrcPkgName -> NameAddr -> StandardsVersion -> SourceDebDescription
+newSourceDebDescription' src who standards =
+    newSourceDebDescription
+      { source = Just src
+      , maintainer = Just who
+      , standardsVersion = Just standards }
 
 data VersionControlSpec
     = VCSBrowser Text
