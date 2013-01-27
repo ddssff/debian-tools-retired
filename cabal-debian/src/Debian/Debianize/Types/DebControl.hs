@@ -31,7 +31,7 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 -- succeeding binary package sections.
 data SourceDebDescription
     = SourceDebDescription
-      { source :: SrcPkgName
+      { source :: Maybe SrcPkgName
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Source>
       , maintainer :: Maybe NameAddr
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Maintainer>
@@ -63,7 +63,7 @@ data SourceDebDescription
 newSourceDebDescription :: SrcPkgName -> NameAddr -> StandardsVersion -> SourceDebDescription
 newSourceDebDescription src who standards =
     SourceDebDescription
-      { source = src
+      { source = Just src
       , maintainer = Just who
       , changedBy = Nothing
       , uploaders = []

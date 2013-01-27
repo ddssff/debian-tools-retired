@@ -46,7 +46,7 @@ versionInfo :: (Deb deb, HasAtoms deb) => NameAddr -> String -> deb -> deb
 versionInfo debianMaintainer date deb =
     setChangeLog' newLog $
     setSourceDebDescription ((sourceDebDescription deb)
-                             { source = sourceName
+                             { source = Just sourceName
                              , Debian.maintainer = Just debianMaintainer }) deb
     where
       ChangeLog oldEntries = changeLog deb
