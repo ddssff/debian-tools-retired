@@ -38,28 +38,28 @@ import Prelude hiding (init, unlines, writeFile)
 import System.FilePath ((</>), (<.>), makeRelative, splitFileName, takeDirectory, takeFileName)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-sourceFormat :: Debianization -> [(FilePath, Text)]
+sourceFormat :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 sourceFormat deb =
     maybe [] (\ x -> [("debian/source/format", pack (show (pretty x)))]) (lookupAtom Source f deb)
     where
       f (DebSourceFormat x) = Just x
       f _ = Nothing
 
-watch :: Debianization -> [(FilePath, Text)]
+watch :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 watch deb =
     maybe [] (\ x -> [("debian/watch", x)]) (lookupAtom Source f deb)
     where
       f (DebWatch x) = Just x
       f _ = Nothing
 
-intermediate :: Debianization -> [(FilePath, Text)]
+intermediate :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 intermediate deb =
     foldAtoms atomf [] deb
     where
       atomf Source (DHIntermediate path text) files = (path,  text) : files
       atomf _ _ files = files
 
-install :: Debianization -> [(FilePath, Text)]
+install :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 install deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
@@ -67,7 +67,7 @@ install deb =
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".install"
 
-dirs :: Debianization -> [(FilePath, Text)]
+dirs :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 dirs deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
@@ -81,7 +81,7 @@ with1 old new = old <> "\n" <> new
 with2 :: String -> t -> t1 -> t2
 with2 msg _ _ = error msg
 
-init :: Debianization -> [(FilePath, Text)]
+init :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 init deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
@@ -90,7 +90,7 @@ init deb =
       pathf name = "debian" </> show (pretty name) ++ ".init"
 
 -- FIXME - use a map and insertWith, check for multiple entries
-logrotate :: Debianization -> [(FilePath, Text)]
+logrotate :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 logrotate deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
@@ -99,7 +99,7 @@ logrotate deb =
       pathf name = "debian" </> show (pretty name) ++ ".logrotate"
 
 -- | Assemble all the links by package and output one file each
-link :: Debianization -> [(FilePath, Text)]
+link :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 link deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
@@ -107,7 +107,7 @@ link deb =
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".links"
 
-postinst :: Debianization -> [(FilePath, Text)]
+postinst :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 postinst deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
@@ -115,7 +115,7 @@ postinst deb =
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postinst"
 
-postrm :: Debianization -> [(FilePath, Text)]
+postrm :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 postrm deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
@@ -123,7 +123,7 @@ postrm deb =
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postrm"
 
-preinst :: Debianization -> [(FilePath, Text)]
+preinst :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 preinst deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
@@ -131,7 +131,7 @@ preinst deb =
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".preinst"
 
-prerm :: Debianization -> [(FilePath, Text)]
+prerm :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 prerm deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
@@ -145,26 +145,26 @@ prerm deb =
 -- considering building one into the other, but it is handy to look at
 -- the Debianization produced by finalizeDebianization in the unit
 -- tests.)
-toFileMap :: Debianization -> Map.Map FilePath Text
-toFileMap d =
+toFileMap :: HasAtoms atoms => atoms -> SourceDebDescription -> Map.Map FilePath Text
+toFileMap atoms d =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
-      [("debian/control", pack (show (pretty (control (sourceDebDescription d))))),
-       ("debian/changelog", pack (show (pretty (changeLog d)))),
-       ("debian/rules", rules d),
-       ("debian/compat", pack (show (compat (error "Missing DebCompat atom") d) <> "\n")),
-       ("debian/copyright", either (\ x -> pack (show x) <> "\n") id (copyright (error "No DebCopyright atom") d))] ++
-      sourceFormat d ++
-      watch d ++
-      install d ++
-      dirs d ++
-      init d ++
-      logrotate d ++
-      link d ++
-      postinst d ++
-      postrm d ++
-      preinst d ++
-      prerm d ++
-      intermediate d
+      [("debian/control", pack (show (pretty (control d)))),
+       ("debian/changelog", pack (show (pretty (changeLog atoms)))),
+       ("debian/rules", rules atoms),
+       ("debian/compat", pack (show (compat (error "Missing DebCompat atom") atoms) <> "\n")),
+       ("debian/copyright", either (\ x -> pack (show x) <> "\n") id (copyright (error "No DebCopyright atom") atoms))] ++
+      sourceFormat atoms ++
+      watch atoms ++
+      install atoms ++
+      dirs atoms ++
+      init atoms ++
+      logrotate atoms ++
+      link atoms ++
+      postinst atoms ++
+      postrm atoms ++
+      preinst atoms ++
+      prerm atoms ++
+      intermediate atoms
 
 -- | Now that we know the build and data directories, we can expand
 -- some atoms into sets of simpler atoms which can eventually be
@@ -193,12 +193,12 @@ finalizeDebianization deb0 =
 
       -- Apply the hints in the atoms to the debianization
       g :: DebAtomKey -> DebAtom -> Debianization -> Debianization
-      g (Binary b) (DHArch x) deb = modifyBinaryDeb b (\ (Just bin) -> bin {architecture = x}) deb
-      g (Binary b) (DHPriority x) deb = modifyBinaryDeb b (\ (Just bin) -> bin {binaryPriority = Just x}) deb
-      g Source (DHPriority x) deb = deb {sourceDebDescription = (sourceDebDescription deb) {priority = Just x}}
-      g (Binary b) (DHSection x) deb = modifyBinaryDeb b (\ (Just bin) -> bin {binarySection = Just x}) deb
-      g Source (DHSection x) deb = deb {sourceDebDescription = (sourceDebDescription deb) {section = Just x}}
-      g (Binary b) (DHDescription x) deb = modifyBinaryDeb b (\ (Just bin) -> bin {Debian.description = x}) deb
+      g (Binary b) (DHArch x) deb =        deb {sourceDebDescription = modifyBinaryDeb b (\ (Just bin) -> bin {architecture = x}) (sourceDebDescription deb)}
+      g (Binary b) (DHPriority x) deb =    deb {sourceDebDescription = modifyBinaryDeb b (\ (Just bin) -> bin {binaryPriority = Just x}) (sourceDebDescription deb)}
+      g Source (DHPriority x) deb =        deb {sourceDebDescription = (sourceDebDescription deb) {priority = Just x}}
+      g (Binary b) (DHSection x) deb =     deb {sourceDebDescription = modifyBinaryDeb b (\ (Just bin) -> bin {binarySection = Just x}) (sourceDebDescription deb)}
+      g Source (DHSection x) deb =         deb {sourceDebDescription = (sourceDebDescription deb) {section = Just x}}
+      g (Binary b) (DHDescription x) deb = deb {sourceDebDescription = modifyBinaryDeb b (\ (Just bin) -> bin {Debian.description = x}) (sourceDebDescription deb)}
       g _ _ deb = deb
 
 foldAtomsFinalized :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
@@ -285,7 +285,7 @@ anyrel x = anyrel' (D.BinPkgName x)
 anyrel' :: D.BinPkgName -> [D.Relation]
 anyrel' x = [D.Rel x Nothing Nothing]
 
-rules :: Debianization -> Text
+rules :: HasAtoms atoms => atoms -> Text
 rules deb =
     foldAtoms append (rulesHead deb) deb
     where
@@ -423,7 +423,7 @@ makeUtilsPackage deb =
       s -> let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)
                atoms = foldr (uncurry insertAtom) (setPackageDescription pkgDesc defaultAtoms) (makeUtilsAtoms p (t1 s))
                deb' = foldAtomsFinalized insertAtom deb atoms in
-           modifyBinaryDeb p (f deb' p s) deb'
+           deb' {sourceDebDescription = modifyBinaryDeb p (f deb' p s) (sourceDebDescription deb')}
     where
       f _ _ _ (Just bin) = bin
       f deb' p s Nothing =

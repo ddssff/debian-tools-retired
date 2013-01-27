@@ -164,15 +164,15 @@ newBinaryDebDescription name arch =
 
 -- | Modify the description of one of the binary debs without changing
 -- the package order.
-modifyBinaryDeb :: BinPkgName -> (Maybe BinaryDebDescription -> BinaryDebDescription) -> Debianization -> Debianization
+modifyBinaryDeb :: BinPkgName -> (Maybe BinaryDebDescription -> BinaryDebDescription) -> SourceDebDescription -> SourceDebDescription
 modifyBinaryDeb bin f deb =
-    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = bins'}}
+    deb {binaryPackages = bins'}
     where
       bins' = if any (\ x -> package x == bin) bins
-             then map g (binaryPackages (sourceDebDescription deb))
-             else binaryPackages (sourceDebDescription deb) ++ [f Nothing]
+             then map g (binaryPackages deb)
+             else binaryPackages deb ++ [f Nothing]
       g x = if package x == bin then f (Just x) else x
-      bins = binaryPackages (sourceDebDescription deb)
+      bins = binaryPackages deb
 
 -- ^ Package interrelationship information.
 data PackageRelations

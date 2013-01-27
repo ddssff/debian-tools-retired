@@ -16,7 +16,7 @@ import Data.Text (Text, unpack)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logVersion))
 import Debian.Debianize.AtomsType (Flags(validate, dryRun), flags, changeLog)
 import Debian.Debianize.Files (toFileMap)
-import Debian.Debianize.Types.Debianization as Debian (Debianization(sourceDebDescription),
+import Debian.Debianize.Types.Debianization as Debian (Debianization(sourceDebDescription, debAtoms),
                                                        SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
 import Debian.Debianize.Utility (replaceFile, diffFile)
 import System.Directory (Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing, doesFileExist)
@@ -56,7 +56,7 @@ outputDebianization old new =
 -- | Describe a 'Debianization' in relation to one that is written into 
 describeDebianization :: FilePath -> Debianization -> IO String
 describeDebianization old d =
-    mapM (\ (path, text) -> liftIO (doFile path text)) (toList (toFileMap d)) >>= return . concat
+    mapM (\ (path, text) -> liftIO (doFile path text)) (toList (toFileMap (debAtoms d) (sourceDebDescription d))) >>= return . concat
     where
       doFile :: FilePath -> Text -> IO String
       doFile path text =
@@ -68,7 +68,7 @@ describeDebianization old d =
 
 writeDebianization :: Debianization -> IO ()
 writeDebianization d =
-    mapM_ (uncurry doFile) (toList (toFileMap d)) >>
+    mapM_ (uncurry doFile) (toList (toFileMap (debAtoms d) (sourceDebDescription d))) >>
     getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})
     where
       doFile path text =
