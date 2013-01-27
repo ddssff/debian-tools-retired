@@ -2,14 +2,13 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Debian.Debianize.Input
-    ( inputDebianization
+    ( inputSourceDebDescription
+    , inputAtomsFromDirectory
     , inputChangeLog
     ) where
 
 import Debug.Trace (trace)
 
-import Control.Applicative (pure, (<$>), (<*>))
-import Control.Exception (SomeException, catch)
 import Control.Monad (foldM, filterM)
 import Data.Char (isSpace)
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -18,10 +17,9 @@ import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.AtomsType (DebAtomKey(..), DebAtom(..), HasAtoms, insertAtom, insertAtoms', defaultAtoms, setRulesHead)
+import Debian.Debianize.AtomsType (DebAtomKey(..), DebAtom(..), HasAtoms, insertAtom, insertAtoms', setRulesHead)
 import Debian.Debianize.Types.DebControl (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                           VersionControlSpec(..), XField(..), newSourceDebDescription, newBinaryDebDescription)
-import Debian.Debianize.Types.Debianization (Debianization(..))
 import Debian.Debianize.Utility (getDirectoryContents')
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
@@ -31,15 +29,6 @@ import Prelude hiding (readFile, lines, words, break, null, log, sum)
 import System.Directory (doesFileExist)
 import System.FilePath ((</>), takeExtension, dropExtension)
 import System.IO.Error (catchIOError)
-
-inputDebianization :: FilePath -> IO Debianization
-inputDebianization top =
-    do xs <- Debianization <$> (fst <$> inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e)))
-                           -- <*> inputChangeLog debian `catchIOError` (\ e -> error ("Failure parsing changelog: " ++ show e))
-                           <*> pure (defaultAtoms)
-       inputAtomsFromDirectory debian xs `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
-    where
-      debian = top </> "debian"
 
 inputSourceDebDescription :: FilePath -> IO (SourceDebDescription, [Field])
 inputSourceDebDescription debian =

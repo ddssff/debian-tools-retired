@@ -16,13 +16,13 @@ import qualified Data.Text as T
 import Data.Set as Set (Set, toList, fromList, difference)
 import Debian.Debianize.AtomsType (DebAtomKey, DebAtom(..))
 import Debian.Debianize.Types.DebControl (VersionControlSpec, XField)
-import Debian.Debianize.Types.Debianization (Debianization(..))
+import Debian.Debianize.Types.Debianization ()
 import Debian.Debianize.Utility (showDeps)
 import Debian.Relation (Relation)
 import Triplets (mkQ2, extQ2)
 
 -- These instances are only used here, to create debugging messages.
-deriving instance Typeable Debianization
+-- deriving instance Typeable Debianization
 deriving instance Typeable DebAtom
 
 -- deriving instance Data Debianization

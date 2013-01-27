@@ -24,7 +24,7 @@ import Debian.Debianize.AtomsType (DebAtomKey(..), DebAtom(..), HasAtoms, foldAt
                                    extraLibMap, epochMap, changeLog, setChangeLog', setRulesHead)
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..), Deb(..))
+import Debian.Debianize.Types.Debianization as Debian (Deb(..))
 import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Utility (trim)
 import Debian.Policy (StandardsVersion)
@@ -110,7 +110,7 @@ cdbsRules pkgId deb =
                                               "include /usr/share/cdbs/1/rules/debhelper.mk",
                                               "include /usr/share/cdbs/1/class/hlibrary.mk" ]) deb
 
-putStandards :: StandardsVersion -> Debianization -> Debianization
+putStandards :: Deb deb => StandardsVersion -> deb -> deb
 putStandards x deb = setSourceDebDescription ((sourceDebDescription deb) {standardsVersion = x}) deb
 
 describe :: HasAtoms atoms => atoms -> PackageType -> PackageIdentifier -> Text
@@ -119,7 +119,7 @@ describe atoms typ ident =
     where
       pkgDesc = fromMaybe (error $ "describe " ++ show ident) $ packageDescription atoms
 
-buildDeps :: Debianization -> Debianization
+buildDeps :: (Deb deb, HasAtoms deb) => deb -> deb
 buildDeps deb =
     setSourceDebDescription ((sourceDebDescription deb) { Debian.buildDepends = debianBuildDeps deb
                                                         , buildDependsIndep = debianBuildDepsIndep deb }) deb
@@ -127,7 +127,7 @@ buildDeps deb =
 -- | Convert the extraLibs field of the cabal build info into debian
 -- binary package names and make them dependendencies of the debian
 -- devel package (if there is one.)
-addExtraLibDependencies :: Debianization -> Debianization
+addExtraLibDependencies :: (Deb deb, HasAtoms deb) => deb -> deb
 addExtraLibDependencies deb =
     setSourceDebDescription ((sourceDebDescription deb) {binaryPackages = map f (binaryPackages (sourceDebDescription deb))}) deb
     where
@@ -208,7 +208,7 @@ extraDeps deps p =
 anyrel' :: D.BinPkgName -> [D.Relation]
 anyrel' x = [D.Rel x Nothing Nothing]
 
-oldFilterMissing :: [BinPkgName] -> Debianization -> Debianization
+oldFilterMissing :: Deb deb => [BinPkgName] -> deb -> deb
 oldFilterMissing missing deb =
     setSourceDebDescription (e (sourceDebDescription deb)) deb
     where
@@ -227,5 +227,5 @@ oldFilterMissing missing deb =
                                 , replaces = f (replaces rels)
                                 , builtUsing = f (builtUsing rels) }
 
-setSourceBinaries :: [BinaryDebDescription] -> Debianization -> Debianization
+setSourceBinaries :: Deb deb => [BinaryDebDescription] -> deb -> deb
 setSourceBinaries xs deb = setSourceDebDescription ((sourceDebDescription deb) {binaryPackages = xs}) deb

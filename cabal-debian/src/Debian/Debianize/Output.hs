@@ -14,16 +14,16 @@ import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Map as Map (toList)
 import Data.Text (Text, unpack)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logVersion))
-import Debian.Debianize.AtomsType (Flags(validate, dryRun), flags, changeLog)
+import Debian.Debianize.AtomsType (HasAtoms, Flags(validate, dryRun), flags, changeLog)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
-import Debian.Debianize.Types.Debianization as Debian (Debianization, Deb(..))
+import Debian.Debianize.Types.Debianization as Debian (Deb(..))
 import Debian.Debianize.Utility (replaceFile, diffFile)
 import System.Directory (Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing, doesFileExist)
 import System.FilePath ((</>), takeDirectory)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-outputDebianization :: Debianization -> Debianization -> IO ()
+outputDebianization :: (Deb deb, HasAtoms deb) => deb -> deb -> IO ()
 outputDebianization old new =
        -- It is imperitive that during the time that dpkg-buildpackage
        -- runs the version number in the changelog and the source and
@@ -54,7 +54,7 @@ outputDebianization old new =
       unChangeLog (ChangeLog x) = x
 
 -- | Describe a 'Debianization' in relation to one that is written into 
-describeDebianization :: FilePath -> Debianization -> IO String
+describeDebianization :: Deb deb => FilePath -> deb -> IO String
 describeDebianization old d =
     mapM (\ (path, text) -> liftIO (doFile path text)) (toList (toFileMap (debAtoms d) (sourceDebDescription d))) >>= return . concat
     where
@@ -66,7 +66,7 @@ describeDebianization old d =
               then diffFile path' text >>= return . maybe (path ++ ": Unchanged\n") (\ diff -> path ++ ": Modified\n" ++ indent " | " diff)
               else return $ path ++ ": Created\n" ++ indent " | " (unpack text)
 
-writeDebianization :: Debianization -> IO ()
+writeDebianization :: Deb deb => deb -> IO ()
 writeDebianization d =
     mapM_ (uncurry doFile) (toList (toFileMap (debAtoms d) (sourceDebDescription d))) >>
     getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})

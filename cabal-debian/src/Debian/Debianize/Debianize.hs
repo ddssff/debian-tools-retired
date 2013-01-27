@@ -22,11 +22,10 @@ import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inpu
 import Debian.Debianize.Combinators (cdbsRules, versionInfo, addExtraLibDependencies,
                                      putStandards, setSourceBinaries)
 import Debian.Debianize.Flags (flagOptions, atomOptions)
-import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..))
-import Debian.Debianize.Types.Debianization as Debian (Debianization, Deb(..))
+import Debian.Debianize.Types.Debianization as Debian (Deb(..), inputDebianization)
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection))
 import Debian.Time (getCurrentLocalRFC822Time)
@@ -100,7 +99,7 @@ debianize top args =
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-cabalToDebianization :: FilePath -> Debianization -> IO Debianization
+cabalToDebianization :: (Deb deb, HasAtoms deb) => FilePath -> deb -> IO deb
 cabalToDebianization top old =
     do old' <- getSimplePackageDescription (verbosity (flags old)) (compilerVersion old) (cabalFlagAssignments old) top old
        let pkgDesc = fromMaybe (error "cabalToDebianization") (packageDescription old')
@@ -114,12 +113,13 @@ cabalToDebianization top old =
       -- the old debianization, so we should do more here.
       scrub = setSourceBinaries []
 
-debianization :: String              -- ^ current date
+debianization :: (Deb deb, HasAtoms deb) =>
+                 String              -- ^ current date
               -> Text                -- ^ copyright
               -> NameAddr            -- ^ maintainer
               -> StandardsVersion
-              -> Debianization       -- ^ Existing debianization
-              -> Debianization       -- ^ New debianization
+              -> deb       -- ^ Existing debianization
+              -> deb       -- ^ New debianization
 debianization date copyright' maint standards oldDeb =
     setSourcePriority Optional $
     setSourceSection (MainSection "haskell") $

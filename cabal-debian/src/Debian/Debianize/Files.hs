@@ -26,7 +26,7 @@ import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms, backupAtoms)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                     VersionControlSpec(..), XField(..), XFieldDest(..), newBinaryDebDescription, modifyBinaryDeb)
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..), Deb(..))
+import Debian.Debianize.Types.Debianization as Debian (Deb(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..))
 import Debian.Debianize.Types.PackageType (PackageType(Exec, Development, Profiling, Documentation, Utilities))
 import Debian.Debianize.Utility (showDeps')
@@ -173,7 +173,7 @@ toFileMap atoms d =
 -- not removed from the list because they may contribute to the
 -- debianization in other ways, so be careful not to do this twice,
 -- this function is not idempotent.  (Exported for use in unit tests.)
-finalizeDebianization  :: Debianization -> Debianization
+finalizeDebianization  :: (Deb deb, HasAtoms deb) => deb -> deb
 finalizeDebianization deb0 =
     foldAtomsFinalized g deb'' deb'' -- Apply tweaks to the debianization
     where
@@ -182,7 +182,7 @@ finalizeDebianization deb0 =
       deb'' = makeUtilsPackage $ librarySpecs $ buildDeps $ deb'
 
       -- Create the binary packages
-      f :: DebAtomKey -> DebAtom -> Debianization -> Debianization
+      f :: (Deb deb, HasAtoms deb) => DebAtomKey -> DebAtom -> deb -> deb
       f k@(Binary b) a@(DHWebsite _) = insertAtom k a . cabalExecBinaryPackage b
       f k@(Binary b) a@(DHServer _) = insertAtom k a . cabalExecBinaryPackage b
       f k@(Binary b) a@(DHBackups _) =
@@ -193,7 +193,7 @@ finalizeDebianization deb0 =
       f k a = insertAtom k a
 
       -- Apply the hints in the atoms to the debianization
-      g :: DebAtomKey -> DebAtom -> Debianization -> Debianization
+      g :: Deb deb => DebAtomKey -> DebAtom -> deb -> deb
       g (Binary b) (DHArch x) deb =        setSourceDebDescription (modifyBinaryDeb b (\ (Just bin) -> bin {architecture = x}) (sourceDebDescription deb)) deb
       g (Binary b) (DHPriority x) deb =    setSourceDebDescription (modifyBinaryDeb b (\ (Just bin) -> bin {binaryPriority = Just x}) (sourceDebDescription deb)) deb
       g Source (DHPriority x) deb =        setSourceDebDescription ((sourceDebDescription deb) {priority = Just x}) deb
@@ -249,7 +249,7 @@ foldAtomsFinalized f r0 atoms =
           execAtoms k x
       expandAtom _ _ = []
 
-cabalExecBinaryPackage :: BinPkgName -> Debianization -> Debianization
+cabalExecBinaryPackage :: (Deb deb, HasAtoms deb) => BinPkgName -> deb -> deb
 cabalExecBinaryPackage b deb =
     setSourceDebDescription ((sourceDebDescription deb) {binaryPackages = bin : binaryPackages (sourceDebDescription deb)}) deb
     where
@@ -358,7 +358,7 @@ depField :: [Char] -> Relations -> [Field' [Char]]
 depField tag rels = case rels of [] -> []; _ -> [Field (tag, " " ++ showDeps' (tag ++ ":") rels)]
 
 -- debLibProf haddock binaryPackageDeps extraDevDeps extraLibMap
-librarySpecs :: Debianization -> Debianization
+librarySpecs :: (Deb deb, HasAtoms deb) => deb -> deb
 librarySpecs deb | isNothing (packageDescription deb) = deb
 librarySpecs deb =
     (if doc then insertAtom (Binary (debName)) (DHLink ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt") ("/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")) else id) $
@@ -416,7 +416,7 @@ t3 x = {-trace ("installed: " ++ show x)-} x
 
 -- | Create a package to hold any executables and data files not
 -- assigned to some other package.
-makeUtilsPackage :: Debianization -> Debianization
+makeUtilsPackage :: (Deb deb, HasAtoms deb) => deb -> deb
 makeUtilsPackage deb | isNothing (packageDescription deb) = deb
 makeUtilsPackage deb =
     case Set.difference (t2 available) (t3 installed) of
