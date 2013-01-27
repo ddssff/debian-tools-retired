@@ -80,7 +80,7 @@ getDebhelperCompatLevel :: IO Int
 getDebhelperCompatLevel =
     debianPackageVersion "debhelper" >>= return . read . takeWhile (/= '.') . version
 
-data StandardsVersion = StandardsVersion Int Int Int (Maybe Int) deriving (Eq, Show, Data, Typeable)
+data StandardsVersion = StandardsVersion Int Int Int (Maybe Int) deriving (Eq, Ord, Show, Data, Typeable)
 
 instance Pretty StandardsVersion where
     pretty (StandardsVersion a b c (Just d)) = text $ show a <> "." <> show b <> "." <> show c <> "." <> show d

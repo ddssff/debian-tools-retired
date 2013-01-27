@@ -82,6 +82,8 @@ module Debian.Debianize.AtomsType
     , compat
     , putCopyright
     , copyright
+    , putDebControl
+    , debControl
     , sourcePackageName
     , sourceFormat
     , debMaintainer
@@ -123,6 +125,7 @@ import Data.Monoid ((<>), mconcat)
 import Data.Text (pack, unlines)
 import Data.Version (showVersion)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logPackage))
+import Debian.Debianize.Types.DebControl (SourceDebDescription)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName), Relation(..))
 import Distribution.Package (PackageName(..), PackageIdentifier(pkgName, pkgVersion))
@@ -220,6 +223,8 @@ data DebAtom
     | DebCompat Int				  -- ^ The debhelper compatibility level, from debian/compat.
     | DebCopyright (Either License Text)	  -- ^ Copyright information, either as a Cabal License value or
                                                   -- the full text.
+    | DebControl SourceDebDescription		  -- ^ The parsed contents of the control file
+
     -- From here down are atoms to be associated with a Debian binary
     -- package.  This could be done with more type safety, separate
     -- maps for the Source atoms and the Binary atoms.
@@ -726,6 +731,17 @@ copyright def atoms =
       from Source (DebCopyright x') (Just x) | x /= x' = error $ "Conflicting copyright atoms: " ++ show x ++ " vs. " ++ show x'
       from Source (DebCopyright x) _ = Just x
       from _ _ x = x
+
+debControl :: HasAtoms atoms => atoms -> Maybe SourceDebDescription
+debControl atoms =
+    foldAtoms from Nothing atoms
+    where
+      from Source (DebControl x') (Just x) | x /= x' = error "Conflicting Source Deb Descriptions"
+      from Source (DebControl x) _ = Just x
+      from _ _ x = x
+
+putDebControl :: HasAtoms atoms => SourceDebDescription -> atoms -> atoms
+putDebControl deb atoms = insertAtom Source (DebControl deb) atoms
 
 sourcePackageName :: HasAtoms atoms => atoms -> Maybe String
 sourcePackageName atoms =

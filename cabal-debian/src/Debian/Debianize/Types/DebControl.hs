@@ -58,7 +58,7 @@ data SourceDebDescription
       , buildDependsIndep :: Relations
       , buildConflictsIndep :: Relations
       , binaryPackages :: [BinaryDebDescription] -- This should perhaps be a set, or a map
-      } deriving (Eq, Show, Data, Typeable)
+      } deriving (Eq, Ord, Show, Data, Typeable)
 
 newSourceDebDescription :: SrcPkgName -> NameAddr -> StandardsVersion -> SourceDebDescription
 newSourceDebDescription src who standards =
@@ -122,7 +122,7 @@ data BinaryDebDescription
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Description>
       , relations :: PackageRelations
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
-      } deriving (Read, Eq, Show, Data, Typeable)
+      } deriving (Eq, Ord, Read, Show, Data, Typeable)
 
 newBinaryDebDescription :: BinPkgName -> PackageArchitectures -> BinaryDebDescription
 newBinaryDebDescription name arch =
@@ -159,7 +159,7 @@ data PackageRelations
       , provides :: Relations
       , replaces :: Relations
       , builtUsing :: Relations
-      } deriving (Read, Eq, Show, Data, Typeable)
+      } deriving (Eq, Ord, Read, Show, Data, Typeable)
 
 newPackageRelations :: PackageRelations
 newPackageRelations =
