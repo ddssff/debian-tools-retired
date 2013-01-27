@@ -106,7 +106,7 @@ cabalToDebianization top old =
        date <- getCurrentLocalRFC822Time
        copyright <- withCurrentDirectory top $ inputCopyright pkgDesc
        maint <- inputMaintainer pkgDesc old' >>= maybe (error "Missing value for --maintainer") return
-       let standards = standardsVersion (sourceDebDescription old')
+       let standards = fromMaybe (error "cabalToDebianization") (standardsVersion (sourceDebDescription old'))
        return $ debianization date copyright maint standards (scrub old')
     where
       -- We really don't want to inherit very much information from

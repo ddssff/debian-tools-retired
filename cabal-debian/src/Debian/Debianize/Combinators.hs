@@ -111,7 +111,7 @@ cdbsRules pkgId deb =
                                               "include /usr/share/cdbs/1/class/hlibrary.mk" ]) deb
 
 putStandards :: Deb deb => StandardsVersion -> deb -> deb
-putStandards x deb = setSourceDebDescription ((sourceDebDescription deb) {standardsVersion = x}) deb
+putStandards x deb = setSourceDebDescription ((sourceDebDescription deb) {standardsVersion = Just x}) deb
 
 describe :: HasAtoms atoms => atoms -> PackageType -> PackageIdentifier -> Text
 describe atoms typ ident =

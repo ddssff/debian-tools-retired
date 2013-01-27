@@ -45,7 +45,7 @@ data SourceDebDescription
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Priority>
       , section :: Maybe Section
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Section>
-      , standardsVersion :: StandardsVersion
+      , standardsVersion :: Maybe StandardsVersion
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Standards-Version>
       , homepage :: Maybe Text
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Homepage>
@@ -74,7 +74,7 @@ newSourceDebDescription src who standards =
       , buildConflicts = []
       , buildDependsIndep  = []
       , buildConflictsIndep  = []
-      , standardsVersion = standards
+      , standardsVersion = Just standards
       , homepage = Nothing
       , vcsFields = Set.empty
       , xFields = Set.empty

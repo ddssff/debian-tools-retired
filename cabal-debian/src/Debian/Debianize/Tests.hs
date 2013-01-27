@@ -10,6 +10,7 @@ import Data.Function (on)
 import Data.List (sortBy)
 import Data.Map as Map (differenceWithKey, intersectionWithKey)
 import qualified Data.Map as Map
+import Data.Maybe (fromMaybe)
 import Data.Monoid (mconcat, (<>), mempty)
 import Data.Set as Set (Set, fromList, singleton)
 import qualified Data.Text as T
@@ -76,7 +77,7 @@ test1 =
                       , buildConflicts = []
                       , buildDependsIndep = []
                       , buildConflictsIndep = []
-                      , standardsVersion = StandardsVersion 3 9 3 (Just 1) -- This will change as new versions of debian-policy are released
+                      , standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)) -- This will change as new versions of debian-policy are released
                       , homepage = Nothing
                       , vcsFields = Set.fromList []
                       , xFields = Set.fromList []
@@ -121,7 +122,7 @@ test2 =
                   buildConflicts = [],
                   buildDependsIndep = [],
                   buildConflictsIndep = [],
-                  standardsVersion = (StandardsVersion 3 9 3 (Just 1)),
+                  standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)),
                   homepage = Nothing,
                   vcsFields = Set.fromList [],
                   xFields = Set.fromList [],
@@ -162,7 +163,7 @@ test3 =
                 , buildDependsIndep =
                     [[Rel (BinPkgName {unBinPkgName = "perl"}) Nothing Nothing]]
                 , buildConflictsIndep = []
-                , standardsVersion = StandardsVersion 3 9 4 Nothing
+                , standardsVersion = Just (StandardsVersion 3 9 4 Nothing)
                 , homepage = Nothing
                 , vcsFields = Set.fromList [ VCSBrowser "http://darcs.debian.org/cgi-bin/darcsweb.cgi?r=pkg-haskell/haskell-devscripts"
                                            , VCSDarcs "http://darcs.debian.org/pkg-haskell/haskell-devscripts"]
@@ -311,8 +312,9 @@ test5 :: Test
 test5 =
     TestLabel "test5" $
     TestCase (     do old <- inputDebianization "test-data/creativeprompts/output"
+                      let standards = fromMaybe (error "test5") (standardsVersion (sourceDebDescription old))
                       new <- cabalToDebianization "test-data/creativeprompts/input"
-                               (newDebianization (changeLog old) (compat (error "Missing debian/compat file") old) (standardsVersion (sourceDebDescription old)))
+                               (newDebianization (changeLog old) (compat (error "Missing debian/compat file") old) standards)
                       let new' = finalizeDebianization $
                                  sourceFormat Native3 $
                                  setArchitecture (BinPkgName "creativeprompts-data") All $
