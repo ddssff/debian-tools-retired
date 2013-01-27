@@ -736,7 +736,7 @@ debControl :: HasAtoms atoms => atoms -> Maybe SourceDebDescription
 debControl atoms =
     foldAtoms from Nothing atoms
     where
-      from Source (DebControl x') (Just x) | x /= x' = error "Conflicting Source Deb Descriptions"
+      from Source (DebControl x') (Just x) | x /= x' = error $ "Conflicting Source Deb Descriptions: " ++ show (x, x')
       from Source (DebControl x) _ = Just x
       from _ _ x = x
 

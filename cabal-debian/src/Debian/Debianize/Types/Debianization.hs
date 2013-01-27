@@ -5,14 +5,16 @@ module Debian.Debianize.Types.Debianization
     , Debianization'
     , newDebianization
     , inputDebianization
+    , modifySourceDebDescription
     ) where
 
 import Control.Applicative (pure, (<$>), (<*>))
 import Control.Exception (SomeException, catch)
 import Data.Maybe (fromMaybe)
+import Data.Set as Set (map)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.AtomsType (Atoms(atomMap), HasAtoms(..), DebAtomKey(Source), Atoms, defaultAtoms, insertAtom,
-                                   DebAtom(DebCompat), setChangeLog, debControl, putDebControl)
+                                   DebAtom(DebCompat, DebControl), setChangeLog, debControl, putDebControl, modifyAtoms')
 import Debian.Debianize.Input (inputSourceDebDescription, inputAtomsFromDirectory)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), newSourceDebDescription)
 import Debian.Orphans ()
@@ -93,3 +95,10 @@ inputDebianization top =
        inputAtomsFromDirectory debian xs `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
     where
       debian = top </> "debian"
+
+modifySourceDebDescription :: (Deb deb, HasAtoms deb) => (SourceDebDescription -> SourceDebDescription) -> deb -> deb
+modifySourceDebDescription f deb =
+    modifyAtoms' g (Set.map (\ d -> (Source, DebControl (f d)))) deb
+    where
+      g Source (DebControl d) = Just d
+      g _ _ = Nothing
