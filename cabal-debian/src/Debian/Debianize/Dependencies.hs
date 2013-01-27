@@ -24,7 +24,6 @@ import Debian.Debianize.AtomsType (HasAtoms, PackageInfo(devDeb, profDeb, docDeb
                                    filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
-import Debian.Debianize.Types.Debianization as Debian (Debianization)
 import Debian.Debianize.Types.Dependencies (debNameFromType)
 import Debian.Debianize.Types.PackageType (DebType(Dev, Prof, Doc), PackageType(..), mkPkgName, VersionSplits(..))
 import qualified Debian.Relation as D
@@ -122,7 +121,7 @@ debianBuildDeps deb =
                           (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc)
                           (concatMap extraLibs . allBuildInfo $ pkgDesc))
 
-debianBuildDepsIndep :: Debianization -> D.Relations
+debianBuildDepsIndep :: HasAtoms atoms => atoms -> D.Relations
 debianBuildDepsIndep deb =
     filterMissing deb $
     if noDocumentationLibrary deb

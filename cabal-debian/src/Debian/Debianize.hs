@@ -14,6 +14,7 @@ module Debian.Debianize
     , module Debian.Debianize.Server
     , module Debian.Debianize.SubstVars
     , module Debian.Debianize.Tests
+    , module Debian.Debianize.Types.DebControl
     , module Debian.Debianize.Types.Debianization
     , module Debian.Debianize.Types.Dependencies
     , module Debian.Debianize.Types.PackageHints
@@ -37,7 +38,8 @@ import Debian.Debianize.Output
 import Debian.Debianize.Server
 import Debian.Debianize.SubstVars
 import Debian.Debianize.Tests
-import Debian.Debianize.Types.Debianization hiding (depends, conflicts)
+import Debian.Debianize.Types.DebControl hiding (depends, conflicts)
+import Debian.Debianize.Types.Debianization
 import Debian.Debianize.Types.Dependencies
 import Debian.Debianize.Types.PackageHints
 import Debian.Debianize.Types.PackageType hiding (VersionSplits)

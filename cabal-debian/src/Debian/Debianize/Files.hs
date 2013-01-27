@@ -24,8 +24,9 @@ import Debian.Debianize.AtomsType (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(.
 import Debian.Debianize.Combinators (describe, buildDeps)
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms, backupAtoms)
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                                       VersionControlSpec(..), XField(..), XFieldDest(..), newBinaryDebDescription, modifyBinaryDeb)
+import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
+                                                    VersionControlSpec(..), XField(..), XFieldDest(..), newBinaryDebDescription, modifyBinaryDeb)
+import Debian.Debianize.Types.Debianization as Debian (Debianization(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..))
 import Debian.Debianize.Types.PackageType (PackageType(Exec, Development, Profiling, Documentation, Utilities))
 import Debian.Debianize.Utility (showDeps')

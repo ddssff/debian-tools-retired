@@ -23,8 +23,8 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.AtomsType (DebAtomKey(..), DebAtom(..), HasAtoms, foldAtoms, packageDescription, revision, debVersion,
                                    extraLibMap, epochMap, changeLog, setChangeLog', setRulesHead)
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..),
-                                                       PackageRelations(..))
+import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
+import Debian.Debianize.Types.Debianization as Debian (Debianization(..))
 import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Utility (trim)
 import Debian.Policy (StandardsVersion)

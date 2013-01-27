@@ -23,8 +23,9 @@ import Debian.Debianize.AtomsType as Atom
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (writeDebianization)
-import Debian.Debianize.Types.Debianization as Deb (Debianization(..), SourceDebDescription(..), BinaryDebDescription(..),
-                                                    PackageRelations(..), VersionControlSpec(..))
+import Debian.Debianize.Types.Debianization as Deb (Debianization(..))
+import Debian.Debianize.Types.DebControl as Deb (SourceDebDescription(..), BinaryDebDescription(..),
+                                                 PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,

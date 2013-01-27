@@ -65,6 +65,7 @@ Library
    Debian.Debianize.Server
    Debian.Debianize.SubstVars
    Debian.Debianize.Tests
+   Debian.Debianize.Types.DebControl
    Debian.Debianize.Types.Debianization
    Debian.Debianize.Types.Dependencies
    Debian.Debianize.Types.PackageHints
