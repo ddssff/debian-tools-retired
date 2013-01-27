@@ -9,13 +9,14 @@ module Debian.Debianize.Dependencies
     , debianBuildDepsIndep
     , dependencies
     , debianName
+    , debNameFromType
     ) where
 
 import Data.Char (isSpace)
 import Data.Function (on)
-import Data.List (nub, minimumBy)
+import Data.List (nub, minimumBy, isSuffixOf)
 import qualified Data.Map as Map
-import Data.Maybe (fromMaybe, catMaybes)
+import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
 import qualified Data.Set as Set
 import Data.Version (Version, showVersion)
 import Debian.Control
@@ -24,10 +25,10 @@ import Debian.Debianize.AtomsType (HasAtoms, PackageInfo(devDeb, profDeb, docDeb
                                    filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
-import Debian.Debianize.Types.Dependencies (debNameFromType)
 import Debian.Debianize.Types.PackageType (DebType(Dev, Prof, Doc), PackageType(..), mkPkgName, VersionSplits(..))
+import Debian.Orphans ()
 import qualified Debian.Relation as D
-import Debian.Relation (Relations, Relation, BinPkgName, PkgName)
+import Debian.Relation (Relations, Relation, BinPkgName(BinPkgName), PkgName)
 import Debian.Version (parseDebianVersion)
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..), Dependency(..))
 import Distribution.PackageDescription as Cabal (PackageDescription(..), allBuildInfo, buildTools, pkgconfigDepends, extraLibs)
@@ -335,3 +336,14 @@ debianName atoms typ pkgDesc =
       -- def = mkPkgName pname typ
       pname@(PackageName string) = pkgName pkgDesc
       version = (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion pkgDesc)))))
+
+-- | Given a control file and a DebType, look for the binary deb with
+-- the corresponding suffix and return its name.
+debNameFromType :: Control' String -> DebType -> Maybe BinPkgName
+debNameFromType control debType =
+    case debType of
+      Dev -> fmap BinPkgName $ listToMaybe (filter (isSuffixOf "-dev") debNames)
+      Prof -> fmap BinPkgName $ listToMaybe (filter (isSuffixOf "-prof") debNames)
+      Doc -> fmap BinPkgName $ listToMaybe (filter (isSuffixOf "-doc") debNames)
+    where
+      debNames = map (\ (Field (_, s)) -> stripWS s) (catMaybes (map (lookupP "Package") (tail (unControl control))))
