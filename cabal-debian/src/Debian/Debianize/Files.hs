@@ -26,7 +26,7 @@ import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms, backupAtoms)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                     VersionControlSpec(..), XField(..), XFieldDest(..), newBinaryDebDescription, modifyBinaryDeb)
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..))
+import Debian.Debianize.Types.Debianization as Debian (Debianization(..), Deb(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..))
 import Debian.Debianize.Types.PackageType (PackageType(Exec, Development, Profiling, Documentation, Utilities))
 import Debian.Debianize.Utility (showDeps')
@@ -194,12 +194,12 @@ finalizeDebianization deb0 =
 
       -- Apply the hints in the atoms to the debianization
       g :: DebAtomKey -> DebAtom -> Debianization -> Debianization
-      g (Binary b) (DHArch x) deb =        deb {sourceDebDescription = modifyBinaryDeb b (\ (Just bin) -> bin {architecture = x}) (sourceDebDescription deb)}
-      g (Binary b) (DHPriority x) deb =    deb {sourceDebDescription = modifyBinaryDeb b (\ (Just bin) -> bin {binaryPriority = Just x}) (sourceDebDescription deb)}
-      g Source (DHPriority x) deb =        deb {sourceDebDescription = (sourceDebDescription deb) {priority = Just x}}
-      g (Binary b) (DHSection x) deb =     deb {sourceDebDescription = modifyBinaryDeb b (\ (Just bin) -> bin {binarySection = Just x}) (sourceDebDescription deb)}
-      g Source (DHSection x) deb =         deb {sourceDebDescription = (sourceDebDescription deb) {section = Just x}}
-      g (Binary b) (DHDescription x) deb = deb {sourceDebDescription = modifyBinaryDeb b (\ (Just bin) -> bin {Debian.description = x}) (sourceDebDescription deb)}
+      g (Binary b) (DHArch x) deb =        setSourceDebDescription (modifyBinaryDeb b (\ (Just bin) -> bin {architecture = x}) (sourceDebDescription deb)) deb
+      g (Binary b) (DHPriority x) deb =    setSourceDebDescription (modifyBinaryDeb b (\ (Just bin) -> bin {binaryPriority = Just x}) (sourceDebDescription deb)) deb
+      g Source (DHPriority x) deb =        setSourceDebDescription ((sourceDebDescription deb) {priority = Just x}) deb
+      g (Binary b) (DHSection x) deb =     setSourceDebDescription (modifyBinaryDeb b (\ (Just bin) -> bin {binarySection = Just x}) (sourceDebDescription deb)) deb
+      g Source (DHSection x) deb =         setSourceDebDescription ((sourceDebDescription deb) {section = Just x}) deb
+      g (Binary b) (DHDescription x) deb = setSourceDebDescription (modifyBinaryDeb b (\ (Just bin) -> bin {Debian.description = x}) (sourceDebDescription deb)) deb
       g _ _ deb = deb
 
 foldAtomsFinalized :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
@@ -251,7 +251,7 @@ foldAtomsFinalized f r0 atoms =
 
 cabalExecBinaryPackage :: BinPkgName -> Debianization -> Debianization
 cabalExecBinaryPackage b deb =
-    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = bin : binaryPackages (sourceDebDescription deb)}}
+    setSourceDebDescription ((sourceDebDescription deb) {binaryPackages = bin : binaryPackages (sourceDebDescription deb)}) deb
     where
       bin = BinaryDebDescription
             { Debian.package = b
@@ -362,13 +362,13 @@ librarySpecs :: Debianization -> Debianization
 librarySpecs deb | isNothing (packageDescription deb) = deb
 librarySpecs deb =
     (if doc then insertAtom (Binary (debName)) (DHLink ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt") ("/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")) else id) $
-    deb { sourceDebDescription =
-            (sourceDebDescription deb)
+    setSourceDebDescription
+            ((sourceDebDescription deb)
               { binaryPackages =
                     (if dev then [librarySpec deb Any Development (Cabal.package pkgDesc)] else []) ++
                     (if prof then [librarySpec deb Any Profiling (Cabal.package pkgDesc)] else []) ++
                     (if doc then [docSpecsParagraph deb (Cabal.package pkgDesc)] else []) ++
-                    (binaryPackages (sourceDebDescription deb)) } }
+                    (binaryPackages (sourceDebDescription deb)) }) deb
     where
       doc = dev && not (noDocumentationLibrary deb)
       prof = dev && not (noProfilingLibrary deb)
@@ -424,7 +424,7 @@ makeUtilsPackage deb =
       s -> let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)
                atoms = foldr (uncurry insertAtom) (setPackageDescription pkgDesc defaultAtoms) (makeUtilsAtoms p (t1 s))
                deb' = foldAtomsFinalized insertAtom deb atoms in
-           deb' {sourceDebDescription = modifyBinaryDeb p (f deb' p s) (sourceDebDescription deb')}
+           setSourceDebDescription (modifyBinaryDeb p (f deb' p s) (sourceDebDescription deb')) deb'
     where
       f _ _ _ (Just bin) = bin
       f deb' p s Nothing =

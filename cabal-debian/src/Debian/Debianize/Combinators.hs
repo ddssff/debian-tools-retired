@@ -24,7 +24,7 @@ import Debian.Debianize.AtomsType (DebAtomKey(..), DebAtom(..), HasAtoms, foldAt
                                    extraLibMap, epochMap, changeLog, setChangeLog', setRulesHead)
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..))
+import Debian.Debianize.Types.Debianization as Debian (Debianization(..), Deb(..))
 import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Utility (trim)
 import Debian.Policy (StandardsVersion)
@@ -42,13 +42,12 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 -- | Set the debianization's version info - everything that goes into
 -- the new changelog entry, source package name, exact debian version,
 -- log comments, maintainer name, revision date.
-versionInfo :: NameAddr -> String -> Debianization -> Debianization
+versionInfo :: (Deb deb, HasAtoms deb) => NameAddr -> String -> deb -> deb
 versionInfo debianMaintainer date deb =
     setChangeLog' newLog $
-    deb { sourceDebDescription =
-            (sourceDebDescription deb)
-              { source = sourceName
-              , Debian.maintainer = debianMaintainer }}
+    setSourceDebDescription ((sourceDebDescription deb)
+                             { source = sourceName
+                             , Debian.maintainer = debianMaintainer }) deb
     where
       ChangeLog oldEntries = changeLog deb
       newLog =
@@ -112,7 +111,7 @@ cdbsRules pkgId deb =
                                               "include /usr/share/cdbs/1/class/hlibrary.mk" ]) deb
 
 putStandards :: StandardsVersion -> Debianization -> Debianization
-putStandards x deb = deb {sourceDebDescription = (sourceDebDescription deb) {standardsVersion = x}}
+putStandards x deb = setSourceDebDescription ((sourceDebDescription deb) {standardsVersion = x}) deb
 
 describe :: HasAtoms atoms => atoms -> PackageType -> PackageIdentifier -> Text
 describe atoms typ ident =
@@ -122,15 +121,15 @@ describe atoms typ ident =
 
 buildDeps :: Debianization -> Debianization
 buildDeps deb =
-    deb { sourceDebDescription = (sourceDebDescription deb) { Debian.buildDepends = debianBuildDeps deb
-                                                            , buildDependsIndep = debianBuildDepsIndep deb } }
+    setSourceDebDescription ((sourceDebDescription deb) { Debian.buildDepends = debianBuildDeps deb
+                                                        , buildDependsIndep = debianBuildDepsIndep deb }) deb
 
 -- | Convert the extraLibs field of the cabal build info into debian
 -- binary package names and make them dependendencies of the debian
 -- devel package (if there is one.)
 addExtraLibDependencies :: Debianization -> Debianization
 addExtraLibDependencies deb =
-    deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = map f (binaryPackages (sourceDebDescription deb))}}
+    setSourceDebDescription ((sourceDebDescription deb) {binaryPackages = map f (binaryPackages (sourceDebDescription deb))}) deb
     where
       f :: BinaryDebDescription -> BinaryDebDescription
       f bin
@@ -211,7 +210,7 @@ anyrel' x = [D.Rel x Nothing Nothing]
 
 oldFilterMissing :: [BinPkgName] -> Debianization -> Debianization
 oldFilterMissing missing deb =
-    deb {sourceDebDescription = e (sourceDebDescription deb)}
+    setSourceDebDescription (e (sourceDebDescription deb)) deb
     where
       e src = src { Debian.buildDepends = f (Debian.buildDepends src)
                   , Debian.buildDependsIndep = f (Debian.buildDependsIndep src)
@@ -229,4 +228,4 @@ oldFilterMissing missing deb =
                                 , builtUsing = f (builtUsing rels) }
 
 setSourceBinaries :: [BinaryDebDescription] -> Debianization -> Debianization
-setSourceBinaries xs deb = deb {sourceDebDescription = (sourceDebDescription deb) {binaryPackages = xs}}
+setSourceBinaries xs deb = setSourceDebDescription ((sourceDebDescription deb) {binaryPackages = xs}) deb

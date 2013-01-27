@@ -11,14 +11,12 @@ module Debian.Debianize.Debianize
     , debianize
     , compileArgs
     , cabalToDebianization
-    , newDebianization
     ) where
 
 import Data.Maybe
 import Data.Text (Text)
-import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.AtomsType (HasAtoms, DebAtomKey(Source), Flags(..), DebAction(..), Atoms, defaultAtoms, insertAtom, DebAtom(DebCompat),
-                                   packageDescription, flags, watchAtom, setSourcePriority, setSourceSection, setChangeLog, compilerVersion,
+import Debian.Debianize.AtomsType (HasAtoms, Flags(..), DebAction(..), Atoms, defaultAtoms,
+                                   packageDescription, flags, watchAtom, setSourcePriority, setSourceSection, compilerVersion,
                                    cabalFlagAssignments, putCopyright)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (cdbsRules, versionInfo, addExtraLibDependencies,
@@ -27,11 +25,10 @@ import Debian.Debianize.Flags (flagOptions, atomOptions)
 import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.SubstVars (substvars)
-import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), newSourceDebDescription)
-import Debian.Debianize.Types.Debianization as Debian (Debianization(..))
+import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..))
+import Debian.Debianize.Types.Debianization as Debian (Debianization, Deb(..))
 import Debian.Debianize.Utility (withCurrentDirectory)
-import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection), parseMaintainer)
-import Debian.Relation (SrcPkgName(SrcPkgName))
+import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection))
 import Debian.Time (getCurrentLocalRFC822Time)
 import Distribution.Package (PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
@@ -140,19 +137,6 @@ debianization date copyright' maint standards oldDeb =
     oldDeb
     where
       pkgDesc = fromMaybe (error "debianization") $ packageDescription oldDeb
-
--- | Create a Debianization based on a changelog entry and a license
--- value.  Uses the currently installed versions of debhelper and
--- debian-policy to set the compatibility levels.
-newDebianization :: ChangeLog -> Int -> StandardsVersion -> Debianization
-newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ = error "defaultDebianization: Invalid changelog entry"
-newDebianization (log@(ChangeLog (entry : _))) level standards =
-    setChangeLog log $
-    insertAtom Source (DebCompat level) $
-    Debianization
-      { sourceDebDescription = newSourceDebDescription (SrcPkgName (logPackage entry)) (either error id (parseMaintainer (logWho entry))) standards
-      , debAtoms = defaultAtoms }
-newDebianization _ _ _ = error "Invalid changelog"
 
 compileEnvironmentArgs :: HasAtoms atoms => atoms -> IO atoms
 compileEnvironmentArgs atoms0 =

@@ -14,16 +14,16 @@ import Data.Monoid (mconcat, (<>), mempty)
 import Data.Set as Set (Set, fromList, singleton)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
-import Debian.Debianize.Debianize (cabalToDebianization, newDebianization)
+import Debian.Debianize.Debianize (cabalToDebianization)
 import Debian.Debianize.AtomsType as Atom
-    (HasAtoms, DebAtomKey(..), DebAtom(..), insertAtom, defaultAtoms, mapAtoms,
+    (HasAtoms, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms,
      tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
      setChangeLog, changeLog, setChangeLog', setRulesHead, compat, putCopyright, knownEpochMappings)
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
 import Debian.Debianize.Input (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (writeDebianization)
-import Debian.Debianize.Types.Debianization as Deb (Debianization(..))
+import Debian.Debianize.Types.Debianization as Deb (Debianization, Deb(..), newDebianization)
 import Debian.Debianize.Types.DebControl as Deb (SourceDebDescription(..), BinaryDebDescription(..),
                                                  PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
@@ -61,19 +61,10 @@ test1 =
                                            , "include /usr/share/cdbs/1/rules/debhelper.mk"
                                            , "include /usr/share/cdbs/1/class/hlibrary.mk"
                                            , "" ]) $
-          setChangeLog
-                 (ChangeLog [Entry { logPackage = "haskell-cabal-debian"
-                                   , logVersion = buildDebianVersion Nothing "2.6.2" Nothing
-                                   , logDists = [ReleaseName {relName = "unstable"}]
-                                   , logUrgency = "low"
-                                   , logComments = "  * Fix a bug constructing the destination pathnames that was dropping\n    files that were supposed to be installed into packages.\n"
-                                   , logWho = "David Fox <dsf@seereason.com>"
-                                   , logDate = "Thu, 20 Dec 2012 06:49:25 -0800" }]) $
           insertAtom Source (DebCompat 9) $ -- This will change as new version of debhelper are released
           putCopyright (Left BSD3) $
-          Debianization
-              { sourceDebDescription =
-                  SourceDebDescription
+          setSourceDebDescription
+                 (SourceDebDescription
                       { source = SrcPkgName {unSrcPkgName = "haskell-cabal-debian"}
                       , maintainer = NameAddr (Just "David Fox") "dsf@seereason.com"
                       , changedBy = Nothing
@@ -89,8 +80,15 @@ test1 =
                       , homepage = Nothing
                       , vcsFields = Set.fromList []
                       , xFields = Set.fromList []
-                      , binaryPackages = [] }
-              , debAtoms = defaultAtoms }
+                      , binaryPackages = [] }) $
+          (newDebianization log 9 (StandardsVersion 3 9 3 (Just 1)))
+      log = ChangeLog [Entry { logPackage = "haskell-cabal-debian"
+                             , logVersion = buildDebianVersion Nothing "2.6.2" Nothing
+                             , logDists = [ReleaseName {relName = "unstable"}]
+                             , logUrgency = "low"
+                             , logComments = "  * Fix a bug constructing the destination pathnames that was dropping\n    files that were supposed to be installed into packages.\n"
+                             , logWho = "David Fox <dsf@seereason.com>"
+                             , logDate = "Thu, 20 Dec 2012 06:49:25 -0800" }]
 
 test2 :: Test
 test2 =
@@ -108,20 +106,10 @@ test2 =
                                    "include /usr/share/cdbs/1/rules/debhelper.mk",
                                    "include /usr/share/cdbs/1/class/hlibrary.mk",
                                    ""]) $
-          setChangeLog
-               (ChangeLog [Entry {logPackage = "haskell-cabal-debian",
-                                  logVersion = Debian.Version.parseDebianVersion ("2.6.2" :: String),
-                                  logDists = [ReleaseName {relName = "unstable"}],
-                                  logUrgency = "low",
-                                  logComments = unlines ["  * Fix a bug constructing the destination pathnames that was dropping",
-                                                         "    files that were supposed to be installed into packages."],
-                                  logWho = "David Fox <dsf@seereason.com>",
-                                  logDate = "Thu, 20 Dec 2012 06:49:25 -0800"}]) $
           insertAtom Source (DebCompat 9) $
           putCopyright (Left BSD3) $
-          Debianization
-          { sourceDebDescription =
-                SourceDebDescription
+          setSourceDebDescription
+               (SourceDebDescription
                 { source = SrcPkgName {unSrcPkgName = "haskell-cabal-debian"},
                   maintainer = NameAddr {nameAddr_name = Just "David Fox", nameAddr_addr = "dsf@seereason.com"},
                   changedBy = Nothing,
@@ -133,12 +121,20 @@ test2 =
                   buildConflicts = [],
                   buildDependsIndep = [],
                   buildConflictsIndep = [],
-                  standardsVersion = StandardsVersion 3 9 3 (Just 1),
+                  standardsVersion = (StandardsVersion 3 9 3 (Just 1)),
                   homepage = Nothing,
                   vcsFields = Set.fromList [],
                   xFields = Set.fromList [],
-                  binaryPackages = [] },
-            debAtoms = defaultAtoms }
+                  binaryPackages = [] }) $
+          (newDebianization log 9 (StandardsVersion 3 9 3 (Just 1)))
+      log = ChangeLog [Entry {logPackage = "haskell-cabal-debian",
+                              logVersion = Debian.Version.parseDebianVersion ("2.6.2" :: String),
+                              logDists = [ReleaseName {relName = "unstable"}],
+                              logUrgency = "low",
+                              logComments = unlines ["  * Fix a bug constructing the destination pathnames that was dropping",
+                                                     "    files that were supposed to be installed into packages."],
+                              logWho = "David Fox <dsf@seereason.com>",
+                              logDate = "Thu, 20 Dec 2012 06:49:25 -0800"}]
 
 test3 :: Test
 test3 =
@@ -150,26 +146,10 @@ test3 =
       testDeb2 =
           sourceFormat Native3 $
           setRulesHead "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n" $
-          setChangeLog
-             (ChangeLog [Entry { logPackage = "haskell-devscripts"
-                               , logVersion = Debian.Version.parseDebianVersion ("0.8.13" :: String)
-                               , logDists = [ReleaseName {relName = "experimental"}]
-                               , logUrgency = "low"
-                               , logComments = "  [ Joachim Breitner ]\n  * Improve parsing of \"Setup register\" output, patch by David Fox\n  * Enable creation of hoogle files, thanks to Kiwamu Okabe for the\n    suggestion. \n\n  [ Kiwamu Okabe ]\n  * Need --html option to fix bug that --hoogle option don't output html file.\n  * Support to create /usr/lib/ghc-doc/hoogle/*.txt for hoogle package.\n\n  [ Joachim Breitner ]\n  * Symlink hoogle\8217s txt files to /usr/lib/ghc-doc/hoogle/\n  * Bump ghc dependency to 7.6 \n  * Bump standards version\n"
-                               , logWho = "Joachim Breitner <nomeata@debian.org>"
-                               , logDate = "Mon, 08 Oct 2012 21:14:50 +0200" },
-                         Entry { logPackage = "haskell-devscripts"
-                               , logVersion = Debian.Version.parseDebianVersion ("0.8.12" :: String)
-                               , logDists = [ReleaseName {relName = "unstable"}]
-                               , logUrgency = "low"
-                               , logComments = "  * Depend on ghc >= 7.4, adjusting to its haddock --interface-version\n    behaviour.\n"
-                               , logWho = "Joachim Breitner <nomeata@debian.org>"
-                               , logDate = "Sat, 04 Feb 2012 10:50:33 +0100"}]) $
           insertAtom Source (DebCompat 7) $
           putCopyright (Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n") $
-          Debianization
-          { sourceDebDescription =
-                SourceDebDescription
+          setSourceDebDescription
+               (SourceDebDescription
                 { source = SrcPkgName {unSrcPkgName = "haskell-devscripts"}
                 , maintainer = NameAddr {nameAddr_name = Just "Debian Haskell Group", nameAddr_addr = "pkg-haskell-maintainers@lists.alioth.debian.org"}
                 , changedBy = Nothing
@@ -222,8 +202,22 @@ test3 =
                                                              , Deb.conflicts = []
                                                              , provides = []
                                                              , replaces = []
-                                                             , builtUsing = [] }}]}
-          , debAtoms = defaultAtoms }
+                                                             , builtUsing = [] }}]}) $
+          (newDebianization log 7 (StandardsVersion 3 9 4 Nothing))
+      log = ChangeLog [Entry { logPackage = "haskell-devscripts"
+                             , logVersion = Debian.Version.parseDebianVersion ("0.8.13" :: String)
+                             , logDists = [ReleaseName {relName = "experimental"}]
+                             , logUrgency = "low"
+                             , logComments = "  [ Joachim Breitner ]\n  * Improve parsing of \"Setup register\" output, patch by David Fox\n  * Enable creation of hoogle files, thanks to Kiwamu Okabe for the\n    suggestion. \n\n  [ Kiwamu Okabe ]\n  * Need --html option to fix bug that --hoogle option don't output html file.\n  * Support to create /usr/lib/ghc-doc/hoogle/*.txt for hoogle package.\n\n  [ Joachim Breitner ]\n  * Symlink hoogle\8217s txt files to /usr/lib/ghc-doc/hoogle/\n  * Bump ghc dependency to 7.6 \n  * Bump standards version\n"
+                             , logWho = "Joachim Breitner <nomeata@debian.org>"
+                             , logDate = "Mon, 08 Oct 2012 21:14:50 +0200" },
+                       Entry { logPackage = "haskell-devscripts"
+                             , logVersion = Debian.Version.parseDebianVersion ("0.8.12" :: String)
+                             , logDists = [ReleaseName {relName = "unstable"}]
+                             , logUrgency = "low"
+                             , logComments = "  * Depend on ghc >= 7.4, adjusting to its haddock --interface-version\n    behaviour.\n"
+                             , logWho = "Joachim Breitner <nomeata@debian.org>"
+                             , logDate = "Sat, 04 Feb 2012 10:50:33 +0100"}]
 
 test4 :: Test
 test4 =
@@ -232,7 +226,7 @@ test4 =
                  new <- cabalToDebianization "test-data/clckwrks-dot-com/input" (newDebianization (changeLog old) 7 (StandardsVersion 3 9 4 Nothing))
                  let new' =
                          finalizeDebianization $
-                         (\ x -> x {sourceDebDescription = (sourceDebDescription x) {homepage = Just "http://www.clckwrks.com/"}}) $
+                         (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://www.clckwrks.com/"}) x) $
                          sourceFormat Native3 $
                          missingDependency (BinPkgName "libghc-clckwrks-theme-clckwrks-doc") $
                          setRevision "" $
@@ -397,7 +391,7 @@ test6 =
                       compat' = 7
                   new <- cabalToDebianization "test-data/artvaluereport2/input" (newDebianization log compat' standards)
                   let new' = finalizeDebianization $
-                             (\ x -> x {sourceDebDescription = (sourceDebDescription x) {homepage = Just "http://appraisalreportonline.com"}}) $
+                             (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://appraisalreportonline.com"}) x) $
                              setSourcePackageName (SrcPkgName "haskell-artvaluereport2") $
                              copyFirstLogEntry old $ -- Get rid of the "debianization generated by..." message so we match
                              insertAtom Source (UtilsPackageName (BinPkgName "artvaluereport2-server")) $
@@ -486,7 +480,7 @@ test7 =
                   new <- cabalToDebianization "test-data/cabal-debian/input"
                            (newDebianization (changeLog old) 7 (StandardsVersion 3 9 3 Nothing))
                   let new' = finalizeDebianization $
-                             (\ x -> x {sourceDebDescription = (sourceDebDescription x) {homepage = Just "http://src.seereason.com/cabal-debian"}}) $
+                             (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://src.seereason.com/cabal-debian"}) x) $
                              sourceFormat Native3 $
                              insertAtom Source (UtilsPackageName (BinPkgName "cabal-debian")) $
                              Atom.depends (BinPkgName "cabal-debian") (anyrel (BinPkgName "apt-file")) $
@@ -508,7 +502,7 @@ test8 =
                              finalizeDebianization $
                              knownEpochMappings $
                              insertAtom Source (BuildDep (BinPkgName "haskell-hsx-utils")) $
-                             (\ x -> x {sourceDebDescription = (sourceDebDescription x) {homepage = Just "http://artvaluereportonline.com"}}) $
+                             (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://artvaluereportonline.com"}) x) $
                              sourceFormat Native3 $
                              new
                   assertEqual "test8" [] (diffDebianizations old new')
