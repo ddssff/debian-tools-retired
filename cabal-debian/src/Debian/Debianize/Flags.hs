@@ -6,10 +6,10 @@ module Debian.Debianize.Flags
 import Data.Char (toLower, isDigit, ord)
 import Data.Set (fromList)
 import Data.Version (parseVersion)
-import Debian.Debianize.Atoms (missingDependency, doExecutable, setSourcePackageName,
-                               setBuildDir, putCabalFlagAssignments, mapFlags, sourceFormat, setRevision, setDebVersion, setOmitLTDeps, putExtraDevDep)
-import Debian.Debianize.AtomsType (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DHMaintainer, BuildDep, BuildDepIndep, ExtraLibMapping, ExecMapping, EpochMapping, Depends, Conflicts),
-                                     insertAtom, Flags(..), DebAction(..))
+import Debian.Debianize.AtomsType (HasAtoms(..), DebAtomKey(..), DebAtom(NoDocumentationLibrary, NoProfilingLibrary, CompilerVersion, DHMaintainer, BuildDep,
+                                                                         BuildDepIndep, ExtraLibMapping, ExecMapping, EpochMapping, Depends, Conflicts),
+                                   insertAtom, Flags(..), DebAction(..), missingDependency, doExecutable, setSourcePackageName, setBuildDir,
+                                   putCabalFlagAssignments, mapFlags, sourceFormat, setRevision, setDebVersion, setOmitLTDeps, putExtraDevDep)
 import Debian.Debianize.Types.PackageHints (InstallFile(..))
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)

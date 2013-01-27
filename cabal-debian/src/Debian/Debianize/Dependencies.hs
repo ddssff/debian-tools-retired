@@ -19,9 +19,9 @@ import Data.Maybe (fromMaybe, catMaybes)
 import qualified Data.Set as Set
 import Data.Version (Version, showVersion)
 import Debian.Control
-import Debian.Debianize.Atoms (noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, versionSplits,
-                               filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
-import Debian.Debianize.AtomsType (HasAtoms, PackageInfo(devDeb, profDeb, docDeb))
+import Debian.Debianize.AtomsType (HasAtoms, PackageInfo(devDeb, profDeb, docDeb),
+                                   noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, versionSplits,
+                                   filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
 import Debian.Debianize.Types.Debianization as Debian (Debianization)

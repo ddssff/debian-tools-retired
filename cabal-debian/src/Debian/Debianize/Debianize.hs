@@ -17,9 +17,9 @@ module Debian.Debianize.Debianize
 import Data.Maybe
 import Data.Text (Text)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.Atoms (packageDescription, flags, watchAtom, setSourcePriority, setSourceSection, setChangeLog, compilerVersion,
-                               cabalFlagAssignments, putCopyright)
-import Debian.Debianize.AtomsType (HasAtoms, DebAtomKey(Source), Flags(..), DebAction(..), Atoms, defaultAtoms, insertAtom, DebAtom(DebCompat))
+import Debian.Debianize.AtomsType (HasAtoms, DebAtomKey(Source), Flags(..), DebAction(..), Atoms, defaultAtoms, insertAtom, DebAtom(DebCompat),
+                                   packageDescription, flags, watchAtom, setSourcePriority, setSourceSection, setChangeLog, compilerVersion,
+                                   cabalFlagAssignments, putCopyright)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (cdbsRules, versionInfo, addExtraLibDependencies,
                                      putStandards, setSourceBinaries)
