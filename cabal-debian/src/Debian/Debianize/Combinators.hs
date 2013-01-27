@@ -47,7 +47,7 @@ versionInfo debianMaintainer date deb =
     setChangeLog' newLog $
     setSourceDebDescription ((sourceDebDescription deb)
                              { source = sourceName
-                             , Debian.maintainer = debianMaintainer }) deb
+                             , Debian.maintainer = Just debianMaintainer }) deb
     where
       ChangeLog oldEntries = changeLog deb
       newLog =

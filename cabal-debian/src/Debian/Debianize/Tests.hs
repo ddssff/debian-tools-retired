@@ -67,7 +67,7 @@ test1 =
           setSourceDebDescription
                  (SourceDebDescription
                       { source = SrcPkgName {unSrcPkgName = "haskell-cabal-debian"}
-                      , maintainer = NameAddr (Just "David Fox") "dsf@seereason.com"
+                      , maintainer = Just (NameAddr (Just "David Fox") "dsf@seereason.com")
                       , changedBy = Nothing
                       , uploaders = []
                       , dmUploadAllowed = False
@@ -112,7 +112,7 @@ test2 =
           setSourceDebDescription
                (SourceDebDescription
                 { source = SrcPkgName {unSrcPkgName = "haskell-cabal-debian"},
-                  maintainer = NameAddr {nameAddr_name = Just "David Fox", nameAddr_addr = "dsf@seereason.com"},
+                  maintainer = Just (NameAddr {nameAddr_name = Just "David Fox", nameAddr_addr = "dsf@seereason.com"}),
                   changedBy = Nothing,
                   uploaders = [],
                   dmUploadAllowed = False,
@@ -152,7 +152,7 @@ test3 =
           setSourceDebDescription
                (SourceDebDescription
                 { source = SrcPkgName {unSrcPkgName = "haskell-devscripts"}
-                , maintainer = NameAddr {nameAddr_name = Just "Debian Haskell Group", nameAddr_addr = "pkg-haskell-maintainers@lists.alioth.debian.org"}
+                , maintainer = Just (NameAddr {nameAddr_name = Just "Debian Haskell Group", nameAddr_addr = "pkg-haskell-maintainers@lists.alioth.debian.org"})
                 , changedBy = Nothing
                 , uploaders = [NameAddr {nameAddr_name = Just "Marco Silva", nameAddr_addr = "marcot@debian.org"},NameAddr {nameAddr_name = Just "Joachim Breitner", nameAddr_addr = "nomeata@debian.org"}]
                 , dmUploadAllowed = False

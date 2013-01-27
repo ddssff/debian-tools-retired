@@ -33,7 +33,7 @@ data SourceDebDescription
     = SourceDebDescription
       { source :: SrcPkgName
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Source>
-      , maintainer :: NameAddr
+      , maintainer :: Maybe NameAddr
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Maintainer>
       , changedBy :: Maybe NameAddr
       -- ^ <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Changed-By>
@@ -64,7 +64,7 @@ newSourceDebDescription :: SrcPkgName -> NameAddr -> StandardsVersion -> SourceD
 newSourceDebDescription src who standards =
     SourceDebDescription
       { source = src
-      , maintainer = who
+      , maintainer = Just who
       , changedBy = Nothing
       , uploaders = []
       , dmUploadAllowed = False
