@@ -22,10 +22,10 @@ import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inpu
 import Debian.Debianize.Combinators (cdbsRules, versionInfo, addExtraLibDependencies,
                                      putStandards, setSourceBinaries)
 import Debian.Debianize.Flags (flagOptions, atomOptions)
+import Debian.Debianize.Input as Debian (inputDebianization)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..))
-import Debian.Debianize.Types.Debianization as Debian (inputDebianization)
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection))
 import Debian.Time (getCurrentLocalRFC822Time)

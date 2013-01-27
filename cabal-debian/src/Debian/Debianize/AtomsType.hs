@@ -98,6 +98,7 @@ module Debian.Debianize.AtomsType
     , sourceDebDescription
     , setSourceDebDescription
     , modifySourceDebDescription
+    , newDebianization
     ) where
 
 import Data.Generics (Data, Typeable)
@@ -108,12 +109,12 @@ import Data.Monoid (mempty)
 import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert, member, map)
 import Data.Text (Text)
 import Data.Version (Version)
-import Debian.Changes (ChangeLog)
+import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Utility (setMapMaybe)
 import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
 import Debian.Debianize.Types.PackageType (DebType, VersionSplits, knownVersionSplits)
 import Debian.Orphans ()
-import Debian.Policy (SourceFormat, PackageArchitectures, PackagePriority, Section)
+import Debian.Policy (SourceFormat, PackageArchitectures, PackagePriority, Section, StandardsVersion, parseMaintainer)
 import Debian.Relation (BinPkgName, SrcPkgName, Relation)
 import Debian.Version (DebianVersion)
 import Distribution.License (License)
@@ -128,8 +129,7 @@ import Data.Monoid ((<>), mconcat)
 --import Data.Set as Set (Set, maxView, toList, null, union, singleton, insert, member)
 import Data.Text (pack, unlines)
 import Data.Version (showVersion)
-import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logPackage))
-import Debian.Debianize.Types.DebControl (SourceDebDescription, newSourceDebDescription)
+import Debian.Debianize.Types.DebControl (SourceDebDescription(source, maintainer, standardsVersion), newSourceDebDescription)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName), Relation(..))
 import Distribution.Package (PackageName(..), PackageIdentifier(pkgName, pkgVersion))
@@ -878,3 +878,17 @@ modifySourceDebDescription f deb =
     where
       g Source (DebControl d) = Just d
       g _ _ = Nothing
+
+-- | Create a Debianization based on a changelog entry and a license
+-- value.  Uses the currently installed versions of debhelper and
+-- debian-policy to set the compatibility levels.
+newDebianization :: ChangeLog -> Int -> StandardsVersion -> Atoms
+newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ = error "defaultDebianization: Invalid changelog entry"
+newDebianization (log@(ChangeLog (entry : _))) level standards =
+    setChangeLog log $
+    insertAtom Source (DebCompat level) $
+    modifySourceDebDescription (\ x -> x { source = Just (SrcPkgName (logPackage entry))
+                                         , maintainer = (either error Just (parseMaintainer (logWho entry)))
+                                         , standardsVersion = Just standards }) $
+    defaultAtoms
+newDebianization _ _ _ = error "Invalid changelog"

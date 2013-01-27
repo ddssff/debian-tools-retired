@@ -2,13 +2,13 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Debian.Debianize.Input
-    ( inputSourceDebDescription
-    , inputAtomsFromDirectory
+    ( inputDebianization
     , inputChangeLog
     ) where
 
 import Debug.Trace (trace)
 
+import Control.Exception (SomeException, catch)
 import Control.Monad (foldM, filterM)
 import Data.Char (isSpace)
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -17,7 +17,8 @@ import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.AtomsType (DebAtomKey(..), DebAtom(..), HasAtoms, insertAtom, insertAtoms', setRulesHead)
+import Debian.Debianize.AtomsType (Atoms, DebAtomKey(..), DebAtom(..), HasAtoms, insertAtom, insertAtoms', setRulesHead,
+                                   defaultAtoms, modifySourceDebDescription)
 import Debian.Debianize.Types.DebControl (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                           VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')
@@ -29,6 +30,15 @@ import Prelude hiding (readFile, lines, words, break, null, log, sum)
 import System.Directory (doesFileExist)
 import System.FilePath ((</>), takeExtension, dropExtension)
 import System.IO.Error (catchIOError)
+
+inputDebianization :: FilePath -> IO Atoms
+inputDebianization top =
+    do (deb, _) <- inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e))
+       -- Different from snd of above?
+       atoms <- inputAtomsFromDirectory debian defaultAtoms `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
+       return $ modifySourceDebDescription (const deb) atoms
+    where
+      debian = top </> "debian"
 
 inputSourceDebDescription :: FilePath -> IO (SourceDebDescription, [Field])
 inputSourceDebDescription debian =
