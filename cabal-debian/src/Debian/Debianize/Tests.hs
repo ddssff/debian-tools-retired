@@ -20,11 +20,11 @@ import Debian.Debianize.AtomsType as Atom
     (HasAtoms, Atoms, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms,
      tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
-     changeLog, setChangeLog', setRulesHead, compat, putCopyright, knownEpochMappings)
+     changeLog, setChangeLog', setRulesHead, compat, putCopyright, knownEpochMappings, sourceDebDescription, setSourceDebDescription)
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)
 import Debian.Debianize.Input (inputChangeLog)
 import Debian.Debianize.Output (writeDebianization)
-import Debian.Debianize.Types.Debianization as Deb (Deb(..), newDebianization, inputDebianization)
+import Debian.Debianize.Types.Debianization as Deb (newDebianization, inputDebianization)
 import Debian.Debianize.Types.DebControl as Deb (SourceDebDescription(..), BinaryDebDescription(..),
                                                  PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Types.PackageHints (InstallFile(..), Server(..), Site(..))
@@ -526,12 +526,12 @@ diffMaps old new =
       combine1 k a b = if a == b then Unchanged k a else Modified k a b
       combine2 _ _ _ = Nothing
 
-diffDebianizations :: Deb deb => deb -> deb -> String -- [Change FilePath T.Text]
+diffDebianizations :: HasAtoms deb => deb -> deb -> String -- [Change FilePath T.Text]
 diffDebianizations old new =
     show (mconcat (map prettyChange (filter (not . isUnchanged) (diffMaps old' new'))))
     where
-      old' = toFileMap (debAtoms old) (sortBinaryDebs (sourceDebDescription old))
-      new' = toFileMap (debAtoms new) (sortBinaryDebs (sourceDebDescription new))
+      old' = toFileMap old (sortBinaryDebs (sourceDebDescription old))
+      new' = toFileMap new (sortBinaryDebs (sourceDebDescription new))
       isUnchanged (Unchanged _ _) = True
       isUnchanged _ = False
       prettyChange (Unchanged p _) = text ("Unchanged: " <> p <> "\n")

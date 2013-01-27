@@ -95,13 +95,17 @@ module Debian.Debianize.AtomsType
     , mapFlags
     , watchAtom
     , tightDependencyFixup
+    , sourceDebDescription
+    , setSourceDebDescription
+    , modifySourceDebDescription
     ) where
 
 import Data.Generics (Data, Typeable)
+import Data.List as List (map)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
-import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert, member)
+import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert, member, map)
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog)
@@ -125,7 +129,7 @@ import Data.Monoid ((<>), mconcat)
 import Data.Text (pack, unlines)
 import Data.Version (showVersion)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logPackage))
-import Debian.Debianize.Types.DebControl (SourceDebDescription)
+import Debian.Debianize.Types.DebControl (SourceDebDescription, newSourceDebDescription)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName), Relation(..))
 import Distribution.Package (PackageName(..), PackageIdentifier(pkgName, pkgVersion))
@@ -615,7 +619,7 @@ knownEpochMappings = putEpochMapping (PackageName "HaXml") 1
 
 filterMissing :: HasAtoms atoms => atoms -> [[Relation]] -> [[Relation]]
 filterMissing atoms rels =
-    filter (/= []) (map (filter (\ (Rel name _ _) -> not (Set.member name (missingDependencies atoms)))) rels)
+    filter (/= []) (List.map (filter (\ (Rel name _ _) -> not (Set.member name (missingDependencies atoms)))) rels)
 
 versionSplits :: HasAtoms atoms => atoms -> [VersionSplits]
 versionSplits atoms =
@@ -852,12 +856,25 @@ tightDependencyFixup pairs p deb =
               (unlines $
                ([ "binary-fixup/" <> name <> "::"
                 , "\techo -n 'haskell:Depends=' >> debian/" <> name <> ".substvars" ] ++
-                intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (map equals pairs) ++
+                intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (List.map equals pairs) ++
                 [ "\techo '' >> debian/" <> name <> ".substvars"
                 , "\techo -n 'haskell:Conflicts=' >> debian/" <> name <> ".substvars" ] ++
-                intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (map newer pairs) ++
+                intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (List.map newer pairs) ++
                 [ "\techo '' >> debian/" <> name <> ".substvars" ]))
       equals (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (=$${Version})' " <>  display' installed <> " >> debian/" <> name <> ".substvars"
       newer  (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (>>$${Version})' " <> display' installed <> " >> debian/" <> name <> ".substvars"
       name = display' p
       display' = pack . show . pretty
+
+sourceDebDescription :: HasAtoms atoms => atoms -> SourceDebDescription
+sourceDebDescription = fromMaybe newSourceDebDescription . debControl
+
+setSourceDebDescription :: HasAtoms atoms => SourceDebDescription -> atoms -> atoms
+setSourceDebDescription d x = modifySourceDebDescription (const d) x
+
+modifySourceDebDescription :: HasAtoms atoms => (SourceDebDescription -> SourceDebDescription) -> atoms -> atoms
+modifySourceDebDescription f deb =
+    modifyAtoms' g (Set.map (\ d -> (Source, DebControl (f d)))) deb
+    where
+      g Source (DebControl d) = Just d
+      g _ _ = Nothing

@@ -17,7 +17,7 @@ import Data.Maybe
 import Data.Text (Text)
 import Debian.Debianize.AtomsType (HasAtoms, Flags(..), DebAction(..), Atoms, defaultAtoms,
                                    packageDescription, flags, watchAtom, setSourcePriority, setSourceSection, compilerVersion,
-                                   cabalFlagAssignments, putCopyright)
+                                   cabalFlagAssignments, putCopyright, sourceDebDescription)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (cdbsRules, versionInfo, addExtraLibDependencies,
                                      putStandards, setSourceBinaries)
@@ -25,7 +25,7 @@ import Debian.Debianize.Flags (flagOptions, atomOptions)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..))
-import Debian.Debianize.Types.Debianization as Debian (Deb(..), inputDebianization)
+import Debian.Debianize.Types.Debianization as Debian (inputDebianization)
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection))
 import Debian.Time (getCurrentLocalRFC822Time)
@@ -99,7 +99,7 @@ debianize top args =
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-cabalToDebianization :: (Deb deb, HasAtoms deb) => FilePath -> deb -> IO deb
+cabalToDebianization :: HasAtoms deb => FilePath -> deb -> IO deb
 cabalToDebianization top old =
     do old' <- getSimplePackageDescription (verbosity (flags old)) (compilerVersion old) (cabalFlagAssignments old) top old
        let pkgDesc = fromMaybe (error "cabalToDebianization") (packageDescription old')
@@ -113,7 +113,7 @@ cabalToDebianization top old =
       -- the old debianization, so we should do more here.
       scrub = setSourceBinaries []
 
-debianization :: (Deb deb, HasAtoms deb) =>
+debianization :: HasAtoms deb =>
                  String              -- ^ current date
               -> Text                -- ^ copyright
               -> NameAddr            -- ^ maintainer
