@@ -140,22 +140,27 @@ module Debian.Debianize.AtomsType
     , foldPriorities
     , foldSections
     , foldDescriptions
+    , foldAtomsFinalized
+    , fileAtoms
     ) where
 
+import Data.ByteString.Lazy.UTF8 (fromString)
+import Data.Digest.Pure.MD5 (md5)
 import Data.Generics (Data, Typeable)
 import Data.List as List (map)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey, empty)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert, member, map)
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Utility (setMapMaybe)
-import Debian.Debianize.Types.PackageHints (InstallFile, Server, Site)
+import Debian.Debianize.Types.PackageHints (Server(..), Site(..), InstallFile(..))
 import Debian.Debianize.Types.PackageType (DebType, VersionSplits, knownVersionSplits)
 import Debian.Orphans ()
-import Debian.Policy (SourceFormat, PackageArchitectures, PackagePriority, Section, StandardsVersion, parseMaintainer)
+import Debian.Policy (SourceFormat, PackageArchitectures, PackagePriority, Section, StandardsVersion, parseMaintainer,
+                      apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName, SrcPkgName, Relation)
 import Debian.Version (DebianVersion)
 import Distribution.License (License)
@@ -163,6 +168,7 @@ import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init, unlines, log)
+import System.Process (showCommandForUser)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 import Data.List (intersperse)
@@ -175,7 +181,7 @@ import Debian.Orphans ()
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName), Relation(..))
 import Distribution.Package (PackageName(..), PackageIdentifier(pkgName, pkgVersion))
 import Distribution.PackageDescription as Cabal (PackageDescription(package))
-import System.FilePath ((</>))
+import System.FilePath ((</>), makeRelative, splitFileName, takeDirectory, takeFileName)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 data DebAtomKey
@@ -1151,3 +1157,229 @@ foldExecs site server backup exec r0 atoms =
       from (Binary p) (DHBackups x) r = backup p x r
       from (Binary p) (DHExecutable x) r = exec p x r
       from _ _ r = r
+
+foldAtomsFinalized :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
+foldAtomsFinalized f r0 atoms =
+    foldr (\ (k, a) r -> f k a r) r0 (expandAtoms pairs)
+    where
+      pairs = foldAtoms (\ k a xs -> (k, a) : xs) [] atoms
+      builddir = buildDir "dist-ghc/build" atoms
+      datadir = dataDir (error "foldAtomsFinalized") atoms
+
+      -- | Fully expand an atom set, returning a set containing
+      -- both the original and the expansion.
+      expandAtoms :: [(DebAtomKey, DebAtom)] -> [(DebAtomKey, DebAtom)]
+      expandAtoms [] = []
+      expandAtoms xs = xs ++ expandAtoms (concatMap (uncurry expandAtom) xs)
+
+      expandAtom :: DebAtomKey -> DebAtom -> [(DebAtomKey, DebAtom)]
+      expandAtom (Binary b) (DHApacheSite domain' logdir text) =
+          [(Binary b, DHLink ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain')),
+           (Binary b, DHInstallDir logdir), -- Server won't start if log directory doesn't exist
+           (Binary b, DHFile ("/etc/apache2/sites-available" </> domain') text)]
+      expandAtom (Binary pkg) (DHInstallCabalExec name dst) =
+          [(Binary pkg, DHInstall (builddir </> name </> name) dst)]
+      expandAtom (Binary p) (DHInstallCabalExecTo n d) =
+          [(Source, DebRulesFragment (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
+                                              , "\tinstall -Dp " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]))]
+      expandAtom (Binary p) (DHInstallData s d) =
+          [(Binary p, if takeFileName s == takeFileName d
+                      then DHInstall s (datadir </> makeRelative "/" (takeDirectory d))
+                      else DHInstallTo s (datadir </> makeRelative "/" d))]
+      expandAtom (Binary p) (DHInstallTo s d) =
+          [(Source, (DebRulesFragment (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
+                                               , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])))]
+      expandAtom (Binary p) (DHFile path s) =
+          let (destDir', destName') = splitFileName path
+              tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
+              tmpPath = tmpDir </> destName' in
+          [(Source, DHIntermediate tmpPath s),
+           (Binary p, DHInstall tmpPath destDir')]
+      expandAtom k (DHWebsite x) =
+          siteAtoms k x
+      expandAtom k (DHServer x) =
+          serverAtoms k x False
+      expandAtom k (DHBackups s) =
+          backupAtoms k s
+      expandAtom k (DHExecutable x) =
+          execAtoms k x
+      expandAtom _ _ = []
+
+-- | Return a list of files to add to the debianization to manage the
+-- server or web site.
+siteAtoms :: DebAtomKey -> Site -> [(DebAtomKey, DebAtom)]
+siteAtoms k@(Binary b) site =
+    [(Binary b, DHInstallDir "/etc/apache2/sites-available"),
+     (Binary b, DHLink ("/etc/apache2/sites-available/" ++ domain site) ("/etc/apache2/sites-enabled/" ++ domain site)),
+     (Binary b, DHFile ("/etc/apache2/sites-available" </> domain site) apacheConfig),
+     (Binary b, DHInstallDir (apacheLogDirectory b)),  -- Server won't start if log directory doesn't exist
+     (Binary b, DHLogrotateStanza (unlines $
+                                              [ pack (apacheAccessLog b) <> " {"
+                                              , "  weekly"
+                                              , "  rotate 5"
+                                              , "  compress"
+                                              , "  missingok"
+                                              , "}"])),
+     (Binary b, DHLogrotateStanza (unlines $
+                                              [ pack (apacheErrorLog b) <> " {"
+                                              , "  weekly"
+                                              , "  rotate 5"
+                                              , "  compress"
+                                              , "  missingok"
+                                              , "}" ]))] ++
+    serverAtoms k (server site) True
+    where
+      -- An apache site configuration file.  This is installed via a line
+      -- in debianFiles.
+      apacheConfig =
+          unlines $
+                   [  "<VirtualHost *:80>"
+                   , "    ServerAdmin " <> pack (serverAdmin site)
+                   , "    ServerName www." <> pack (domain site)
+                   , "    ServerAlias " <> pack (domain site)
+                   , ""
+                   , "    ErrorLog " <> pack (apacheErrorLog b)
+                   , "    CustomLog " <> pack (apacheAccessLog b) <> " combined"
+                   , ""
+                   , "    ProxyRequests Off"
+                   , "    AllowEncodedSlashes NoDecode"
+                   , ""
+                   , "    <Proxy *>"
+                   , "                AddDefaultCharset off"
+                   , "                Order deny,allow"
+                   , "                #Allow from .example.com"
+                   , "                Deny from all"
+                   , "                #Allow from all"
+                   , "    </Proxy>"
+                   , ""
+                   , "    <Proxy http://127.0.0.1:" <> port' <> "/*>"
+                   , "                AddDefaultCharset off"
+                   , "                Order deny,allow"
+                   , "                #Allow from .example.com"
+                   , "                #Deny from all"
+                   , "                Allow from all"
+                   , "    </Proxy>"
+                   , ""
+                   , "    SetEnv proxy-sendcl 1"
+                   , ""
+                   , "    ProxyPass / http://127.0.0.1:" <> port' <> "/ nocanon"
+                   , "    ProxyPassReverse / http://127.0.0.1:" <> port' <> "/"
+                   , "</VirtualHost>" ]
+      port' = pack (show (port (server site)))
+
+serverAtoms :: DebAtomKey -> Server -> Bool -> [(DebAtomKey, DebAtom)]
+serverAtoms k@(Binary b) server isSite =
+    [(Binary b, DHPostInst debianPostinst),
+     (Binary b, DHInstallInit debianInit)] ++
+    serverLogrotate b ++
+    execAtoms k exec
+    where
+      exec = installFile server
+      debianInit =
+          unlines $
+                   [ "#! /bin/sh -e"
+                   , ""
+                   , ". /lib/lsb/init-functions"
+                   , ""
+                   , "case \"$1\" in"
+                   , "  start)"
+                   , "    test -x /usr/bin/" <> pack (destName exec) <> " || exit 0"
+                   , "    log_begin_msg \"Starting " <> pack (destName exec) <> "...\""
+                   , "    mkdir -p " <> pack (databaseDirectory b)
+                   , "    " <> startCommand
+                   , "    log_end_msg $?"
+                   , "    ;;"
+                   , "  stop)"
+                   , "    log_begin_msg \"Stopping " <> pack (destName exec) <> "...\""
+                   , "    " <> stopCommand
+                   , "    log_end_msg $?"
+                   , "    ;;"
+                   , "  *)"
+                   , "    log_success_msg \"Usage: ${0} {start|stop}\""
+                   , "    exit 1"
+                   , "esac"
+                   , ""
+                   , "exit 0" ]
+      startCommand = pack $ showCommandForUser "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
+      stopCommand = pack $ showCommandForUser "start-stop-daemon" (stopOptions ++ commonOptions)
+      commonOptions = ["--pidfile", "/var/run/" ++ destName exec]
+      startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory b, "--exec", "/usr/bin" </> destName exec]
+      stopOptions = ["--stop", "--oknodo"] ++ if retry server /= "" then ["--retry=" ++ retry server ] else []
+      serverOptions = serverFlags server ++ commonServerOptions
+      -- Without these, happstack servers chew up CPU even when idle
+      commonServerOptions = ["+RTS", "-IO", "-RTS"]
+
+      debianPostinst =
+          unlines $
+                   ([ "#!/bin/sh"
+                    , ""
+                    , "case \"$1\" in"
+                    , "  configure)" ] ++
+                    (if isSite
+                     then [ "    # Apache won't start if this directory doesn't exist"
+                          , "    mkdir -p " <> pack (apacheLogDirectory b)
+                          , "    # Restart apache so it sees the new file in /etc/apache2/sites-enabled"
+                          , "    /usr/sbin/a2enmod proxy"
+                          , "    /usr/sbin/a2enmod proxy_http"
+                          , "    service apache2 restart" ]
+                     else []) ++
+                    [ "    service " <> pack (show (pretty b)) <> " start"
+                    , "    ;;"
+                    , "esac"
+                    , ""
+                    , "#DEBHELPER#"
+                    , ""
+                    , "exit 0" ])
+
+-- | A configuration file for the logrotate facility, installed via a line
+-- in debianFiles.
+serverLogrotate :: BinPkgName -> [(DebAtomKey, DebAtom)]
+serverLogrotate b =
+    [(Binary b, (DHLogrotateStanza . unlines $
+                   [ pack (serverAccessLog b) <> " {"
+                   , "  weekly"
+                   , "  rotate 5"
+                   , "  compress"
+                   , "  missingok"
+                   , "}" ])),
+     (Binary b, (DHLogrotateStanza . unlines $
+                   [ pack (serverAppLog b) <> " {"
+                   , "  weekly"
+                   , "  rotate 5"
+                   , "  compress"
+                   , "  missingok"
+                   , "}" ]))]
+
+backupAtoms :: DebAtomKey -> String -> [(DebAtomKey, DebAtom)]
+backupAtoms k name =
+    [(k, DHPostInst . unlines $
+                  [ "#!/bin/sh"
+                  , ""
+                  , "case \"$1\" in"
+                  , "  configure)"
+                  , "    " <> pack ("/etc/cron.hourly" </> name) <> " --initialize"
+                  , "    ;;"
+                  , "esac" ])] ++
+    execAtoms k (InstallFile { execName = name
+                             , destName = name
+                             , sourceDir = Nothing
+                             , destDir = Just "/etc/cron.hourly" })
+
+execAtoms :: DebAtomKey -> InstallFile -> [(DebAtomKey, DebAtom)]
+execAtoms (Binary b) ifile =
+    [(Source, DebRulesFragment (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp")))] ++
+     fileAtoms (Binary b) ifile
+
+fileAtoms :: DebAtomKey -> InstallFile -> [(DebAtomKey, DebAtom)]
+fileAtoms k installFile =
+    fileAtoms' k (sourceDir installFile) (execName installFile) (destDir installFile) (destName installFile)
+
+fileAtoms' :: DebAtomKey -> Maybe FilePath -> String -> Maybe FilePath -> String -> [(DebAtomKey, DebAtom)]
+fileAtoms' (Binary b) sourceDir execName destDir destName =
+    [(Binary b, case (sourceDir, execName == destName) of
+                  (Nothing, True) -> DHInstallCabalExec execName d
+                  (Just s, True) -> DHInstall (s </> execName) d
+                  (Nothing, False) -> DHInstallCabalExecTo execName (d </> destName)
+                  (Just s, False) -> DHInstallTo (s </> execName) (d </> destName))]
+    where
+      d = fromMaybe "usr/bin" destDir

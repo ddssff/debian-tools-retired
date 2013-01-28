@@ -11,7 +11,6 @@ module Debian.Debianize
     , module Debian.Debianize.Input
     , module Debian.Debianize.Interspersed
     , module Debian.Debianize.Output
-    , module Debian.Debianize.Server
     , module Debian.Debianize.SubstVars
     , module Debian.Debianize.Tests
     , module Debian.Debianize.Types.DebControl
@@ -33,7 +32,6 @@ import Debian.Debianize.Generic
 import Debian.Debianize.Input
 import Debian.Debianize.Interspersed
 import Debian.Debianize.Output
-import Debian.Debianize.Server
 import Debian.Debianize.SubstVars
 import Debian.Debianize.Tests
 import Debian.Debianize.Types.DebControl hiding (depends, conflicts)

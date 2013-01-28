@@ -2,6 +2,8 @@ module Debian.Debianize.Types.PackageHints
     ( InstallFile(..)
     , Server(..)
     , Site(..)
+    , oldClckwrksSiteFlags
+    , oldClckwrksServerFlags
     ) where
 
 --import Debian.Relation (BinPkgName)
@@ -47,3 +49,14 @@ data Site
       , serverAdmin :: String   -- ^ Apache ServerAdmin parameter
       , server :: Server   -- ^ The hint to install the server job
       } deriving (Read, Show, Eq, Ord)
+
+oldClckwrksSiteFlags :: Site -> [String]
+oldClckwrksSiteFlags site =
+    [ -- According to the happstack-server documentation this needs a trailing slash.
+      "--base-uri", "http://" ++ domain site ++ "/"
+    , "--http-port", show port]
+oldClckwrksServerFlags :: Server -> [String]
+oldClckwrksServerFlags server =
+    [ -- According to the happstack-server documentation this needs a trailing slash.
+      "--base-uri", "http://" ++ hostname server ++ ":" ++ show (port server) ++ "/"
+    , "--http-port", show port]

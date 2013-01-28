@@ -62,7 +62,6 @@ Library
    Debian.Debianize.Interspersed
    Debian.Debianize.Input
    Debian.Debianize.Output
-   Debian.Debianize.Server
    Debian.Debianize.SubstVars
    Debian.Debianize.Tests
    Debian.Debianize.Types.DebControl

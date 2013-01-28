@@ -8,24 +8,21 @@ module Debian.Debianize.Files
 
 -- import Debug.Trace
 
-import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Char (toLower)
-import Data.Digest.Pure.MD5 (md5)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid (Monoid, (<>), mempty)
 import Data.Set as Set (Set, difference, union, fromList, null, insert, toList, member, filter)
 import Data.String (IsString)
-import Data.Text (Text, pack, unpack, unlines)
+import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.AtomsType (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom, defaultAtoms,
-                                   buildDir, dataDir, packageDescription, setArchitecture, setPackageDescription, binaryPackageDeps, changeLog,
+                                   packageDescription, setArchitecture, setPackageDescription, binaryPackageDeps, changeLog,
                                    binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
                                    rulesHead, compat, copyright, sourceDebDescription, setSourceDebDescription,
-                                   installDir, file, rulesFragment, installTo, link, install, intermediateFile)
+                                   foldAtomsFinalized, fileAtoms)
 import Debian.Debianize.Combinators (describe, buildDeps)
 import Debian.Debianize.Dependencies (debianName)
-import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms, backupAtoms)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                     VersionControlSpec(..), XField(..), XFieldDest(..), newBinaryDebDescription, modifyBinaryDeb)
 import Debian.Debianize.Types.PackageHints (InstallFile(..))
@@ -37,7 +34,7 @@ import qualified Debian.Relation as D
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (init, unlines, writeFile)
-import System.FilePath ((</>), (<.>), makeRelative, splitFileName, takeDirectory, takeFileName)
+import System.FilePath ((</>), (<.>))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 sourceFormat :: HasAtoms atoms => atoms -> [(FilePath, Text)]
@@ -202,53 +199,6 @@ finalizeDebianization deb0 =
       g Source (DHSection x) deb =         setSourceDebDescription ((sourceDebDescription deb) {section = Just x}) deb
       g (Binary b) (DHDescription x) deb = setSourceDebDescription (modifyBinaryDeb b (\ (Just bin) -> bin {Debian.description = x}) (sourceDebDescription deb)) deb
       g _ _ deb = deb
-
-foldAtomsFinalized :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
-foldAtomsFinalized f r0 atoms =
-    foldr (\ (k, a) r -> f k a r) r0 (expandAtoms pairs)
-    where
-      pairs = foldAtoms (\ k a xs -> (k, a) : xs) [] atoms
-      builddir = buildDir "dist-ghc/build" atoms
-      datadir = dataDir (error "foldAtomsFinalized") atoms
-
-      -- | Fully expand an atom set, returning a set containing
-      -- both the original and the expansion.
-      expandAtoms :: [(DebAtomKey, DebAtom)] -> [(DebAtomKey, DebAtom)]
-      expandAtoms [] = []
-      expandAtoms xs = xs ++ expandAtoms (concatMap (uncurry expandAtom) xs)
-
-      expandAtom :: DebAtomKey -> DebAtom -> [(DebAtomKey, DebAtom)]
-      expandAtom (Binary b) (DHApacheSite domain' logdir text) =
-          [(Binary b, DHLink ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain')),
-           (Binary b, DHInstallDir logdir), -- Server won't start if log directory doesn't exist
-           (Binary b, DHFile ("/etc/apache2/sites-available" </> domain') text)]
-      expandAtom (Binary pkg) (DHInstallCabalExec name dst) =
-          [(Binary pkg, DHInstall (builddir </> name </> name) dst)]
-      expandAtom (Binary p) (DHInstallCabalExecTo n d) =
-          [(Source, DebRulesFragment (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
-                                              , "\tinstall -Dp " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]))]
-      expandAtom (Binary p) (DHInstallData s d) =
-          [(Binary p, if takeFileName s == takeFileName d
-                      then DHInstall s (datadir </> makeRelative "/" (takeDirectory d))
-                      else DHInstallTo s (datadir </> makeRelative "/" d))]
-      expandAtom (Binary p) (DHInstallTo s d) =
-          [(Source, (DebRulesFragment (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
-                                               , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])))]
-      expandAtom (Binary p) (DHFile path s) =
-          let (destDir', destName') = splitFileName path
-              tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
-              tmpPath = tmpDir </> destName' in
-          [(Source, DHIntermediate tmpPath s),
-           (Binary p, DHInstall tmpPath destDir')]
-      expandAtom k (DHWebsite x) =
-          siteAtoms k x
-      expandAtom k (DHServer x) =
-          serverAtoms k x False
-      expandAtom k (DHBackups s) =
-          backupAtoms k s
-      expandAtom k (DHExecutable x) =
-          execAtoms k x
-      expandAtom _ _ = []
 
 cabalExecBinaryPackage :: HasAtoms deb => BinPkgName -> deb -> deb
 cabalExecBinaryPackage b deb =
