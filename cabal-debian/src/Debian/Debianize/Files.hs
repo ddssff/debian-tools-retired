@@ -1,6 +1,6 @@
 -- | Convert a Debianization into a list of files that can then be
 -- written out.
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 module Debian.Debianize.Files
     ( finalizeDebianization
     , toFileMap
@@ -9,23 +9,23 @@ module Debian.Debianize.Files
 -- import Debug.Trace
 
 import Data.Char (toLower)
+import Data.List as List (map)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid (Monoid, (<>), mempty)
-import Data.Set as Set (Set, difference, union, fromList, null, insert, toList, member, filter)
+import Data.Set as Set (Set, difference, fromList, null, insert, toList, member, filter, fold, empty, map)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.AtomsType (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom, defaultAtoms,
+import Debian.Debianize.AtomsType (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom,
                                    packageDescription, setArchitecture, setPackageDescription, binaryPackageDeps, changeLog,
                                    binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
                                    rulesHead, compat, copyright, sourceDebDescription, setSourceDebDescription,
-                                   foldAtomsFinalized, fileAtoms)
+                                   foldAtomsFinalized, rulesFragment, installData, installCabalExec, foldCabalDatas, foldCabalExecs)
 import Debian.Debianize.Combinators (describe, buildDeps)
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                     VersionControlSpec(..), XField(..), XFieldDest(..), newBinaryDebDescription, modifyBinaryDeb)
-import Debian.Debianize.Types.PackageHints (InstallFile(..))
 import Debian.Debianize.Types.PackageType (PackageType(Exec, Development, Profiling, Documentation, Utilities))
 import Debian.Debianize.Utility (showDeps')
 import Debian.Policy (PackageArchitectures(Any, All), Section(..))
@@ -219,7 +219,7 @@ binaryPackageRelations :: HasAtoms atoms => BinPkgName -> PackageType -> atoms -
 binaryPackageRelations b typ deb =
     PackageRelations
     { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                (if typ == Development then map anyrel' (toList (extraDevDeps deb)) else []) ++
+                (if typ == Development then List.map anyrel' (toList (extraDevDeps deb)) else []) ++
                 binaryPackageDeps b deb
     , recommends = [anyrel "${haskell:Recommends}"]
     , suggests = [anyrel "${haskell:Suggests}"]
@@ -261,9 +261,9 @@ control src =
             depField "Build-Conflicts-Indep" (buildConflictsIndep src) ++
             [Field ("Standards-Version", " " <> show (pretty (standardsVersion src)))] ++
             mField "Homepage" (homepage src) ++
-            map vcsField (toList (vcsFields src)) ++
-            map xField (toList (xFields src))) :
-           map binary (binaryPackages src))
+            List.map vcsField (toList (vcsFields src)) ++
+            List.map xField (toList (xFields src))) :
+           List.map binary (binaryPackages src))
     }
     where
       binary :: BinaryDebDescription -> Paragraph' String
@@ -328,7 +328,7 @@ librarySpecs deb =
       PackageName cabal = pkgName (Cabal.package pkgDesc)
       debName :: BinPkgName
       debName = debianName deb Documentation (Cabal.package pkgDesc)
-      hoogle = map toLower cabal
+      hoogle = List.map toLower cabal
 
 docSpecsParagraph :: HasAtoms atoms => atoms -> PackageIdentifier -> BinaryDebDescription
 docSpecsParagraph atoms pkgId =
@@ -354,12 +354,12 @@ librarySpec atoms arch typ pkgId =
             , relations = binaryPackageRelations (debianName atoms typ pkgId) Development atoms
             }
 
-t1 :: Show a => a -> a
-t1 x = {-trace ("util files: " ++ show x)-} x
-t2 :: Show a => a -> a
-t2 x = {-trace ("available: " ++ show x)-} x
-t3 :: Show a => a -> a
-t3 x = {-trace ("installed: " ++ show x)-} x
+--t1 :: Show a => a -> a
+--t1 x = {-trace ("util files: " ++ show x)-} x
+-- t2 :: Show a => a -> a
+-- t2 x = {-trace ("available: " ++ show x)-} x
+-- t3 :: Show a => a -> a
+-- t3 x = {-trace ("installed: " ++ show x)-} x
 -- t4 :: Show a => a -> a
 -- t4 x = trace ("utils package atoms: " ++ show x) x
 -- t5 :: Show a => a -> a
@@ -367,56 +367,37 @@ t3 x = {-trace ("installed: " ++ show x)-} x
 
 -- | Create a package to hold any executables and data files not
 -- assigned to some other package.
-makeUtilsPackage :: HasAtoms deb => deb -> deb
+makeUtilsPackage :: forall deb. HasAtoms deb => deb -> deb
 makeUtilsPackage deb | isNothing (packageDescription deb) = deb
 makeUtilsPackage deb =
-    case Set.difference (t2 available) (t3 installed) of
-      s | Set.null s -> deb
-      s -> let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)
-               atoms = foldr (uncurry insertAtom) (setPackageDescription pkgDesc defaultAtoms) (makeUtilsAtoms p (t1 s))
-               deb' = foldAtomsFinalized insertAtom deb atoms in
-           setSourceDebDescription (modifyBinaryDeb p (f deb' p s) (sourceDebDescription deb')) deb'
+    case (Set.difference availableData installedData, Set.difference availableExec installedExec) of
+      (datas, execs) | Set.null datas && Set.null execs -> deb
+      (datas, execs) ->
+          let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)
+              atoms = setPackageDescription pkgDesc . makeUtilsAtoms p datas execs $ (mempty :: deb)
+              deb' = foldAtomsFinalized insertAtom deb atoms in
+          setSourceDebDescription (modifyBinaryDeb p (f deb' p (if Set.null execs then All else Any)) (sourceDebDescription deb')) deb'
     where
       f _ _ _ (Just bin) = bin
-      f deb' p s Nothing =
-          let bin = newBinaryDebDescription p (arch s) in
+      f deb' p arch Nothing =
+          let bin = newBinaryDebDescription p arch in
           bin {binarySection = Just (MainSection "misc"),
                relations = binaryPackageRelations p Utilities deb'}
-      arch s = if Set.null (Set.filter isCabalExecutable s) then All else Any
-      isCabalExecutable (CabalExecutable _) = True
-      isCabalExecutable _ = False
       pkgDesc = fromMaybe (error "makeUtilsPackage: no PackageDescription") $ packageDescription deb
-      available :: Set FileInfo
-      available = Set.union (Set.fromList (map DataFile (Cabal.dataFiles pkgDesc)))
-                            (Set.fromList (map (CabalExecutable . Cabal.exeName) (Prelude.filter (Cabal.buildable . Cabal.buildInfo) (Cabal.executables pkgDesc))))
-      installed :: Set FileInfo
-      installed = foldAtoms cabalFile mempty deb
-      cabalFile :: DebAtomKey -> DebAtom -> Set FileInfo -> Set FileInfo
-      cabalFile _ (DHInstallCabalExec name _) xs = Set.insert (CabalExecutable name) xs
-      cabalFile _ (DHInstallCabalExecTo name _) xs = Set.insert (CabalExecutable name) xs
-      cabalFile k (DHExecutable i@(InstallFile {})) xs = foldr (uncurry cabalFile) xs (fileAtoms k i)
-      cabalFile _ (DHInstall path _) xs = Set.insert (DataFile path) xs
-      cabalFile _ (DHInstallTo path _) xs = Set.insert (DataFile path) xs
-      cabalFile _ (DHInstallData path _) xs = Set.insert (DataFile path) xs
-      cabalFile _ _ xs = xs
+      availableData = Set.fromList (Cabal.dataFiles pkgDesc)
+      availableExec = Set.map Cabal.exeName (Set.filter (Cabal.buildable . Cabal.buildInfo) (Set.fromList (Cabal.executables pkgDesc)))
+      installedData :: Set FilePath
+      installedData = foldCabalDatas Set.insert Set.empty deb
+      installedExec :: Set String
+      installedExec = foldCabalExecs (Set.insert :: String -> Set String -> Set String) (Set.empty :: Set String) (deb :: deb)
 
-makeUtilsAtoms :: BinPkgName -> Set FileInfo -> [(DebAtomKey, DebAtom)]
-makeUtilsAtoms p s =
-    if Set.null s
-    then []
-    else (Source, DebRulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))) :
-         map (\ x -> (Binary p, x)) (map fileInfoAtom (Set.toList s))
+makeUtilsAtoms :: HasAtoms atoms => BinPkgName -> Set FilePath -> Set String -> atoms -> atoms
+makeUtilsAtoms p datas execs atoms0 =
+    if Set.null datas && Set.null execs
+    then atoms0
+    else rulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n")) . g $ atoms0
     where
-      fileInfoAtom (DataFile path) = DHInstallData path path
-      fileInfoAtom (CabalExecutable name) = DHInstallCabalExec name "usr/bin"
-
--- | This is onlyu used to represent files during the computation of
--- @installed@ and @available@ in makeUtilsPackage.
-data FileInfo
-    = DataFile FilePath
-    -- ^ A file that is going to be installed into the package's data
-    -- file directory, /usr/share/packagename-version/.
-    | CabalExecutable String
-    -- ^ A Cabal Executable record, which appears in dist/build/name/name,
-    -- and is typically installed into /usr/bin.
-    deriving (Eq, Ord, Show)
+      g :: HasAtoms atoms => atoms -> atoms
+      g atoms = Set.fold execAtom (Set.fold dataAtom atoms datas) execs
+      dataAtom path atoms = installData p path path atoms
+      execAtom name atoms = installCabalExec p name "usr/bin" atoms

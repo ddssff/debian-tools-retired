@@ -16,7 +16,7 @@ import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
-import Debian.Debianize.AtomsType (HasAtoms, Flags(dryRun), insertAtom, DebAtomKey(Source), DebAtom(DebPackageInfo),
+import Debian.Debianize.AtomsType (HasAtoms, Flags(dryRun), putPackageInfo,
                                    PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), Flags(verbosity),
                                    flags, filterMissing, packageInfo, compilerVersion, cabalFlagAssignments, compiler)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps, debNameFromType)
@@ -133,7 +133,7 @@ packageInfo' compiler debVersions atoms (d, f) =
           do dev <- debOfFile ("^" ++ d </> p ++ "-" ++ v </> cdir </> "libHS" ++ p ++ "-" ++ v ++ ".a$")
              prof <- debOfFile ("^" ++ d </> p ++ "-" ++ v </> cdir </> "libHS" ++ p ++ "-" ++ v ++ "_p.a$")
              doc <- debOfFile ("/" ++ p ++ ".haddock$")
-             return (insertAtom Source (DebPackageInfo (PackageInfo { cabalName = p
-                                                                    , devDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) dev
-                                                                    , profDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) prof
-                                                                    , docDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) doc })) atoms)
+             return $ putPackageInfo (PackageInfo { cabalName = p
+                                                  , devDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) dev
+                                                  , profDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) prof
+                                                  , docDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) doc }) atoms

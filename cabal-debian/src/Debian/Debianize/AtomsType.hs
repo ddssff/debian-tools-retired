@@ -63,6 +63,7 @@ module Debian.Debianize.AtomsType
     , conflicts
     , binaryPackageDeps
     , binaryPackageConflicts
+    , putPackageInfo
     , packageInfo
     , rulesHead
     , setRulesHead
@@ -114,6 +115,7 @@ module Debian.Debianize.AtomsType
     , getIntermediateFiles
     , installInit
     , install
+    , installData
     , getInstalls
     , logrotateStanza
     , postInst
@@ -142,6 +144,8 @@ module Debian.Debianize.AtomsType
     , foldDescriptions
     , foldAtomsFinalized
     , fileAtoms
+    , foldCabalDatas
+    , foldCabalExecs
     ) where
 
 import Data.ByteString.Lazy.UTF8 (fromString)
@@ -172,7 +176,7 @@ import System.Process (showCommandForUser)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 import Data.List (intersperse)
-import Data.Monoid ((<>), mconcat)
+import Data.Monoid ((<>))
 --import Data.Set as Set (Set, maxView, toList, null, union, singleton, insert, member)
 import Data.Text (pack, unlines)
 import Data.Version (showVersion)
@@ -360,7 +364,7 @@ instance Monoid Atoms where
     mempty = defaultAtoms
     mappend a b = foldAtoms insertAtom a b
 
-class HasAtoms atoms where
+class Monoid atoms => HasAtoms atoms where
     getAtoms :: atoms -> Map DebAtomKey (Set DebAtom)
     putAtoms :: Map DebAtomKey (Set DebAtom) -> atoms -> atoms
 
@@ -614,6 +618,9 @@ putExtraLibMapping cab deb atoms = insertAtom Source (ExtraLibMapping cab deb) a
 
 putExecMap :: HasAtoms atoms => String -> BinPkgName -> atoms -> atoms
 putExecMap cabal debian deb = insertAtom Source (ExecMapping cabal debian) deb
+
+putPackageInfo :: HasAtoms atoms => PackageInfo -> atoms -> atoms
+putPackageInfo info atoms = insertAtom Source (DebPackageInfo info) atoms
 
 packageInfo :: HasAtoms atoms => PackageName -> atoms -> Maybe PackageInfo
 packageInfo (PackageName name) atoms =
@@ -1037,7 +1044,10 @@ newDebianization (log@(ChangeLog (entry : _))) level standards =
 newDebianization _ _ _ = error "Invalid changelog"
 
 install :: HasAtoms atoms => BinPkgName -> FilePath -> FilePath -> atoms -> atoms
-install p path destDir atoms = insertAtom (Binary p) (DHInstall path destDir) atoms
+install p path d atoms = insertAtom (Binary p) (DHInstall path d) atoms
+
+installData :: HasAtoms atoms => BinPkgName -> FilePath -> FilePath -> atoms -> atoms
+installData p path dest atoms = insertAtom (Binary p) (DHInstallData path dest) atoms
 
 getInstalls :: HasAtoms atoms => atoms -> Map BinPkgName (Set (FilePath, FilePath))
 getInstalls atoms =
@@ -1077,7 +1087,7 @@ rulesFragment :: HasAtoms atoms => Text -> atoms -> atoms
 rulesFragment text atoms = insertAtom Source (DebRulesFragment text) atoms
 
 installCabalExec :: HasAtoms atoms => BinPkgName -> String -> FilePath -> atoms -> atoms
-installCabalExec p name destDir atoms = insertAtom (Binary p) (DHInstallCabalExec name destDir) atoms
+installCabalExec p name d atoms = insertAtom (Binary p) (DHInstallCabalExec name d) atoms
 
 installCabalExecTo :: HasAtoms atoms => BinPkgName -> String -> FilePath -> atoms -> atoms
 installCabalExecTo p name dest atoms = insertAtom (Binary p) (DHInstallCabalExecTo name dest) atoms
@@ -1153,11 +1163,11 @@ foldExecs :: HasAtoms atoms =>
           -> r
           -> atoms
           -> r
-foldExecs site server backup exec r0 atoms =
+foldExecs site serv backup exec r0 atoms =
     foldAtoms from r0 atoms
     where
       from (Binary p) (DHWebsite x) r = site p x r
-      from (Binary p) (DHServer x) r = server p x r
+      from (Binary p) (DHServer x) r = serv p x r
       from (Binary p) (DHBackups x) r = backup p x r
       from (Binary p) (DHExecutable x) r = exec p x r
       from _ _ r = r
@@ -1387,3 +1397,27 @@ fileAtoms' (Binary b) sourceDir execName destDir destName =
                   (Just s, False) -> DHInstallTo (s </> execName) (d </> destName))]
     where
       d = fromMaybe "usr/bin" destDir
+
+foldCabalExecs :: HasAtoms atoms => (String -> r -> r) -> r -> atoms -> r
+foldCabalExecs f r0 atoms =
+    foldAtoms g r0 atoms
+    where
+      g (Binary _) (DHInstallCabalExec name _) r = f name r
+      g (Binary _) (DHInstallCabalExecTo name _) r = f name r
+      g (Binary p) (DHExecutable i@(InstallFile {})) r =
+          let d = fromMaybe "usr/bin" (destDir i) in
+          case (sourceDir i, execName i == destName i) of
+            (Nothing, True) -> g (Binary p) (DHInstallCabalExec (execName i) d) r
+            (Just s, True) ->  g (Binary p) (DHInstall (s </> execName i) d) r
+            (Nothing, False) ->  g (Binary p) (DHInstallCabalExecTo (execName i) (d </> destName i)) r
+            (Just s, False) ->  g (Binary p) (DHInstallTo (s </> execName i) (d </> destName i)) r
+      g _ _ r = r
+
+foldCabalDatas :: HasAtoms atoms => (FilePath -> r -> r) -> r -> atoms -> r
+foldCabalDatas f r0 atoms =
+    foldAtoms g r0 atoms
+    where
+      g (Binary _) (DHInstall path _) r = f path r
+      g (Binary _) (DHInstallTo path _) r = f path r
+      g (Binary _) (DHInstallData path _) r = f path r
+      g _ _ r = r

@@ -15,7 +15,7 @@ import Debian.Relation (Relation(..), VersionReq(..), ArchitectureReq(..),
 import Debian.Version (DebianVersion, prettyDebianVersion, parseDebianVersion)
 import Distribution.Compiler (CompilerId(..), CompilerFlavor(..))
 import Distribution.License (License(..))
-import Distribution.PackageDescription (PackageDescription(package))
+import Distribution.PackageDescription (PackageDescription(package), Executable(..))
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Version (VersionRange(..), foldVersionRange')
 import Language.Haskell.Extension (Extension(..), KnownExtension(..), Language(..))
@@ -43,6 +43,9 @@ deriving instance Eq Compiler
 deriving instance Ord Compiler
 deriving instance Ord NameAddr
 deriving instance Ord License
+
+instance Ord Executable where
+    compare = compare `on` exeName
 
 instance Ord PackageDescription where
     compare = compare `on` package
