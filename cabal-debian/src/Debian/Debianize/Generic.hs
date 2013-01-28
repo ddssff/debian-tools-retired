@@ -20,7 +20,7 @@ import Debian.Relation (Relation)
 import Triplets (mkQ2, extQ2)
 
 -- These instances are only used here, to create debugging messages.
--- deriving instance Typeable Debianization
+deriving instance Typeable Atoms
 deriving instance Typeable DebAtom
 
 -- deriving instance Data Debianization

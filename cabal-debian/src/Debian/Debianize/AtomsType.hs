@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables #-}
 module Debian.Debianize.AtomsType
-    ( Atoms
+    ( Atoms(Atoms, unAtoms)
     , DebAtomKey(..)
     , DebAtom(..)
     , Flags(..)
@@ -150,7 +150,7 @@ import Data.Generics (Data, Typeable)
 import Data.List as List (map)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey, empty)
 import Data.Maybe (fromMaybe)
-import Data.Monoid (mempty)
+import Data.Monoid (Monoid(..))
 import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert, member, map)
 import Data.Text (Text, unpack)
 import Data.Version (Version)
@@ -351,18 +351,22 @@ defaultFlags =
 -- versions to debian package names and versions.  (This could be
 -- broken up into smaller atoms, many of which would be attached to
 -- binary packages.
-type Atoms = Map DebAtomKey (Set DebAtom)
+newtype Atoms = Atoms {unAtoms :: Map DebAtomKey (Set DebAtom)} deriving (Eq, Show)
 
 defaultAtoms :: Atoms
-defaultAtoms = insertAtom Source (VersionSplits knownVersionSplits) $ mempty
+defaultAtoms = insertAtom Source (VersionSplits knownVersionSplits) $ (Atoms mempty)
+
+instance Monoid Atoms where
+    mempty = defaultAtoms
+    mappend a b = foldAtoms insertAtom a b
 
 class HasAtoms atoms where
     getAtoms :: atoms -> Map DebAtomKey (Set DebAtom)
     putAtoms :: Map DebAtomKey (Set DebAtom) -> atoms -> atoms
 
 instance HasAtoms Atoms where
-    getAtoms = id
-    putAtoms mp _ = mp
+    getAtoms = unAtoms
+    putAtoms mp _ = Atoms mp
 
 lookupAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Maybe a
 lookupAtom mbin from xs =
