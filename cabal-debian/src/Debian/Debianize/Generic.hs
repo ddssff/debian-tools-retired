@@ -11,10 +11,9 @@ module Debian.Debianize.Generic
 import Prelude hiding (GT)
 import Data.Generics (Data, Typeable, GenericQ, toConstr, showConstr, gzipWithQ, extQ, ext1Q, gmapQ, Constr {- , ext2Q, Typeable2, dataTypeName, dataTypeOf-})
 import Data.List (sort)
-import Data.Map (Map)
 import qualified Data.Text as T
 import Data.Set as Set (Set, toList, fromList, difference)
-import Debian.Debianize.AtomsType (DebAtomKey, DebAtom(..))
+import Debian.Debianize.AtomsType (Atoms, DebAtom(..))
 import Debian.Debianize.Types.DebControl (VersionControlSpec, XField)
 import Debian.Debianize.Utility (showDeps)
 import Debian.Relation (Relation)
@@ -47,7 +46,7 @@ geq x y =
       setEq1 a b = toList a == toList b
       setEq2 :: Set XField -> Set XField -> Bool
       setEq2 a b = toList a == toList b
-      mapEq1 :: Map DebAtomKey (Set DebAtom) -> Map DebAtomKey (Set DebAtom) -> Bool
+      mapEq1 :: Atoms -> Atoms -> Bool
       mapEq1 a b = (a == b)
 
 data Diff
@@ -75,7 +74,7 @@ gdiff x y =
       setEq1 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
       setEq2 :: Set XField -> Set XField -> [Diff]
       setEq2 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
-      mapEq1 :: Map DebAtomKey (Set DebAtom) -> Map DebAtomKey (Set DebAtom) -> [Diff]
+      mapEq1 :: Atoms -> Atoms -> [Diff]
       mapEq1 a b = if a == b then [] else [Diff {stack = [], expected = show a, actual = show b}]
       relEq :: [[Relation]] -> [[Relation]] -> [Diff]
       relEq a b = if Set.fromList a == Set.fromList b

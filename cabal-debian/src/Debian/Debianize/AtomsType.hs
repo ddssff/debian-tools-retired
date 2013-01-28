@@ -32,8 +32,11 @@ module Debian.Debianize.AtomsType
     , dataDir
     , setPackageDescription
     , compilerVersion
+    , putCompilerVersion
     , noProfilingLibrary
+    , putNoProfilingLibrary
     , noDocumentationLibrary
+    , putNoDocumentationLibrary
     , utilsPackageName
     -- * DependencyHint getter and setters
     , missingDependency
@@ -80,12 +83,14 @@ module Debian.Debianize.AtomsType
     , setChangeLog'
     , changeLog
     , compat
+    , putCompat
     , putCopyright
     , copyright
     , putDebControl
     , debControl
     , sourcePackageName
     , sourceFormat
+    , warning
     , debMaintainer
     , buildDir
     , setBuildDir
@@ -93,17 +98,53 @@ module Debian.Debianize.AtomsType
     , putCabalFlagAssignments
     , flags
     , mapFlags
+    , getWatch
     , watchAtom
+    , watchFile
     , tightDependencyFixup
     , sourceDebDescription
     , setSourceDebDescription
     , modifySourceDebDescription
     , newDebianization
+    , putBuildDep
+    , putBuildDepIndep
+    , putExtraLibMapping
+    , putDebMaintainer
+    , intermediateFile
+    , getIntermediateFiles
+    , installInit
+    , install
+    , getInstalls
+    , logrotateStanza
+    , postInst
+    , postRm
+    , preInst
+    , preRm
+    , link
+    , file
+    , installDir
+    , rulesFragment
+    , installCabalExec
+    , installCabalExecTo
+    , installTo
+    , getInstallDirs
+    , getInstallInits
+    , getLogrotateStanzas
+    , getLinks
+    , getPostInsts
+    , getPostRms
+    , getPreInsts
+    , getPreRms
+    , foldExecs
+    , foldArchitectures
+    , foldPriorities
+    , foldSections
+    , foldDescriptions
     ) where
 
 import Data.Generics (Data, Typeable)
 import Data.List as List (map)
-import Data.Map as Map (Map, lookup, insertWith, foldWithKey)
+import Data.Map as Map (Map, lookup, insertWith, foldWithKey, empty)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert, member, map)
@@ -328,7 +369,7 @@ lookupAtomDef :: (HasAtoms atoms, Show a, Ord a) => a -> DebAtomKey -> (DebAtom 
 lookupAtomDef def key from xs = fromMaybe def $ lookupAtom key from xs
 
 lookupAtoms :: HasAtoms atoms => (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Set a
-lookupAtoms mbin from x = maybe empty (setMapMaybe from) (Map.lookup mbin (getAtoms x))
+lookupAtoms mbin from x = maybe Set.empty (setMapMaybe from) (Map.lookup mbin (getAtoms x))
 
 insertAtom :: HasAtoms atoms => DebAtomKey -> DebAtom -> atoms -> atoms
 insertAtom mbin atom x = putAtoms (insertWith union mbin (singleton atom) (getAtoms x)) x
@@ -444,12 +485,21 @@ compilerVersion deb =
     where from (CompilerVersion x) = Just x
           from _ = Nothing
 
+putCompilerVersion :: HasAtoms atoms => Version -> atoms -> atoms
+putCompilerVersion ver deb = insertAtom Source (CompilerVersion ver) deb
+
+putNoProfilingLibrary :: HasAtoms atoms => atoms -> atoms
+putNoProfilingLibrary deb = insertAtom Source NoProfilingLibrary deb
+
 noProfilingLibrary :: HasAtoms atoms => atoms -> Bool
 noProfilingLibrary deb =
     not . Set.null . lookupAtoms Source isNoProfilingLibrary $ deb
     where
       isNoProfilingLibrary NoProfilingLibrary = Just NoProfilingLibrary
       isNoProfilingLibrary _ = Nothing
+
+putNoDocumentationLibrary :: HasAtoms atoms => atoms -> atoms
+putNoDocumentationLibrary deb = insertAtom Source NoDocumentationLibrary deb
 
 noDocumentationLibrary :: HasAtoms atoms => atoms -> Bool
 noDocumentationLibrary deb =
@@ -521,12 +571,18 @@ buildDeps atoms =
       from Source (BuildDep x) s = Set.insert x s
       from _ _ s = s
 
+putBuildDep :: HasAtoms atoms => BinPkgName -> atoms -> atoms
+putBuildDep bin atoms = insertAtom Source (BuildDep bin) atoms
+
 buildDepsIndep :: HasAtoms atoms => atoms -> Set BinPkgName
 buildDepsIndep atoms =
     foldAtoms from mempty atoms
     where
       from Source (BuildDepIndep x) s = Set.insert x s
       from _ _ s = s
+
+putBuildDepIndep :: HasAtoms atoms => BinPkgName -> atoms -> atoms
+putBuildDepIndep bin atoms = insertAtom Source (BuildDep bin) atoms
 
 missingDependencies :: HasAtoms atoms => atoms -> Set BinPkgName
 missingDependencies atoms =
@@ -542,6 +598,9 @@ extraLibMap atoms =
       from Source (ExtraLibMapping cabal debian) m =
           Map.insertWith union cabal (singleton debian) m
       from _ _ m = m
+
+putExtraLibMapping :: HasAtoms atoms => String -> BinPkgName -> atoms -> atoms
+putExtraLibMapping cab deb atoms = insertAtom Source (ExtraLibMapping cab deb) atoms
 
 putExecMap :: HasAtoms atoms => String -> BinPkgName -> atoms -> atoms
 putExecMap cabal debian deb = insertAtom Source (ExecMapping cabal debian) deb
@@ -656,6 +715,56 @@ binaryPackageConflicts p atoms =
 setSourceArchitecture :: HasAtoms atoms => PackageArchitectures -> atoms -> atoms
 setSourceArchitecture x deb = insertAtom Source (DHArch x) deb
 
+foldArchitectures :: HasAtoms atoms =>
+                    (PackageArchitectures -> r -> r)
+                 -> (BinPkgName -> PackageArchitectures -> r -> r)
+                 -> r
+                 -> atoms
+                 -> r
+foldArchitectures sourceArch binaryArch r0 atoms =
+    foldAtoms from r0 atoms
+    where
+      from (Binary p) (DHArch x) r = binaryArch p x r
+      from Source (DHArch x) r = sourceArch x r
+      from _ _ r = r
+
+foldPriorities :: HasAtoms atoms =>
+                  (PackagePriority -> r -> r)
+               -> (BinPkgName -> PackagePriority -> r -> r)
+               -> r
+               -> atoms
+               -> r
+foldPriorities sourcePriority binaryPriority r0 atoms =
+    foldAtoms from r0 atoms
+    where
+      from (Binary p) (DHPriority x) r = binaryPriority p x r
+      from Source (DHPriority x) r = sourcePriority x r
+      from _ _ r = r
+
+foldSections :: HasAtoms atoms =>
+                (Section -> r -> r)
+             -> (BinPkgName -> Section -> r -> r)
+               -> r
+               -> atoms
+               -> r
+foldSections sourceSection binarySection r0 atoms =
+    foldAtoms from r0 atoms
+    where
+      from (Binary p) (DHSection x) r = binarySection p x r
+      from Source (DHSection x) r = sourceSection x r
+      from _ _ r = r
+
+foldDescriptions :: HasAtoms atoms =>
+                    (BinPkgName -> Text -> r -> r)
+                 -> r
+                 -> atoms
+                 -> r
+foldDescriptions description r0 atoms =
+    foldAtoms from r0 atoms
+    where
+      from (Binary p) (DHDescription x) r = description p x r
+      from _ _ r = r
+
 setSourcePriority :: HasAtoms atoms => PackagePriority -> atoms -> atoms
 setSourcePriority x deb = insertAtom Source (DHPriority x) deb
 
@@ -755,6 +864,12 @@ sourcePackageName atoms =
 sourceFormat :: HasAtoms atoms => SourceFormat -> atoms -> atoms
 sourceFormat format deb = insertAtom Source (DebSourceFormat format) deb
 
+warning :: HasAtoms atoms => Text -> atoms -> atoms
+warning text deb = insertAtom Source (Warning text) deb
+
+putDebMaintainer :: HasAtoms atoms => NameAddr -> atoms -> atoms
+putDebMaintainer maint atoms = insertAtom Source (DHMaintainer maint) atoms
+
 debMaintainer :: HasAtoms atoms => atoms -> Maybe NameAddr
 debMaintainer atoms =
     foldAtoms from Nothing atoms
@@ -778,6 +893,19 @@ compat def atoms =
       from Source (DebCompat n') (Just n) | n /= n' = error $ "Conflicting compat levels: " ++ show (n, n')
       from Source (DebCompat n) _ = Just n
       from _ _ x = x
+
+putCompat :: HasAtoms atoms => Int -> atoms -> atoms
+putCompat n atoms = insertAtom Source (DebCompat n) atoms
+
+intermediateFile :: HasAtoms atoms => FilePath -> Text -> atoms -> atoms
+intermediateFile path text atoms = insertAtom Source (DHIntermediate path text) atoms
+
+getIntermediateFiles :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+getIntermediateFiles atoms =
+    foldAtoms from [] atoms
+    where
+      from Source (DHIntermediate path text) xs = (path, text) : xs
+      from _ _ xs = xs
 
 setBuildDir :: HasAtoms atoms => FilePath -> atoms -> atoms
 setBuildDir path atoms =
@@ -830,15 +958,23 @@ mapFlags f atoms =
       p _ _ = Nothing
 -}
 
+getWatch :: HasAtoms atoms => atoms -> Maybe Text
+getWatch atoms =
+    foldAtoms from Nothing atoms
+    where
+      from :: DebAtomKey -> DebAtom -> Maybe Text -> Maybe Text
+      from Source (DebWatch x') (Just x) | x /= x' = error $ "Conflicting debian/watch files: " ++ show (x, x')
+      from Source (DebWatch x) _ = Just x
+      from _ _ x = x
+
 watchAtom :: HasAtoms atoms => PackageName -> atoms -> atoms
 watchAtom (PackageName pkgname) deb =
-    insertAtom Source atom deb
-    where
-      atom =
-          DebWatch . pack $
-            "version=3\nopts=\"downloadurlmangle=s|archive/([\\w\\d_-]+)/([\\d\\.]+)/|archive/$1/$2/$1-$2.tar.gz|,\\\nfilenamemangle=s|(.*)/$|" ++ pkgname ++
-            "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
-            " \\\n    ([\\d\\.]*\\d)/\n"
+    watchFile (pack $ "version=3\nopts=\"downloadurlmangle=s|archive/([\\w\\d_-]+)/([\\d\\.]+)/|archive/$1/$2/$1-$2.tar.gz|,\\\nfilenamemangle=s|(.*)/$|" ++ pkgname ++
+                      "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
+                      " \\\n    ([\\d\\.]*\\d)/\n") deb
+
+watchFile :: HasAtoms atoms => Text -> atoms -> atoms
+watchFile text deb = insertAtom Source (DebWatch text) deb
 
 -- | Create equals dependencies.  For each pair (A, B), use dpkg-query
 -- to find out B's version number, version B.  Then write a rule into
@@ -889,3 +1025,129 @@ newDebianization (log@(ChangeLog (entry : _))) level standards =
                                          , standardsVersion = Just standards }) $
     defaultAtoms
 newDebianization _ _ _ = error "Invalid changelog"
+
+install :: HasAtoms atoms => BinPkgName -> FilePath -> FilePath -> atoms -> atoms
+install p path destDir atoms = insertAtom (Binary p) (DHInstall path destDir) atoms
+
+getInstalls :: HasAtoms atoms => atoms -> Map BinPkgName (Set (FilePath, FilePath))
+getInstalls atoms =
+    foldAtoms from Map.empty atoms
+    where
+      from (Binary p) (DHInstall src dst) mp = Map.insertWith Set.union p (singleton (src, dst)) mp
+      from _ _ mp = mp
+
+installInit :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+installInit p text atoms = insertAtom (Binary p) (DHInstallInit text) atoms
+
+logrotateStanza :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+logrotateStanza p text atoms = insertAtom (Binary p) (DHLogrotateStanza text) atoms
+
+postInst :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+postInst p text atoms = insertAtom (Binary p) (DHPostInst text) atoms
+
+postRm :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+postRm p text atoms = insertAtom (Binary p) (DHPostRm text) atoms
+
+preInst :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+preInst p text atoms = insertAtom (Binary p) (DHPreInst text) atoms
+
+preRm :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+preRm p text atoms = insertAtom (Binary p) (DHPreRm text) atoms
+
+link :: HasAtoms atoms => BinPkgName -> FilePath -> FilePath -> atoms -> atoms
+link p path text atoms = insertAtom (Binary p) (DHLink path text) atoms
+
+file :: HasAtoms atoms => BinPkgName -> FilePath -> Text -> atoms -> atoms
+file p path text atoms = insertAtom (Binary p) (DHFile path text) atoms 
+
+installDir :: HasAtoms atoms => BinPkgName -> FilePath -> atoms -> atoms
+installDir p path atoms = insertAtom (Binary p) (DHInstallDir path) atoms
+
+rulesFragment :: HasAtoms atoms => Text -> atoms -> atoms
+rulesFragment text atoms = insertAtom Source (DebRulesFragment text) atoms
+
+installCabalExec :: HasAtoms atoms => BinPkgName -> String -> FilePath -> atoms -> atoms
+installCabalExec p name destDir atoms = insertAtom (Binary p) (DHInstallCabalExec name destDir) atoms
+
+installCabalExecTo :: HasAtoms atoms => BinPkgName -> String -> FilePath -> atoms -> atoms
+installCabalExecTo p name dest atoms = insertAtom (Binary p) (DHInstallCabalExecTo name dest) atoms
+
+installTo :: HasAtoms atoms => BinPkgName -> FilePath -> FilePath -> atoms -> atoms
+installTo p from dest atoms = insertAtom (Binary p) (DHInstallTo from dest) atoms
+
+one :: (Eq a, Show a) => a -> a -> a
+one old new | old /= new = error $ "Conflict: " ++ show (old, new)
+one old _ = old
+
+getInstallDirs :: HasAtoms atoms => atoms -> Map BinPkgName (Set FilePath)
+getInstallDirs atoms =
+    foldAtoms from Map.empty atoms
+    where
+      from (Binary p) (DHInstallDir d) mp = Map.insertWith Set.union p (singleton d) mp
+      from _ _ mp = mp
+
+getInstallInits :: HasAtoms atoms => atoms -> Map BinPkgName Text
+getInstallInits atoms =
+    foldAtoms from Map.empty atoms
+    where
+      from (Binary p) (DHInstallInit t) mp = Map.insertWith one p t mp
+      from _ _ mp = mp
+
+getLogrotateStanzas :: HasAtoms atoms => atoms -> Map BinPkgName (Set Text)
+getLogrotateStanzas atoms =
+    foldAtoms from Map.empty atoms
+    where
+      from (Binary p) (DHLogrotateStanza t) mp = Map.insertWith Set.union p (singleton t) mp
+      from _ _ mp = mp
+
+getLinks :: HasAtoms atoms => atoms -> Map BinPkgName (Set (FilePath, FilePath))
+getLinks atoms =
+    foldAtoms from Map.empty atoms
+    where
+      from (Binary p) (DHLink loc txt) mp = Map.insertWith Set.union p (singleton (loc, txt)) mp
+      from _ _ mp = mp
+
+getPostInsts :: HasAtoms atoms => atoms -> Map BinPkgName Text
+getPostInsts atoms =
+    foldAtoms from Map.empty atoms
+    where
+      from (Binary p) (DHPostInst t) mp = Map.insertWith one p t mp
+      from _ _ mp = mp
+
+getPostRms :: HasAtoms atoms => atoms -> Map BinPkgName Text
+getPostRms atoms =
+    foldAtoms from Map.empty atoms
+    where
+      from (Binary p) (DHPostRm t) mp = Map.insertWith one p t mp
+      from _ _ mp = mp
+
+getPreInsts :: HasAtoms atoms => atoms -> Map BinPkgName Text
+getPreInsts atoms =
+    foldAtoms from Map.empty atoms
+    where
+      from (Binary p) (DHPreInst t) mp = Map.insertWith one p t mp
+      from _ _ mp = mp
+
+getPreRms :: HasAtoms atoms => atoms -> Map BinPkgName Text
+getPreRms atoms =
+    foldAtoms from Map.empty atoms
+    where
+      from (Binary p) (DHPreRm t) mp = Map.insertWith one p t mp
+      from _ _ mp = mp
+
+foldExecs :: HasAtoms atoms =>
+             (BinPkgName -> Site -> r -> r)
+          -> (BinPkgName -> Server -> r -> r)
+          -> (BinPkgName -> String -> r -> r)
+          -> (BinPkgName -> InstallFile -> r -> r)
+          -> r
+          -> atoms
+          -> r
+foldExecs site server backup exec r0 atoms =
+    foldAtoms from r0 atoms
+    where
+      from (Binary p) (DHWebsite x) r = site p x r
+      from (Binary p) (DHServer x) r = server p x r
+      from (Binary p) (DHBackups x) r = backup p x r
+      from (Binary p) (DHExecutable x) r = exec p x r
+      from _ _ r = r

@@ -20,7 +20,7 @@ import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, intercalate, unlines)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.AtomsType (DebAtomKey(..), DebAtom(..), HasAtoms, foldAtoms, packageDescription, revision, debVersion,
+import Debian.Debianize.AtomsType (HasAtoms, packageDescription, revision, debVersion, sourcePackageName,
                                    extraLibMap, epochMap, changeLog, setChangeLog', setRulesHead, sourceDebDescription, setSourceDebDescription)
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
@@ -65,12 +65,7 @@ versionInfo debianMaintainer date deb =
       -- Get the source package name, either from the SourcePackageName
       -- atom or construct it from the cabal package name.
       sourceName :: SrcPkgName
-      sourceName =
-          fromMaybe (debianName deb Source' pkgId) (foldAtoms from Nothing deb)
-          where
-            from Source (SourcePackageName s) (Just t) | s /= t = error $ "Conflicting source package names: " ++ show s ++ " vs. " ++ show t
-            from Source (SourcePackageName s) _ = Just s
-            from _ _ x = x
+      sourceName = maybe (debianName deb Source' pkgId) SrcPkgName (sourcePackageName deb)
       merge :: ChangeLogEntry -> ChangeLogEntry -> ChangeLogEntry
       merge old new =
           old { logComments = logComments old ++ logComments new

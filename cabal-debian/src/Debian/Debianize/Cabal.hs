@@ -12,7 +12,7 @@ import Data.Maybe
 import Data.Set (Set, toList)
 import Data.Text (Text, pack)
 import Data.Version (Version)
-import Debian.Debianize.AtomsType (HasAtoms, DebAtomKey(Source), DebAtom(DHMaintainer), lookupAtom, setCompiler, setPackageDescription)
+import Debian.Debianize.AtomsType (HasAtoms, setCompiler, setPackageDescription, debMaintainer)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
@@ -103,13 +103,11 @@ showLicense (UnknownLicense _) = "Unknown"
 -- cabal package, or from the value returned by getDebianMaintainer.
 inputMaintainer :: HasAtoms atoms => PackageDescription -> atoms -> IO (Maybe NameAddr)
 inputMaintainer pkgDesc atoms =
-    return (lookupAtom Source from atoms) >>=
+    return (debMaintainer atoms) >>=
     return . maybe (parse cabalMaintainer) Just >>=
     maybe getDebianMaintainer (return . Just) >>=
     return . maybe (Just haskellMaintainer) Just
     where
-      from (DHMaintainer x) = Just x
-      from _ = Nothing
       parse :: Maybe String -> Maybe NameAddr
       parse Nothing = Nothing
       parse (Just s) = either (const Nothing) Just (parseMaintainer s)
