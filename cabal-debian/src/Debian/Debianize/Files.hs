@@ -21,7 +21,8 @@ import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Fiel
 import Debian.Debianize.AtomsType (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom, defaultAtoms,
                                    buildDir, dataDir, packageDescription, setArchitecture, setPackageDescription, binaryPackageDeps, changeLog,
                                    binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
-                                   rulesHead, compat, copyright, sourceDebDescription, setSourceDebDescription)
+                                   rulesHead, compat, copyright, sourceDebDescription, setSourceDebDescription,
+                                   installDir, file, rulesFragment, installTo, link, install, intermediateFile)
 import Debian.Debianize.Combinators (describe, buildDeps)
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Server (execAtoms, serverAtoms, siteAtoms, fileAtoms, backupAtoms)
@@ -53,15 +54,15 @@ watch deb =
       f (DebWatch x) = Just x
       f _ = Nothing
 
-intermediate :: HasAtoms atoms => atoms -> [(FilePath, Text)]
-intermediate deb =
+intermediates :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+intermediates deb =
     foldAtoms atomf [] deb
     where
       atomf Source (DHIntermediate path text) files = (path,  text) : files
       atomf _ _ files = files
 
-install :: HasAtoms atoms => atoms -> [(FilePath, Text)]
-install deb =
+installs :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+installs deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
       atomf (Binary name) (DHInstall src dst) files = Map.insertWith with1 (pathf name)  (pack (src ++ " " ++ dst)) files
@@ -100,8 +101,8 @@ logrotate deb =
       pathf name = "debian" </> show (pretty name) ++ ".logrotate"
 
 -- | Assemble all the links by package and output one file each
-link :: HasAtoms atoms => atoms -> [(FilePath, Text)]
-link deb =
+links :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+links deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
       atomf (Binary name) (DHLink loc txt) files = Map.insertWith with1 (pathf name) (pack (loc ++ " " ++ txt)) files
@@ -156,16 +157,16 @@ toFileMap atoms d =
        ("debian/copyright", either (\ x -> pack (show x) <> "\n") id (copyright (error "No DebCopyright atom") atoms))] ++
       sourceFormat atoms ++
       watch atoms ++
-      install atoms ++
+      installs atoms ++
       dirs atoms ++
       init atoms ++
       logrotate atoms ++
-      link atoms ++
+      links atoms ++
       postinst atoms ++
       postrm atoms ++
       preinst atoms ++
       prerm atoms ++
-      intermediate atoms
+      intermediates atoms
 
 -- | Now that we know the build and data directories, we can expand
 -- some atoms into sets of simpler atoms which can eventually be
