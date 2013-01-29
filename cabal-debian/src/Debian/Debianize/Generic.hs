@@ -13,7 +13,8 @@ import Data.Generics (Data, Typeable, GenericQ, toConstr, showConstr, gzipWithQ,
 import Data.List (sort)
 import qualified Data.Text as T
 import Data.Set as Set (Set, toList, fromList, difference)
-import Debian.Debianize.AtomsType (Atoms, DebAtom(..))
+import Debian.Debianize.AtomsClass (DebAtom(..))
+import Debian.Debianize.AtomsType (Atoms)
 import Debian.Debianize.Types.DebControl (VersionControlSpec, XField)
 import Debian.Debianize.Utility (showDeps)
 import Debian.Relation (Relation)

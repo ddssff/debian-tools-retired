@@ -16,9 +16,9 @@ import Data.Set as Set (Set, fromList, singleton)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
+import Debian.Debianize.AtomsClass (HasAtoms, DebAtomKey(..), DebAtom(..))
 import Debian.Debianize.AtomsType as Atom
-    (HasAtoms, Atoms, DebAtomKey(..), DebAtom(..), insertAtom, mapAtoms,
-     tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
+    (Atoms, insertAtom, mapAtoms, tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
      changeLog, setChangeLog', setRulesHead, compat, putCopyright, knownEpochMappings, sourceDebDescription, setSourceDebDescription, newDebianization)
 import Debian.Debianize.Files (finalizeDebianization, toFileMap)

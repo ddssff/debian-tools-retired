@@ -50,6 +50,7 @@ Library
    Data.Algorithm.Diff.Pretty
    Debian.Cabal
    Debian.Debianize
+   Debian.Debianize.AtomsClass
    Debian.Debianize.AtomsType
    Debian.Debianize.Bundled
    Debian.Debianize.Cabal

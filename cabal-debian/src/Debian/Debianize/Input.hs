@@ -17,7 +17,8 @@ import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.AtomsType (Atoms, HasAtoms, setRulesHead, install, installDir,
+import Debian.Debianize.AtomsClass (HasAtoms)
+import Debian.Debianize.AtomsType (Atoms, setRulesHead, install, installDir,
                                    defaultAtoms, modifySourceDebDescription, intermediateFile, warning, watchFile, logrotateStanza,
                                    sourceFormat, putCompat, putCopyright, setChangeLog, installInit, postInst, postRm, preInst, preRm, link)
 import Debian.Debianize.Types.DebControl (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),

@@ -17,7 +17,8 @@ import Data.Set as Set (Set, difference, fromList, null, insert, toList, member,
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.AtomsType (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(..), lookupAtom, foldAtoms, insertAtom,
+import Debian.Debianize.AtomsClass (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(..))
+import Debian.Debianize.AtomsType (lookupAtom, foldAtoms, insertAtom,
                                    packageDescription, setArchitecture, setPackageDescription, binaryPackageDeps, changeLog,
                                    binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
                                    rulesHead, compat, copyright, sourceDebDescription, setSourceDebDescription,

@@ -20,7 +20,8 @@ import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, intercalate, unlines)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.AtomsType (HasAtoms, packageDescription, revision, debVersion, sourcePackageName,
+import Debian.Debianize.AtomsClass (HasAtoms)
+import Debian.Debianize.AtomsType (packageDescription, revision, debVersion, sourcePackageName,
                                    extraLibMap, epochMap, changeLog, setChangeLog', setRulesHead, sourceDebDescription, setSourceDebDescription)
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))

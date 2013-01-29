@@ -20,8 +20,8 @@ import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
 import qualified Data.Set as Set
 import Data.Version (Version, showVersion)
 import Debian.Control
-import Debian.Debianize.AtomsType (HasAtoms, PackageInfo(devDeb, profDeb, docDeb),
-                                   noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, versionSplits,
+import Debian.Debianize.AtomsClass (HasAtoms, PackageInfo(devDeb, profDeb, docDeb))
+import Debian.Debianize.AtomsType (noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, versionSplits,
                                    filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
