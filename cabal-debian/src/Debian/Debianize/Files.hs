@@ -17,8 +17,8 @@ import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.AtomsClass (HasAtoms, DebAtomKey(..), DebAtom(..))
 import Debian.Debianize.AtomsType (lookupAtom, foldAtoms, changeLog, compat, copyright, rulesHead)
-import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                                    VersionControlSpec(..), XField(..), XFieldDest(..))
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
+                                               VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations)
 import Prelude hiding (init, unlines, writeFile)

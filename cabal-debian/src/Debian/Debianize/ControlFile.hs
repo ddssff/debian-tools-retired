@@ -1,6 +1,6 @@
 -- | Preliminary.
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances #-}
-module Debian.Debianize.Types.DebControl
+module Debian.Debianize.ControlFile
     ( SourceDebDescription(..)
     , newSourceDebDescription
     , newSourceDebDescription'

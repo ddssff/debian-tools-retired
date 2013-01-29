@@ -15,7 +15,7 @@ import qualified Data.Text as T
 import Data.Set as Set (Set, toList, fromList, difference)
 import Debian.Debianize.AtomsClass (DebAtom(..))
 import Debian.Debianize.AtomsType (Atoms)
-import Debian.Debianize.Types.DebControl (VersionControlSpec, XField)
+import Debian.Debianize.ControlFile (VersionControlSpec, XField)
 import Debian.Debianize.Utility (showDeps)
 import Debian.Relation (Relation)
 import Triplets (mkQ2, extQ2)

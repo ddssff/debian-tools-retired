@@ -55,6 +55,7 @@ Library
    Debian.Debianize.Bundled
    Debian.Debianize.Cabal
    Debian.Debianize.Combinators
+   Debian.Debianize.ControlFile
    Debian.Debianize.Debianize
    Debian.Debianize.Dependencies
    Debian.Debianize.Files
@@ -66,7 +67,6 @@ Library
    Debian.Debianize.Output
    Debian.Debianize.SubstVars
    Debian.Debianize.Tests
-   Debian.Debianize.Types.DebControl
    Debian.Debianize.Utility
    Debian.Orphans
    Debian.Policy

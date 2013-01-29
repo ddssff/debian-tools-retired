@@ -24,8 +24,8 @@ import Debian.Debianize.AtomsClass (HasAtoms, PackageInfo(devDeb, profDeb, docDe
 import Debian.Debianize.AtomsType (noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, versionSplits,
                                    filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
+import Debian.Debianize.ControlFile (PackageType(..))
 import Debian.Debianize.Interspersed (Interspersed(leftmost, pairs, foldInverted), foldTriples)
-import Debian.Debianize.Types.DebControl (PackageType(..))
 import Debian.Orphans ()
 import qualified Debian.Relation as D
 import Debian.Relation (Relations, Relation, BinPkgName(BinPkgName), PkgName(pkgNameFromString))

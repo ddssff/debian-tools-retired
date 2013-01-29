@@ -4,6 +4,7 @@ module Debian.Debianize
     , module Debian.Debianize.Bundled
     , module Debian.Debianize.Cabal
     , module Debian.Debianize.Combinators
+    , module Debian.Debianize.ControlFile
     , module Debian.Debianize.Debianize
     , module Debian.Debianize.Dependencies
     , module Debian.Debianize.Files
@@ -15,7 +16,6 @@ module Debian.Debianize
     , module Debian.Debianize.Output
     , module Debian.Debianize.SubstVars
     , module Debian.Debianize.Tests
-    , module Debian.Debianize.Types.DebControl
     , module Debian.Debianize.Utility
     , module Debian.Policy
     ) where
@@ -36,6 +36,6 @@ import Debian.Debianize.Interspersed
 import Debian.Debianize.Output
 import Debian.Debianize.SubstVars
 import Debian.Debianize.Tests
-import Debian.Debianize.Types.DebControl hiding (depends, conflicts)
+import Debian.Debianize.ControlFile hiding (depends, conflicts)
 import Debian.Debianize.Utility
 import Debian.Policy

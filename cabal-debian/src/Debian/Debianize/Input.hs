@@ -21,8 +21,8 @@ import Debian.Debianize.AtomsClass (HasAtoms)
 import Debian.Debianize.AtomsType (Atoms, setRulesHead, install, installDir,
                                    defaultAtoms, modifySourceDebDescription, intermediateFile, warning, watchFile, logrotateStanza,
                                    sourceFormat, putCompat, putCopyright, setChangeLog, installInit, postInst, postRm, preInst, preRm, link)
-import Debian.Debianize.Types.DebControl (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                          VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
+import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
+                                     VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
