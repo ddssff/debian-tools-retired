@@ -152,7 +152,6 @@ import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, sing
 import Data.Text (Text, unpack)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.AtomsClass (HasAtoms)
 import Debian.Debianize.AtomsClass (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags(..), DebAction(..), PackageInfo(..))
 import Debian.Debianize.Utility (setMapMaybe)
 import Debian.Debianize.Types.PackageHints (Server(..), Site(..), InstallFile(..))

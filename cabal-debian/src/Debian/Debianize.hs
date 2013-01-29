@@ -7,6 +7,7 @@ module Debian.Debianize
     , module Debian.Debianize.Debianize
     , module Debian.Debianize.Dependencies
     , module Debian.Debianize.Files
+    , module Debian.Debianize.Finalize
     , module Debian.Debianize.Flags
     , module Debian.Debianize.Generic
     , module Debian.Debianize.Input
@@ -29,6 +30,7 @@ import Debian.Debianize.Combinators hiding (buildDeps)
 import Debian.Debianize.Debianize
 import Debian.Debianize.Dependencies
 import Debian.Debianize.Files
+import Debian.Debianize.Finalize
 import Debian.Debianize.Flags
 import Debian.Debianize.Generic
 import Debian.Debianize.Input
