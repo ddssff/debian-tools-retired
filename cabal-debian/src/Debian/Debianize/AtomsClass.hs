@@ -10,6 +10,8 @@ module Debian.Debianize.AtomsClass
     , Server(..)
     , InstallFile(..)
     , DebType(..)
+    , VersionSplits(..)
+    , knownVersionSplits
     , oldClckwrksSiteFlags
     , oldClckwrksServerFlags
     ) where
@@ -19,16 +21,15 @@ import Data.Map (Map)
 import Data.Monoid (Monoid)
 import Data.Set (Set)
 import Data.Text (Text)
-import Data.Version (Version)
+import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog)
-import Debian.Debianize.Splits (VersionSplits)
 import Debian.Debianize.Types.DebControl (SourceDebDescription)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, SourceFormat, PackagePriority, Section)
 import Debian.Relation (Relation, SrcPkgName, BinPkgName)
 import Debian.Version (DebianVersion)
 import Distribution.License (License)
-import Distribution.Package (PackageName)
+import Distribution.Package (PackageName(PackageName))
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
@@ -106,7 +107,7 @@ data DebAtom
                                                   -- version 0.3.0.0-1build3, we need to specify
                                                   -- debVersion="0.3.0.0-1build3" or the version we produce will
                                                   -- look older than the one already available upstream.
-    | VersionSplits [VersionSplits]		  -- ^ Instances where the debian package name is different (for
+    | DebVersionSplits [VersionSplits]		  -- ^ Instances where the debian package name is different (for
                                                   -- some range of version numbers) from the default constructed
                                                   -- by mkPkgName.
     | BuildDep BinPkgName			  -- ^ Add a build dependency (FIXME: should be a Rel, or an OrRelation, not a BinPkgName)
@@ -226,6 +227,29 @@ data InstallFile
 
 -- | A redundant data type, too lazy to expunge.
 data DebType = Dev | Prof | Doc deriving (Eq, Ord, Read, Show)
+
+data VersionSplits
+    = VersionSplits {
+        packageName :: PackageName
+      , oldestPackage :: PackageName
+      , splits :: [(Version, PackageName)] -- Assumed to be in version number order
+      } deriving (Eq, Ord, Show)
+
+-- | These are the instances of debian names changing that I know
+-- about.  I know they really shouldn't be hard coded.  Send a patch.
+-- Note that this inherits the lack of type safety of the mkPkgName
+-- function.
+knownVersionSplits :: [VersionSplits]
+knownVersionSplits =
+    [ VersionSplits {
+        packageName = PackageName "parsec"
+      , oldestPackage = PackageName "parsec2"
+      , splits = [(Version [3] [], PackageName "parsec3")] }
+    , VersionSplits {
+        packageName = PackageName "QuickCheck"
+      , oldestPackage = PackageName "quickcheck1"
+      , splits = [(Version [2] [], PackageName "quickcheck2")] }
+    ]
 
 oldClckwrksSiteFlags :: Site -> [String]
 oldClckwrksSiteFlags site =

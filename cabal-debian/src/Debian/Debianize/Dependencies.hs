@@ -15,17 +15,16 @@ module Debian.Debianize.Dependencies
 import Data.Char (isSpace, toLower)
 import Data.Function (on)
 import Data.List (nub, minimumBy, isSuffixOf)
-import qualified Data.Map as Map
+import Data.Map as Map (Map, lookup, insertWith, empty)
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
 import qualified Data.Set as Set
 import Data.Version (Version, showVersion)
 import Debian.Control
-import Debian.Debianize.AtomsClass (HasAtoms, PackageInfo(devDeb, profDeb, docDeb), DebType(Dev, Prof, Doc))
+import Debian.Debianize.AtomsClass (HasAtoms, PackageInfo(devDeb, profDeb, docDeb), DebType(Dev, Prof, Doc), VersionSplits(..))
 import Debian.Debianize.AtomsType (noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, versionSplits,
                                    filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
-import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
-import Debian.Debianize.Splits (VersionSplits(..))
+import Debian.Debianize.Interspersed (Interspersed(leftmost, pairs, foldInverted), foldTriples)
 import Debian.Debianize.Types.DebControl (PackageType(..))
 import Debian.Orphans ()
 import qualified Debian.Relation as D
@@ -288,23 +287,6 @@ canonical (Rel rel) = And [Or [Rel rel]]
 canonical (And rels) = And $ concatMap (unAnd . canonical) rels
 canonical (Or rels) = And . map Or $ sequence $ map (concat . map unOr . unAnd . canonical) $ rels
 
-packageSplits :: [VersionSplits] -> Map.Map PackageName VersionSplits
-packageSplits splits =
-    foldr (\ splits' mp -> Map.insertWith multipleSplitsError (packageName splits') splits' mp)
-          Map.empty
-          splits
-    where
-      multipleSplitsError :: VersionSplits -> a -> b
-      multipleSplitsError (VersionSplits {packageName = PackageName p}) _s2 =
-          error ("Multiple splits for package " ++ show p)
-
-packageRangesFromVersionSplits :: VersionSplits -> [(PackageName, VersionRange)]
-packageRangesFromVersionSplits splits =
-    foldInverted (\ older dname newer more ->
-                      (dname, intersectVersionRanges (maybe anyVersion orLaterVersion older) (maybe anyVersion earlierVersion newer)) : more)
-                 []
-                 splits
-
 -- | Function that applies the mapping from cabal names to debian
 -- names based on version numbers.  If a version split happens at v,
 -- this will return the ltName if < v, and the geName if the relation
@@ -370,3 +352,25 @@ mkPkgName (PackageName name) typ =
       fixChar :: Char -> Char
       fixChar '_' = '-'
       fixChar c = toLower c
+
+instance Interspersed VersionSplits PackageName Version where
+    leftmost (VersionSplits {splits = []}) = error "Empty Interspersed instance"
+    leftmost (VersionSplits {oldestPackage = p}) = p
+    pairs (VersionSplits {splits = xs}) = xs
+
+packageSplits :: [VersionSplits] -> Map PackageName VersionSplits
+packageSplits splits =
+    foldr (\ splits' mp -> Map.insertWith multipleSplitsError (packageName splits') splits' mp)
+          Map.empty
+          splits
+    where
+      multipleSplitsError :: VersionSplits -> a -> b
+      multipleSplitsError (VersionSplits {packageName = PackageName p}) _s2 =
+          error ("Multiple splits for package " ++ show p)
+
+packageRangesFromVersionSplits :: VersionSplits -> [(PackageName, VersionRange)]
+packageRangesFromVersionSplits splits =
+    foldInverted (\ older dname newer more ->
+                      (dname, intersectVersionRanges (maybe anyVersion orLaterVersion older) (maybe anyVersion earlierVersion newer)) : more)
+                 []
+                 splits

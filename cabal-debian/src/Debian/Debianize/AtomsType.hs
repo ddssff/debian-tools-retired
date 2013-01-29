@@ -152,8 +152,7 @@ import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, sing
 import Data.Text (Text, unpack)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.AtomsClass (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags(..), DebAction(..), PackageInfo(..), Site(..), Server(..), InstallFile(..))
-import Debian.Debianize.Splits (VersionSplits, knownVersionSplits)
+import Debian.Debianize.AtomsClass (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags(..), DebAction(..), PackageInfo(..), Site(..), Server(..), InstallFile(..), VersionSplits, knownVersionSplits)
 import Debian.Debianize.Utility (setMapMaybe)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat, PackageArchitectures, PackagePriority, Section, StandardsVersion, parseMaintainer,
@@ -197,7 +196,7 @@ defaultFlags =
 newtype Atoms = Atoms {unAtoms :: Map DebAtomKey (Set DebAtom)} deriving (Eq, Show)
 
 defaultAtoms :: Atoms
-defaultAtoms = insertAtom Source (VersionSplits knownVersionSplits) $ (Atoms mempty)
+defaultAtoms = insertAtom Source (DebVersionSplits knownVersionSplits) $ (Atoms mempty)
 
 instance Monoid Atoms where
     mempty = defaultAtoms
@@ -533,7 +532,7 @@ versionSplits :: HasAtoms atoms => atoms -> [VersionSplits]
 versionSplits atoms =
     getSingleton (error "versionSplits") from atoms
     where
-      from Source (VersionSplits x) = Just x
+      from Source (DebVersionSplits x) = Just x
       from _ _ = Nothing
 
 putExtraDevDep :: HasAtoms atoms => BinPkgName -> atoms -> atoms
