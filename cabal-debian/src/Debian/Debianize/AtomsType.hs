@@ -152,9 +152,8 @@ import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, sing
 import Data.Text (Text, unpack)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.AtomsClass (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags(..), DebAction(..), PackageInfo(..))
+import Debian.Debianize.AtomsClass (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags(..), DebAction(..), PackageInfo(..), Site(..), Server(..), InstallFile(..))
 import Debian.Debianize.Utility (setMapMaybe)
-import Debian.Debianize.Types.PackageHints (Server(..), Site(..), InstallFile(..))
 import Debian.Debianize.Types.PackageType (VersionSplits, knownVersionSplits)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat, PackageArchitectures, PackagePriority, Section, StandardsVersion, parseMaintainer,

@@ -67,7 +67,6 @@ Library
    Debian.Debianize.SubstVars
    Debian.Debianize.Tests
    Debian.Debianize.Types.DebControl
-   Debian.Debianize.Types.PackageHints
    Debian.Debianize.Types.PackageType
    Debian.Debianize.Utility
    Debian.Orphans
