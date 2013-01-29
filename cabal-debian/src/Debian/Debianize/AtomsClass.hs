@@ -9,6 +9,7 @@ module Debian.Debianize.AtomsClass
     , Site(..)
     , Server(..)
     , InstallFile(..)
+    , DebType(..)
     , oldClckwrksSiteFlags
     , oldClckwrksServerFlags
     ) where
@@ -20,8 +21,8 @@ import Data.Set (Set)
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog)
+import Debian.Debianize.Splits (VersionSplits)
 import Debian.Debianize.Types.DebControl (SourceDebDescription)
-import Debian.Debianize.Types.PackageType (DebType, VersionSplits)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, SourceFormat, PackagePriority, Section)
 import Debian.Relation (Relation, SrcPkgName, BinPkgName)
@@ -222,6 +223,9 @@ data InstallFile
       , destDir :: Maybe FilePath -- ^ where to put it, default is usr/bin/<execName>
       , destName :: String  -- ^ name to give installed executable
       } deriving (Read, Show, Eq, Ord)
+
+-- | A redundant data type, too lazy to expunge.
+data DebType = Dev | Prof | Doc deriving (Eq, Ord, Read, Show)
 
 oldClckwrksSiteFlags :: Site -> [String]
 oldClckwrksSiteFlags site =

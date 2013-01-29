@@ -16,12 +16,11 @@ import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
-import Debian.Debianize.AtomsClass (HasAtoms, Flags(dryRun, verbosity), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb))
+import Debian.Debianize.AtomsClass (HasAtoms, Flags(dryRun, verbosity), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType)
 import Debian.Debianize.AtomsType (putPackageInfo, flags, filterMissing, packageInfo, compilerVersion, cabalFlagAssignments, compiler)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps, debNameFromType)
 import Debian.Debianize.Cabal (getSimplePackageDescription)
 import Debian.Control
-import Debian.Debianize.Types.PackageType (DebType)
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps,
                                     dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
 import qualified Debian.Relation as D

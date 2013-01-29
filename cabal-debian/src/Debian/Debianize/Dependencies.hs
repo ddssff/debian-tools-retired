@@ -12,7 +12,7 @@ module Debian.Debianize.Dependencies
     , debNameFromType
     ) where
 
-import Data.Char (isSpace)
+import Data.Char (isSpace, toLower)
 import Data.Function (on)
 import Data.List (nub, minimumBy, isSuffixOf)
 import qualified Data.Map as Map
@@ -20,15 +20,16 @@ import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
 import qualified Data.Set as Set
 import Data.Version (Version, showVersion)
 import Debian.Control
-import Debian.Debianize.AtomsClass (HasAtoms, PackageInfo(devDeb, profDeb, docDeb))
+import Debian.Debianize.AtomsClass (HasAtoms, PackageInfo(devDeb, profDeb, docDeb), DebType(Dev, Prof, Doc))
 import Debian.Debianize.AtomsType (noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, versionSplits,
                                    filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.Interspersed (Interspersed(foldInverted), foldTriples)
-import Debian.Debianize.Types.PackageType (DebType(Dev, Prof, Doc), PackageType(..), mkPkgName, VersionSplits(..))
+import Debian.Debianize.Splits (VersionSplits(..))
+import Debian.Debianize.Types.DebControl (PackageType(..))
 import Debian.Orphans ()
 import qualified Debian.Relation as D
-import Debian.Relation (Relations, Relation, BinPkgName(BinPkgName), PkgName)
+import Debian.Relation (Relations, Relation, BinPkgName(BinPkgName), PkgName(pkgNameFromString))
 import Debian.Version (parseDebianVersion)
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..), Dependency(..))
 import Distribution.PackageDescription as Cabal (PackageDescription(..), allBuildInfo, buildTools, pkgconfigDepends, extraLibs)
@@ -347,3 +348,25 @@ debNameFromType control debType =
       Doc -> fmap BinPkgName $ listToMaybe (filter (isSuffixOf "-doc") debNames)
     where
       debNames = map (\ (Field (_, s)) -> stripWS s) (catMaybes (map (lookupP "Package") (tail (unControl control))))
+
+-- | Build a debian package name from a cabal package name and a
+-- debian package type.  Unfortunately, this does not enforce the
+-- correspondence between the PackageType value and the name type, so
+-- it can return nonsense like (SrcPkgName "libghc-debian-dev").
+mkPkgName :: PkgName name => PackageName -> PackageType -> name
+mkPkgName (PackageName name) typ =
+    pkgNameFromString $
+             case typ of
+                Documentation -> "libghc-" ++ base ++ "-doc"
+                Development -> "libghc-" ++ base ++ "-dev"
+                Profiling -> "libghc-" ++ base ++ "-prof"
+                Utilities -> "haskell-" ++ base ++ "-utils"
+                Exec -> base
+                Source' -> "haskell-" ++ base ++ ""
+                Cabal -> base
+    where
+      base = map (fixChar . toLower) name
+      -- Underscore is prohibited in debian package names.
+      fixChar :: Char -> Char
+      fixChar '_' = '-'
+      fixChar c = toLower c

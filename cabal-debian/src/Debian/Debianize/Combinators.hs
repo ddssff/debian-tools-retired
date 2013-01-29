@@ -24,8 +24,8 @@ import Debian.Debianize.AtomsClass (HasAtoms)
 import Debian.Debianize.AtomsType (packageDescription, revision, debVersion, sourcePackageName,
                                    extraLibMap, epochMap, changeLog, setChangeLog', setRulesHead, sourceDebDescription, setSourceDebDescription)
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
-import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..))
-import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
+import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
+-- import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Utility (trim)
 import Debian.Policy (StandardsVersion)
 import qualified Debian.Relation as D

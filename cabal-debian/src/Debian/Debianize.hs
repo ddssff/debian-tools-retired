@@ -13,10 +13,10 @@ module Debian.Debianize
     , module Debian.Debianize.Input
     , module Debian.Debianize.Interspersed
     , module Debian.Debianize.Output
+    , module Debian.Debianize.Splits
     , module Debian.Debianize.SubstVars
     , module Debian.Debianize.Tests
     , module Debian.Debianize.Types.DebControl
-    , module Debian.Debianize.Types.PackageType
     , module Debian.Debianize.Utility
     , module Debian.Policy
     ) where
@@ -35,9 +35,9 @@ import Debian.Debianize.Generic
 import Debian.Debianize.Input
 import Debian.Debianize.Interspersed
 import Debian.Debianize.Output
+import Debian.Debianize.Splits hiding (VersionSplits)
 import Debian.Debianize.SubstVars
 import Debian.Debianize.Tests
 import Debian.Debianize.Types.DebControl hiding (depends, conflicts)
-import Debian.Debianize.Types.PackageType hiding (VersionSplits)
 import Debian.Debianize.Utility
 import Debian.Policy

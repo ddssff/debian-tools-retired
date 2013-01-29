@@ -20,8 +20,8 @@ import Debian.Debianize.AtomsType (insertAtom,
 import Debian.Debianize.Combinators (describe, buildDeps)
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Types.DebControl as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                                    newBinaryDebDescription, modifyBinaryDeb)
-import Debian.Debianize.Types.PackageType (PackageType(Exec, Development, Profiling, Documentation, Utilities))
+                                                    newBinaryDebDescription, modifyBinaryDeb,
+                                                    PackageType(Exec, Development, Profiling, Documentation, Utilities))
 import Debian.Policy (PackageArchitectures(Any, All), Section(..))
 import Debian.Relation (Relation(Rel), BinPkgName(BinPkgName))
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..))
