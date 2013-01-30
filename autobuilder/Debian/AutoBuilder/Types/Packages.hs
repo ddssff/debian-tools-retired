@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 -- | The Packages type specifies how to obtain the source code for one
 -- or more packages.
 module Debian.AutoBuilder.Types.Packages
@@ -13,7 +14,7 @@ import Data.ByteString (ByteString)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.Set (Set, empty, union)
 import Debian.Relation (BinPkgName)
-import qualified Distribution.Debian as CD
+import qualified Debian.Debianize as CD
 
 data Packages
     = NoPackage
@@ -122,7 +123,7 @@ data PackageFlag
     -- bugs.
     | CabalDebian [String]
     -- ^ Pass some arbitrary arguments to cabal-debian
-    | ModifyAtoms ([CD.DebAtom] -> [CD.DebAtom])
+    | ModifyAtoms (CD.HasAtoms atoms => atoms -> atoms)
     -- ^ Modify the cabal-debian configuration in a fully general way
     | MapDep String BinPkgName
     -- ^ Tell cabal-debian to map the first argument (a name that

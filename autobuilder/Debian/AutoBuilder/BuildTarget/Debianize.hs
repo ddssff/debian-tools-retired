@@ -11,7 +11,6 @@ import Control.Monad (when)
 import Control.Monad.CatchIO (MonadCatchIO, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (isSuffixOf)
-import qualified Data.Map as Map
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -20,9 +19,9 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Relation (BinPkgName(unBinPkgName))
 import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
-import qualified Distribution.Debian as Cabal
+import qualified Debian.Debianize as Cabal
 import Distribution.Verbosity (normal)
-import Distribution.Package (PackageIdentifier(..), PackageName(..))
+import Distribution.Package (PackageIdentifier(..))
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Prelude hiding (catch)
@@ -48,7 +47,7 @@ prepare cache package' target =
                 let version = pkgVersion . package . packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderCabal cache (P.flags package') dir Cabal.defaultFlags
+                liftIO $ autobuilderCabal cache (P.flags package') dir Cabal.defaultAtoms
                 return $ T.Download { T.package = package'
                                     , T.getTop = dir
                                     , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
@@ -81,51 +80,30 @@ collectPackageFlags cache pflags =
     do v <- verbosity
        return $ maybe [] (\ x -> ["--ghc-version", x]) ver ++
                 ["--verbose=" ++ show v] ++
-                concatMap pflag pflags
+                concatMap asCabalFlags pflags
     where
-      pflag (P.Maintainer s) = ["--maintainer", s]
-      pflag (P.ExtraDep s) = ["--build-dep", s]
-      pflag (P.ExtraDevDep s) = ["--dev-dep", s]
-      pflag (P.MapDep c d) = ["--map-dep", c ++ "=" ++ unBinPkgName d]
-      pflag (P.DebVersion s) = ["--deb-version", s]
-      pflag (P.Revision s) = ["--revision", s]
-      pflag (P.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]
-      pflag P.NoDoc = ["--disable-haddock"]
-      pflag (P.CabalDebian ss) = ss
-      pflag _ = []
-
       ver = P.ghcVersion (P.params cache)
 
-autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> Cabal.Flags -> IO ()
-autobuilderCabal cache pflags currentDirectory flags =
+autobuilderCabal :: forall atoms. Cabal.HasAtoms atoms => P.CacheRec -> [P.PackageFlag] -> FilePath -> atoms -> IO ()
+autobuilderCabal cache pflags currentDirectory atoms =
     withCurrentDirectory currentDirectory $
     do args <- collectPackageFlags cache pflags
        done <- Cabal.runDebianize args
-       when (not done) (Cabal.debianize (foldr applyPackageFlag (Cabal.Config {Cabal.modifyAtoms = id, Cabal.flags = flags}) pflags))
+       let atoms' = Cabal.compileArgs (atoms :: atoms) (concatMap asCabalFlags pflags :: [String]) :: atoms
+       when (not done) (Cabal.cabalToDebianization "." atoms' >>= Cabal.writeDebianization)
+
+asCabalFlags :: P.PackageFlag -> [String]
+asCabalFlags (P.Maintainer s) = ["--maintainer", s]
+asCabalFlags (P.ExtraDep s) = ["--build-dep", s]
+asCabalFlags (P.ExtraDevDep s) = ["--dev-dep", s]
+asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ unBinPkgName d]
+asCabalFlags (P.DebVersion s) = ["--deb-version", s]
+asCabalFlags (P.Revision s) = ["--revision", s]
+asCabalFlags (P.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]
+asCabalFlags P.NoDoc = ["--disable-haddock"]
+asCabalFlags (P.CabalDebian ss) = ss
+asCabalFlags _ = []
 
 -- | Apply a set of package flags to a cabal-debian configuration record.
-applyPackageFlag :: P.PackageFlag -> Cabal.Config -> Cabal.Config
-applyPackageFlag x config@(Cabal.Config {Cabal.flags = fs, Cabal.modifyAtoms = fn}) =
-    case x of
-      P.Maintainer s -> config {Cabal.flags = fs {Cabal.debMaintainer = Just s}}
-      P.ExtraDep s -> config {Cabal.flags = fs {Cabal.buildDeps = s : Cabal.buildDeps fs}}
-      P.ExtraDevDep s -> config {Cabal.flags = fs {Cabal.extraDevDeps = s : Cabal.extraDevDeps fs}}
-      P.NoDoc -> config {Cabal.flags = fs {Cabal.haddock = False}}
-      P.MapDep c d -> config {Cabal.flags = fs {Cabal.extraLibMap = Map.insertWith (++) c [d] (Cabal.extraLibMap fs)}}
-      P.DebVersion s -> config {Cabal.flags = fs {Cabal.debVersion = Just s}}
-      P.Revision s -> config {Cabal.flags = fs {Cabal.revision = s}}
-      P.Epoch name d -> config {Cabal.flags = fs {Cabal.epochMap = if d >= 1 && d <= 9
-                                                                   then Map.insert (PackageName name) d (Cabal.epochMap fs)
-                                                                   else Cabal.epochMap fs}}
-      P.CabalDebian ss -> config {Cabal.flags = Cabal.compileArgs ss fs}
-      -- Compose a modifyAtoms argument with the current value
-      P.ModifyAtoms fn' -> config {Cabal.modifyAtoms = fn' . fn}
-
-      -- Flags that do not affect cabal-debian
-      P.RelaxDep _ -> config
-      P.UDeb _ -> config
-      P.OmitLTDeps -> config
-      P.AptPin _ -> config
-      P.CabalPin _ -> config
-      P.DarcsTag _ -> config
-      P.GitBranch _ -> config
+applyPackageFlag :: Cabal.HasAtoms atoms => P.PackageFlag -> atoms -> atoms
+applyPackageFlag x atoms = Cabal.compileArgs atoms (asCabalFlags x)

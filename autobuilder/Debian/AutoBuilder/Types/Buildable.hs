@@ -52,6 +52,7 @@ failing :: ([ErrorMsg] -> b) -> (a -> b) -> Failing a -> b
 failing f _ (Failure errs) = f errs
 failing _ f (Success a)    = f a
 
+{- -- This is now in the Triplets module of cabal-debian
 instance Monad Failing where
   return = Success
   m >>= f =
@@ -59,6 +60,7 @@ instance Monad Failing where
         (Failure errs) -> (Failure errs)
         (Success a) -> f a
   fail errMsg = Failure [errMsg]
+-}
 
 -- | A replacement for the BuildTarget class and the BuildTarget.* types.  The method code
 -- moves into the function that turns a RetrieveMethod into a BuildTarget.

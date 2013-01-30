@@ -42,7 +42,7 @@ import Debian.Changes (ChangesFile(changeRelease, changeInfo, changeFiles, chang
 import Debian.Control
 -- import Debian.Control
 import qualified Debian.GenBuildDeps as G
-import Debian.Relation (BinPkgName(..), SrcPkgName(..), PkgName(..))
+import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString(Relations, Relation(..))
 import Debian.Release (Arch, releaseName')
 import Debian.Repo.Monads.Apt (MonadApt)
@@ -76,7 +76,7 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files(fileSize, getFileStatus)
 import System.Unix.Chroot (useEnv)
-import System.Process (proc, shell, CreateProcess(cwd), readProcessWithExitCode, showCommandForUser)
+import System.Process (proc, shell, CreateProcess(cwd), readProcessWithExitCode, showCommandForUser, readProcess)
 import System.Process.Progress (mergeToStdout, keepStdout, keepResult, collectOutputs,
                                 keepResult, runProcessF, runProcess, quieter, noisier, qPutStrLn, ePutStr, ePutStrLn)
 import System.Process.Read (readModifiedProcess)
@@ -529,13 +529,13 @@ prepareBuildImage cache dependOS sourceFingerprint buildOS target =
       noClean = P.noClean (P.params cache)
       newPath = rootPath (rootDir buildOS) ++ fromJust (dropPrefix (rootPath (rootDir dependOS)) (topdir (cleanSource target)))
 
--- | Perform an IO operation with /proc mounted
+-- | Perform an IO operation with /tmp mounted in the build environment
 withTmp :: forall a. OSImage -> IO a -> IO a
 withTmp buildOS task =
     do createDirectoryIfMissing True dir
-       _ <- quieter 1 $ runProcessF (proc "mount" ["--bind", "/tmp", dir]) L.empty
+       _ <- readProcess "mount" ["--bind", "/tmp", dir] ""
        result <- try task :: IO (Either SomeException a)
-       _ <- quieter 1 $ runProcessF (proc "umount" [dir]) L.empty
+       _ <- readProcess "umount" [dir] ""
        either throw return result
     where
       dir = rootPath (rootDir buildOS) ++ "/tmp"
