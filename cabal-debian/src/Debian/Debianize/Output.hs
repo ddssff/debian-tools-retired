@@ -10,20 +10,21 @@ module Debian.Debianize.Output
     , writeDebianization
     ) where
 
-import Control.Monad.Trans (MonadIO, liftIO)
-import Data.Map as Map (toList)
-import Data.Text (Text, unpack)
+import Data.Algorithm.Diff.Context (contextDiff)
+import Data.Algorithm.Diff.Pretty (prettyDiff)
+import Data.Map as Map (toList, elems)
+import Data.Text as Text (Text, unpack, split)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logVersion))
 import Debian.Debianize.AtomsClass (HasAtoms, Flags(validate, dryRun))
 import Debian.Debianize.AtomsType (flags, changeLog, sourceDebDescription)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
 import Debian.Debianize.Files (toFileMap)
-import Debian.Debianize.Utility (replaceFile, diffFile)
-import System.Directory (Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing, doesFileExist)
+import Debian.Debianize.Utility (replaceFile, zipMaps)
+import System.Directory (Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing)
 import System.FilePath ((</>), takeDirectory)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-outputDebianization :: HasAtoms deb => deb -> deb -> IO ()
+outputDebianization :: HasAtoms deb => Maybe deb -> deb -> IO ()
 outputDebianization old new =
        -- It is imperitive that during the time that dpkg-buildpackage
        -- runs the version number in the changelog and the source and
@@ -34,37 +35,45 @@ outputDebianization old new =
        -- able to put the debianize parameters in the Setup file,
        -- rather than storing them apart from the package in the
        -- autobuilder configuration.
+       case old of
+         Just old' | validate (flags new) -> validateDebianization old' new
+         _ | validate (flags new) -> error "No existing debianization to validate"
+         Just old' | dryRun (flags new) -> putStr ("Debianization (dry run):\n" ++ describeDebianization old' new)
+         _ | dryRun (flags new) -> error "No existing debianiztion to compare new one to"
+         _ -> writeDebianization new
+
+validateDebianization :: (HasAtoms a, HasAtoms b) => a -> b -> IO ()
+validateDebianization old new =
+    do let oldVersion = logVersion (head (unChangeLog (changeLog old)))
+           newVersion = logVersion (head (unChangeLog (changeLog new)))
+           oldSource = source . sourceDebDescription $ old
+           newSource = source . sourceDebDescription $ new
+           oldPackages = map Debian.package . binaryPackages . sourceDebDescription $ old
+           newPackages = map Debian.package . binaryPackages . sourceDebDescription $ new
        case () of
-         _ | validate (flags new) ->
-               do let oldVersion = logVersion (head (unChangeLog (changeLog old)))
-                      newVersion = logVersion (head (unChangeLog (changeLog new)))
-                      oldSource = source . sourceDebDescription $ old
-                      newSource = source . sourceDebDescription $ new
-                      oldPackages = map Debian.package . binaryPackages . sourceDebDescription $ old
-                      newPackages = map Debian.package . binaryPackages . sourceDebDescription $ new
-                  case () of
-                    _ | oldVersion /= newVersion -> error ("Version mismatch, expected " ++ show (pretty oldVersion) ++ ", found " ++ show (pretty newVersion))
-                      | oldSource /= newSource -> error ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource))
-                      | oldPackages /= newPackages -> error ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages))
-                      | True -> return ()
-           | dryRun (flags new) -> putStrLn "Debianization (dry run):" >> describeDebianization "." new >>= putStr
-           | True -> writeDebianization new
+         _ | oldVersion /= newVersion -> error ("Version mismatch, expected " ++ show (pretty oldVersion) ++ ", found " ++ show (pretty newVersion))
+           | oldSource /= newSource -> error ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource))
+           | oldPackages /= newPackages -> error ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages))
+           | True -> return ()
     where
       unChangeLog :: ChangeLog -> [ChangeLogEntry]
       unChangeLog (ChangeLog x) = x
 
--- | Describe a 'Debianization' in relation to one that is written into 
-describeDebianization :: HasAtoms deb => FilePath -> deb -> IO String
-describeDebianization old d =
-    mapM (\ (path, text) -> liftIO (doFile path text)) (toList (toFileMap d (sourceDebDescription d))) >>= return . concat
+-- | Describe a 'Debianization' in relation to one that is written into
+describeDebianization :: (HasAtoms old, HasAtoms new) => old -> new -> String
+describeDebianization old new =
+    concat . Map.elems $ zipMaps doFile oldFiles newFiles
     where
-      doFile :: FilePath -> Text -> IO String
-      doFile path text =
-          let path' = old </> path in
-          doesFileExist path' >>= \ exists ->
-              if exists
-              then diffFile path' text >>= return . maybe (path ++ ": Unchanged\n") (\ diff -> path ++ ": Modified\n" ++ indent " | " diff)
-              else return $ path ++ ": Created\n" ++ indent " | " (unpack text)
+      oldFiles = toFileMap old (sourceDebDescription old)
+      newFiles = toFileMap new (sourceDebDescription new)
+      doFile :: FilePath -> Maybe Text -> Maybe Text -> Maybe String
+      doFile path (Just _) Nothing = Just (path ++ ": Deleted\n")
+      doFile path Nothing (Just n) = Just (path ++ ": Created\n" ++ indent " | " (unpack n))
+      doFile path (Just o) (Just n) =
+          if o == n
+          then Just (path ++ ": Unchanged\n")
+          else Just (show (prettyDiff ("old" </> path) ("new" </> path) (contextDiff 2 (split (== '\n') o) (split (== '\n') n))))
+      doFile path Nothing Nothing = error "Internal error in zipMaps"
 
 writeDebianization :: HasAtoms deb => deb -> IO ()
 writeDebianization d =
