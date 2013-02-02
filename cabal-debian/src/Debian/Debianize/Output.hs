@@ -73,7 +73,7 @@ describeDebianization old new =
           if o == n
           then Just (path ++ ": Unchanged\n")
           else Just (show (prettyDiff ("old" </> path) ("new" </> path) (contextDiff 2 (split (== '\n') o) (split (== '\n') n))))
-      doFile path Nothing Nothing = error "Internal error in zipMaps"
+      doFile _path Nothing Nothing = error "Internal error in zipMaps"
 
 writeDebianization :: HasAtoms deb => deb -> IO ()
 writeDebianization d =

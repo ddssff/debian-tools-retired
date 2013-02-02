@@ -7,6 +7,7 @@ module Debian.Debianize.Tests
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Function (on)
+import Data.Lens.Lazy (setL)
 import Data.List (sortBy)
 import Data.Map as Map (differenceWithKey, intersectionWithKey)
 import qualified Data.Map as Map
@@ -16,11 +17,11 @@ import Data.Set as Set (Set, fromList, singleton)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
-import Debian.Debianize.AtomsClass (HasAtoms, DebAtomKey(..), DebAtom(..), InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead), DebAtomKey(..), DebAtom(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.AtomsType as Atom
     (Atoms, insertAtom, mapAtoms, tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
-     changeLog, updateChangeLog, setRulesHead, compat, putCopyright, knownEpochMappings, sourceDebDescription, setSourceDebDescription, newDebianization)
+     changeLog, updateChangeLog, compat, putCopyright, knownEpochMappings, sourceDebDescription, setSourceDebDescription, newDebianization)
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
@@ -48,18 +49,19 @@ test1 =
     TestLabel "test1" $
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion
-                 let deb = putCopyright (Left BSD3) $ newDebianization (ChangeLog [testEntry]) level standards
+                 let deb = finalizeDebianization $ putCopyright (Left BSD3) $ newDebianization (ChangeLog [testEntry]) level standards
                  assertEqual "test1" [] (diffDebianizations testDeb1 deb))
     where
       testDeb1 :: Atoms
       testDeb1 =
-          setRulesHead (T.pack . unlines $ [ "#!/usr/bin/make -f"
-                                           , ""
-                                           , "DEB_CABAL_PACKAGE = haskell-cabal-debian"
-                                           , ""
-                                           , "include /usr/share/cdbs/1/rules/debhelper.mk"
-                                           , "include /usr/share/cdbs/1/class/hlibrary.mk"
-                                           , "" ]) $
+          setL rulesHead (Just . T.unlines $
+                          [ "#!/usr/bin/make -f"
+                          , ""
+                          , "DEB_CABAL_PACKAGE = haskell-cabal-debian"
+                          , ""
+                          , "include /usr/share/cdbs/1/rules/debhelper.mk"
+                          , "include /usr/share/cdbs/1/class/hlibrary.mk"
+                          , "" ]) $
           insertAtom Source (DebCompat 9) $ -- This will change as new version of debhelper are released
           putCopyright (Left BSD3) $
           setSourceDebDescription
@@ -94,17 +96,18 @@ test2 =
     TestLabel "test2" $
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion
-                 let deb = putCopyright (Left BSD3) $ newDebianization (ChangeLog [testEntry]) level standards
+                 let deb = finalizeDebianization $ putCopyright (Left BSD3) $ newDebianization (ChangeLog [testEntry]) level standards
                  assertEqual "test2" [] (diffDebianizations expect deb))
     where
       expect =
-          setRulesHead (T.unlines ["#!/usr/bin/make -f",
-                                   "",
-                                   "DEB_CABAL_PACKAGE = haskell-cabal-debian",
-                                   "",
-                                   "include /usr/share/cdbs/1/rules/debhelper.mk",
-                                   "include /usr/share/cdbs/1/class/hlibrary.mk",
-                                   ""]) $
+          setL rulesHead (Just . T.unlines $
+                          ["#!/usr/bin/make -f",
+                           "",
+                           "DEB_CABAL_PACKAGE = haskell-cabal-debian",
+                           "",
+                           "include /usr/share/cdbs/1/rules/debhelper.mk",
+                           "include /usr/share/cdbs/1/class/hlibrary.mk",
+                           ""]) $
           insertAtom Source (DebCompat 9) $
           putCopyright (Left BSD3) $
           setSourceDebDescription
@@ -144,7 +147,7 @@ test3 =
       testDeb2 :: Atoms
       testDeb2 =
           sourceFormat Native3 $
-          setRulesHead "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n" $
+          setL rulesHead (Just "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n") $
           insertAtom Source (DebCompat 7) $
           putCopyright (Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n") $
           setSourceDebDescription

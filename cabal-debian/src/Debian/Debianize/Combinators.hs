@@ -12,6 +12,7 @@ module Debian.Debianize.Combinators
     , oldFilterMissing
     ) where
 
+import Data.Lens.Lazy (setL)
 import Data.List as List (nub, intercalate)
 import qualified Data.Map as Map
 import Data.Maybe
@@ -20,9 +21,9 @@ import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, intercalate, unlines)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.AtomsClass (HasAtoms)
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead))
 import Debian.Debianize.AtomsType (packageDescription, revision, debVersion, sourcePackageName,
-                                   extraLibMap, epochMap, changeLog, modifyChangeLog, setRulesHead, sourceDebDescription, setSourceDebDescription)
+                                   extraLibMap, epochMap, changeLog, modifyChangeLog, sourceDebDescription, setSourceDebDescription)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 -- import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
@@ -98,12 +99,15 @@ convertVersion debinfo cabalVersion =
 -- | Generate the head of the debian/rules file.
 cdbsRules :: HasAtoms atoms => PackageIdentifier -> atoms -> atoms
 cdbsRules pkgId deb =
-    setRulesHead (unlines ["#!/usr/bin/make -f",
-                                              "",
-                                              "DEB_CABAL_PACKAGE = " <> pack (show (pretty (debianName deb Cabal pkgId :: BinPkgName))),
-                                              "",
-                                              "include /usr/share/cdbs/1/rules/debhelper.mk",
-                                              "include /usr/share/cdbs/1/class/hlibrary.mk" ]) deb
+    setL rulesHead
+         (Just . unlines $
+          ["#!/usr/bin/make -f",
+           "",
+           "DEB_CABAL_PACKAGE = " <> pack (show (pretty (debianName deb Cabal pkgId :: BinPkgName))),
+           "",
+           "include /usr/share/cdbs/1/rules/debhelper.mk",
+           "include /usr/share/cdbs/1/class/hlibrary.mk" ])
+         deb
 
 putStandards :: HasAtoms atoms => StandardsVersion -> atoms -> atoms
 putStandards x deb = setSourceDebDescription ((sourceDebDescription deb) {standardsVersion = Just x}) deb

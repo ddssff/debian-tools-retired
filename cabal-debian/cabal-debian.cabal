@@ -28,6 +28,7 @@ Library
    bytestring,
    Cabal >= 1.9,
    containers,
+   data-lens,
    debian >= 3.70,
    Diff,
    directory,

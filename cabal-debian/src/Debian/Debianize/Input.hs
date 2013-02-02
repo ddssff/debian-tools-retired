@@ -11,14 +11,15 @@ import Debug.Trace (trace)
 import Control.Exception (SomeException, catch)
 import Control.Monad (foldM, filterM)
 import Data.Char (isSpace)
+import Data.Lens.Lazy (setL)
 import Data.Maybe (fromMaybe)
 import Data.Set (fromList, insert)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.AtomsClass (HasAtoms)
-import Debian.Debianize.AtomsType (Atoms, setRulesHead, install, installDir,
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead))
+import Debian.Debianize.AtomsType (Atoms, install, installDir,
                                    defaultAtoms, modifySourceDebDescription, intermediateFile, warning, watchFile, logrotateStanza,
                                    sourceFormat, putCompat, putCopyright, setChangeLog, installInit, postInst, postRm, preInst, preRm, link)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
@@ -170,7 +171,7 @@ inputAtoms :: HasAtoms atoms => FilePath -> FilePath -> atoms -> IO atoms
 inputAtoms _ path xs | elem path ["control"] = return xs
 inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ (either warning sourceFormat (readSourceFormat text)) xs
 inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ watchFile text xs
-inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> return $ setRulesHead text xs
+inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> return $ setL rulesHead (Just text) xs
 inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> return $ putCompat (read (unpack text)) xs
 inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> return $ putCopyright (Right text) xs
 inputAtoms debian name@"changelog" xs =

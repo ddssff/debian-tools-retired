@@ -6,13 +6,15 @@ module Debian.Debianize.Finalize
     ) where
 
 import Data.Char (toLower)
+import Data.Lens.Lazy (modL)
 import Data.List as List (map)
 import Data.Maybe
-import Data.Monoid (Monoid, mempty)
+import Data.Monoid (Monoid, mempty, (<>))
 import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, empty, map)
-import Data.Text (pack)
-import Debian.Debianize.AtomsClass (HasAtoms(putAtoms), DebAtomKey(..), DebAtom(..))
-import Debian.Debianize.AtomsType (insertAtom,
+import Data.Text (pack, unlines)
+import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logPackage))
+import Debian.Debianize.AtomsClass (HasAtoms(putAtoms, rulesHead), DebAtomKey(..), DebAtom(..))
+import Debian.Debianize.AtomsType (insertAtom, sourcePackageName, changeLog,
                                    packageDescription, setArchitecture, setPackageDescription, binaryPackageDeps,
                                    binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
                                    sourceDebDescription, setSourceDebDescription,
@@ -38,6 +40,7 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- this function is not idempotent.  (Exported for use in unit tests.)
 finalizeDebianization  :: HasAtoms deb => deb -> deb
 finalizeDebianization deb0 =
+    defaultRulesHead $
     foldAtomsFinalized g deb'' deb'' -- Apply tweaks to the debianization
     where
       -- Fixme - makeUtilsPackage does stuff that needs to go through foldAtomsFinalized
@@ -64,6 +67,23 @@ finalizeDebianization deb0 =
       g Source (DHSection x) deb =         setSourceDebDescription ((sourceDebDescription deb) {section = Just x}) deb
       g (Binary b) (DHDescription x) deb = setSourceDebDescription (modifyBinaryDeb b (\ (Just bin) -> bin {Debian.description = x}) (sourceDebDescription deb)) deb
       g _ _ deb = deb
+
+-- | Ensure a valid rulesHead value in atoms.
+defaultRulesHead :: HasAtoms atoms => atoms -> atoms
+defaultRulesHead atoms =
+    modL rulesHead f atoms
+    where
+      f (Just x) = Just x
+      f Nothing = Just . unlines $
+                  [ "#!/usr/bin/make -f"
+                  , ""
+                  , "DEB_CABAL_PACKAGE = " <> pack (show (pretty name))
+                  , ""
+                  , "include /usr/share/cdbs/1/rules/debhelper.mk"
+                  , "include /usr/share/cdbs/1/class/hlibrary.mk"
+                  , "" ]
+      name = fromMaybe logName (sourcePackageName atoms)
+      logName = let ChangeLog (hd : _) = changeLog atoms in logPackage hd
 
 cabalExecBinaryPackage :: HasAtoms deb => BinPkgName -> deb -> deb
 cabalExecBinaryPackage b deb =

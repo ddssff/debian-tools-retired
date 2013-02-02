@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 module Debian.Debianize.AtomsType
     ( Atoms(Atoms, unAtoms)
     , defaultFlags
@@ -59,8 +59,6 @@ module Debian.Debianize.AtomsType
     , binaryPackageConflicts
     , putPackageInfo
     , packageInfo
-    , rulesHead
-    , setRulesHead
     , setSourceArchitecture
     , setSourcePriority
     , setSourceSection
@@ -145,6 +143,7 @@ module Debian.Debianize.AtomsType
 
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
+import Data.Lens.Lazy (lens)
 import Data.List as List (map)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey, empty)
 import Data.Maybe (fromMaybe)
@@ -197,7 +196,9 @@ defaultFlags =
 newtype Atoms = Atoms {unAtoms :: Map DebAtomKey (Set DebAtom)} deriving (Eq, Show)
 
 defaultAtoms :: Atoms
-defaultAtoms = insertAtom Source (DebVersionSplits knownVersionSplits) $ (Atoms mempty)
+defaultAtoms =
+    insertAtom Source (DebVersionSplits knownVersionSplits) $
+    Atoms mempty
 
 instance Monoid Atoms where
     mempty = defaultAtoms
@@ -206,6 +207,19 @@ instance Monoid Atoms where
 instance HasAtoms Atoms where
     getAtoms = unAtoms
     putAtoms mp _ = Atoms mp
+
+    rulesHead = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DebRulesHead x') (Just x) | x /= x' = error $ "Conflicting rulesHead values:" ++ show (x, x')
+                from Source (DebRulesHead x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebRulesHead) x)) atoms
+              where
+                f :: DebAtomKey -> DebAtom -> Maybe Text
+                f Source (DebRulesHead y) = Just y
+                f _ _ = Nothing
 
 lookupAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Maybe a
 lookupAtom mbin from xs =
@@ -464,38 +478,6 @@ packageInfo (PackageName name) atoms =
       from Source (DebPackageInfo p) Nothing | cabalName p == name = Just p
       from Source (DebPackageInfo p') (Just _) | cabalName p' == name = error $ "Multiple DebPackageInfo entries for " ++ name
       from _ _ x = x
-
-rulesHead :: HasAtoms atoms => atoms -> Text
-rulesHead atoms =
-    fromMaybe (defaultRulesHead atoms) $ foldAtoms from Nothing atoms
-    where
-      from Source (DebRulesHead text') (Just text) | text' /= text = error $ "Conflicting values for DebRulesHead: " ++ show text ++ " vs. " ++ show text'
-      from Source (DebRulesHead text) _ = Just text
-      from _ _ x = x
-
-setRulesHead :: HasAtoms atoms => Text -> atoms -> atoms
-setRulesHead text atoms =
-    modifyAtoms' f g atoms
-    where
-      f :: DebAtomKey -> DebAtom -> Maybe Text
-      f Source (DebRulesHead x) = Just x
-      f _ _ = Nothing
-      g :: Set Text -> Set (DebAtomKey, DebAtom)
-      g s | Set.null s || s == singleton text = singleton (Source, DebRulesHead text)
-      g s = error $ "setRulesHead: " ++ show (s, text)
-
-defaultRulesHead :: HasAtoms atoms => atoms -> Text
-defaultRulesHead atoms =
-    unlines $ [ "#!/usr/bin/make -f"
-              , ""
-              , "DEB_CABAL_PACKAGE = " <> pack (show (pretty name))
-              , ""
-              , "include /usr/share/cdbs/1/rules/debhelper.mk"
-              , "include /usr/share/cdbs/1/class/hlibrary.mk"
-              , "" ]
-    where
-      name = fromMaybe logName (sourcePackageName atoms)
-      logName = let ChangeLog (hd : _) = changeLog atoms in logPackage hd
 
 execMap :: HasAtoms atoms => atoms -> Map.Map String BinPkgName
 execMap atoms =

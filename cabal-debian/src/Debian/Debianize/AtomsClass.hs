@@ -17,6 +17,7 @@ module Debian.Debianize.AtomsClass
     ) where
 
 import Data.Generics (Data, Typeable)
+import Data.Lens.Lazy (Lens)
 import Data.Map (Map)
 import Data.Monoid (Monoid)
 import Data.Set (Set)
@@ -37,6 +38,7 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 class Monoid atoms => HasAtoms atoms where
     getAtoms :: atoms -> Map DebAtomKey (Set DebAtom)
     putAtoms :: Map DebAtomKey (Set DebAtom) -> atoms -> atoms
+    rulesHead :: Lens atoms (Maybe Text)
 
 data DebAtomKey
     = Source

@@ -7,6 +7,7 @@ module Debian.Debianize.Files
 
 -- import Debug.Trace
 
+import Data.Lens.Lazy (getL)
 import Data.List as List (map)
 import Data.Map as Map (Map, toList, empty, insertWith, fromListWithKey)
 import Data.Maybe
@@ -15,8 +16,8 @@ import Data.Set as Set (toList, member)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.AtomsClass (HasAtoms, DebAtomKey(..), DebAtom(..))
-import Debian.Debianize.AtomsType (lookupAtom, foldAtoms, changeLog, compat, copyright, rulesHead)
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead), DebAtomKey(..), DebAtom(..))
+import Debian.Debianize.AtomsType (lookupAtom, foldAtoms, changeLog, compat, copyright)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Utility (showDeps')
@@ -155,7 +156,7 @@ toFileMap atoms d =
 
 rules :: HasAtoms atoms => atoms -> Text
 rules deb =
-    foldAtoms append (rulesHead deb) deb
+    foldAtoms append (fromMaybe mempty (getL rulesHead deb)) deb
     where
       append Source (DebRulesFragment x) text = text <> "\n" <> x
       append _ _ text = text
