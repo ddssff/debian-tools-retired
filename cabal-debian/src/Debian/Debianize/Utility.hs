@@ -19,16 +19,17 @@ module Debian.Debianize.Utility
     , withCurrentDirectory
     , getDirectoryContents'
     , setMapMaybe
+    , zipMaps
     ) where
 
 import Control.Exception as E (catch, try, bracket, IOException)
 import Control.Monad (when)
 import Control.Monad.Reader (ReaderT, ask)
 import Data.Char (isSpace)
-import Data.List (isSuffixOf, intercalate)
-import qualified Data.Map as Map
+import Data.List as List (isSuffixOf, intercalate, map)
+import Data.Map as Map (Map, foldWithKey, empty, fromList, findWithDefault, insert, map, lookup)
 import Data.Maybe (catMaybes, mapMaybe)
-import Data.Set (Set, fromList, toList)
+import Data.Set (Set, toList)
 import qualified Data.Set as Set
 import Data.Text as Text (Text, unpack, lines)
 import Data.Text.IO (hGetContents)
@@ -36,6 +37,7 @@ import Debian.Control (parseControl, lookupP, Field'(Field), unControl, stripWS)
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Debian.Version.String (parseDebianVersion)
 import qualified Debian.Relation as D
+import Prelude hiding (map, lookup)
 import System.Directory (doesFileExist, doesDirectoryExist, removeFile, renameFile, removeDirectory, getDirectoryContents, getCurrentDirectory, setCurrentDirectory)
 import System.Exit(ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>), dropExtension)
@@ -117,15 +119,15 @@ dpkgFileMap =
     do
       let fp = "/var/lib/dpkg/info"
       names <- getDirectoryContents fp >>= return . filter (isSuffixOf ".list")
-      let paths = map (fp </>) names
+      let paths = List.map (fp </>) names
       files <- mapM (strictReadF Text.lines) paths
-      return $ Map.fromList $ zip (map dropExtension names) (map (Set.fromList . map (D.BinPkgName . unpack)) $ files)
+      return $ Map.fromList $ zip (List.map dropExtension names) (List.map (Set.fromList . List.map (D.BinPkgName . unpack)) $ files)
 
 -- |Given a path, return the name of the package that owns it.
 debOfFile :: FilePath -> ReaderT (Map.Map FilePath (Set.Set D.BinPkgName)) IO (Maybe D.BinPkgName)
 debOfFile path =
     do mp <- ask
-       return $ testPath (Map.lookup path mp)
+       return $ testPath (lookup path mp)
     where
       -- testPath :: Maybe (Set.Set FilePath) -> Maybe FilePath
       testPath Nothing = Nothing
@@ -153,7 +155,7 @@ showDeps = show . D.prettyRelations
 showDeps' :: [a] -> [[D.Relation]] -> String
 showDeps' prefix xss =
     intercalate  ("\n" ++ prefix' ++ " ") . Prelude.lines . show . D.prettyRelations $ xss
-    where prefix' = map (\ _ -> ' ') prefix
+    where prefix' = List.map (\ _ -> ' ') prefix
 
 -- | From Darcs.Utils
 withCurrentDirectory :: FilePath -> IO a -> IO a
@@ -196,4 +198,17 @@ getDirectoryContents' dir =
       dotFile _ = False
 
 setMapMaybe :: (Ord a, Ord b) => (a -> Maybe b) -> Set a -> Set b
-setMapMaybe p = fromList . mapMaybe p . toList
+setMapMaybe p = Set.fromList . mapMaybe p . toList
+
+zipMaps :: Ord k => (k -> Maybe a -> Maybe b -> Maybe c) -> Map k a -> Map k b -> Map k c
+zipMaps f m n =
+    foldWithKey h (foldWithKey g empty m) n
+    where
+      g k a r = case f k (Just a) (lookup k n) of
+                  Just c -> Map.insert k c r              -- Both m and n have entries for k
+                  Nothing -> r                            -- Only m has an entry for k
+      h k b r = case lookup k m of
+                  Nothing -> case f k Nothing (Just b) of
+                               Just c -> Map.insert k c r -- Only n has an entry for k
+                               Nothing -> r
+                  Just _ -> r
