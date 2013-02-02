@@ -134,7 +134,6 @@ module Debian.Debianize.AtomsType
     , foldSections
     , foldDescriptions
     , foldAtomsFinalized
-    , fileAtoms
     , foldCabalDatas
     , foldCabalExecs
     ) where
@@ -143,7 +142,7 @@ import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Lens.Lazy (lens, getL)
 import Data.List as List (map)
-import Data.Map as Map (Map, lookup, insertWith, foldWithKey, empty)
+import Data.Map as Map (Map, lookup, insertWith, foldWithKey, empty, null)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
 import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert, member, map)
@@ -199,7 +198,9 @@ defaultAtoms =
     Atoms mempty
 
 instance Monoid Atoms where
-    mempty = defaultAtoms
+    -- We need mempty to actually be an empty map because we test for
+    -- this in the expandAtoms recursion.
+    mempty = Atoms mempty -- defaultAtoms
     mappend a b = foldAtoms insertAtom a b
 
 instance HasAtoms Atoms where
@@ -1007,76 +1008,90 @@ foldExecs site serv backup exec r0 atoms =
       from (Binary p) (DHExecutable x) r = exec p x r
       from _ _ r = r
 
-foldAtomsFinalized :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
+foldAtomsFinalized :: (HasAtoms atoms, Show atoms) => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
 foldAtomsFinalized f r0 atoms =
-    foldr (\ (k, a) r -> f k a r) r0 (expandAtoms pairs)
+    foldAtoms f r0 (expanded atoms)
     where
-      pairs = foldAtoms (\ k a xs -> (k, a) : xs) [] atoms
+      -- The atoms in r plus the ones generated from r
+      expanded :: HasAtoms r => r -> r
+      expanded r = foldAtoms insertAtom r (newAtoms r)
+      -- All the atoms generated from those in r
+      newAtoms :: HasAtoms r => r -> r
+      newAtoms r =
+          -- I don't understand why folding an empty map causes an infinite recursion, but it does
+          if Map.null (getAtoms next)
+          then r
+          else foldAtoms insertAtom (newAtoms next) next
+              where
+                next = nextAtoms r
+      -- The next layer of atoms generated from r
+      nextAtoms :: HasAtoms r => r -> r
+      nextAtoms atoms = foldAtoms next mempty atoms
+
       builddir = buildDir "dist-ghc/build" atoms
       datadir = dataDir (error "foldAtomsFinalized") atoms
 
-      -- | Fully expand an atom set, returning a set containing
-      -- both the original and the expansion.
-      expandAtoms :: [(DebAtomKey, DebAtom)] -> [(DebAtomKey, DebAtom)]
-      expandAtoms [] = []
-      expandAtoms xs = xs ++ expandAtoms (concatMap (uncurry expandAtom) xs)
+      -- Fully expand a single atom
+      next :: HasAtoms r => DebAtomKey -> DebAtom -> r -> r
+      next (Binary b) (DHApacheSite domain' logdir text) r =
+          link b ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain') .
+          installDir b logdir .
+          file b ("/etc/apache2/sites-available" </> domain') text $
+          r
+      next (Binary b) (DHInstallCabalExec name dst) r =
+          install b (builddir </> name </> name) dst $
+          r
+      next (Binary b) (DHInstallCabalExecTo n d) r =
+          rulesFragment (unlines [ pack ("binary-fixup" </> show (pretty b)) <> "::"
+                                 , "\tinstall -Dp " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty b) </> makeRelative "/" d) ]) $
+          r
+      next (Binary b) (DHInstallData s d) r =
+          if takeFileName s == takeFileName d
+          then install b s (datadir </> makeRelative "/" (takeDirectory d)) r
+          else installTo b s (datadir </> makeRelative "/" d) r
+      next (Binary p) (DHInstallTo s d) r =
+          rulesFragment (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
+                                 , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]) $
+          r
+      next (Binary p) (DHFile path s) r =
+          intermediateFile tmpPath s . install p tmpPath destDir' $ r
+          where
+            (destDir', destName') = splitFileName path
+            tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
+            tmpPath = tmpDir </> destName'
+      next (Binary b) (DHWebsite x) r =
+          siteAtoms b x $
+          r
+      next (Binary b) (DHServer x) r =
+          serverAtoms b x False $
+          r
+      next (Binary b) (DHBackups s) r =
+          backupAtoms b s $
+          r
+      next (Binary b) (DHExecutable x) r =
+          execAtoms b x $
+          r
+      next _ _ r = r
 
-      expandAtom :: DebAtomKey -> DebAtom -> [(DebAtomKey, DebAtom)]
-      expandAtom (Binary b) (DHApacheSite domain' logdir text) =
-          [(Binary b, DHLink ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain')),
-           (Binary b, DHInstallDir logdir), -- Server won't start if log directory doesn't exist
-           (Binary b, DHFile ("/etc/apache2/sites-available" </> domain') text)]
-      expandAtom (Binary pkg) (DHInstallCabalExec name dst) =
-          [(Binary pkg, DHInstall (builddir </> name </> name) dst)]
-      expandAtom (Binary p) (DHInstallCabalExecTo n d) =
-          [(Source, DebRulesFragment (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
-                                              , "\tinstall -Dp " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]))]
-      expandAtom (Binary p) (DHInstallData s d) =
-          [(Binary p, if takeFileName s == takeFileName d
-                      then DHInstall s (datadir </> makeRelative "/" (takeDirectory d))
-                      else DHInstallTo s (datadir </> makeRelative "/" d))]
-      expandAtom (Binary p) (DHInstallTo s d) =
-          [(Source, (DebRulesFragment (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
-                                               , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])))]
-      expandAtom (Binary p) (DHFile path s) =
-          let (destDir', destName') = splitFileName path
-              tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
-              tmpPath = tmpDir </> destName' in
-          [(Source, DHIntermediate tmpPath s),
-           (Binary p, DHInstall tmpPath destDir')]
-      expandAtom k (DHWebsite x) =
-          siteAtoms k x
-      expandAtom k (DHServer x) =
-          serverAtoms k x False
-      expandAtom k (DHBackups s) =
-          backupAtoms k s
-      expandAtom k (DHExecutable x) =
-          execAtoms k x
-      expandAtom _ _ = []
-
--- | Return a list of files to add to the debianization to manage the
--- server or web site.
-siteAtoms :: DebAtomKey -> Site -> [(DebAtomKey, DebAtom)]
-siteAtoms k@(Binary b) site =
-    [(Binary b, DHInstallDir "/etc/apache2/sites-available"),
-     (Binary b, DHLink ("/etc/apache2/sites-available/" ++ domain site) ("/etc/apache2/sites-enabled/" ++ domain site)),
-     (Binary b, DHFile ("/etc/apache2/sites-available" </> domain site) apacheConfig),
-     (Binary b, DHInstallDir (apacheLogDirectory b)),  -- Server won't start if log directory doesn't exist
-     (Binary b, DHLogrotateStanza (unlines $
-                                              [ pack (apacheAccessLog b) <> " {"
+siteAtoms :: HasAtoms r => BinPkgName -> Site -> r -> r
+siteAtoms b site =
+    installDir b "/etc/apache2/sites-available" .
+    link b ("/etc/apache2/sites-available/" ++ domain site) ("/etc/apache2/sites-enabled/" ++ domain site) .
+    file b ("/etc/apache2/sites-available" </> domain site) apacheConfig .
+    installDir b (apacheLogDirectory b) .
+    logrotateStanza b (unlines $              [ pack (apacheAccessLog b) <> " {"
                                               , "  weekly"
                                               , "  rotate 5"
                                               , "  compress"
                                               , "  missingok"
-                                              , "}"])),
-     (Binary b, DHLogrotateStanza (unlines $
-                                              [ pack (apacheErrorLog b) <> " {"
+                                              , "}"]) .
+    logrotateStanza b (unlines $              [ pack (apacheErrorLog b) <> " {"
                                               , "  weekly"
                                               , "  rotate 5"
                                               , "  compress"
                                               , "  missingok"
-                                              , "}" ]))] ++
-    serverAtoms k (server site) True
+                                              , "}" ]) .
+    serverAtoms b (server site) True
     where
       -- An apache site configuration file.  This is installed via a line
       -- in debianFiles.
@@ -1116,12 +1131,12 @@ siteAtoms k@(Binary b) site =
                    , "</VirtualHost>" ]
       port' = pack (show (port (server site)))
 
-serverAtoms :: DebAtomKey -> Server -> Bool -> [(DebAtomKey, DebAtom)]
-serverAtoms k@(Binary b) server isSite =
-    [(Binary b, DHPostInst debianPostinst),
-     (Binary b, DHInstallInit debianInit)] ++
-    serverLogrotate b ++
-    execAtoms k exec
+serverAtoms :: HasAtoms r => BinPkgName -> Server -> Bool -> r -> r
+serverAtoms b server isSite =
+    postInst b debianPostinst .
+    installInit b debianInit .
+    serverLogrotate' b .
+    execAtoms b exec
     where
       exec = installFile server
       debianInit =
@@ -1182,54 +1197,53 @@ serverAtoms k@(Binary b) server isSite =
 
 -- | A configuration file for the logrotate facility, installed via a line
 -- in debianFiles.
-serverLogrotate :: BinPkgName -> [(DebAtomKey, DebAtom)]
-serverLogrotate b =
-    [(Binary b, (DHLogrotateStanza . unlines $
-                   [ pack (serverAccessLog b) <> " {"
-                   , "  weekly"
-                   , "  rotate 5"
-                   , "  compress"
-                   , "  missingok"
-                   , "}" ])),
-     (Binary b, (DHLogrotateStanza . unlines $
-                   [ pack (serverAppLog b) <> " {"
-                   , "  weekly"
-                   , "  rotate 5"
-                   , "  compress"
-                   , "  missingok"
-                   , "}" ]))]
+serverLogrotate' :: HasAtoms r => BinPkgName -> r -> r
+serverLogrotate' b =
+    logrotateStanza b (unlines $ [ pack (serverAccessLog b) <> " {"
+                                 , "  weekly"
+                                 , "  rotate 5"
+                                 , "  compress"
+                                 , "  missingok"
+                                 , "}" ]) .
+    logrotateStanza b (unlines $ [ pack (serverAppLog b) <> " {"
+                                 , "  weekly"
+                                 , "  rotate 5"
+                                 , "  compress"
+                                 , "  missingok"
+                                 , "}" ])
 
-backupAtoms :: DebAtomKey -> String -> [(DebAtomKey, DebAtom)]
-backupAtoms k name =
-    [(k, DHPostInst . unlines $
+backupAtoms :: HasAtoms r => BinPkgName -> String -> r -> r
+backupAtoms b name =
+    postInst b (unlines $
                   [ "#!/bin/sh"
                   , ""
                   , "case \"$1\" in"
                   , "  configure)"
                   , "    " <> pack ("/etc/cron.hourly" </> name) <> " --initialize"
                   , "    ;;"
-                  , "esac" ])] ++
-    execAtoms k (InstallFile { execName = name
-                             , destName = name
-                             , sourceDir = Nothing
-                             , destDir = Just "/etc/cron.hourly" })
+                  , "esac" ]) .
+    execAtoms b (InstallFile { execName = name
+                              , destName = name
+                              , sourceDir = Nothing
+                              , destDir = Just "/etc/cron.hourly" })
 
-execAtoms :: DebAtomKey -> InstallFile -> [(DebAtomKey, DebAtom)]
-execAtoms (Binary b) ifile =
-    [(Source, DebRulesFragment (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp")))] ++
-     fileAtoms (Binary b) ifile
+execAtoms :: HasAtoms r => BinPkgName -> InstallFile -> r -> r
+execAtoms b ifile r =
+    rulesFragment (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp")) .
+    fileAtoms b ifile $
+    r
 
-fileAtoms :: DebAtomKey -> InstallFile -> [(DebAtomKey, DebAtom)]
-fileAtoms k installFile =
-    fileAtoms' k (sourceDir installFile) (execName installFile) (destDir installFile) (destName installFile)
+fileAtoms :: HasAtoms r => BinPkgName -> InstallFile -> r -> r
+fileAtoms b installFile r =
+    fileAtoms' b (sourceDir installFile) (execName installFile) (destDir installFile) (destName installFile) r
 
-fileAtoms' :: DebAtomKey -> Maybe FilePath -> String -> Maybe FilePath -> String -> [(DebAtomKey, DebAtom)]
-fileAtoms' (Binary b) sourceDir execName destDir destName =
-    [(Binary b, case (sourceDir, execName == destName) of
-                  (Nothing, True) -> DHInstallCabalExec execName d
-                  (Just s, True) -> DHInstall (s </> execName) d
-                  (Nothing, False) -> DHInstallCabalExecTo execName (d </> destName)
-                  (Just s, False) -> DHInstallTo (s </> execName) (d </> destName))]
+fileAtoms' :: HasAtoms r => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> r -> r
+fileAtoms' b sourceDir execName destDir destName r =
+    case (sourceDir, execName == destName) of
+      (Nothing, True) -> installCabalExec b execName d r
+      (Just s, True) -> install b (s </> execName) d r
+      (Nothing, False) -> installCabalExecTo b execName (d </> destName) r
+      (Just s, False) -> installTo b (s </> execName) (d </> destName) r
     where
       d = fromMaybe "usr/bin" destDir
 

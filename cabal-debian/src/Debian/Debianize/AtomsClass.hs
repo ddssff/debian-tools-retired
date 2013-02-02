@@ -35,7 +35,9 @@ import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
-class Monoid atoms => HasAtoms atoms where
+class (Monoid atoms,
+       Show atoms) -- for debugging
+    => HasAtoms atoms where
     getAtoms :: atoms -> Map DebAtomKey (Set DebAtom)
     putAtoms :: Map DebAtomKey (Set DebAtom) -> atoms -> atoms
     rulesHead :: Lens atoms (Maybe Text)
