@@ -6,16 +6,16 @@ module Debian.Debianize.Finalize
     ) where
 
 import Data.Char (toLower)
-import Data.Lens.Lazy (modL)
+import Data.Lens.Lazy (modL, setL, getL)
 import Data.List as List (map)
 import Data.Maybe
 import Data.Monoid (Monoid, mempty, (<>))
 import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, empty, map)
 import Data.Text (pack, unlines)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logPackage))
-import Debian.Debianize.AtomsClass (HasAtoms(putAtoms, rulesHead), DebAtomKey(..), DebAtom(..))
+import Debian.Debianize.AtomsClass (HasAtoms(putAtoms, rulesHead, packageDescription), DebAtomKey(..), DebAtom(..))
 import Debian.Debianize.AtomsType (insertAtom, sourcePackageName, changeLog,
-                                   packageDescription, setArchitecture, setPackageDescription, binaryPackageDeps,
+                                   setArchitecture, binaryPackageDeps,
                                    binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
                                    sourceDebDescription, setSourceDebDescription,
                                    foldAtomsFinalized, rulesFragment, installData, installCabalExec, foldCabalDatas, foldCabalExecs)
@@ -98,7 +98,7 @@ cabalExecBinaryPackage b deb =
             , Debian.description = describe deb Exec (Cabal.package pkgDesc)
             , relations = binaryPackageRelations b Exec deb
             }
-      pkgDesc = fromMaybe (error "cabalExecBinaryPackage: no PackageDescription") $ packageDescription deb
+      pkgDesc = fromMaybe (error "cabalExecBinaryPackage: no PackageDescription") $ getL packageDescription deb
 
 binaryPackageRelations :: HasAtoms atoms => BinPkgName -> PackageType -> atoms -> PackageRelations
 binaryPackageRelations b typ deb =
@@ -118,7 +118,7 @@ binaryPackageRelations b typ deb =
 
 -- debLibProf haddock binaryPackageDeps extraDevDeps extraLibMap
 librarySpecs :: HasAtoms deb => deb -> deb
-librarySpecs deb | isNothing (packageDescription deb) = deb
+librarySpecs deb | isNothing (getL packageDescription deb) = deb
 librarySpecs deb =
     (if doc then insertAtom (Binary (debName)) (DHLink ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt") ("/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")) else id) $
     setSourceDebDescription
@@ -132,7 +132,7 @@ librarySpecs deb =
       doc = dev && not (noDocumentationLibrary deb)
       prof = dev && not (noProfilingLibrary deb)
       dev = isJust (Cabal.library pkgDesc)
-      pkgDesc = fromMaybe (error "librarySpecs: no PackageDescription") $ packageDescription deb
+      pkgDesc = fromMaybe (error "librarySpecs: no PackageDescription") $ getL packageDescription deb
       PackageName cabal = pkgName (Cabal.package pkgDesc)
       debName :: BinPkgName
       debName = debianName deb Documentation (Cabal.package pkgDesc)
@@ -165,13 +165,13 @@ librarySpec atoms arch typ pkgId =
 -- | Create a package to hold any executables and data files not
 -- assigned to some other package.
 makeUtilsPackage :: forall deb. HasAtoms deb => deb -> deb
-makeUtilsPackage deb | isNothing (packageDescription deb) = deb
+makeUtilsPackage deb | isNothing (getL packageDescription deb) = deb
 makeUtilsPackage deb =
     case (Set.difference availableData installedData, Set.difference availableExec installedExec) of
       (datas, execs) | Set.null datas && Set.null execs -> deb
       (datas, execs) ->
           let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)
-              atoms = setPackageDescription pkgDesc . makeUtilsAtoms p datas execs $ (mempty :: deb)
+              atoms = setL packageDescription (Just pkgDesc) . makeUtilsAtoms p datas execs $ (mempty :: deb)
               deb' = foldAtomsFinalized insertAtom deb atoms in
           setSourceDebDescription (modifyBinaryDeb p (f deb' p (if Set.null execs then All else Any)) (sourceDebDescription deb')) deb'
     where
@@ -180,7 +180,7 @@ makeUtilsPackage deb =
           let bin = newBinaryDebDescription p arch in
           bin {binarySection = Just (MainSection "misc"),
                relations = binaryPackageRelations p Utilities deb'}
-      pkgDesc = fromMaybe (error "makeUtilsPackage: no PackageDescription") $ packageDescription deb
+      pkgDesc = fromMaybe (error "makeUtilsPackage: no PackageDescription") $ getL packageDescription deb
       availableData = Set.fromList (Cabal.dataFiles pkgDesc)
       availableExec = Set.map Cabal.exeName (Set.filter (Cabal.buildable . Cabal.buildInfo) (Set.fromList (Cabal.executables pkgDesc)))
       installedData :: Set FilePath

@@ -22,9 +22,7 @@ module Debian.Debianize.AtomsType
     -- * Future class methods
     , compiler
     , setCompiler
-    , packageDescription
     , dataDir
-    , setPackageDescription
     , compilerVersion
     , putCompilerVersion
     , noProfilingLibrary
@@ -143,7 +141,7 @@ module Debian.Debianize.AtomsType
 
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
-import Data.Lens.Lazy (lens)
+import Data.Lens.Lazy (lens, getL)
 import Data.List as List (map)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey, empty)
 import Data.Maybe (fromMaybe)
@@ -217,8 +215,19 @@ instance HasAtoms Atoms where
                 from _ _ x = x
           s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebRulesHead) x)) atoms
               where
-                f :: DebAtomKey -> DebAtom -> Maybe Text
                 f Source (DebRulesHead y) = Just y
+                f _ _ = Nothing
+
+    packageDescription = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DHPackageDescription x') (Just x) | x /= x' = error $ "Conflicting rulesHead values:" ++ show (x, x')
+                from Source (DHPackageDescription x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DHPackageDescription) x)) atoms
+              where
+                f Source (DHPackageDescription y) = Just y
                 f _ _ = Nothing
 
 lookupAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Maybe a
@@ -317,15 +326,24 @@ setCompiler comp atoms =
       f Source (DHCompiler _) = True
       f _ _ = False
 
+{-
 packageDescription :: HasAtoms atoms => atoms -> Maybe PackageDescription
 packageDescription deb =
     lookupAtom Source from deb
     where from (DHPackageDescription x) = Just x
           from _ = Nothing
 
+setPackageDescription :: HasAtoms atoms => PackageDescription -> atoms -> atoms
+setPackageDescription desc atoms =
+    replaceAtoms f Source (DHPackageDescription desc) atoms
+    where
+      f Source (DHPackageDescription _) = True
+      f _ _ = False
+-}
+
 dataDir :: HasAtoms atoms => FilePath -> atoms -> FilePath
 dataDir def atoms =
-    maybe def dataDirectory $ packageDescription atoms
+    maybe def dataDirectory $ getL packageDescription atoms
     where
       -- This is the directory where the files listed in the Data-Files
       -- section of the .cabal file need to be installed.
@@ -334,13 +352,6 @@ dataDir def atoms =
           "usr/share" </> (pkgname ++ "-" ++ (showVersion . pkgVersion . package $ pkgDesc))
           where
             PackageName pkgname = pkgName . package $ pkgDesc
-
-setPackageDescription :: HasAtoms atoms => PackageDescription -> atoms -> atoms
-setPackageDescription desc atoms =
-    replaceAtoms f Source (DHPackageDescription desc) atoms
-    where
-      f Source (DHPackageDescription _) = True
-      f _ _ = False
 
 compilerVersion :: HasAtoms atoms => atoms -> Maybe Version
 compilerVersion deb =

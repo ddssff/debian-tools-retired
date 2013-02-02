@@ -14,14 +14,15 @@ module Debian.Debianize.Dependencies
 
 import Data.Char (isSpace, toLower)
 import Data.Function (on)
+import Data.Lens.Lazy (getL)
 import Data.List (nub, minimumBy, isSuffixOf)
 import Data.Map as Map (Map, lookup, insertWith, empty)
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
 import qualified Data.Set as Set
 import Data.Version (Version, showVersion)
 import Debian.Control
-import Debian.Debianize.AtomsClass (HasAtoms, PackageInfo(devDeb, profDeb, docDeb), DebType(Dev, Prof, Doc), VersionSplits(..))
-import Debian.Debianize.AtomsType (noProfilingLibrary, noDocumentationLibrary, packageDescription, compiler, versionSplits,
+import Debian.Debianize.AtomsClass (HasAtoms(packageDescription), PackageInfo(devDeb, profDeb, docDeb), DebType(Dev, Prof, Doc), VersionSplits(..))
+import Debian.Debianize.AtomsType (noProfilingLibrary, noDocumentationLibrary, compiler, versionSplits,
                                    filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile (PackageType(..))
@@ -83,10 +84,10 @@ debDeps debType atoms control =
 cabalDependencies :: HasAtoms atoms => atoms -> [Dependency]
 cabalDependencies atoms =
     catMaybes $ map unboxDependency $ allBuildDepends atoms
-                  (Cabal.buildDepends (fromMaybe (error "cabalDependencies") $ packageDescription atoms))
-                  (concatMap buildTools . allBuildInfo . fromMaybe (error "cabalDependencies") $ packageDescription atoms)
-                  (concatMap pkgconfigDepends . allBuildInfo . fromMaybe (error "cabalDependencies") $ packageDescription atoms)
-                  (concatMap extraLibs . allBuildInfo . fromMaybe (error "cabalDependencies") $ packageDescription atoms)
+                  (Cabal.buildDepends (fromMaybe (error "cabalDependencies") $ getL packageDescription atoms))
+                  (concatMap buildTools . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL packageDescription atoms)
+                  (concatMap pkgconfigDepends . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL packageDescription atoms)
+                  (concatMap extraLibs . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL packageDescription atoms)
 
 -- |Debian packages don't have per binary package build dependencies,
 -- so we just gather them all up here.
@@ -111,7 +112,7 @@ debianBuildDeps deb =
            anyrel "ghc"] ++
             (map anyrel' (Set.toList (buildDeps deb))) ++
             (if noProfilingLibrary deb then [] else [anyrel "ghc-prof"]) ++
-            cabalDeps (packageDescription deb)
+            cabalDeps (getL packageDescription deb)
     where
       cabalDeps Nothing = []
       cabalDeps (Just pkgDesc) =
@@ -129,7 +130,7 @@ debianBuildDepsIndep deb =
     then []
     else nub $ [anyrel "ghc-doc"] ++
                (map anyrel' (Set.toList (buildDepsIndep deb))) ++
-               cabalDeps (packageDescription deb)
+               cabalDeps (getL packageDescription deb)
     where
       cabalDeps Nothing = []
       cabalDeps (Just pkgDesc) =

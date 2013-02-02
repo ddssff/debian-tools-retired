@@ -8,12 +8,13 @@ module Debian.Debianize.Cabal
 import Control.Exception (bracket)
 import Control.Monad (when)
 import Control.Monad.Trans (MonadIO, liftIO)
+import Data.Lens.Lazy (setL)
 import Data.Maybe
 import Data.Set (Set, toList)
 import Data.Text (Text, pack)
 import Data.Version (Version)
-import Debian.Debianize.AtomsClass (HasAtoms)
-import Debian.Debianize.AtomsType (setCompiler, setPackageDescription, debMaintainer)
+import Debian.Debianize.AtomsClass (HasAtoms(packageDescription))
+import Debian.Debianize.AtomsType (setCompiler, debMaintainer)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
@@ -59,7 +60,7 @@ getSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top a
                    Left e -> error $ "finalize failed: " ++ show e
                    Right (pd, _) -> return pd
       liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
-      return $ setCompiler compiler $ setPackageDescription pkgDesc $ atoms
+      return $ setCompiler compiler $ setL packageDescription (Just pkgDesc) $ atoms
     where
       vb = intToVerbosity' verbosity
 

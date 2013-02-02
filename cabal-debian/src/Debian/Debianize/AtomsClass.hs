@@ -39,6 +39,7 @@ class Monoid atoms => HasAtoms atoms where
     getAtoms :: atoms -> Map DebAtomKey (Set DebAtom)
     putAtoms :: Map DebAtomKey (Set DebAtom) -> atoms -> atoms
     rulesHead :: Lens atoms (Maybe Text)
+    packageDescription :: Lens atoms (Maybe PackageDescription)
 
 data DebAtomKey
     = Source

@@ -14,10 +14,11 @@ module Debian.Debianize.Debianize
     ) where
 
 import Control.Applicative ((<$>))
+import Data.Lens.Lazy (getL)
 import Data.Maybe
 import Data.Text (Text)
-import Debian.Debianize.AtomsClass (HasAtoms, Flags(..), DebAction(..))
-import Debian.Debianize.AtomsType (Atoms, defaultAtoms, packageDescription, flags, watchAtom, setSourcePriority, setChangeLog,
+import Debian.Debianize.AtomsClass (HasAtoms(packageDescription), Flags(..), DebAction(..))
+import Debian.Debianize.AtomsType (Atoms, defaultAtoms, flags, watchAtom, setSourcePriority, setChangeLog,
                                    setSourceSection, compilerVersion, cabalFlagAssignments, putCopyright, sourceDebDescription)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (cdbsRules, versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries)
@@ -105,7 +106,7 @@ debianize top args =
 cabalToDebianization :: HasAtoms deb => FilePath -> deb -> IO deb
 cabalToDebianization top old =
     do old' <- getSimplePackageDescription (verbosity (flags old)) (compilerVersion old) (cabalFlagAssignments old) top old
-       let pkgDesc = fromMaybe (error "cabalToDebianization") (packageDescription old')
+       let pkgDesc = fromMaybe (error "cabalToDebianization") (getL packageDescription old')
        date <- getCurrentLocalRFC822Time
        copyright <- withCurrentDirectory top $ inputCopyright pkgDesc
        maint <- inputMaintainer pkgDesc old' >>= maybe (error "Missing value for --maintainer") return
@@ -139,7 +140,7 @@ debianization date copyright' maint standards oldDeb =
     -- somewhat wrong.
     oldDeb
     where
-      pkgDesc = fromMaybe (error "debianization") $ packageDescription oldDeb
+      pkgDesc = fromMaybe (error "debianization") $ getL packageDescription oldDeb
 
 compileEnvironmentArgs :: HasAtoms atoms => atoms -> IO atoms
 compileEnvironmentArgs atoms0 =

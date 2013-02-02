@@ -12,7 +12,7 @@ module Debian.Debianize.Combinators
     , oldFilterMissing
     ) where
 
-import Data.Lens.Lazy (setL)
+import Data.Lens.Lazy (setL, getL)
 import Data.List as List (nub, intercalate)
 import qualified Data.Map as Map
 import Data.Maybe
@@ -21,8 +21,8 @@ import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, intercalate, unlines)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead))
-import Debian.Debianize.AtomsType (packageDescription, revision, debVersion, sourcePackageName,
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, packageDescription))
+import Debian.Debianize.AtomsType (revision, debVersion, sourcePackageName,
                                    extraLibMap, epochMap, changeLog, modifyChangeLog, sourceDebDescription, setSourceDebDescription)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
@@ -75,7 +75,7 @@ versionInfo debianMaintainer date deb =
       debinfo = maybe (Right (epoch, revision deb)) Left (debVersion deb)
       epoch = Map.lookup (pkgName pkgId) (epochMap deb)
       pkgId = Cabal.package pkgDesc
-      pkgDesc = fromMaybe (error "versionInfo: no PackageDescription") $ packageDescription deb
+      pkgDesc = fromMaybe (error "versionInfo: no PackageDescription") $ getL packageDescription deb
 
 -- | Combine various bits of information to produce the debian version
 -- which will be used for the debian package.  If the override
@@ -116,7 +116,7 @@ describe :: HasAtoms atoms => atoms -> PackageType -> PackageIdentifier -> Text
 describe atoms typ ident =
     debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc) typ ident
     where
-      pkgDesc = fromMaybe (error $ "describe " ++ show ident) $ packageDescription atoms
+      pkgDesc = fromMaybe (error $ "describe " ++ show ident) $ getL packageDescription atoms
 
 buildDeps :: HasAtoms deb => deb -> deb
 buildDeps deb =
@@ -139,7 +139,7 @@ addExtraLibDependencies deb =
       g rels = rels { depends = depends rels ++
                                 map anyrel' (concatMap (\ cab -> maybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] Set.toList (Map.lookup cab (extraLibMap deb)))
                                                        (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc)) }
-      pkgDesc = fromMaybe (error "addExtraLibDependencies: no PackageDescription") $ packageDescription deb
+      pkgDesc = fromMaybe (error "addExtraLibDependencies: no PackageDescription") $ getL packageDescription deb
 
 debianDescription :: String -> String -> String -> String -> String -> PackageType -> PackageIdentifier -> Text
 debianDescription synopsis' description' author' maintainer' url typ pkgId =
