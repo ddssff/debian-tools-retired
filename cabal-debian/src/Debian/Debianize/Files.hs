@@ -8,7 +8,7 @@ module Debian.Debianize.Files
 -- import Debug.Trace
 
 import Data.List as List (map)
-import qualified Data.Map as Map
+import Data.Map as Map (Map, toList, empty, insertWith, fromListWithKey)
 import Data.Maybe
 import Data.Monoid (Monoid, (<>), mempty)
 import Data.Set as Set (toList, member)
@@ -132,7 +132,7 @@ prerm deb =
 -- considering building one into the other, but it is handy to look at
 -- the Debianization produced by finalizeDebianization in the unit
 -- tests.)
-toFileMap :: HasAtoms atoms => atoms -> SourceDebDescription -> Map.Map FilePath Text
+toFileMap :: HasAtoms atoms => atoms -> SourceDebDescription -> Map FilePath Text
 toFileMap atoms d =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
       [("debian/control", pack (show (pretty (control d)))),
@@ -177,8 +177,8 @@ control src =
             depField "Build-Conflicts-Indep" (buildConflictsIndep src) ++
             [Field ("Standards-Version", " " <> show (pretty (standardsVersion src)))] ++
             mField "Homepage" (homepage src) ++
-            List.map vcsField (toList (vcsFields src)) ++
-            List.map xField (toList (xFields src))) :
+            List.map vcsField (Set.toList (vcsFields src)) ++
+            List.map xField (Set.toList (xFields src))) :
            List.map binary (binaryPackages src))
     }
     where
