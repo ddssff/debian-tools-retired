@@ -13,16 +13,17 @@ module Debian.Debianize.Debianize
     , cabalToDebianization
     ) where
 
+import Control.Applicative ((<$>))
 import Data.Maybe
 import Data.Text (Text)
 import Debian.Debianize.AtomsClass (HasAtoms, Flags(..), DebAction(..))
-import Debian.Debianize.AtomsType (Atoms, defaultAtoms, packageDescription, flags, watchAtom, setSourcePriority,
+import Debian.Debianize.AtomsType (Atoms, defaultAtoms, packageDescription, flags, watchAtom, setSourcePriority, setChangeLog,
                                    setSourceSection, compilerVersion, cabalFlagAssignments, putCopyright, sourceDebDescription)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (cdbsRules, versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..))
 import Debian.Debianize.Flags (flagOptions, atomOptions)
-import Debian.Debianize.Input as Debian (inputDebianization)
+import Debian.Debianize.Input as Debian (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Utility (withCurrentDirectory)
@@ -89,9 +90,12 @@ runDebianize args =
 -- preserved.
 debianize :: FilePath -> [String] -> IO ()
 debianize top args =
-    do old <- inputDebianization top
-       new <- compileEnvironmentArgs (compileArgs old args) >>= cabalToDebianization top
-       outputDebianization old new
+    do log <- (Just <$> inputChangeLog "debian/changelog") `catchIOError` (\ _ -> return Nothing)
+       old <- (Just <$> inputDebianization top) `catchIOError` (\ _ -> return Nothing)
+       new <- compileEnvironmentArgs (compileArgs defaultAtoms args) >>= cabalToDebianization top
+       outputDebianization (Just (def log old)) new
+    where
+      def log old = fromMaybe ((maybe id setChangeLog log) defaultAtoms) old
 
 -- | Given a Flags record, get any additional configuration
 -- information from the environment, read the cabal package

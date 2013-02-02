@@ -22,7 +22,7 @@ import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.AtomsClass (HasAtoms)
 import Debian.Debianize.AtomsType (packageDescription, revision, debVersion, sourcePackageName,
-                                   extraLibMap, epochMap, changeLog, setChangeLog', setRulesHead, sourceDebDescription, setSourceDebDescription)
+                                   extraLibMap, epochMap, changeLog, modifyChangeLog, setRulesHead, sourceDebDescription, setSourceDebDescription)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 -- import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
@@ -44,7 +44,7 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 -- log comments, maintainer name, revision date.
 versionInfo :: (HasAtoms deb) => NameAddr -> String -> deb -> deb
 versionInfo debianMaintainer date deb =
-    setChangeLog' newLog $
+    modifyChangeLog (const (Just newLog)) $
     setSourceDebDescription ((sourceDebDescription deb)
                              { source = Just sourceName
                              , Debian.maintainer = Just debianMaintainer }) deb

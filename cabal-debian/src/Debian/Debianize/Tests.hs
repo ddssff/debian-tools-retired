@@ -20,7 +20,7 @@ import Debian.Debianize.AtomsClass (HasAtoms, DebAtomKey(..), DebAtom(..), Insta
 import Debian.Debianize.AtomsType as Atom
     (Atoms, insertAtom, mapAtoms, tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
-     changeLog, setChangeLog', setRulesHead, compat, putCopyright, knownEpochMappings, sourceDebDescription, setSourceDebDescription, newDebianization)
+     changeLog, updateChangeLog, setRulesHead, compat, putCopyright, knownEpochMappings, sourceDebDescription, setSourceDebDescription, newDebianization)
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
@@ -374,13 +374,13 @@ test5 =
 
 copyFirstLogEntry :: HasAtoms atoms => atoms -> atoms -> atoms
 copyFirstLogEntry deb1 deb2 =
-    setChangeLog' (ChangeLog (hd1 : tl2)) deb2
+    updateChangeLog (ChangeLog (hd1 : tl2)) deb2
     where
       ChangeLog (hd1 : _) = changeLog deb1
       ChangeLog (_ : tl2) = changeLog deb2
 
 copyChangelog :: (HasAtoms a, HasAtoms b) => a -> b -> b
-copyChangelog deb1 deb2 = setChangeLog' (changeLog deb1) deb2
+copyChangelog deb1 deb2 = updateChangeLog (changeLog deb1) deb2
 
 test6 :: Test
 test6 =

@@ -74,8 +74,9 @@ module Debian.Debianize.AtomsType
     , doWebsite
     , doBackups
     , setSourcePackageName
+    , modifyChangeLog
     , setChangeLog
-    , setChangeLog'
+    , updateChangeLog
     , changeLog
     , compat
     , putCompat
@@ -655,22 +656,29 @@ doBackups bin s deb =
 setSourcePackageName :: HasAtoms atoms => SrcPkgName -> atoms -> atoms
 setSourcePackageName src deb = insertAtom Source (SourcePackageName src) deb
 
-setChangeLog :: HasAtoms atoms => ChangeLog -> atoms -> atoms
--- setChangeLog log deb = insertAtom Source (DebChangeLog log) deb
-setChangeLog log deb =
-    modifyAtoms' f g deb
+modifyChangeLog :: HasAtoms atoms => (Maybe ChangeLog -> Maybe ChangeLog) -> atoms -> atoms
+modifyChangeLog f atoms =
+    modifyAtoms' p g atoms
     where
-      f Source (DebChangeLog x) = Just x
-      f _ _ = Nothing
-      g s | Set.null s = singleton (Source, DebChangeLog log)
-      g s = error $ "Multiple changelogs: " ++ show (log, s)
+      p Source (DebChangeLog x) = Just x
+      p _ _ = Nothing
+      g :: Set ChangeLog -> Set (DebAtomKey, DebAtom) 
+      g s =
+          case Set.toList s of
+            [] -> maybe Set.empty (\ log -> singleton (Source, DebChangeLog log)) (f Nothing)
+            [log] ->  maybe Set.empty (\ log' -> singleton (Source, DebChangeLog log')) (f (Just log))
+            _ -> error $ "Multiple changelogs: " ++ show (Set.toList s)
+
+setChangeLog :: HasAtoms atoms => ChangeLog -> atoms -> atoms
+setChangeLog log atoms =
+    modifyChangeLog f atoms
+    where
+      f Nothing = Just log
+      f (Just log') = error $ "Multiple changelogs: " ++ show (log', log)
 
 -- | Like setChangeLog, but replacing the current log is not an error.
-setChangeLog' :: HasAtoms atoms => ChangeLog -> atoms -> atoms
-setChangeLog' log deb =
-    replaceAtoms f Source (DebChangeLog log) deb
-    where f Source (DebChangeLog _) = True
-          f _ _ = False
+updateChangeLog :: HasAtoms atoms => ChangeLog -> atoms -> atoms
+updateChangeLog log atoms = modifyChangeLog (const (Just log)) atoms
 
 changeLog :: HasAtoms atoms => atoms -> ChangeLog
 changeLog deb =
