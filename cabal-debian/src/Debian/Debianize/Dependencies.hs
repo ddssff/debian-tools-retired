@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -Wall -Wwarn -fno-warn-name-shadowing -fno-warn-orphans #-}
 module Debian.Debianize.Dependencies
     ( cabalDependencies -- Debian.Cabal.SubstVars
@@ -10,6 +10,7 @@ module Debian.Debianize.Dependencies
     , dependencies
     , debianName
     , debNameFromType
+    , getRulesHead
     ) where
 
 import Data.Char (isSpace, toLower)
@@ -18,10 +19,13 @@ import Data.Lens.Lazy (getL)
 import Data.List (nub, minimumBy, isSuffixOf)
 import Data.Map as Map (Map, lookup, insertWith, empty)
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
+import Data.Monoid ((<>))
 import qualified Data.Set as Set
+import Data.Text as Text (Text, pack, unlines)
 import Data.Version (Version, showVersion)
 import Debian.Control
-import Debian.Debianize.AtomsClass (HasAtoms(packageDescription), PackageInfo(devDeb, profDeb, docDeb), DebType(Dev, Prof, Doc), VersionSplits(..))
+import Debian.Debianize.AtomsClass (HasAtoms(packageDescription, rulesHead), PackageInfo(devDeb, profDeb, docDeb),
+                                    DebType(Dev, Prof, Doc), VersionSplits(..))
 import Debian.Debianize.AtomsType (Atoms, noProfilingLibrary, noDocumentationLibrary, compiler, versionSplits,
                                    filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
@@ -37,9 +41,11 @@ import Distribution.Version (VersionRange, anyVersion, foldVersionRange', inters
                              laterVersion, orLaterVersion, earlierVersion, orEarlierVersion, fromVersionIntervals, toVersionIntervals, withinVersion,
                              isNoVersion, asVersionIntervals)
 import Distribution.Version.Invert (invertVersionRange)
+import Prelude hiding (unlines)
 import System.Exit (ExitCode(ExitSuccess))
 import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readProcessWithExitCode)
+import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 data Dependency_
   = BuildDepends Dependency
@@ -375,3 +381,35 @@ packageRangesFromVersionSplits splits =
                       (dname, intersectVersionRanges (maybe anyVersion orLaterVersion older) (maybe anyVersion earlierVersion newer)) : more)
                  []
                  splits
+
+{-
+-- | Generate the head of the debian/rules file.
+cdbsRules :: PackageIdentifier -> Atoms -> Atoms
+cdbsRules pkgId deb =
+    setL rulesHead
+         (Just . unlines $
+          ["#!/usr/bin/make -f",
+           "",
+           "DEB_CABAL_PACKAGE = " <> name,
+           "",
+           "include /usr/share/cdbs/1/rules/debhelper.mk",
+           "include /usr/share/cdbs/1/class/hlibrary.mk" ])
+         deb
+    where
+      -- The name is based on the cabal package, but it may need to be
+      -- modified to avoid violating Debian rules - no underscores, no
+      -- capital letters.
+      name = pack (show (pretty (debianName deb Cabal pkgId :: BinPkgName)))
+-}
+
+getRulesHead :: Atoms -> Text
+getRulesHead atoms =
+    fromMaybe computeRulesHead (getL rulesHead atoms)
+    where
+      computeRulesHead =
+          unlines $
+            ["#!/usr/bin/make -f", ""] ++
+            maybe [] (\ x -> ["DEB_CABAL_PACKAGE = " <> x, ""]) (fmap name (getL packageDescription atoms)) ++
+            ["include /usr/share/cdbs/1/rules/debhelper.mk",
+             "include /usr/share/cdbs/1/class/hlibrary.mk"]
+      name pkgDesc = pack (show (pretty (debianName atoms Cabal (Cabal.package pkgDesc) :: BinPkgName)))

@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Debian.Debianize.Combinators
     ( versionInfo
-    , cdbsRules
     , putStandards
     , buildDeps
     , describe
@@ -12,18 +11,17 @@ module Debian.Debianize.Combinators
     , oldFilterMissing
     ) where
 
-import Data.Lens.Lazy (setL, getL)
+import Data.Lens.Lazy (getL, modL)
 import Data.List as List (nub, intercalate)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid ((<>))
 import qualified Data.Set as Set
-import Data.Text as Text (Text, pack, intercalate, unlines)
+import Data.Text as Text (Text, pack, intercalate)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, packageDescription))
-import Debian.Debianize.AtomsType (Atoms, revision, debVersion, sourcePackageName,
-                                   extraLibMap, epochMap, changeLog, modifyChangeLog, sourceDebDescription, setSourceDebDescription)
+import Debian.Debianize.AtomsClass (HasAtoms(packageDescription, sourcePackageName, changelog))
+import Debian.Debianize.AtomsType (Atoms, revision, debVersion, extraLibMap, epochMap, sourceDebDescription, setSourceDebDescription)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 -- import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
@@ -45,12 +43,12 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 -- log comments, maintainer name, revision date.
 versionInfo :: NameAddr -> String -> Atoms -> Atoms
 versionInfo debianMaintainer date deb =
-    modifyChangeLog (const (Just newLog)) $
+    modL changelog (const (Just newLog)) $
     setSourceDebDescription ((sourceDebDescription deb)
                              { source = Just sourceName
                              , Debian.maintainer = Just debianMaintainer }) deb
     where
-      ChangeLog oldEntries = changeLog deb
+      Just (ChangeLog oldEntries) = getL changelog deb
       newLog =
           case dropWhile (\ entry -> logVersion entry > logVersion newEntry) oldEntries of
             -- If the new package version number matches the old, merge the new and existing log entries
@@ -67,7 +65,7 @@ versionInfo debianMaintainer date deb =
       -- Get the source package name, either from the SourcePackageName
       -- atom or construct it from the cabal package name.
       sourceName :: SrcPkgName
-      sourceName = maybe (debianName deb Source' pkgId) SrcPkgName (sourcePackageName deb)
+      sourceName = maybe (debianName deb Source' pkgId) id (getL sourcePackageName deb)
       merge :: ChangeLogEntry -> ChangeLogEntry -> ChangeLogEntry
       merge old new =
           old { logComments = logComments old ++ logComments new
@@ -96,18 +94,24 @@ convertVersion debinfo cabalVersion =
                              (show (pretty cabalVersion))
                              (Just debianRevision)
 
--- | Generate the head of the debian/rules file.
-cdbsRules :: PackageIdentifier -> Atoms -> Atoms
-cdbsRules pkgId deb =
-    setL rulesHead
-         (Just . unlines $
-          ["#!/usr/bin/make -f",
-           "",
-           "DEB_CABAL_PACKAGE = " <> pack (show (pretty (debianName deb Cabal pkgId :: BinPkgName))),
-           "",
-           "include /usr/share/cdbs/1/rules/debhelper.mk",
-           "include /usr/share/cdbs/1/class/hlibrary.mk" ])
-         deb
+{-
+-- | Ensure a valid rulesHead value in atoms.
+defaultRulesHead :: Atoms -> Atoms
+defaultRulesHead atoms =
+    modL rulesHead f atoms
+    where
+      f (Just x) = Just x
+      f Nothing = Just . unlines $
+                  [ "#!/usr/bin/make -f"
+                  , ""
+                  , "DEB_CABAL_PACKAGE = " <> pack (show (pretty name))
+                  , ""
+                  , "include /usr/share/cdbs/1/rules/debhelper.mk"
+                  , "include /usr/share/cdbs/1/class/hlibrary.mk"
+                  , "" ]
+      name = fromMaybe logName (sourcePackageName atoms)
+      logName = let ChangeLog (hd : _) = changeLog atoms in logPackage hd
+-}
 
 putStandards :: StandardsVersion -> Atoms -> Atoms
 putStandards x deb = setSourceDebDescription ((sourceDebDescription deb) {standardsVersion = Just x}) deb

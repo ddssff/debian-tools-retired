@@ -8,7 +8,7 @@ import Data.Lens.Lazy (setL)
 import Data.Set (fromList)
 import Data.Version (parseVersion)
 import Debian.Debianize.AtomsClass (HasAtoms(..), Flags(..), DebAction(..), InstallFile(..))
-import Debian.Debianize.AtomsType (Atoms, missingDependency, doExecutable, setSourcePackageName, setBuildDir,
+import Debian.Debianize.AtomsType (Atoms, missingDependency, doExecutable, setBuildDir,
                                    putCabalFlagAssignments, mapFlags, setRevision, setDebVersion, setOmitLTDeps, putExtraDevDep,
                                    putCompilerVersion, putNoProfilingLibrary, putNoDocumentationLibrary, putDebMaintainer, putBuildDep, putBuildDepIndep,
                                    depends, conflicts, putExtraLibMapping, putEpochMapping, putExecMap)
@@ -64,7 +64,7 @@ atomOptions =
              "Don't generate API documentation.  Use this if build is crashing due to a haddock error.",
       Option "" ["missing-dependency"] (ReqArg (\ name atoms -> missingDependency (BinPkgName name) atoms) "DEB")
              "Mark a package missing, do not add it to any dependency lists in the debianization.",
-      Option "" ["source-package-name"] (ReqArg (\ name x -> setSourcePackageName (SrcPkgName name) x) "NAME")
+      Option "" ["source-package-name"] (ReqArg (\ name x -> setL sourcePackageName (Just (SrcPkgName name)) x) "NAME")
              "Use this name for the debian source package.  Default is haskell-<cabalname>, where the cabal package name is downcased.",
       Option "" ["disable-library-profiling"] (NoArg putNoProfilingLibrary)
              "Don't generate profiling libraries",

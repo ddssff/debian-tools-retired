@@ -17,12 +17,14 @@ import Data.Set as Set (fromList)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat), DebAtomKey(..), DebAtom(..), InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat, changelog, sourcePackageName), DebAtomKey(..), DebAtom(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.AtomsType as Atom
     (Atoms, insertAtom, tightDependencyFixup, missingDependency, setRevision, putExecMap,
-     depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
-     changeLog, updateChangeLog, putCopyright, knownEpochMappings, sourceDebDescription, setSourceDebDescription, newDebianization)
+     depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture,
+     putCopyright, knownEpochMappings, sourceDebDescription, setSourceDebDescription, newDebianization)
+import Debian.Debianize.Cabal (getSimplePackageDescription')
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
+import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization)
@@ -57,11 +59,8 @@ test1 =
           setL rulesHead (Just . T.unlines $
                           [ "#!/usr/bin/make -f"
                           , ""
-                          , "DEB_CABAL_PACKAGE = haskell-cabal-debian"
-                          , ""
                           , "include /usr/share/cdbs/1/rules/debhelper.mk"
-                          , "include /usr/share/cdbs/1/class/hlibrary.mk"
-                          , "" ]) $
+                          , "include /usr/share/cdbs/1/class/hlibrary.mk" ]) $
           setL compat (Just 9) $ -- This will change as new version of debhelper are released
           putCopyright (Left BSD3) $
           setSourceDebDescription
@@ -103,11 +102,8 @@ test2 =
           setL rulesHead (Just . T.unlines $
                           ["#!/usr/bin/make -f",
                            "",
-                           "DEB_CABAL_PACKAGE = haskell-cabal-debian",
-                           "",
                            "include /usr/share/cdbs/1/rules/debhelper.mk",
-                           "include /usr/share/cdbs/1/class/hlibrary.mk",
-                           ""]) $
+                           "include /usr/share/cdbs/1/class/hlibrary.mk"]) $
           setL compat (Just 9) $
           putCopyright (Left BSD3) $
           setSourceDebDescription
@@ -225,34 +221,32 @@ test4 :: Test
 test4 =
     TestLabel "test4" $
     TestCase (do old <- inputDebianization "test-data/clckwrks-dot-com/output"
-                 new <- cabalToDebianization "test-data/clckwrks-dot-com/input" (newDebianization (changeLog old) 7 (StandardsVersion 3 9 4 Nothing))
-                 let new' =
-                         finalizeDebianization $
+                 let new = newDebianization (fromMaybe (error "missing debian/changelog") (getL changelog old)) 7 (StandardsVersion 3 9 4 Nothing)
+                 new' <- getSimplePackageDescription' "test-data/clckwrks-dot-com/input" new
+                 let new'' =
                          (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://www.clckwrks.com/"}) x) $
                          setL sourceFormat (Just Native3) $
                          missingDependency (BinPkgName "libghc-clckwrks-theme-clckwrks-doc") $
                          setRevision "" $
                          doWebsite (BinPkgName "clckwrks-dot-com-production") (theSite (BinPkgName "clckwrks-dot-com-production")) $
                          doBackups (BinPkgName "clckwrks-dot-com-backups") "clckwrks-dot-com-backups" $
-                         copyFirstLogEntry old $
                          fixRules $
                          tight $
-                         new
-                 assertEqual "test4" [] (diffDebianizations old new')
-             )
+                         new'
+                 new''' <- cabalToDebianization "test-data/clckwrks-dot-com/input" new'' >>= return . finalizeDebianization
+                 assertEqual "test4" [] (diffDebianizations old (copyFirstLogEntry old new''')))
     where
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
       serverNames = map BinPkgName ["clckwrks-dot-com-production"] -- , "clckwrks-dot-com-staging", "clckwrks-dot-com-development"]
       -- Insert a line just above the debhelper.mk include
       fixRules deb =
-          modL rulesHead
-               (\ (Just t) -> (Just 
-                               (T.unlines $ concat $
-                                map (\ line -> if line == "include /usr/share/cdbs/1/rules/debhelper.mk"
-                                               then ["DEB_SETUP_GHC_CONFIGURE_ARGS = -fbackups", "", line] :: [T.Text]
-                                               else [line] :: [T.Text]) (T.lines t))))
-               deb
+          modL rulesHead (\ mt -> (Just . f) (fromMaybe (getRulesHead deb) mt)) deb
+          where
+            f t = T.unlines $ concat $
+                  map (\ line -> if line == "include /usr/share/cdbs/1/rules/debhelper.mk"
+                                 then ["DEB_SETUP_GHC_CONFIGURE_ARGS = -fbackups", "", line] :: [T.Text]
+                                 else [line] :: [T.Text]) (T.lines t)
 {-
           mapAtoms f deb
           where
@@ -321,25 +315,21 @@ anyrel b = Rel b Nothing Nothing
 test5 :: Test
 test5 =
     TestLabel "test5" $
-    TestCase (     do old <- inputDebianization "test-data/creativeprompts/output"
-                      let standards = fromMaybe (error "test5") (standardsVersion (sourceDebDescription old))
-                      new <- cabalToDebianization "test-data/creativeprompts/input"
-                               (newDebianization (changeLog old) (fromMaybe (error "Missing debian/compat file") $ getL compat old) standards)
-                      let new' = finalizeDebianization $
-                                 setL sourceFormat (Just Native3) $
-                                 setArchitecture (BinPkgName "creativeprompts-data") All $
-                                 setArchitecture (BinPkgName "creativeprompts-development") All $
-                                 setArchitecture (BinPkgName "creativeprompts-production") All $
-                                 insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
-                                 copyFirstLogEntry old $ -- Get rid of the "debianization generated by..." message so we match
-                                 Atom.depends (BinPkgName "creativeprompts-server") (anyrel (BinPkgName "markdown")) $
-                                 putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
-                                 doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" $
-                                 doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) $
-                                 doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production")) $
-                                 new
-                      assertEqual "test5" [] (diffDebianizations old new')
-             )
+    TestCase (do old <- inputDebianization "test-data/creativeprompts/output"
+                 let standards = fromMaybe (error "test5") (standardsVersion (sourceDebDescription old))
+                 let new = setL sourceFormat (Just Native3) $
+                           setArchitecture (BinPkgName "creativeprompts-data") All $
+                           setArchitecture (BinPkgName "creativeprompts-development") All $
+                           setArchitecture (BinPkgName "creativeprompts-production") All $
+                           insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
+                           Atom.depends (BinPkgName "creativeprompts-server") (anyrel (BinPkgName "markdown")) $
+                           putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
+                           doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" $
+                           doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) $
+                           doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production")) $
+                           (newDebianization (fromMaybe (error "Missing debian/changelog") (getL changelog old)) (fromMaybe (error "Missing debian/compat file") $ getL compat old) standards)
+                 new' <- cabalToDebianization "test-data/creativeprompts/input" new >>= return . finalizeDebianization
+                 assertEqual "test5" [] (diffDebianizations old (copyFirstLogEntry old new')))
     where
       theSite :: BinPkgName -> Site
       theSite deb =
@@ -386,26 +376,23 @@ test5 =
 
 copyFirstLogEntry :: Atoms -> Atoms -> Atoms
 copyFirstLogEntry deb1 deb2 =
-    updateChangeLog (ChangeLog (hd1 : tl2)) deb2
+    modL changelog (const (Just (ChangeLog (hd1 : tl2)))) deb2
     where
-      ChangeLog (hd1 : _) = changeLog deb1
-      ChangeLog (_ : tl2) = changeLog deb2
+      ChangeLog (hd1 : _) = fromMaybe (error "Missing debian/changelog") (getL changelog deb1)
+      ChangeLog (_ : tl2) = fromMaybe (error "Missing debian/changelog") (getL changelog deb2)
 
 copyChangelog :: Atoms -> Atoms -> Atoms
-copyChangelog deb1 deb2 = updateChangeLog (changeLog deb1) deb2
+copyChangelog deb1 deb2 = modL changelog (const (getL changelog deb1)) deb2
 
 test6 :: Test
 test6 =
     TestLabel "test6" $
     TestCase ( do old <- inputDebianization "test-data/artvaluereport2/output"
-                  let log = changeLog old
+                  let log = getL changelog old
                       standards = StandardsVersion 3 9 1 Nothing
                       compat' = 7
-                  new <- cabalToDebianization "test-data/artvaluereport2/input" (newDebianization log compat' standards)
-                  let new' = finalizeDebianization $
-                             (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://appraisalreportonline.com"}) x) $
-                             setSourcePackageName (SrcPkgName "haskell-artvaluereport2") $
-                             copyFirstLogEntry old $ -- Get rid of the "debianization generated by..." message so we match
+                  let new =  (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://appraisalreportonline.com"}) x) $
+                             setL sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) $
                              insertAtom Source (UtilsPackageName (BinPkgName "artvaluereport2-server")) $
                              setArchitecture (BinPkgName "artvaluereport2-development") All $
                              setArchitecture (BinPkgName "artvaluereport2-production") All $
@@ -428,9 +415,10 @@ test6 =
                                   ["libjs-jquery", "libjs-jquery-ui", "libjs-jcrop", "libjpeg-progs", "netpbm",
                                    "texlive-latex-recommended", "texlive-latex-extra", "texlive-fonts-recommended", "texlive-fonts-extra"] $
                              doExecutable (BinPkgName "artvaluereport2-server") (InstallFile "artvaluereport2-server" Nothing Nothing "artvaluereport2-server") $
-                             new
+                             (newDebianization (fromMaybe (error "Missing debian/changelog") log) compat' standards)
+                  new' <- cabalToDebianization "test-data/artvaluereport2/input" new >>= return . finalizeDebianization
                   withCurrentDirectory "/tmp" (writeDebianization new')
-                  assertEqual "test6" [] (diffDebianizations old new')
+                  assertEqual "test6" [] (diffDebianizations old (copyFirstLogEntry old new'))
              )
     where
       -- hints = dependencyHints (putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $ putExtraDevDep (BinPkgName "markdown") $ Flags.defaultFlags)
@@ -489,19 +477,16 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase ( do old <- inputDebianization "."
-                  new <- cabalToDebianization "test-data/cabal-debian/input"
-                           (newDebianization (changeLog old) 7 (StandardsVersion 3 9 3 Nothing))
-                  let new' = finalizeDebianization $
-                             (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://src.seereason.com/cabal-debian"}) x) $
-                             setL sourceFormat (Just Native3) $
-                             insertAtom Source (UtilsPackageName (BinPkgName "cabal-debian")) $
-                             Atom.depends (BinPkgName "cabal-debian") (anyrel (BinPkgName "apt-file")) $
-                             Atom.conflicts (BinPkgName "cabal-debian")
-                                     (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing) $
-                             copyChangelog old $
-                             -- copyCopyright old $
-                             new
-                  assertEqual "test7" [] (diffDebianizations old new')
+                  let new = (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://src.seereason.com/cabal-debian"}) x) $
+                            setL sourceFormat (Just Native3) $
+                            insertAtom Source (UtilsPackageName (BinPkgName "cabal-debian")) $
+                            Atom.depends (BinPkgName "cabal-debian") (anyrel (BinPkgName "apt-file")) $
+                            Atom.conflicts (BinPkgName "cabal-debian")
+                                    (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing) $
+                            copyChangelog old $
+                            newDebianization (fromMaybe (error "Missing debian/changelog") (getL changelog old)) 7 (StandardsVersion 3 9 3 Nothing)
+                  new' <- cabalToDebianization "test-data/cabal-debian/input" new >>= return . finalizeDebianization
+                  assertEqual "test7" [] (diffDebianizations old (copyChangelog old new'))
              )
 
 test8 :: Test
@@ -509,15 +494,13 @@ test8 =
     TestLabel "test7" $
     TestCase ( do old <- inputDebianization "test-data/artvaluereport-data/output"
                   log <- inputChangeLog "test-data/artvaluereport-data/input/debian"
-                  new <- cabalToDebianization "test-data/artvaluereport-data/input" (newDebianization log 7 (StandardsVersion 3 9 3 Nothing))
-                  let new' = copyFirstLogEntry old $ -- Get rid of the "debianization generated by..." message so we match
-                             finalizeDebianization $
-                             knownEpochMappings $
-                             insertAtom Source (BuildDep (BinPkgName "haskell-hsx-utils")) $
-                             (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://artvaluereportonline.com"}) x) $
-                             setL sourceFormat (Just Native3) $
-                             new
-                  assertEqual "test8" [] (diffDebianizations old new')
+                  let new = knownEpochMappings $
+                            insertAtom Source (BuildDep (BinPkgName "haskell-hsx-utils")) $
+                            (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://artvaluereportonline.com"}) x) $
+                            setL sourceFormat (Just Native3) $
+                            (newDebianization log 7 (StandardsVersion 3 9 3 Nothing))
+                  new' <- cabalToDebianization "test-data/artvaluereport-data/input" new >>= return . finalizeDebianization
+                  assertEqual "test8" [] (diffDebianizations old (copyChangelog old new'))
              )
 
 data Change k a

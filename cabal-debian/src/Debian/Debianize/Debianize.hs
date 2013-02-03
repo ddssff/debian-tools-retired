@@ -17,11 +17,11 @@ import Control.Applicative ((<$>))
 import Data.Lens.Lazy (getL, setL)
 import Data.Maybe
 import Data.Text (Text)
-import Debian.Debianize.AtomsClass (HasAtoms(packageDescription, watch), Flags(..), DebAction(..))
-import Debian.Debianize.AtomsType (Atoms, defaultAtoms, flags, watchAtom, setSourcePriority, setChangeLog,
+import Debian.Debianize.AtomsClass (HasAtoms(packageDescription, watch, changelog), Flags(..), DebAction(..))
+import Debian.Debianize.AtomsType (Atoms, defaultAtoms, flags, watchAtom, setSourcePriority,
                                    setSourceSection, compilerVersion, cabalFlagAssignments, putCopyright, sourceDebDescription)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
-import Debian.Debianize.Combinators (cdbsRules, versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries)
+import Debian.Debianize.Combinators (versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..))
 import Debian.Debianize.Flags (flagOptions, atomOptions)
 import Debian.Debianize.Input as Debian (inputDebianization, inputChangeLog)
@@ -96,7 +96,7 @@ debianize top args =
        new <- compileEnvironmentArgs (compileArgs defaultAtoms args) >>= cabalToDebianization top
        outputDebianization (Just (def log old)) new
     where
-      def log old = fromMaybe ((maybe id setChangeLog log) defaultAtoms) old
+      def log old = fromMaybe ((setL changelog log) defaultAtoms) old
 
 -- | Given a Flags record, get any additional configuration
 -- information from the environment, read the cabal package
@@ -121,9 +121,9 @@ debianization :: String              -- ^ current date
               -> Text                -- ^ copyright
               -> NameAddr            -- ^ maintainer
               -> StandardsVersion
-              -> Atoms      -- ^ Existing debianization
+              -> Atoms      -- ^ Debianization specification
               -> Atoms      -- ^ New debianization
-debianization date copyright' maint standards oldDeb =
+debianization date copyright' maint standards deb =
     setSourcePriority Optional $
     setSourceSection (MainSection "haskell") $
     -- setSourceBinaries [] $
@@ -132,14 +132,13 @@ debianization date copyright' maint standards oldDeb =
     putStandards standards $
     versionInfo maint date $
     addExtraLibDependencies $
-    cdbsRules (Cabal.package pkgDesc) $
     -- Do we want to replace the atoms in the old deb, or add these?
     -- Or should we delete even more information from the original,
     -- keeping only the changelog?  Probably the latter.  So this is
     -- somewhat wrong.
-    oldDeb
+    deb
     where
-      pkgDesc = fromMaybe (error "debianization") $ getL packageDescription oldDeb
+      pkgDesc = fromMaybe (error "debianization") $ getL packageDescription deb
 
 compileEnvironmentArgs :: Atoms -> IO Atoms
 compileEnvironmentArgs atoms0 =

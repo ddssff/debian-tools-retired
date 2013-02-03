@@ -18,10 +18,10 @@ import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat, watch))
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat, watch, changelog))
 import Debian.Debianize.AtomsType (Atoms, install, installDir,
                                    defaultAtoms, modifySourceDebDescription, intermediateFile, warning, logrotateStanza, putPostInst,
-                                   putCopyright, setChangeLog, installInit, postRm, preInst, preRm, link)
+                                   putCopyright, installInit, postRm, preInst, preRm, link)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')
@@ -175,7 +175,7 @@ inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> ret
 inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> return $ setL compat (Just (read (unpack text))) xs
 inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> return $ putCopyright (Right text) xs
 inputAtoms debian name@"changelog" xs =
-    readFile (debian </> name) >>= return . parseChangeLog . unpack >>= \ log -> return $ setChangeLog log xs
+    readFile (debian </> name) >>= return . parseChangeLog . unpack >>= \ log -> return $ setL changelog (Just log) xs
 inputAtoms debian name xs =
     case (BinPkgName (dropExtension name), takeExtension name) of
       (p, ".install") ->   readFile (debian </> name) >>= \ text -> return $ foldr (readInstall p) xs (lines text)

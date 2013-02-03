@@ -38,14 +38,14 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 class (Monoid atoms,
        Show atoms) -- for debugging
     => HasAtoms atoms where
-    -- getAtoms :: atoms -> Map DebAtomKey (Set DebAtom)
-    -- putAtoms :: Map DebAtomKey (Set DebAtom) -> atoms -> atoms
     rulesHead :: Lens atoms (Maybe Text)
     packageDescription :: Lens atoms (Maybe PackageDescription)
     postInst :: Lens atoms (Map BinPkgName Text)
     compat :: Lens atoms (Maybe Int)
     sourceFormat :: Lens atoms (Maybe SourceFormat)
     watch :: Lens atoms (Maybe Text)
+    sourcePackageName :: Lens atoms (Maybe SrcPkgName)
+    changelog :: Lens atoms (Maybe ChangeLog)
 
 data DebAtomKey
     = Source

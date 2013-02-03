@@ -69,16 +69,10 @@ module Debian.Debianize.AtomsType
     , doServer
     , doWebsite
     , doBackups
-    , setSourcePackageName
-    , modifyChangeLog
-    , setChangeLog
-    , updateChangeLog
-    , changeLog
     , putCopyright
     , copyright
     , putDebControl
     , debControl
-    , sourcePackageName
     , warning
     , debMaintainer
     , buildDir
@@ -137,7 +131,7 @@ module Debian.Debianize.AtomsType
 
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
-import Data.Lens.Lazy (lens, getL, modL)
+import Data.Lens.Lazy (lens, getL, setL, modL)
 import Data.List as List (map)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey, empty, null, insert, update)
 import Data.Maybe (fromMaybe)
@@ -151,10 +145,10 @@ import Debian.Debianize.Utility (setMapMaybe)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, PackagePriority, Section, StandardsVersion, parseMaintainer,
                       apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
-import Debian.Relation (BinPkgName, SrcPkgName, Relation)
+import Debian.Relation (BinPkgName, Relation)
 import Debian.Version (DebianVersion)
 import Distribution.License (License)
-import Distribution.Package (PackageName)
+import Distribution.Package (PackageName, PackageIdentifier(..))
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init, unlines, log)
@@ -169,7 +163,7 @@ import Data.Version (showVersion)
 import Debian.Debianize.ControlFile (SourceDebDescription(source, maintainer, standardsVersion), newSourceDebDescription)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName), Relation(..))
-import Distribution.Package (PackageName(..), PackageIdentifier(pkgName, pkgVersion))
+import Distribution.Package (PackageName(..))
 import Distribution.PackageDescription as Cabal (PackageDescription(package))
 import System.FilePath ((</>), makeRelative, splitFileName, takeDirectory, takeFileName)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
@@ -201,11 +195,6 @@ instance Monoid Atoms where
     mappend a b = foldAtoms insertAtom a b
 
 instance HasAtoms Atoms where
-{-
-    getAtoms = unAtoms
-    putAtoms mp _ = Atoms mp
--}
-
     -- Lenses to access values in the Atoms type.  This is an old
     -- design which I plan to make private and turn into something
     -- nicer, so these will remain ugly and repetitive for now.
@@ -282,6 +271,30 @@ instance HasAtoms Atoms where
                 f Source (DHPostInst m) = Just m
                 f _ _ = Nothing
 
+    sourcePackageName = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (SourcePackageName x') (Just x) | x /= x' = error $ "Conflicting compat values:" ++ show (x, x')
+                from Source (SourcePackageName x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . SourcePackageName) x)) atoms
+              where
+                f Source (SourcePackageName y) = Just y
+                f _ _ = Nothing
+
+    changelog = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DebChangeLog x') (Just x) | x /= x' = error $ "Conflicting compat values:" ++ show (x, x')
+                from Source (DebChangeLog x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebChangeLog) x)) atoms
+              where
+                f Source (DebChangeLog y) = Just y
+                f _ _ = Nothing
+
 lookupAtom :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Maybe a
 lookupAtom mbin from xs =
     case maxView (lookupAtoms mbin from xs) of
@@ -340,7 +353,7 @@ partitionAtoms' f deb =
             Just x -> (Set.insert x xs, deb')
             Nothing -> (xs, insertAtom k atom deb')
 
--- | Like modifyAtoms, but 
+-- | Like modifyAtoms, but...
 modifyAtoms' :: (Ord a) =>
                (DebAtomKey -> DebAtom -> Maybe a)
             -> (Set a -> Set (DebAtomKey, DebAtom))
@@ -377,21 +390,6 @@ setCompiler comp atoms =
     where
       f Source (DHCompiler _) = True
       f _ _ = False
-
-{-
-packageDescription :: HasAtoms atoms => atoms -> Maybe PackageDescription
-packageDescription deb =
-    lookupAtom Source from deb
-    where from (DHPackageDescription x) = Just x
-          from _ = Nothing
-
-setPackageDescription :: HasAtoms atoms => PackageDescription -> atoms -> atoms
-setPackageDescription desc atoms =
-    replaceAtoms f Source (DHPackageDescription desc) atoms
-    where
-      f Source (DHPackageDescription _) = True
-      f _ _ = False
--}
 
 dataDir :: FilePath -> Atoms -> FilePath
 dataDir def atoms =
@@ -694,43 +692,6 @@ doBackups bin s deb =
     depends bin (Rel (BinPkgName "anacron") Nothing Nothing) $
     deb
 
-setSourcePackageName :: SrcPkgName -> Atoms -> Atoms
-setSourcePackageName src deb = insertAtom Source (SourcePackageName src) deb
-
-modifyChangeLog :: (Maybe ChangeLog -> Maybe ChangeLog) -> Atoms -> Atoms
-modifyChangeLog f atoms =
-    modifyAtoms' p g atoms
-    where
-      p Source (DebChangeLog x) = Just x
-      p _ _ = Nothing
-      g :: Set ChangeLog -> Set (DebAtomKey, DebAtom) 
-      g s =
-          case Set.toList s of
-            [] -> maybe Set.empty (\ log -> singleton (Source, DebChangeLog log)) (f Nothing)
-            [log] ->  maybe Set.empty (\ log' -> singleton (Source, DebChangeLog log')) (f (Just log))
-            _ -> error $ "Multiple changelogs: " ++ show (Set.toList s)
-
-setChangeLog :: ChangeLog -> Atoms -> Atoms
-setChangeLog log atoms =
-    modifyChangeLog f atoms
-    where
-      f Nothing = Just log
-      f (Just log') = error $ "Multiple changelogs: " ++ show (log', log)
-
--- | Like setChangeLog, but replacing the current log is not an error.
-updateChangeLog :: ChangeLog -> Atoms -> Atoms
-updateChangeLog log atoms = modifyChangeLog (const (Just log)) atoms
-
-changeLog :: Atoms -> ChangeLog
-changeLog deb =
-    maybe (error "No changelog") g $ foldAtoms f Nothing deb
-    where
-      f Source (DebChangeLog log') (Just log) | log' /= log = error "Conflicting changelogs"
-      f Source (DebChangeLog log') _ = Just log'
-      f _ _ x = x
-      g (ChangeLog (hd : tl)) = ChangeLog (hd {logPackage = fromMaybe (logPackage hd) (sourcePackageName deb)} : tl)
-      g _ = error $ "Invalid changelog"
-
 putCopyright :: Either License Text -> Atoms -> Atoms
 putCopyright copy deb = insertAtom Source (DebCopyright copy) deb
 
@@ -752,19 +713,6 @@ debControl atoms =
 
 putDebControl :: SourceDebDescription -> Atoms -> Atoms
 putDebControl deb atoms = insertAtom Source (DebControl deb) atoms
-
-sourcePackageName :: Atoms -> Maybe String
-sourcePackageName atoms =
-    foldAtoms from Nothing atoms
-    where
-      from Source (SourcePackageName (SrcPkgName src')) (Just src) | src' /= src = error $ "Conflicting source package names: " ++ show (src, src')
-      from Source (SourcePackageName (SrcPkgName src)) _ = Just src
-      from _ _ x = x
-
-{-
-sourceFormat :: SourceFormat -> Atoms -> Atoms
-sourceFormat format deb = insertAtom Source (DebSourceFormat format) deb
--}
 
 warning :: Text -> Atoms -> Atoms
 warning text deb = insertAtom Source (Warning text) deb
@@ -838,29 +786,6 @@ mapFlags f atoms =
                                               Just (_, s) | not (Set.null s) -> error "Conflicting Flag atoms"
                                               Just (x, _) -> x
                                               Nothing -> defaultFlags)))
-{-
-    insertAtom Source (DHFlags (f fs)) atoms'
-    where
-      fs = case maxView flagss of
-             Nothing -> defaultFlags
-             Just (x, s) -> if Set.null s then x else error "Conflicting Flag atoms"
-      (flagss, atoms') = partitionAtoms p atoms
-      p Source (DHFlags x) = Just x
-      p _ _ = Nothing
--}
-{-
-getWatch :: Atoms -> Maybe Text
-getWatch atoms =
-    foldAtoms from Nothing atoms
-    where
-      from :: DebAtomKey -> DebAtom -> Maybe Text -> Maybe Text
-      from Source (DebWatch x') (Just x) | x /= x' = error $ "Conflicting debian/watch files: " ++ show (x, x')
-      from Source (DebWatch x) _ = Just x
-      from _ _ x = x
-
-watchFile :: Text -> Atoms -> Atoms
-watchFile text deb = insertAtom Source (DebWatch text) deb
--}
 
 watchAtom :: PackageName -> Text
 watchAtom (PackageName pkgname) =
@@ -910,7 +835,7 @@ modifySourceDebDescription f deb =
 newDebianization :: ChangeLog -> Int -> StandardsVersion -> Atoms
 newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ = error "defaultDebianization: Invalid changelog entry"
 newDebianization (log@(ChangeLog (entry : _))) level standards =
-    setChangeLog log $
+    setL changelog (Just log) $
     insertAtom Source (DebCompat level) $
     modifySourceDebDescription (\ x -> x { source = Just (SrcPkgName (logPackage entry))
                                          , maintainer = (either error Just (parseMaintainer (logWho entry)))

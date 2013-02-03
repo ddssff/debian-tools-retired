@@ -12,11 +12,13 @@ module Debian.Debianize.Output
 
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
+import Data.Lens.Lazy (getL)
 import Data.Map as Map (toList, elems)
+import Data.Maybe (fromMaybe)
 import Data.Text as Text (Text, unpack, split)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logVersion))
-import Debian.Debianize.AtomsClass (Flags(validate, dryRun))
-import Debian.Debianize.AtomsType (Atoms, flags, changeLog, sourceDebDescription)
+import Debian.Debianize.AtomsClass (HasAtoms(changelog), Flags(validate, dryRun))
+import Debian.Debianize.AtomsType (Atoms, flags, sourceDebDescription)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Utility (replaceFile, zipMaps)
@@ -44,8 +46,8 @@ outputDebianization old new =
 
 validateDebianization :: Atoms -> Atoms -> IO ()
 validateDebianization old new =
-    do let oldVersion = logVersion (head (unChangeLog (changeLog old)))
-           newVersion = logVersion (head (unChangeLog (changeLog new)))
+    do let oldVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL changelog old))))
+           newVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL changelog new))))
            oldSource = source . sourceDebDescription $ old
            newSource = source . sourceDebDescription $ new
            oldPackages = map Debian.package . binaryPackages . sourceDebDescription $ old

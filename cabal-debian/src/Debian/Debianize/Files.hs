@@ -16,10 +16,11 @@ import Data.Set as Set (toList, member)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat, watch), DebAtomKey(..), DebAtom(..))
-import Debian.Debianize.AtomsType (Atoms, foldAtoms, changeLog, copyright)
+import Debian.Debianize.AtomsClass (HasAtoms(compat, sourceFormat, watch, changelog), DebAtomKey(..), DebAtom(..))
+import Debian.Debianize.AtomsType (Atoms, foldAtoms, copyright)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..))
+import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
 import Prelude hiding (init, unlines, writeFile)
@@ -132,7 +133,7 @@ toFileMap :: Atoms -> SourceDebDescription -> Map FilePath Text
 toFileMap atoms d =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
       [("debian/control", pack (show (pretty (control d)))),
-       ("debian/changelog", pack (show (pretty (changeLog atoms)))),
+       ("debian/changelog", pack (show (pretty (fromMaybe (error "Missing debian/changelog") (getL changelog atoms))))),
        ("debian/rules", rules atoms),
        ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom") $ getL compat atoms) <> "\n")),
        ("debian/copyright", either (\ x -> pack (show x) <> "\n") id (copyright (error "No DebCopyright atom") atoms))] ++
@@ -151,7 +152,7 @@ toFileMap atoms d =
 
 rules :: Atoms -> Text
 rules deb =
-    foldAtoms append (fromMaybe mempty (getL rulesHead deb)) deb
+    foldAtoms append (getRulesHead deb) deb
     where
       append Source (DebRulesFragment x) text = text <> "\n" <> x
       append _ _ text = text

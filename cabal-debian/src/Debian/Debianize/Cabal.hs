@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 module Debian.Debianize.Cabal
     ( getSimplePackageDescription
+    , getSimplePackageDescription'
     , inputCopyright
     , inputMaintainer
     ) where
@@ -13,8 +14,8 @@ import Data.Maybe
 import Data.Set (Set, toList)
 import Data.Text (Text, pack)
 import Data.Version (Version)
-import Debian.Debianize.AtomsClass (HasAtoms(packageDescription))
-import Debian.Debianize.AtomsType (Atoms, setCompiler, debMaintainer)
+import Debian.Debianize.AtomsClass (HasAtoms(packageDescription), Flags(..))
+import Debian.Debianize.AtomsType (Atoms, flags, compilerVersion, cabalFlagAssignments, setCompiler, debMaintainer)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
@@ -46,6 +47,10 @@ withSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top 
        let atoms' = setCompiler compiler . setPackageDescription pkgDesc $ atoms
        action atoms'
 -}
+
+getSimplePackageDescription' :: FilePath -> Atoms -> IO Atoms
+getSimplePackageDescription' top old =
+    getSimplePackageDescription (verbosity (flags old)) (compilerVersion old) (cabalFlagAssignments old) top old
 
 getSimplePackageDescription :: Int -> Maybe Version -> Set (FlagName, Bool) -> FilePath -> Atoms -> IO Atoms
 getSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top atoms =
