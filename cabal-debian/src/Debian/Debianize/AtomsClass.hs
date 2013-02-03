@@ -46,6 +46,7 @@ class (Monoid atoms,
     watch :: Lens atoms (Maybe Text)
     sourcePackageName :: Lens atoms (Maybe SrcPkgName)
     changelog :: Lens atoms (Maybe ChangeLog)
+    comments :: Lens atoms (Maybe [[Text]]) -- ^ Comment entries for the latest changelog entry
 
 data DebAtomKey
     = Source
@@ -93,6 +94,8 @@ data DebAtom
     | Warning Text                                -- ^ A warning to be reported later
     | UtilsPackageName BinPkgName                 -- ^ Name to give the package for left-over data files and executables
     | DebChangeLog ChangeLog			  -- ^ The changelog, first entry contains the source package name and version
+    | DebLogComments [[Text]]			  -- ^ Each element is a comment to be added to the changelog, where the
+                                                  -- element's text elements are the lines of the comment.
     | SourcePackageName SrcPkgName                -- ^ Name to give to debian source package.  If not supplied name is constructed
                                                   -- from the cabal package name.
     | DHMaintainer NameAddr			  -- ^ Value for the maintainer field in the control file.  Note that

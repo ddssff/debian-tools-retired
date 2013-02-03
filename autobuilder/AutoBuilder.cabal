@@ -1,5 +1,5 @@
 Name:           AutoBuilder
-Version:        6.48.3
+Version:        6.49
 License:        BSD3
 Author:         David Fox
 Synopsis:       Build Debian source packages in suitable environments.
@@ -48,7 +48,7 @@ Library
     Hs-Source-Dirs: ., ../cabal-debian/src
     Build-Depends: hsemail, text, syb
   else
-    Build-Depends: cabal-debian >= 2.6.3
+    Build-Depends: cabal-debian >= 3.0
 
   Build-Depends:
         ansi-wl-pprint

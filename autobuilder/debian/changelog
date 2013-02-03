@@ -1,3 +1,9 @@
+autobuilder (6.49) unstable; urgency=low
+
+  * Changes for cabal-debian 3.0.
+
+ -- David Fox <dsf@seereason.com>  Sun, 03 Feb 2013 08:38:56 -0800
+
 autobuilder (6.48.3) unstable; urgency=low
 
   * Require cabal-debian 2.6.3 to bypass a bug formatting the control

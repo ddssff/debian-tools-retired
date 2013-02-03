@@ -123,7 +123,7 @@ data PackageFlag
     -- bugs.
     | CabalDebian [String]
     -- ^ Pass some arbitrary arguments to cabal-debian
-    | ModifyAtoms (CD.HasAtoms atoms => atoms -> atoms)
+    | ModifyAtoms (CD.Atoms -> CD.Atoms)
     -- ^ Modify the cabal-debian configuration in a fully general way
     | MapDep String BinPkgName
     -- ^ Tell cabal-debian to map the first argument (a name that

@@ -86,7 +86,7 @@ module Debian.Debianize.AtomsType
     , sourceDebDescription
     , setSourceDebDescription
     , modifySourceDebDescription
-    , newDebianization
+    -- , newDebianization
     , putBuildDep
     , putBuildDepIndep
     , putExtraLibMapping
@@ -293,6 +293,18 @@ instance HasAtoms Atoms where
           s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebChangeLog) x)) atoms
               where
                 f Source (DebChangeLog y) = Just y
+                f _ _ = Nothing
+
+    comments = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DebLogComments xss') (Just xss) | xss == xss' = error $ "Conflicting log comments: " ++ show (xss, xss')
+                from Source (DebLogComments xss) _ = Just xss
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebLogComments) x)) atoms
+              where
+                f Source (DebLogComments y) = Just y
                 f _ _ = Nothing
 
 lookupAtom :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Maybe a
@@ -828,20 +840,6 @@ modifySourceDebDescription f deb =
     where
       g Source (DebControl d) = Just d
       g _ _ = Nothing
-
--- | Create a Debianization based on a changelog entry and a license
--- value.  Uses the currently installed versions of debhelper and
--- debian-policy to set the compatibility levels.
-newDebianization :: ChangeLog -> Int -> StandardsVersion -> Atoms
-newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ = error "defaultDebianization: Invalid changelog entry"
-newDebianization (log@(ChangeLog (entry : _))) level standards =
-    setL changelog (Just log) $
-    insertAtom Source (DebCompat level) $
-    modifySourceDebDescription (\ x -> x { source = Just (SrcPkgName (logPackage entry))
-                                         , maintainer = (either error Just (parseMaintainer (logWho entry)))
-                                         , standardsVersion = Just standards }) $
-    defaultAtoms
-newDebianization _ _ _ = error "Invalid changelog"
 
 install :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
 install p path d atoms = insertAtom (Binary p) (DHInstall path d) atoms

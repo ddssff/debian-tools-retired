@@ -16,10 +16,11 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
+import Debian.Debianize (Atoms, compileArgs)
+import qualified Debian.Debianize as Cabal
 import Debian.Relation (BinPkgName(unBinPkgName))
 import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
-import qualified Debian.Debianize as Cabal
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..))
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
@@ -84,13 +85,34 @@ collectPackageFlags cache pflags =
     where
       ver = P.ghcVersion (P.params cache)
 
-autobuilderCabal :: forall atoms. Cabal.HasAtoms atoms => P.CacheRec -> [P.PackageFlag] -> FilePath -> atoms -> IO ()
+autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> Cabal.Atoms -> IO ()
 autobuilderCabal cache pflags currentDirectory atoms =
     withCurrentDirectory currentDirectory $
-    do args <- collectPackageFlags cache pflags
-       done <- Cabal.runDebianize args
-       let atoms' = Cabal.compileArgs (atoms :: atoms) (concatMap asCabalFlags pflags :: [String]) :: atoms
-       when (not done) (Cabal.cabalToDebianization "." atoms' >>= Cabal.writeDebianization)
+    do -- This will be false if the package has no debian/Debianize.hs script
+       done <- collectPackageFlags cache pflags >>= Cabal.runDebianize
+       when (not done) (Cabal.cabalToDebianization "." (applyPackageFlags pflags atoms) >>= Cabal.writeDebianization)
+
+applyPackageFlags :: [P.PackageFlag] -> Atoms -> Atoms
+applyPackageFlags flags atoms = foldr applyPackageFlag atoms flags
+
+applyPackageFlag :: P.PackageFlag -> Atoms -> Atoms
+applyPackageFlag x@(P.Maintainer _) atoms = compileArgs atoms (asCabalFlags x)
+applyPackageFlag x@(P.ExtraDep _) atoms = compileArgs atoms (asCabalFlags x)
+applyPackageFlag x@(P.ExtraDevDep _) atoms = compileArgs atoms (asCabalFlags x)
+applyPackageFlag x@(P.MapDep _ _) atoms = compileArgs atoms (asCabalFlags x)
+applyPackageFlag x@(P.DebVersion _) atoms = compileArgs atoms (asCabalFlags x)
+applyPackageFlag x@(P.Revision _) atoms = compileArgs atoms (asCabalFlags x)
+applyPackageFlag x@(P.Epoch _ _) atoms = compileArgs atoms (asCabalFlags x)
+applyPackageFlag x@P.NoDoc atoms = compileArgs atoms (asCabalFlags x)
+applyPackageFlag (P.CabalDebian ss) atoms = compileArgs atoms ss
+applyPackageFlag (P.ModifyAtoms f) atoms = f atoms
+applyPackageFlag (P.RelaxDep _) x = x
+applyPackageFlag (P.UDeb _) x = x
+applyPackageFlag P.OmitLTDeps x = x -- I think this exists
+applyPackageFlag (P.AptPin _) x = x
+applyPackageFlag (P.CabalPin _) x = x
+applyPackageFlag (P.DarcsTag _) x = x
+applyPackageFlag (P.GitBranch _) x = x
 
 asCabalFlags :: P.PackageFlag -> [String]
 asCabalFlags (P.Maintainer s) = ["--maintainer", s]
@@ -102,8 +124,17 @@ asCabalFlags (P.Revision s) = ["--revision", s]
 asCabalFlags (P.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]
 asCabalFlags P.NoDoc = ["--disable-haddock"]
 asCabalFlags (P.CabalDebian ss) = ss
-asCabalFlags _ = []
+asCabalFlags (P.RelaxDep _) = []
+asCabalFlags (P.UDeb _) = []
+asCabalFlags P.OmitLTDeps = [] -- I think this exists
+asCabalFlags (P.AptPin _) = []
+asCabalFlags (P.CabalPin _) = []
+asCabalFlags (P.ModifyAtoms _) = []
+asCabalFlags (P.DarcsTag _) = []
+asCabalFlags (P.GitBranch _) = []
 
 -- | Apply a set of package flags to a cabal-debian configuration record.
-applyPackageFlag :: Cabal.HasAtoms atoms => P.PackageFlag -> atoms -> atoms
+{-
+applyPackageFlag :: P.PackageFlag -> Cabal.Atoms -> Cabal.Atoms
 applyPackageFlag x atoms = Cabal.compileArgs atoms (asCabalFlags x)
+-}
