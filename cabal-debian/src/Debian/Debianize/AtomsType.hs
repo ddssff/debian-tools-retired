@@ -109,7 +109,10 @@ module Debian.Debianize.AtomsType
     , installData
     , getInstalls
     , logrotateStanza
-    , postInst
+    , putPostInst
+    , getPostInsts
+    , getPostInst
+    , modPostInst
     , postRm
     , preInst
     , preRm
@@ -124,7 +127,6 @@ module Debian.Debianize.AtomsType
     , getInstallInits
     , getLogrotateStanzas
     , getLinks
-    , getPostInsts
     , getPostRms
     , getPreInsts
     , getPreRms
@@ -140,9 +142,9 @@ module Debian.Debianize.AtomsType
 
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
-import Data.Lens.Lazy (lens, getL)
+import Data.Lens.Lazy (lens, getL, modL)
 import Data.List as List (map)
-import Data.Map as Map (Map, lookup, insertWith, foldWithKey, empty, null)
+import Data.Map as Map (Map, lookup, insertWith, foldWithKey, empty, null, insert, update)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
 import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert, member, map)
@@ -229,6 +231,21 @@ instance HasAtoms Atoms where
           s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DHPackageDescription) x)) atoms
               where
                 f Source (DHPackageDescription y) = Just y
+                f _ _ = Nothing
+
+    postInst = lens g s
+        where
+          g :: HasAtoms atoms => atoms -> Map BinPkgName Text
+          g atoms = fromMaybe Map.empty $ foldAtoms from mempty atoms
+              where
+                from :: DebAtomKey -> DebAtom -> Maybe (Map BinPkgName Text) -> Maybe (Map BinPkgName Text)
+                from Source (DHPostInst x') (Just x) | x' /= x = error $ "Conflicting postinsts: " ++ show (x, x')
+                from Source (DHPostInst x) _ = Just x
+                from _ _ x = x
+          s :: HasAtoms atoms => Map BinPkgName Text -> atoms -> atoms
+          s x atoms = modifyAtoms' f (const ((singleton . (Source,) . DHPostInst) x)) atoms
+              where
+                f Source (DHPostInst m) = Just m
                 f _ _ = Nothing
 
 lookupAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Maybe a
@@ -898,8 +915,30 @@ installInit p text atoms = insertAtom (Binary p) (DHInstallInit text) atoms
 logrotateStanza :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
 logrotateStanza p text atoms = insertAtom (Binary p) (DHLogrotateStanza text) atoms
 
-postInst :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
-postInst p text atoms = insertAtom (Binary p) (DHPostInst text) atoms
+getPostInsts :: HasAtoms atoms => atoms -> Map BinPkgName Text
+getPostInsts atoms =
+    fromMaybe Map.empty $ foldAtoms from Nothing atoms
+    where
+      from :: DebAtomKey -> DebAtom -> Maybe (Map BinPkgName Text) -> Maybe (Map BinPkgName Text)
+      from Source (DHPostInst mp') (Just mp) | mp /= mp' = error "Multiple PostInst maps"
+      from Source (DHPostInst mp) _ = Just mp
+      from _ _ x = x
+
+getPostInst :: HasAtoms atoms => atoms -> BinPkgName -> Maybe Text
+getPostInst atoms b = Map.lookup b (getPostInsts atoms)
+
+putPostInst :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+putPostInst p text atoms =
+    modL postInst (\ m -> Map.insertWith f p text m) atoms
+    where
+      f a b = if a == b then a else error $ "putPostInst: conflicting postinsts: " ++ show (a, b)
+
+modPostInst :: HasAtoms atoms => BinPkgName -> (Maybe Text -> Maybe Text) -> atoms -> atoms
+modPostInst p f atoms = modL postInst (\ m -> case Map.lookup p m of
+                                                Nothing -> case f Nothing of
+                                                             Just t' -> Map.insert p t' m
+                                                             Nothing -> m
+                                                Just t -> update (f . Just) p m) atoms
 
 postRm :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
 postRm p text atoms = insertAtom (Binary p) (DHPostRm text) atoms
@@ -961,13 +1000,6 @@ getLinks atoms =
     foldAtoms from Map.empty atoms
     where
       from (Binary p) (DHLink loc txt) mp = Map.insertWith Set.union p (singleton (loc, txt)) mp
-      from _ _ mp = mp
-
-getPostInsts :: HasAtoms atoms => atoms -> Map BinPkgName Text
-getPostInsts atoms =
-    foldAtoms from Map.empty atoms
-    where
-      from (Binary p) (DHPostInst t) mp = Map.insertWith one p t mp
       from _ _ mp = mp
 
 getPostRms :: HasAtoms atoms => atoms -> Map BinPkgName Text
@@ -1133,7 +1165,7 @@ siteAtoms b site =
 
 serverAtoms :: HasAtoms r => BinPkgName -> Server -> Bool -> r -> r
 serverAtoms b server isSite =
-    postInst b debianPostinst .
+    putPostInst b debianPostinst .
     installInit b debianInit .
     serverLogrotate' b .
     execAtoms b exec
@@ -1214,7 +1246,7 @@ serverLogrotate' b =
 
 backupAtoms :: HasAtoms r => BinPkgName -> String -> r -> r
 backupAtoms b name =
-    postInst b (unlines $
+    putPostInst b (unlines $
                   [ "#!/bin/sh"
                   , ""
                   , "case \"$1\" in"

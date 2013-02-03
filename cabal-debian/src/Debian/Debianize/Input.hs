@@ -20,8 +20,8 @@ import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import Debian.Debianize.AtomsClass (HasAtoms(rulesHead))
 import Debian.Debianize.AtomsType (Atoms, install, installDir,
-                                   defaultAtoms, modifySourceDebDescription, intermediateFile, warning, watchFile, logrotateStanza,
-                                   sourceFormat, putCompat, putCopyright, setChangeLog, installInit, postInst, postRm, preInst, preRm, link)
+                                   defaultAtoms, modifySourceDebDescription, intermediateFile, warning, watchFile, logrotateStanza, putPostInst,
+                                   sourceFormat, putCompat, putCopyright, setChangeLog, installInit, postRm, preInst, preRm, link)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')
@@ -183,7 +183,7 @@ inputAtoms debian name xs =
       (p, ".init") ->      readFile (debian </> name) >>= \ text -> return $ installInit p text xs
       (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> return $ logrotateStanza p text xs
       (p, ".links") ->     readFile (debian </> name) >>= \ text -> return $ foldr (readLink p) xs (lines text)
-      (p, ".postinst") ->  readFile (debian </> name) >>= \ text -> return $ postInst p text xs
+      (p, ".postinst") ->  readFile (debian </> name) >>= \ text -> return $ putPostInst p text xs
       (p, ".postrm") ->    readFile (debian </> name) >>= \ text -> return $ postRm p text xs
       (p, ".preinst") ->   readFile (debian </> name) >>= \ text -> return $ preInst p text xs
       (p, ".prerm") ->     readFile (debian </> name) >>= \ text -> return $ preRm p text xs

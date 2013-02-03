@@ -42,6 +42,7 @@ class (Monoid atoms,
     putAtoms :: Map DebAtomKey (Set DebAtom) -> atoms -> atoms
     rulesHead :: Lens atoms (Maybe Text)
     packageDescription :: Lens atoms (Maybe PackageDescription)
+    postInst :: Lens atoms (Map BinPkgName Text)
 
 data DebAtomKey
     = Source
@@ -134,6 +135,7 @@ data DebAtom
     | DebCopyright (Either License Text)	  -- ^ Copyright information, either as a Cabal License value or
                                                   -- the full text.
     | DebControl SourceDebDescription		  -- ^ The parsed contents of the control file
+    | DHPostInst (Map BinPkgName Text)	 	  -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
 
     -- From here down are atoms to be associated with a Debian binary
     -- package.  This could be done with more type safety, separate
@@ -141,7 +143,6 @@ data DebAtom
     | DHApacheSite String FilePath Text           -- ^ Have Apache configure a site using PACKAGE, DOMAIN, LOGDIR, and APACHECONFIGFILE
     | DHLogrotateStanza Text		          -- ^ Add a stanza of a logrotate file to the binary package
     | DHLink FilePath FilePath          	  -- ^ Create a symbolic link in the binary package
-    | DHPostInst Text                   	  -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
     | DHPostRm Text                     	  -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
     | DHPreInst Text                    	  -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
     | DHPreRm Text                      	  -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
@@ -257,12 +258,12 @@ knownVersionSplits =
     ]
 
 oldClckwrksSiteFlags :: Site -> [String]
-oldClckwrksSiteFlags site =
+oldClckwrksSiteFlags x =
     [ -- According to the happstack-server documentation this needs a trailing slash.
-      "--base-uri", "http://" ++ domain site ++ "/"
+      "--base-uri", "http://" ++ domain x ++ "/"
     , "--http-port", show port]
 oldClckwrksServerFlags :: Server -> [String]
-oldClckwrksServerFlags server =
+oldClckwrksServerFlags x =
     [ -- According to the happstack-server documentation this needs a trailing slash.
-      "--base-uri", "http://" ++ hostname server ++ ":" ++ show (port server) ++ "/"
+      "--base-uri", "http://" ++ hostname x ++ ":" ++ show (port x) ++ "/"
     , "--http-port", show port]

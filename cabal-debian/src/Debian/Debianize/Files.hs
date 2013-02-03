@@ -9,7 +9,7 @@ module Debian.Debianize.Files
 
 import Data.Lens.Lazy (getL)
 import Data.List as List (map)
-import Data.Map as Map (Map, toList, empty, insertWith, fromListWithKey)
+import Data.Map as Map (Map, toList, empty, insertWith, fromListWithKey, mapKeys)
 import Data.Maybe
 import Data.Monoid (Monoid, (<>), mempty)
 import Data.Set as Set (toList, member)
@@ -21,7 +21,7 @@ import Debian.Debianize.AtomsType (lookupAtom, foldAtoms, changeLog, compat, cop
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Utility (showDeps')
-import Debian.Relation (Relations)
+import Debian.Relation (Relations, BinPkgName(BinPkgName))
 import Prelude hiding (init, unlines, writeFile)
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -97,11 +97,14 @@ links deb =
 
 postinst :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 postinst deb =
-    Map.toList $ foldAtoms atomf mempty deb
+    Map.toList $ fromMaybe empty $ foldAtoms atomf Nothing deb
     where
-      atomf (Binary name) (DHPostInst t) files = Map.insertWith (<>) (pathf name) t files
-      atomf _ _ files = files
-      pathf name = "debian" </> show (pretty name) ++ ".postinst"
+      atomf :: DebAtomKey -> DebAtom -> Maybe (Map FilePath Text) -> Maybe (Map FilePath Text)
+      atomf Source (DHPostInst mp') Nothing = Just (mapKeys pathf mp')
+      atomf Source (DHPostInst mp') (Just mp) = error $ "Multiple postInst maps: " ++ show (mp, mp')
+      atomf _ _ mp = mp
+      -- f (BinPkgName name) t = (pathf name, t)
+      pathf (BinPkgName name) = "debian" </> show (pretty name) ++ ".postinst"
 
 postrm :: HasAtoms atoms => atoms -> [(FilePath, Text)]
 postrm deb =
