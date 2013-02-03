@@ -4,11 +4,12 @@ module Debian.Debianize.Flags
     ) where
 
 import Data.Char (toLower, isDigit, ord)
+import Data.Lens.Lazy (setL)
 import Data.Set (fromList)
 import Data.Version (parseVersion)
 import Debian.Debianize.AtomsClass (HasAtoms(..), Flags(..), DebAction(..), InstallFile(..))
-import Debian.Debianize.AtomsType (missingDependency, doExecutable, setSourcePackageName, setBuildDir,
-                                   putCabalFlagAssignments, mapFlags, sourceFormat, setRevision, setDebVersion, setOmitLTDeps, putExtraDevDep,
+import Debian.Debianize.AtomsType (Atoms, missingDependency, doExecutable, setSourcePackageName, setBuildDir,
+                                   putCabalFlagAssignments, mapFlags, setRevision, setDebVersion, setOmitLTDeps, putExtraDevDep,
                                    putCompilerVersion, putNoProfilingLibrary, putNoDocumentationLibrary, putDebMaintainer, putBuildDep, putBuildDepIndep,
                                    depends, conflicts, putExtraLibMapping, putEpochMapping, putExecMap)
 import Debian.Orphans ()
@@ -37,7 +38,7 @@ parseArgs args atoms = do
 -}
 
 -- | Options that modify the Flags atom.
-flagOptions :: HasAtoms atoms => [OptDescr (atoms -> atoms)]
+flagOptions :: [OptDescr (Atoms -> Atoms)]
 flagOptions =
     [ Option "v" ["verbose"] (ReqArg (\ s atoms -> mapFlags (\ x -> x { verbosity = read s }) atoms) "n")
              "Change build verbosity",
@@ -53,7 +54,7 @@ flagOptions =
     ]
 
 -- | Options that modify other atoms.
-atomOptions :: HasAtoms atoms => [OptDescr (atoms -> atoms)]
+atomOptions :: [OptDescr (Atoms -> Atoms)]
 atomOptions =
     [ Option "" ["executable"] (ReqArg (\ path x -> executableOption path (\ bin e -> doExecutable bin e x)) "SOURCEPATH or SOURCEPATH:DESTDIR")
              "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
@@ -100,7 +101,7 @@ atomOptions =
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
       Option "" ["omit-lt-deps"] (NoArg setOmitLTDeps)
              "Don't generate the << dependency when we see a cabal equals dependency.",
-      Option "" ["quilt"] (NoArg (sourceFormat Quilt3))
+      Option "" ["quilt"] (NoArg (setL sourceFormat (Just Quilt3)))
              "The package has an upstream tarball, write '3.0 (quilt)' into source/format.",
       Option "" ["builddir"] (ReqArg (\ s atoms -> setBuildDir (s </> "build") atoms) "PATH")
              "Subdirectory where cabal does its build, dist/build by default, dist-ghc when run by haskell-devscripts.  The build subdirectory is added to match the behavior of the --builddir option in the Setup script."

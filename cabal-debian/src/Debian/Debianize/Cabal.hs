@@ -14,7 +14,7 @@ import Data.Set (Set, toList)
 import Data.Text (Text, pack)
 import Data.Version (Version)
 import Debian.Debianize.AtomsClass (HasAtoms(packageDescription))
-import Debian.Debianize.AtomsType (setCompiler, debMaintainer)
+import Debian.Debianize.AtomsType (Atoms, setCompiler, debMaintainer)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
@@ -47,7 +47,7 @@ withSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top 
        action atoms'
 -}
 
-getSimplePackageDescription :: HasAtoms atoms => Int -> Maybe Version -> Set (FlagName, Bool) -> FilePath -> atoms -> IO atoms
+getSimplePackageDescription :: Int -> Maybe Version -> Set (FlagName, Bool) -> FilePath -> Atoms -> IO Atoms
 getSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top atoms =
     withCurrentDirectory top $ do
       descPath <- defaultPackageDesc vb
@@ -103,7 +103,7 @@ showLicense (UnknownLicense _) = "Unknown"
 
 -- | Try to compute the debian maintainer from the maintainer field of the
 -- cabal package, or from the value returned by getDebianMaintainer.
-inputMaintainer :: HasAtoms atoms => PackageDescription -> atoms -> IO (Maybe NameAddr)
+inputMaintainer :: PackageDescription -> Atoms -> IO (Maybe NameAddr)
 inputMaintainer pkgDesc atoms =
     return (debMaintainer atoms) >>=
     return . maybe (parse cabalMaintainer) Just >>=

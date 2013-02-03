@@ -14,10 +14,10 @@ module Debian.Debianize.Debianize
     ) where
 
 import Control.Applicative ((<$>))
-import Data.Lens.Lazy (getL)
+import Data.Lens.Lazy (getL, setL)
 import Data.Maybe
 import Data.Text (Text)
-import Debian.Debianize.AtomsClass (HasAtoms(packageDescription), Flags(..), DebAction(..))
+import Debian.Debianize.AtomsClass (HasAtoms(packageDescription, watch), Flags(..), DebAction(..))
 import Debian.Debianize.AtomsType (Atoms, defaultAtoms, flags, watchAtom, setSourcePriority, setChangeLog,
                                    setSourceSection, compilerVersion, cabalFlagAssignments, putCopyright, sourceDebDescription)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
@@ -103,7 +103,7 @@ debianize top args =
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-cabalToDebianization :: HasAtoms deb => FilePath -> deb -> IO deb
+cabalToDebianization :: FilePath -> Atoms -> IO Atoms
 cabalToDebianization top old =
     do old' <- getSimplePackageDescription (verbosity (flags old)) (compilerVersion old) (cabalFlagAssignments old) top old
        let pkgDesc = fromMaybe (error "cabalToDebianization") (getL packageDescription old')
@@ -117,18 +117,17 @@ cabalToDebianization top old =
       -- the old debianization, so we should do more here.
       scrub = setSourceBinaries []
 
-debianization :: HasAtoms deb =>
-                 String              -- ^ current date
+debianization :: String              -- ^ current date
               -> Text                -- ^ copyright
               -> NameAddr            -- ^ maintainer
               -> StandardsVersion
-              -> deb       -- ^ Existing debianization
-              -> deb       -- ^ New debianization
+              -> Atoms      -- ^ Existing debianization
+              -> Atoms      -- ^ New debianization
 debianization date copyright' maint standards oldDeb =
     setSourcePriority Optional $
     setSourceSection (MainSection "haskell") $
     -- setSourceBinaries [] $
-    watchAtom (pkgName $ Cabal.package $ pkgDesc)  $
+    setL watch (Just (watchAtom (pkgName $ Cabal.package $ pkgDesc)))  $
     putCopyright (Right copyright') $
     putStandards standards $
     versionInfo maint date $
@@ -142,23 +141,23 @@ debianization date copyright' maint standards oldDeb =
     where
       pkgDesc = fromMaybe (error "debianization") $ getL packageDescription oldDeb
 
-compileEnvironmentArgs :: HasAtoms atoms => atoms -> IO atoms
+compileEnvironmentArgs :: Atoms -> IO Atoms
 compileEnvironmentArgs atoms0 =
     getEnv "CABALDEBIAN" >>= return . compileArgs atoms0 . read
 
 -- | Compile the command line arguments into the atoms value and pass
 -- to the action.
-withFlags :: HasAtoms atoms => atoms -> (atoms -> IO a) -> IO a
+withFlags :: Atoms -> (Atoms -> IO a) -> IO a
 withFlags def action = getArgs >>= action . compileArgs def
 
 -- | Read the value of $CABALDEBIAN as a list of command line
 -- arguments, construct a ('Flags' -> 'Flags') function from them, and
 -- compose it with a function that takes a 'Flags' record.
-withEnvironmentFlags :: HasAtoms atoms => atoms -> (atoms -> IO a) -> IO a
+withEnvironmentFlags :: Atoms -> (Atoms -> IO a) -> IO a
 withEnvironmentFlags atoms0 f =
     (getEnv "CABALDEBIAN" >>= f . compileArgs atoms0 . read) `catchIOError` (\ _ -> f atoms0)
 
-compileArgs :: HasAtoms atoms => atoms -> [String] -> atoms
+compileArgs :: Atoms -> [String] -> Atoms
 compileArgs atoms args =
     case getOpt' RequireOrder (flagOptions ++ atomOptions) args of
       (os, [], [], []) -> foldl (flip ($)) atoms os

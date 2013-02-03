@@ -16,8 +16,8 @@ import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
-import Debian.Debianize.AtomsClass (HasAtoms, Flags(dryRun, verbosity), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType)
-import Debian.Debianize.AtomsType (putPackageInfo, flags, filterMissing, packageInfo, compilerVersion, cabalFlagAssignments, compiler)
+import Debian.Debianize.AtomsClass (Flags(dryRun, verbosity), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType)
+import Debian.Debianize.AtomsType (Atoms, putPackageInfo, flags, filterMissing, packageInfo, compilerVersion, cabalFlagAssignments, compiler)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps, debNameFromType)
 import Debian.Debianize.Cabal (getSimplePackageDescription)
 import Debian.Control
@@ -42,8 +42,7 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- names, or examining the /var/lib/dpkg/info/\*.list files.  From
 -- these we can determine the source package name, and from that the
 -- documentation package name.
-substvars :: HasAtoms atoms =>
-             atoms
+substvars :: Atoms
           -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> IO ()
 substvars atoms debType =
@@ -53,7 +52,7 @@ substvars atoms debType =
        control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
        substvars' atoms'' debType control
 
-substvars' :: HasAtoms atoms => atoms -> DebType -> Control' String -> IO ()
+substvars' :: Atoms -> DebType -> Control' String -> IO ()
 substvars' atoms debType control =
     case (missingBuildDeps, path) of
       -- There should already be a .substvars file produced by dh_haskell_prep,
@@ -105,7 +104,7 @@ substvars' atoms debType control =
       bd = maybe "" (\ (Field (_a, b)) -> stripWS b) . lookupP "Build-Depends" . head . unControl $ control
       bdi = maybe "" (\ (Field (_a, b)) -> stripWS b) . lookupP "Build-Depends-Indep" . head . unControl $ control
 
-libPaths :: HasAtoms atoms => Compiler -> DebMap -> atoms -> IO atoms
+libPaths :: Compiler -> DebMap -> Atoms -> IO Atoms
 libPaths compiler debVersions atoms
     | compilerFlavor compiler == GHC =
         do a <- getDirPaths "/usr/lib"
@@ -116,7 +115,7 @@ libPaths compiler debVersions atoms
     where
       getDirPaths path = try (getDirectoryContents path) >>= return . map (\ x -> (path, x)) . either (\ (_ :: SomeException) -> []) id
 
-packageInfo' :: HasAtoms atoms => Compiler ->  DebMap -> atoms -> (FilePath, String) -> ReaderT (Map.Map FilePath (Set.Set D.BinPkgName)) IO atoms
+packageInfo' :: Compiler ->  DebMap -> Atoms -> (FilePath, String) -> ReaderT (Map.Map FilePath (Set.Set D.BinPkgName)) IO Atoms
 packageInfo' compiler debVersions atoms (d, f) =
     case parseNameVersion f of
       Nothing -> return atoms

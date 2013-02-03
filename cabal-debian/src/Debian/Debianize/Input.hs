@@ -18,10 +18,10 @@ import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat))
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat, watch))
 import Debian.Debianize.AtomsType (Atoms, install, installDir,
-                                   defaultAtoms, modifySourceDebDescription, intermediateFile, warning, watchFile, logrotateStanza, putPostInst,
-                                   sourceFormat, putCopyright, setChangeLog, installInit, postRm, preInst, preRm, link)
+                                   defaultAtoms, modifySourceDebDescription, intermediateFile, warning, logrotateStanza, putPostInst,
+                                   putCopyright, setChangeLog, installInit, postRm, preInst, preRm, link)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')
@@ -150,27 +150,27 @@ yes x = error $ "Expecting yes or no: " ++ x
 inputChangeLog :: FilePath -> IO ChangeLog
 inputChangeLog debian = readFile (debian </> "changelog") >>= return . parseChangeLog . unpack  -- `catch` handleDoesNotExist :: IO ChangeLog
 
-inputAtomsFromDirectory :: HasAtoms atoms => FilePath -> atoms -> IO atoms -- .install files, .init files, etc.
+inputAtomsFromDirectory :: FilePath -> Atoms -> IO Atoms -- .install files, .init files, etc.
 inputAtomsFromDirectory debian xs =
     debianFiles xs >>= intermediateFiles (debian </> "cabalInstall")
     where
-      debianFiles :: HasAtoms atoms => atoms -> IO atoms
+      debianFiles :: Atoms -> IO Atoms
       debianFiles xs' =
           getDirectoryContents' debian >>=
           return . (++ ["source/format"]) >>=
           filterM (doesFileExist . (debian </>)) >>=
           foldM (\ xs'' name -> inputAtoms debian name xs'') xs'
-      intermediateFiles :: HasAtoms atoms => FilePath -> atoms -> IO atoms
+      intermediateFiles :: FilePath -> Atoms -> IO Atoms
       intermediateFiles tmp xs' =
           do sums <- getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
              paths <- mapM (\ sum -> getDirectoryContents' (tmp </> sum) >>= return . map (sum </>)) sums >>= return . concat
              files <- mapM (readFile . (tmp </>)) paths
              foldM (\ xs'' (path, file) -> return $ intermediateFile ("debian/cabalInstall" </> path) file xs'') xs' (zip paths files)
 
-inputAtoms :: HasAtoms atoms => FilePath -> FilePath -> atoms -> IO atoms
+inputAtoms :: FilePath -> FilePath -> Atoms -> IO Atoms
 inputAtoms _ path xs | elem path ["control"] = return xs
-inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ (either warning sourceFormat (readSourceFormat text)) xs
-inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ watchFile text xs
+inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ (either warning (setL sourceFormat . Just) (readSourceFormat text)) xs
+inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ setL watch (Just text) xs
 inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> return $ setL rulesHead (Just text) xs
 inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> return $ setL compat (Just (read (unpack text))) xs
 inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> return $ putCopyright (Right text) xs
@@ -196,18 +196,18 @@ inputAtoms debian name xs =
       (_, x) | last x == '~' -> return xs -- backup file
       _ -> trace ("Ignored: " ++ debian </> name) (return xs)
 
-readLink :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+readLink :: BinPkgName -> Text -> Atoms -> Atoms
 readLink p line atoms =
     case words line of
       [a, b] -> link p (unpack a) (unpack b) atoms
       [] -> atoms
       _ -> trace ("readLink: " ++ show line) atoms
 
-readInstall :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+readInstall :: BinPkgName -> Text -> Atoms -> Atoms
 readInstall p line atoms =
     case break isSpace line of
       (_, b) | null b -> error $ "readInstall: syntax error in .install file for " ++ show p ++ ": " ++ show line
       (a, b) -> install p (unpack (strip a)) (unpack (strip b)) atoms
 
-readDir :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+readDir :: BinPkgName -> Text -> Atoms -> Atoms
 readDir p line atoms = installDir p (unpack line) atoms

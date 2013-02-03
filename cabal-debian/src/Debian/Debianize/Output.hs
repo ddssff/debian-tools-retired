@@ -15,8 +15,8 @@ import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Map as Map (toList, elems)
 import Data.Text as Text (Text, unpack, split)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logVersion))
-import Debian.Debianize.AtomsClass (HasAtoms, Flags(validate, dryRun))
-import Debian.Debianize.AtomsType (flags, changeLog, sourceDebDescription)
+import Debian.Debianize.AtomsClass (Flags(validate, dryRun))
+import Debian.Debianize.AtomsType (Atoms, flags, changeLog, sourceDebDescription)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Utility (replaceFile, zipMaps)
@@ -24,7 +24,7 @@ import System.Directory (Permissions(executable), getPermissions, setPermissions
 import System.FilePath ((</>), takeDirectory)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-outputDebianization :: HasAtoms deb => Maybe deb -> deb -> IO ()
+outputDebianization :: Maybe Atoms -> Atoms -> IO ()
 outputDebianization old new =
        -- It is imperitive that during the time that dpkg-buildpackage
        -- runs the version number in the changelog and the source and
@@ -42,7 +42,7 @@ outputDebianization old new =
          _ | dryRun (flags new) -> error "No existing debianiztion to compare new one to"
          _ -> writeDebianization new
 
-validateDebianization :: (HasAtoms a, HasAtoms b) => a -> b -> IO ()
+validateDebianization :: Atoms -> Atoms -> IO ()
 validateDebianization old new =
     do let oldVersion = logVersion (head (unChangeLog (changeLog old)))
            newVersion = logVersion (head (unChangeLog (changeLog new)))
@@ -60,7 +60,7 @@ validateDebianization old new =
       unChangeLog (ChangeLog x) = x
 
 -- | Describe a 'Debianization' in relation to one that is written into
-describeDebianization :: (HasAtoms old, HasAtoms new) => old -> new -> String
+describeDebianization :: Atoms -> Atoms -> String
 describeDebianization old new =
     concat . Map.elems $ zipMaps doFile oldFiles newFiles
     where
@@ -75,7 +75,7 @@ describeDebianization old new =
           else Just (show (prettyDiff ("old" </> path) ("new" </> path) (contextDiff 2 (split (== '\n') o) (split (== '\n') n))))
       doFile _path Nothing Nothing = error "Internal error in zipMaps"
 
-writeDebianization :: HasAtoms deb => deb -> IO ()
+writeDebianization :: Atoms -> IO ()
 writeDebianization d =
     mapM_ (uncurry doFile) (toList (toFileMap d (sourceDebDescription d))) >>
     getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})

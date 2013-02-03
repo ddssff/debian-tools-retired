@@ -22,7 +22,7 @@ import qualified Data.Set as Set
 import Data.Version (Version, showVersion)
 import Debian.Control
 import Debian.Debianize.AtomsClass (HasAtoms(packageDescription), PackageInfo(devDeb, profDeb, docDeb), DebType(Dev, Prof, Doc), VersionSplits(..))
-import Debian.Debianize.AtomsType (noProfilingLibrary, noDocumentationLibrary, compiler, versionSplits,
+import Debian.Debianize.AtomsType (Atoms, noProfilingLibrary, noDocumentationLibrary, compiler, versionSplits,
                                    filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile (PackageType(..))
@@ -64,7 +64,7 @@ unboxDependency (ExtraLibs _) = Nothing -- Dependency (PackageName d) anyVersion
 
 -- Make a list of the debian devel packages corresponding to cabal packages
 -- which are build dependencies
-debDeps :: HasAtoms atoms => DebType -> atoms -> Control' String -> D.Relations
+debDeps :: DebType -> Atoms -> Control' String -> D.Relations
 debDeps debType atoms control =
     interdependencies ++ otherdependencies
     where
@@ -81,7 +81,7 @@ debDeps debType atoms control =
                                                                                                              Doc -> docDeb p)
                             Nothing -> Nothing) (cabalDependencies atoms))
 
-cabalDependencies :: HasAtoms atoms => atoms -> [Dependency]
+cabalDependencies :: Atoms -> [Dependency]
 cabalDependencies atoms =
     catMaybes $ map unboxDependency $ allBuildDepends atoms
                   (Cabal.buildDepends (fromMaybe (error "cabalDependencies") $ getL packageDescription atoms))
@@ -91,7 +91,7 @@ cabalDependencies atoms =
 
 -- |Debian packages don't have per binary package build dependencies,
 -- so we just gather them all up here.
-allBuildDepends :: HasAtoms atoms => atoms -> [Dependency] -> [Dependency] -> [Dependency] -> [String] -> [Dependency_]
+allBuildDepends :: Atoms -> [Dependency] -> [Dependency] -> [Dependency] -> [String] -> [Dependency_]
 allBuildDepends atoms buildDepends buildTools pkgconfigDepends extraLibs =
     nub $ map BuildDepends buildDepends ++
           map BuildTools buildTools ++
@@ -103,7 +103,7 @@ allBuildDepends atoms buildDepends buildTools pkgconfigDepends extraLibs =
 
 -- The haskell-cdbs package contains the hlibrary.mk file with
 -- the rules for building haskell packages.
-debianBuildDeps :: HasAtoms atoms => atoms -> D.Relations
+debianBuildDeps :: Atoms -> D.Relations
 debianBuildDeps deb =
     filterMissing deb $
     nub $ [[D.Rel (D.BinPkgName "debhelper") (Just (D.GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
@@ -123,7 +123,7 @@ debianBuildDeps deb =
                           (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc)
                           (concatMap extraLibs . allBuildInfo $ pkgDesc))
 
-debianBuildDepsIndep :: HasAtoms atoms => atoms -> D.Relations
+debianBuildDepsIndep :: Atoms -> D.Relations
 debianBuildDepsIndep deb =
     filterMissing deb $
     if noDocumentationLibrary deb
@@ -143,7 +143,7 @@ debianBuildDepsIndep deb =
 -- | The documentation dependencies for a package include the
 -- documentation package for any libraries which are build
 -- dependencies, so we have access to all the cross references.
-docDependencies :: HasAtoms atoms => atoms -> Dependency_ -> D.Relations
+docDependencies :: Atoms -> Dependency_ -> D.Relations
 docDependencies atoms (BuildDepends (Dependency name ranges)) =
     dependencies atoms Documentation name ranges
 docDependencies _ _ = []
@@ -151,7 +151,7 @@ docDependencies _ _ = []
 -- | The Debian build dependencies for a package include the profiling
 -- libraries and the documentation packages, used for creating cross
 -- references.  Also the packages associated with extra libraries.
-buildDependencies :: HasAtoms atoms => atoms -> Dependency_ -> D.Relations
+buildDependencies :: Atoms -> Dependency_ -> D.Relations
 buildDependencies atoms (BuildDepends (Dependency name ranges)) =
     dependencies atoms Development name ranges ++
     dependencies atoms Profiling name ranges
@@ -202,7 +202,7 @@ anyrel' x = [D.Rel x Nothing Nothing]
 -- | Turn a cabal dependency into debian dependencies.  The result
 -- needs to correspond to a single debian package to be installed,
 -- so we will return just an OrRelation.
-dependencies :: HasAtoms atoms => atoms -> PackageType -> PackageName -> VersionRange -> Relations
+dependencies :: Atoms -> PackageType -> PackageName -> VersionRange -> Relations
 dependencies atoms typ name cabalRange =
     map doBundled $ convert' (canonical (Or (catMaybes (map convert alts))))
     where
@@ -292,7 +292,7 @@ canonical (Or rels) = And . map Or $ sequence $ map (concat . map unOr . unAnd .
 -- names based on version numbers.  If a version split happens at v,
 -- this will return the ltName if < v, and the geName if the relation
 -- is >= v.
-debianName :: (HasAtoms atoms, PkgName name) => atoms -> PackageType -> PackageIdentifier -> name
+debianName :: (PkgName name) => Atoms -> PackageType -> PackageIdentifier -> name
 debianName atoms typ pkgDesc =
     (\ pname -> mkPkgName pname typ) $
     case filter (\ x -> pname == packageName x) (versionSplits atoms) of

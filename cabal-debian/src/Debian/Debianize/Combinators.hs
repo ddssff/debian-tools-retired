@@ -22,7 +22,7 @@ import Data.Text as Text (Text, pack, intercalate, unlines)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, packageDescription))
-import Debian.Debianize.AtomsType (revision, debVersion, sourcePackageName,
+import Debian.Debianize.AtomsType (Atoms, revision, debVersion, sourcePackageName,
                                    extraLibMap, epochMap, changeLog, modifyChangeLog, sourceDebDescription, setSourceDebDescription)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
@@ -43,7 +43,7 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 -- | Set the debianization's version info - everything that goes into
 -- the new changelog entry, source package name, exact debian version,
 -- log comments, maintainer name, revision date.
-versionInfo :: (HasAtoms deb) => NameAddr -> String -> deb -> deb
+versionInfo :: NameAddr -> String -> Atoms -> Atoms
 versionInfo debianMaintainer date deb =
     modifyChangeLog (const (Just newLog)) $
     setSourceDebDescription ((sourceDebDescription deb)
@@ -97,7 +97,7 @@ convertVersion debinfo cabalVersion =
                              (Just debianRevision)
 
 -- | Generate the head of the debian/rules file.
-cdbsRules :: HasAtoms atoms => PackageIdentifier -> atoms -> atoms
+cdbsRules :: PackageIdentifier -> Atoms -> Atoms
 cdbsRules pkgId deb =
     setL rulesHead
          (Just . unlines $
@@ -109,16 +109,16 @@ cdbsRules pkgId deb =
            "include /usr/share/cdbs/1/class/hlibrary.mk" ])
          deb
 
-putStandards :: HasAtoms atoms => StandardsVersion -> atoms -> atoms
+putStandards :: StandardsVersion -> Atoms -> Atoms
 putStandards x deb = setSourceDebDescription ((sourceDebDescription deb) {standardsVersion = Just x}) deb
 
-describe :: HasAtoms atoms => atoms -> PackageType -> PackageIdentifier -> Text
+describe :: Atoms -> PackageType -> PackageIdentifier -> Text
 describe atoms typ ident =
     debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc) typ ident
     where
       pkgDesc = fromMaybe (error $ "describe " ++ show ident) $ getL packageDescription atoms
 
-buildDeps :: HasAtoms deb => deb -> deb
+buildDeps :: Atoms -> Atoms
 buildDeps deb =
     setSourceDebDescription ((sourceDebDescription deb) { Debian.buildDepends = debianBuildDeps deb
                                                         , buildDependsIndep = debianBuildDepsIndep deb }) deb
@@ -126,7 +126,7 @@ buildDeps deb =
 -- | Convert the extraLibs field of the cabal build info into debian
 -- binary package names and make them dependendencies of the debian
 -- devel package (if there is one.)
-addExtraLibDependencies :: HasAtoms deb => deb -> deb
+addExtraLibDependencies :: Atoms -> Atoms
 addExtraLibDependencies deb =
     setSourceDebDescription ((sourceDebDescription deb) {binaryPackages = map f (binaryPackages (sourceDebDescription deb))}) deb
     where
@@ -207,7 +207,7 @@ extraDeps deps p =
 anyrel' :: D.BinPkgName -> [D.Relation]
 anyrel' x = [D.Rel x Nothing Nothing]
 
-oldFilterMissing :: HasAtoms deb => [BinPkgName] -> deb -> deb
+oldFilterMissing :: [BinPkgName] -> Atoms -> Atoms
 oldFilterMissing missing deb =
     setSourceDebDescription (e (sourceDebDescription deb)) deb
     where
@@ -226,5 +226,5 @@ oldFilterMissing missing deb =
                                 , replaces = f (replaces rels)
                                 , builtUsing = f (builtUsing rels) }
 
-setSourceBinaries :: HasAtoms deb => [BinaryDebDescription] -> deb -> deb
+setSourceBinaries :: [BinaryDebDescription] -> Atoms -> Atoms
 setSourceBinaries xs deb = setSourceDebDescription ((sourceDebDescription deb) {binaryPackages = xs}) deb

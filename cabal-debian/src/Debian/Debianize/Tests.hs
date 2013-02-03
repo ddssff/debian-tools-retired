@@ -7,19 +7,19 @@ module Debian.Debianize.Tests
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Function (on)
-import Data.Lens.Lazy (setL, getL)
+import Data.Lens.Lazy (setL, getL, modL)
 import Data.List (sortBy)
 import Data.Map as Map (differenceWithKey, intersectionWithKey)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mconcat, (<>), mempty)
-import Data.Set as Set (Set, fromList, singleton)
+import Data.Set as Set (fromList)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat), DebAtomKey(..), DebAtom(..), InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat), DebAtomKey(..), DebAtom(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.AtomsType as Atom
-    (Atoms, insertAtom, mapAtoms, tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
+    (Atoms, insertAtom, tightDependencyFixup, missingDependency, setRevision, putExecMap,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
      changeLog, updateChangeLog, putCopyright, knownEpochMappings, sourceDebDescription, setSourceDebDescription, newDebianization)
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
@@ -146,7 +146,7 @@ test3 =
     where
       testDeb2 :: Atoms
       testDeb2 =
-          sourceFormat Native3 $
+          setL sourceFormat (Just Native3) $
           setL rulesHead (Just "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n") $
           setL compat (Just 7) $
           putCopyright (Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n") $
@@ -229,7 +229,7 @@ test4 =
                  let new' =
                          finalizeDebianization $
                          (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://www.clckwrks.com/"}) x) $
-                         sourceFormat Native3 $
+                         setL sourceFormat (Just Native3) $
                          missingDependency (BinPkgName "libghc-clckwrks-theme-clckwrks-doc") $
                          setRevision "" $
                          doWebsite (BinPkgName "clckwrks-dot-com-production") (theSite (BinPkgName "clckwrks-dot-com-production")) $
@@ -246,6 +246,14 @@ test4 =
       serverNames = map BinPkgName ["clckwrks-dot-com-production"] -- , "clckwrks-dot-com-staging", "clckwrks-dot-com-development"]
       -- Insert a line just above the debhelper.mk include
       fixRules deb =
+          modL rulesHead
+               (\ (Just t) -> (Just 
+                               (T.unlines $ concat $
+                                map (\ line -> if line == "include /usr/share/cdbs/1/rules/debhelper.mk"
+                                               then ["DEB_SETUP_GHC_CONFIGURE_ARGS = -fbackups", "", line] :: [T.Text]
+                                               else [line] :: [T.Text]) (T.lines t))))
+               deb
+{-
           mapAtoms f deb
           where
             f :: DebAtomKey -> DebAtom -> Set (DebAtomKey, DebAtom)
@@ -255,6 +263,7 @@ test4 =
                                                                 then ["DEB_SETUP_GHC_CONFIGURE_ARGS = -fbackups", "", line] :: [T.Text]
                                                                 else [line] :: [T.Text]) (T.lines t)))
             f k a = singleton (k, a)
+-}
       tight deb = foldr (tightDependencyFixup
                          -- For each pair (A, B) make sure that this package requires the
                          -- same exact version of package B as the version of A currently
@@ -317,7 +326,7 @@ test5 =
                       new <- cabalToDebianization "test-data/creativeprompts/input"
                                (newDebianization (changeLog old) (fromMaybe (error "Missing debian/compat file") $ getL compat old) standards)
                       let new' = finalizeDebianization $
-                                 sourceFormat Native3 $
+                                 setL sourceFormat (Just Native3) $
                                  setArchitecture (BinPkgName "creativeprompts-data") All $
                                  setArchitecture (BinPkgName "creativeprompts-development") All $
                                  setArchitecture (BinPkgName "creativeprompts-production") All $
@@ -375,14 +384,14 @@ test5 =
       json2Path = "/usr/share/clckwrks-0.13.2/json2"
 
 
-copyFirstLogEntry :: HasAtoms atoms => atoms -> atoms -> atoms
+copyFirstLogEntry :: Atoms -> Atoms -> Atoms
 copyFirstLogEntry deb1 deb2 =
     updateChangeLog (ChangeLog (hd1 : tl2)) deb2
     where
       ChangeLog (hd1 : _) = changeLog deb1
       ChangeLog (_ : tl2) = changeLog deb2
 
-copyChangelog :: (HasAtoms a, HasAtoms b) => a -> b -> b
+copyChangelog :: Atoms -> Atoms -> Atoms
 copyChangelog deb1 deb2 = updateChangeLog (changeLog deb1) deb2
 
 test6 :: Test
@@ -484,7 +493,7 @@ test7 =
                            (newDebianization (changeLog old) 7 (StandardsVersion 3 9 3 Nothing))
                   let new' = finalizeDebianization $
                              (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://src.seereason.com/cabal-debian"}) x) $
-                             sourceFormat Native3 $
+                             setL sourceFormat (Just Native3) $
                              insertAtom Source (UtilsPackageName (BinPkgName "cabal-debian")) $
                              Atom.depends (BinPkgName "cabal-debian") (anyrel (BinPkgName "apt-file")) $
                              Atom.conflicts (BinPkgName "cabal-debian")
@@ -506,7 +515,7 @@ test8 =
                              knownEpochMappings $
                              insertAtom Source (BuildDep (BinPkgName "haskell-hsx-utils")) $
                              (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://artvaluereportonline.com"}) x) $
-                             sourceFormat Native3 $
+                             setL sourceFormat (Just Native3) $
                              new
                   assertEqual "test8" [] (diffDebianizations old new')
              )
@@ -527,7 +536,7 @@ diffMaps old new =
       combine1 k a b = if a == b then Unchanged k a else Modified k a b
       combine2 _ _ _ = Nothing
 
-diffDebianizations :: HasAtoms deb => deb -> deb -> String -- [Change FilePath T.Text]
+diffDebianizations :: Atoms -> Atoms -> String -- [Change FilePath T.Text]
 diffDebianizations old new =
     show (mconcat (map prettyChange (filter (not . isUnchanged) (diffMaps old' new'))))
     where

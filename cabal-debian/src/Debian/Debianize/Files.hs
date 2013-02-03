@@ -16,8 +16,8 @@ import Data.Set as Set (toList, member)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat), DebAtomKey(..), DebAtom(..))
-import Debian.Debianize.AtomsType (lookupAtom, foldAtoms, changeLog, copyright)
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat, watch), DebAtomKey(..), DebAtom(..))
+import Debian.Debianize.AtomsType (Atoms, foldAtoms, changeLog, copyright)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Utility (showDeps')
@@ -26,28 +26,20 @@ import Prelude hiding (init, unlines, writeFile)
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-sourceFormat :: HasAtoms atoms => atoms -> [(FilePath, Text)]
-sourceFormat deb =
-    maybe [] (\ x -> [("debian/source/format", pack (show (pretty x)))]) (lookupAtom Source f deb)
-    where
-      f (DebSourceFormat x) = Just x
-      f _ = Nothing
+sourceFormatFiles :: Atoms -> [(FilePath, Text)]
+sourceFormatFiles deb = maybe [] (\ x -> [("debian/source/format", pack (show (pretty x)))]) (getL sourceFormat deb)
 
-watch :: HasAtoms atoms => atoms -> [(FilePath, Text)]
-watch deb =
-    maybe [] (\ x -> [("debian/watch", x)]) (lookupAtom Source f deb)
-    where
-      f (DebWatch x) = Just x
-      f _ = Nothing
+watchFile :: Atoms -> [(FilePath, Text)]
+watchFile deb = maybe [] (\ x -> [("debian/watch", x)]) (getL watch deb)
 
-intermediates :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+intermediates :: Atoms -> [(FilePath, Text)]
 intermediates deb =
     foldAtoms atomf [] deb
     where
       atomf Source (DHIntermediate path text) files = (path,  text) : files
       atomf _ _ files = files
 
-installs :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+installs :: Atoms -> [(FilePath, Text)]
 installs deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
@@ -55,7 +47,7 @@ installs deb =
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".install"
 
-dirs :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+dirs :: Atoms -> [(FilePath, Text)]
 dirs deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
@@ -69,7 +61,7 @@ with1 old new = old <> "\n" <> new
 with2 :: String -> t -> t1 -> t2
 with2 msg _ _ = error msg
 
-init :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+init :: Atoms -> [(FilePath, Text)]
 init deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
@@ -78,7 +70,7 @@ init deb =
       pathf name = "debian" </> show (pretty name) ++ ".init"
 
 -- FIXME - use a map and insertWith, check for multiple entries
-logrotate :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+logrotate :: Atoms -> [(FilePath, Text)]
 logrotate deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
@@ -87,7 +79,7 @@ logrotate deb =
       pathf name = "debian" </> show (pretty name) ++ ".logrotate"
 
 -- | Assemble all the links by package and output one file each
-links :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+links :: Atoms -> [(FilePath, Text)]
 links deb =
     Map.toList $ foldAtoms atomf Map.empty deb
     where
@@ -95,7 +87,7 @@ links deb =
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".links"
 
-postinst :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+postinst :: Atoms -> [(FilePath, Text)]
 postinst deb =
     Map.toList $ fromMaybe empty $ foldAtoms atomf Nothing deb
     where
@@ -106,7 +98,7 @@ postinst deb =
       -- f (BinPkgName name) t = (pathf name, t)
       pathf (BinPkgName name) = "debian" </> show (pretty name) ++ ".postinst"
 
-postrm :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+postrm :: Atoms -> [(FilePath, Text)]
 postrm deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
@@ -114,7 +106,7 @@ postrm deb =
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postrm"
 
-preinst :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+preinst :: Atoms -> [(FilePath, Text)]
 preinst deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
@@ -122,7 +114,7 @@ preinst deb =
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".preinst"
 
-prerm :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+prerm :: Atoms -> [(FilePath, Text)]
 prerm deb =
     Map.toList $ foldAtoms atomf mempty deb
     where
@@ -136,7 +128,7 @@ prerm deb =
 -- considering building one into the other, but it is handy to look at
 -- the Debianization produced by finalizeDebianization in the unit
 -- tests.)
-toFileMap :: HasAtoms atoms => atoms -> SourceDebDescription -> Map FilePath Text
+toFileMap :: Atoms -> SourceDebDescription -> Map FilePath Text
 toFileMap atoms d =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
       [("debian/control", pack (show (pretty (control d)))),
@@ -144,8 +136,8 @@ toFileMap atoms d =
        ("debian/rules", rules atoms),
        ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom") $ getL compat atoms) <> "\n")),
        ("debian/copyright", either (\ x -> pack (show x) <> "\n") id (copyright (error "No DebCopyright atom") atoms))] ++
-      sourceFormat atoms ++
-      watch atoms ++
+      sourceFormatFiles atoms ++
+      watchFile atoms ++
       installs atoms ++
       dirs atoms ++
       init atoms ++
@@ -157,7 +149,7 @@ toFileMap atoms d =
       prerm atoms ++
       intermediates atoms
 
-rules :: HasAtoms atoms => atoms -> Text
+rules :: Atoms -> Text
 rules deb =
     foldAtoms append (fromMaybe mempty (getL rulesHead deb)) deb
     where

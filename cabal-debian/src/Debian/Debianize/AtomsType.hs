@@ -79,7 +79,6 @@ module Debian.Debianize.AtomsType
     , putDebControl
     , debControl
     , sourcePackageName
-    , sourceFormat
     , warning
     , debMaintainer
     , buildDir
@@ -88,9 +87,7 @@ module Debian.Debianize.AtomsType
     , putCabalFlagAssignments
     , flags
     , mapFlags
-    , getWatch
     , watchAtom
-    , watchFile
     , tightDependencyFixup
     , sourceDebDescription
     , setSourceDebDescription
@@ -152,7 +149,7 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.AtomsClass (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags(..), DebAction(..), PackageInfo(..), Site(..), Server(..), InstallFile(..), VersionSplits, knownVersionSplits)
 import Debian.Debianize.Utility (setMapMaybe)
 import Debian.Orphans ()
-import Debian.Policy (SourceFormat, PackageArchitectures, PackagePriority, Section, StandardsVersion, parseMaintainer,
+import Debian.Policy (PackageArchitectures, PackagePriority, Section, StandardsVersion, parseMaintainer,
                       apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName, SrcPkgName, Relation)
 import Debian.Version (DebianVersion)
@@ -204,8 +201,10 @@ instance Monoid Atoms where
     mappend a b = foldAtoms insertAtom a b
 
 instance HasAtoms Atoms where
+{-
     getAtoms = unAtoms
     putAtoms mp _ = Atoms mp
+-}
 
     -- Lenses to access values in the Atoms type.  This is an old
     -- design which I plan to make private and turn into something
@@ -234,6 +233,30 @@ instance HasAtoms Atoms where
                 f Source (DebCompat y) = Just y
                 f _ _ = Nothing
 
+    sourceFormat = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DebSourceFormat x') (Just x) | x /= x' = error $ "Conflicting compat values:" ++ show (x, x')
+                from Source (DebSourceFormat x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebSourceFormat) x)) atoms
+              where
+                f Source (DebSourceFormat y) = Just y
+                f _ _ = Nothing
+
+    watch = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DebWatch x') (Just x) | x /= x' = error $ "Conflicting watch values:" ++ show (x, x')
+                from Source (DebWatch x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebWatch) x)) atoms
+              where
+                f Source (DebWatch y) = Just y
+                f _ _ = Nothing
+
     packageDescription = lens g s
         where
           g atoms = foldAtoms from Nothing atoms
@@ -248,71 +271,69 @@ instance HasAtoms Atoms where
 
     postInst = lens g s
         where
-          g :: HasAtoms atoms => atoms -> Map BinPkgName Text
           g atoms = fromMaybe Map.empty $ foldAtoms from mempty atoms
               where
                 from :: DebAtomKey -> DebAtom -> Maybe (Map BinPkgName Text) -> Maybe (Map BinPkgName Text)
                 from Source (DHPostInst x') (Just x) | x' /= x = error $ "Conflicting postinsts: " ++ show (x, x')
                 from Source (DHPostInst x) _ = Just x
                 from _ _ x = x
-          s :: HasAtoms atoms => Map BinPkgName Text -> atoms -> atoms
           s x atoms = modifyAtoms' f (const ((singleton . (Source,) . DHPostInst) x)) atoms
               where
                 f Source (DHPostInst m) = Just m
                 f _ _ = Nothing
 
-lookupAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Maybe a
+lookupAtom :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Maybe a
 lookupAtom mbin from xs =
     case maxView (lookupAtoms mbin from xs) of
       Nothing -> Nothing
       Just (x, s) | Set.null s -> Just x
       Just (x, s) -> error $ "lookupAtom - multiple: " ++ show (x : toList s)
 
-lookupAtomDef :: (HasAtoms atoms, Show a, Ord a) => a -> DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> a
+lookupAtomDef :: (Show a, Ord a) => a -> DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> a
 lookupAtomDef def key from xs = fromMaybe def $ lookupAtom key from xs
 
-lookupAtoms :: HasAtoms atoms => (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Set a
-lookupAtoms mbin from x = maybe Set.empty (setMapMaybe from) (Map.lookup mbin (getAtoms x))
+lookupAtoms :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Set a
+lookupAtoms mbin from x = maybe Set.empty (setMapMaybe from) (Map.lookup mbin (unAtoms x))
 
-insertAtom :: HasAtoms atoms => DebAtomKey -> DebAtom -> atoms -> atoms
-insertAtom mbin atom x = putAtoms (insertWith union mbin (singleton atom) (getAtoms x)) x
+insertAtom :: DebAtomKey -> DebAtom -> Atoms -> Atoms
+insertAtom mbin atom (Atoms x) = Atoms (insertWith union mbin (singleton atom) x)
 
-insertAtoms :: HasAtoms atoms => Set (DebAtomKey, DebAtom) -> atoms -> atoms
+insertAtoms :: Set (DebAtomKey, DebAtom) -> Atoms -> Atoms
 insertAtoms s atoms =
     case maxView s of
       Nothing -> atoms
       Just ((k, a), s') -> insertAtoms s' (insertAtom k a atoms)
 
-insertAtoms' :: HasAtoms atoms => [(DebAtomKey, DebAtom)] -> atoms -> atoms
+insertAtoms' :: [(DebAtomKey, DebAtom)] -> Atoms -> Atoms
 insertAtoms' xs atoms = insertAtoms (fromList xs) atoms
 
-hasAtom :: (HasAtoms atoms, Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> atoms -> Bool
+hasAtom :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Bool
 hasAtom key p xs = not . Set.null . lookupAtoms key p $ xs
 
-foldAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
-foldAtoms f r0 xs = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (getAtoms xs)
+foldAtoms :: (DebAtomKey -> DebAtom -> r -> r) -> r -> Atoms -> r
+foldAtoms f r0 (Atoms xs) = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 xs
 
 -- | Map each atom of a HasAtoms instance to zero or more new atoms.
-mapAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> Set (DebAtomKey, DebAtom)) -> atoms -> atoms
-mapAtoms f xs = foldAtoms (\ k atom xs' -> insertAtoms (f k atom) xs') (putAtoms mempty xs) xs
+mapAtoms :: (DebAtomKey -> DebAtom -> Set (DebAtomKey, DebAtom)) -> Atoms -> Atoms
+mapAtoms f atoms@(Atoms xs) = foldAtoms (\ k atom xs' -> insertAtoms (f k atom) xs') (Atoms xs) atoms
 
 -- | Split atoms out of a HasAtoms instance by predicate.
-partitionAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> Bool) -> atoms -> (Set (DebAtomKey, DebAtom), atoms)
+partitionAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> (Set (DebAtomKey, DebAtom), Atoms)
 partitionAtoms f deb =
-    foldAtoms g (mempty, putAtoms mempty deb) deb
+    foldAtoms g (mempty, Atoms mempty) deb
     where
       g k atom (atoms, deb') =
           case f k atom of
             True -> (Set.insert (k, atom) atoms, deb')
             False -> (atoms, insertAtom k atom deb')
 
-replaceAtoms :: HasAtoms atoms => (DebAtomKey -> DebAtom -> Bool) -> DebAtomKey -> DebAtom -> atoms -> atoms
+replaceAtoms :: (DebAtomKey -> DebAtom -> Bool) -> DebAtomKey -> DebAtom -> Atoms -> Atoms
 replaceAtoms f k atom atoms = insertAtom k atom (snd (partitionAtoms f atoms))
 
 -- | Split atoms out of a HasAtoms instance by predicate.
-partitionAtoms' :: (HasAtoms atoms, Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> atoms -> (Set a, atoms)
+partitionAtoms' :: (Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> (Set a, Atoms)
 partitionAtoms' f deb =
-    foldAtoms g (mempty, putAtoms mempty deb) deb
+    foldAtoms g (mempty, Atoms mempty) deb
     where
       g k atom (xs, deb') =
           case f k atom of
@@ -320,17 +341,17 @@ partitionAtoms' f deb =
             Nothing -> (xs, insertAtom k atom deb')
 
 -- | Like modifyAtoms, but 
-modifyAtoms' :: (HasAtoms atoms, Ord a) =>
+modifyAtoms' :: (Ord a) =>
                (DebAtomKey -> DebAtom -> Maybe a)
             -> (Set a -> Set (DebAtomKey, DebAtom))
-            -> atoms
-            -> atoms
+            -> Atoms
+            -> Atoms
 modifyAtoms' f g atoms =
     insertAtoms (g s) atoms'
     where
       (s, atoms') = partitionAtoms' f atoms
 
-getMaybeSingleton :: (HasAtoms atoms, Eq a) => Maybe a -> (DebAtomKey -> DebAtom -> Maybe a) -> atoms -> Maybe a
+getMaybeSingleton :: (Eq a) => Maybe a -> (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> Maybe a
 getMaybeSingleton multiple f atoms =
     foldAtoms from Nothing atoms
     where
@@ -341,16 +362,16 @@ getMaybeSingleton multiple f atoms =
       from k a Nothing =
           f k a
 
-getSingleton :: (HasAtoms atoms, Eq a) => a -> (DebAtomKey -> DebAtom -> Maybe a) -> atoms -> a
+getSingleton :: (Eq a) => a -> (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> a
 getSingleton def f atoms = fromMaybe def (getMaybeSingleton Nothing f atoms)
 
-compiler :: HasAtoms atoms => Compiler -> atoms -> Compiler
+compiler :: Compiler -> Atoms -> Compiler
 compiler def deb =
     lookupAtomDef def Source from deb
     where from (DHCompiler x) = Just x
           from _ = Nothing
 
-setCompiler :: HasAtoms atoms => Compiler -> atoms -> atoms
+setCompiler :: Compiler -> Atoms -> Atoms
 setCompiler comp atoms =
     replaceAtoms f Source (DHCompiler comp) atoms
     where
@@ -372,7 +393,7 @@ setPackageDescription desc atoms =
       f _ _ = False
 -}
 
-dataDir :: HasAtoms atoms => FilePath -> atoms -> FilePath
+dataDir :: FilePath -> Atoms -> FilePath
 dataDir def atoms =
     maybe def dataDirectory $ getL packageDescription atoms
     where
@@ -384,36 +405,36 @@ dataDir def atoms =
           where
             PackageName pkgname = pkgName . package $ pkgDesc
 
-compilerVersion :: HasAtoms atoms => atoms -> Maybe Version
+compilerVersion :: Atoms -> Maybe Version
 compilerVersion deb =
     lookupAtom Source from deb
     where from (CompilerVersion x) = Just x
           from _ = Nothing
 
-putCompilerVersion :: HasAtoms atoms => Version -> atoms -> atoms
+putCompilerVersion :: Version -> Atoms -> Atoms
 putCompilerVersion ver deb = insertAtom Source (CompilerVersion ver) deb
 
-putNoProfilingLibrary :: HasAtoms atoms => atoms -> atoms
+putNoProfilingLibrary :: Atoms -> Atoms
 putNoProfilingLibrary deb = insertAtom Source NoProfilingLibrary deb
 
-noProfilingLibrary :: HasAtoms atoms => atoms -> Bool
+noProfilingLibrary :: Atoms -> Bool
 noProfilingLibrary deb =
     not . Set.null . lookupAtoms Source isNoProfilingLibrary $ deb
     where
       isNoProfilingLibrary NoProfilingLibrary = Just NoProfilingLibrary
       isNoProfilingLibrary _ = Nothing
 
-putNoDocumentationLibrary :: HasAtoms atoms => atoms -> atoms
+putNoDocumentationLibrary :: Atoms -> Atoms
 putNoDocumentationLibrary deb = insertAtom Source NoDocumentationLibrary deb
 
-noDocumentationLibrary :: HasAtoms atoms => atoms -> Bool
+noDocumentationLibrary :: Atoms -> Bool
 noDocumentationLibrary deb =
     hasAtom Source isNoDocumentationLibrary deb
     where
       isNoDocumentationLibrary NoDocumentationLibrary = Just NoDocumentationLibrary
       isNoDocumentationLibrary _ = Nothing
 
-utilsPackageName :: HasAtoms atoms => atoms -> Maybe BinPkgName
+utilsPackageName :: Atoms -> Maybe BinPkgName
 utilsPackageName deb =
     foldAtoms from Nothing deb
     where
@@ -421,10 +442,10 @@ utilsPackageName deb =
       from Source (UtilsPackageName _) (Just _) = error "Multiple values for UtilsPackageName"
       from _ _ r = r
 
-missingDependency :: HasAtoms atoms => BinPkgName -> atoms -> atoms
+missingDependency :: BinPkgName -> Atoms -> Atoms
 missingDependency b deb = insertAtom Source (MissingDependency b) deb
 
-setRevision :: HasAtoms atoms => String -> atoms -> atoms
+setRevision :: String -> Atoms -> Atoms
 setRevision s deb =
     replaceAtoms from Source (DebRevision s) deb
     where
@@ -432,14 +453,14 @@ setRevision s deb =
       from Source (DebRevision _) = True
       from _ _ = False
 
-revision :: HasAtoms atoms => atoms -> String
+revision :: Atoms -> String
 revision atoms =
     getSingleton "" from atoms
     where
       from Source (DebRevision s) = Just s
       from _ _ = Nothing
 
-setDebVersion :: HasAtoms atoms => DebianVersion -> atoms -> atoms
+setDebVersion :: DebianVersion -> Atoms -> Atoms
 setDebVersion v deb =
     replaceAtoms from Source (DebVersion v) deb
     where
@@ -447,14 +468,14 @@ setDebVersion v deb =
       from Source (DebVersion _) = True
       from _ _ = False
 
-debVersion :: HasAtoms atoms => atoms -> Maybe DebianVersion
+debVersion :: Atoms -> Maybe DebianVersion
 debVersion atoms =
     getMaybeSingleton (error "Conflicting DebVersion values") from atoms
     where
       from Source (DebVersion v) = Just v
       from _ _ = Nothing
 
-setOmitLTDeps :: HasAtoms atoms => atoms -> atoms
+setOmitLTDeps :: Atoms -> Atoms
 setOmitLTDeps deb =
     replaceAtoms from Source OmitLTDeps deb
     where
@@ -462,41 +483,41 @@ setOmitLTDeps deb =
       from Source OmitLTDeps = True
       from _ _ = False
 
-omitLTDeps :: HasAtoms atoms => atoms -> Bool
+omitLTDeps :: Atoms -> Bool
 omitLTDeps atoms =
     not $ Set.null $ fst $ partitionAtoms' from atoms
     where
       from Source OmitLTDeps = Just ()
       from _ _ = Nothing
 
-buildDeps :: HasAtoms atoms => atoms -> Set BinPkgName
+buildDeps :: Atoms -> Set BinPkgName
 buildDeps atoms =
     foldAtoms from mempty atoms
     where
       from Source (BuildDep x) s = Set.insert x s
       from _ _ s = s
 
-putBuildDep :: HasAtoms atoms => BinPkgName -> atoms -> atoms
+putBuildDep :: BinPkgName -> Atoms -> Atoms
 putBuildDep bin atoms = insertAtom Source (BuildDep bin) atoms
 
-buildDepsIndep :: HasAtoms atoms => atoms -> Set BinPkgName
+buildDepsIndep :: Atoms -> Set BinPkgName
 buildDepsIndep atoms =
     foldAtoms from mempty atoms
     where
       from Source (BuildDepIndep x) s = Set.insert x s
       from _ _ s = s
 
-putBuildDepIndep :: HasAtoms atoms => BinPkgName -> atoms -> atoms
+putBuildDepIndep :: BinPkgName -> Atoms -> Atoms
 putBuildDepIndep bin atoms = insertAtom Source (BuildDep bin) atoms
 
-missingDependencies :: HasAtoms atoms => atoms -> Set BinPkgName
+missingDependencies :: Atoms -> Set BinPkgName
 missingDependencies atoms =
     foldAtoms from mempty atoms
     where
       from Source (MissingDependency x) s = Set.insert x s
       from _ _ s = s
 
-extraLibMap :: HasAtoms atoms => atoms -> Map.Map String (Set BinPkgName)
+extraLibMap :: Atoms -> Map.Map String (Set BinPkgName)
 extraLibMap atoms =
     foldAtoms from mempty atoms
     where
@@ -504,16 +525,16 @@ extraLibMap atoms =
           Map.insertWith union cabal (singleton debian) m
       from _ _ m = m
 
-putExtraLibMapping :: HasAtoms atoms => String -> BinPkgName -> atoms -> atoms
+putExtraLibMapping :: String -> BinPkgName -> Atoms -> Atoms
 putExtraLibMapping cab deb atoms = insertAtom Source (ExtraLibMapping cab deb) atoms
 
-putExecMap :: HasAtoms atoms => String -> BinPkgName -> atoms -> atoms
+putExecMap :: String -> BinPkgName -> Atoms -> Atoms
 putExecMap cabal debian deb = insertAtom Source (ExecMapping cabal debian) deb
 
-putPackageInfo :: HasAtoms atoms => PackageInfo -> atoms -> atoms
+putPackageInfo :: PackageInfo -> Atoms -> Atoms
 putPackageInfo info atoms = insertAtom Source (DebPackageInfo info) atoms
 
-packageInfo :: HasAtoms atoms => PackageName -> atoms -> Maybe PackageInfo
+packageInfo :: PackageName -> Atoms -> Maybe PackageInfo
 packageInfo (PackageName name) atoms =
     foldAtoms from Nothing atoms
     where
@@ -521,7 +542,7 @@ packageInfo (PackageName name) atoms =
       from Source (DebPackageInfo p') (Just _) | cabalName p' == name = error $ "Multiple DebPackageInfo entries for " ++ name
       from _ _ x = x
 
-execMap :: HasAtoms atoms => atoms -> Map.Map String BinPkgName
+execMap :: Atoms -> Map.Map String BinPkgName
 execMap atoms =
     foldAtoms from mempty atoms
     where
@@ -531,10 +552,10 @@ execMap atoms =
                                    else a) cabal debian m
       from _ _ m = m
 
-putEpochMapping :: HasAtoms atoms => PackageName -> Int -> atoms -> atoms
+putEpochMapping :: PackageName -> Int -> Atoms -> Atoms
 putEpochMapping cab n atoms = insertAtom Source (EpochMapping cab n) atoms
 
-epochMap :: HasAtoms atoms => atoms -> Map.Map PackageName Int
+epochMap :: Atoms -> Map.Map PackageName Int
 epochMap atoms =
     foldAtoms from mempty atoms
     where
@@ -546,56 +567,55 @@ epochMap atoms =
 
 -- | We should always call this, just as we should always apply
 -- knownVersionSplits.
-knownEpochMappings :: HasAtoms atoms => atoms -> atoms
+knownEpochMappings :: Atoms -> Atoms
 knownEpochMappings = putEpochMapping (PackageName "HaXml") 1
 
-filterMissing :: HasAtoms atoms => atoms -> [[Relation]] -> [[Relation]]
+filterMissing :: Atoms -> [[Relation]] -> [[Relation]]
 filterMissing atoms rels =
     filter (/= []) (List.map (filter (\ (Rel name _ _) -> not (Set.member name (missingDependencies atoms)))) rels)
 
-versionSplits :: HasAtoms atoms => atoms -> [VersionSplits]
+versionSplits :: Atoms -> [VersionSplits]
 versionSplits atoms =
     getSingleton (error "versionSplits") from atoms
     where
       from Source (DebVersionSplits x) = Just x
       from _ _ = Nothing
 
-putExtraDevDep :: HasAtoms atoms => BinPkgName -> atoms -> atoms
+putExtraDevDep :: BinPkgName -> Atoms -> Atoms
 putExtraDevDep bin atoms = insertAtom Source (DevDepends bin) atoms
 
-extraDevDeps :: HasAtoms atoms => atoms -> Set BinPkgName
+extraDevDeps :: Atoms -> Set BinPkgName
 extraDevDeps atoms =
     foldAtoms f mempty atoms
     where
       f Source (DevDepends p) s = Set.insert p s
       f _ _ s = s
 
-depends :: HasAtoms atoms => BinPkgName -> Relation -> atoms -> atoms
+depends :: BinPkgName -> Relation -> Atoms -> Atoms
 depends pkg rel atoms = insertAtom (Binary pkg) (Depends rel) atoms
 
-conflicts :: HasAtoms atoms => BinPkgName -> Relation -> atoms -> atoms
+conflicts :: BinPkgName -> Relation -> Atoms -> Atoms
 conflicts pkg rel atoms = insertAtom (Binary pkg) (Conflicts rel) atoms
 
-binaryPackageDeps :: HasAtoms atoms => BinPkgName -> atoms -> [[Relation]]
+binaryPackageDeps :: BinPkgName -> Atoms -> [[Relation]]
 binaryPackageDeps p atoms =
     foldAtoms f [] atoms
     where f (Binary p') (Depends rel) rels | p == p' = [rel] : rels
           f _ _ rels = rels
 
-binaryPackageConflicts :: HasAtoms atoms => BinPkgName -> atoms -> [[Relation]]
+binaryPackageConflicts :: BinPkgName -> Atoms -> [[Relation]]
 binaryPackageConflicts p atoms =
     foldAtoms f [] atoms
     where f (Binary p') (Conflicts rel) rels | p == p' = [rel] : rels
           f _ _ rels = rels
 
-setSourceArchitecture :: HasAtoms atoms => PackageArchitectures -> atoms -> atoms
+setSourceArchitecture :: PackageArchitectures -> Atoms -> Atoms
 setSourceArchitecture x deb = insertAtom Source (DHArch x) deb
 
-foldArchitectures :: HasAtoms atoms =>
-                    (PackageArchitectures -> r -> r)
+foldArchitectures :: (PackageArchitectures -> r -> r)
                  -> (BinPkgName -> PackageArchitectures -> r -> r)
                  -> r
-                 -> atoms
+                 -> Atoms
                  -> r
 foldArchitectures sourceArch binaryArch r0 atoms =
     foldAtoms from r0 atoms
@@ -604,11 +624,10 @@ foldArchitectures sourceArch binaryArch r0 atoms =
       from Source (DHArch x) r = sourceArch x r
       from _ _ r = r
 
-foldPriorities :: HasAtoms atoms =>
-                  (PackagePriority -> r -> r)
+foldPriorities :: (PackagePriority -> r -> r)
                -> (BinPkgName -> PackagePriority -> r -> r)
                -> r
-               -> atoms
+               -> Atoms
                -> r
 foldPriorities sourcePriority binaryPriority r0 atoms =
     foldAtoms from r0 atoms
@@ -617,11 +636,10 @@ foldPriorities sourcePriority binaryPriority r0 atoms =
       from Source (DHPriority x) r = sourcePriority x r
       from _ _ r = r
 
-foldSections :: HasAtoms atoms =>
-                (Section -> r -> r)
+foldSections :: (Section -> r -> r)
              -> (BinPkgName -> Section -> r -> r)
                -> r
-               -> atoms
+               -> Atoms
                -> r
 foldSections sourceSection binarySection r0 atoms =
     foldAtoms from r0 atoms
@@ -630,10 +648,9 @@ foldSections sourceSection binarySection r0 atoms =
       from Source (DHSection x) r = sourceSection x r
       from _ _ r = r
 
-foldDescriptions :: HasAtoms atoms =>
-                    (BinPkgName -> Text -> r -> r)
+foldDescriptions :: (BinPkgName -> Text -> r -> r)
                  -> r
-                 -> atoms
+                 -> Atoms
                  -> r
 foldDescriptions description r0 atoms =
     foldAtoms from r0 atoms
@@ -641,46 +658,46 @@ foldDescriptions description r0 atoms =
       from (Binary p) (DHDescription x) r = description p x r
       from _ _ r = r
 
-setSourcePriority :: HasAtoms atoms => PackagePriority -> atoms -> atoms
+setSourcePriority :: PackagePriority -> Atoms -> Atoms
 setSourcePriority x deb = insertAtom Source (DHPriority x) deb
 
-setSourceSection :: HasAtoms atoms => Section -> atoms -> atoms
+setSourceSection :: Section -> Atoms -> Atoms
 setSourceSection x deb = insertAtom Source (DHSection x) deb
 
-setSourceDescription :: HasAtoms atoms => Text -> atoms -> atoms
+setSourceDescription :: Text -> Atoms -> Atoms
 setSourceDescription x deb = insertAtom Source (DHDescription x) deb
 
-setArchitecture :: HasAtoms atoms => BinPkgName -> PackageArchitectures -> atoms -> atoms
+setArchitecture :: BinPkgName -> PackageArchitectures -> Atoms -> Atoms
 setArchitecture k x deb = insertAtom (Binary k) (DHArch x) deb
 
-setPriority :: HasAtoms atoms => BinPkgName -> PackagePriority -> atoms -> atoms
+setPriority :: BinPkgName -> PackagePriority -> Atoms -> Atoms
 setPriority k x deb = insertAtom (Binary k) (DHPriority x) deb
 
-setSection :: HasAtoms atoms => BinPkgName -> Section -> atoms -> atoms
+setSection :: BinPkgName -> Section -> Atoms -> Atoms
 setSection k x deb = insertAtom (Binary k) (DHSection x) deb
 
-setDescription :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+setDescription :: BinPkgName -> Text -> Atoms -> Atoms
 setDescription k x deb = insertAtom (Binary k) (DHDescription x) deb
 
-doExecutable :: HasAtoms atoms => BinPkgName -> InstallFile -> atoms -> atoms
+doExecutable :: BinPkgName -> InstallFile -> Atoms -> Atoms
 doExecutable bin x deb = insertAtom (Binary bin) (DHExecutable x) deb
 
-doServer :: HasAtoms atoms => BinPkgName -> Server -> atoms -> atoms
+doServer :: BinPkgName -> Server -> Atoms -> Atoms
 doServer bin x deb = insertAtom (Binary bin) (DHServer x) deb
 
-doWebsite :: HasAtoms atoms => BinPkgName -> Site -> atoms -> atoms
+doWebsite :: BinPkgName -> Site -> Atoms -> Atoms
 doWebsite bin x deb = insertAtom (Binary bin) (DHWebsite x) deb
 
-doBackups :: HasAtoms atoms => BinPkgName -> String -> atoms -> atoms
+doBackups :: BinPkgName -> String -> Atoms -> Atoms
 doBackups bin s deb =
     insertAtom (Binary bin) (DHBackups s) $
     depends bin (Rel (BinPkgName "anacron") Nothing Nothing) $
     deb
 
-setSourcePackageName :: HasAtoms atoms => SrcPkgName -> atoms -> atoms
+setSourcePackageName :: SrcPkgName -> Atoms -> Atoms
 setSourcePackageName src deb = insertAtom Source (SourcePackageName src) deb
 
-modifyChangeLog :: HasAtoms atoms => (Maybe ChangeLog -> Maybe ChangeLog) -> atoms -> atoms
+modifyChangeLog :: (Maybe ChangeLog -> Maybe ChangeLog) -> Atoms -> Atoms
 modifyChangeLog f atoms =
     modifyAtoms' p g atoms
     where
@@ -693,7 +710,7 @@ modifyChangeLog f atoms =
             [log] ->  maybe Set.empty (\ log' -> singleton (Source, DebChangeLog log')) (f (Just log))
             _ -> error $ "Multiple changelogs: " ++ show (Set.toList s)
 
-setChangeLog :: HasAtoms atoms => ChangeLog -> atoms -> atoms
+setChangeLog :: ChangeLog -> Atoms -> Atoms
 setChangeLog log atoms =
     modifyChangeLog f atoms
     where
@@ -701,10 +718,10 @@ setChangeLog log atoms =
       f (Just log') = error $ "Multiple changelogs: " ++ show (log', log)
 
 -- | Like setChangeLog, but replacing the current log is not an error.
-updateChangeLog :: HasAtoms atoms => ChangeLog -> atoms -> atoms
+updateChangeLog :: ChangeLog -> Atoms -> Atoms
 updateChangeLog log atoms = modifyChangeLog (const (Just log)) atoms
 
-changeLog :: HasAtoms atoms => atoms -> ChangeLog
+changeLog :: Atoms -> ChangeLog
 changeLog deb =
     maybe (error "No changelog") g $ foldAtoms f Nothing deb
     where
@@ -714,10 +731,10 @@ changeLog deb =
       g (ChangeLog (hd : tl)) = ChangeLog (hd {logPackage = fromMaybe (logPackage hd) (sourcePackageName deb)} : tl)
       g _ = error $ "Invalid changelog"
 
-putCopyright :: HasAtoms atoms => Either License Text -> atoms -> atoms
+putCopyright :: Either License Text -> Atoms -> Atoms
 putCopyright copy deb = insertAtom Source (DebCopyright copy) deb
 
-copyright :: HasAtoms atoms => Either License Text -> atoms -> Either License Text
+copyright :: Either License Text -> Atoms -> Either License Text
 copyright def atoms =
     fromMaybe def $ foldAtoms from Nothing atoms
     where
@@ -725,7 +742,7 @@ copyright def atoms =
       from Source (DebCopyright x) _ = Just x
       from _ _ x = x
 
-debControl :: HasAtoms atoms => atoms -> Maybe SourceDebDescription
+debControl :: Atoms -> Maybe SourceDebDescription
 debControl atoms =
     foldAtoms from Nothing atoms
     where
@@ -733,10 +750,10 @@ debControl atoms =
       from Source (DebControl x) _ = Just x
       from _ _ x = x
 
-putDebControl :: HasAtoms atoms => SourceDebDescription -> atoms -> atoms
+putDebControl :: SourceDebDescription -> Atoms -> Atoms
 putDebControl deb atoms = insertAtom Source (DebControl deb) atoms
 
-sourcePackageName :: HasAtoms atoms => atoms -> Maybe String
+sourcePackageName :: Atoms -> Maybe String
 sourcePackageName atoms =
     foldAtoms from Nothing atoms
     where
@@ -744,16 +761,18 @@ sourcePackageName atoms =
       from Source (SourcePackageName (SrcPkgName src)) _ = Just src
       from _ _ x = x
 
-sourceFormat :: HasAtoms atoms => SourceFormat -> atoms -> atoms
+{-
+sourceFormat :: SourceFormat -> Atoms -> Atoms
 sourceFormat format deb = insertAtom Source (DebSourceFormat format) deb
+-}
 
-warning :: HasAtoms atoms => Text -> atoms -> atoms
+warning :: Text -> Atoms -> Atoms
 warning text deb = insertAtom Source (Warning text) deb
 
-putDebMaintainer :: HasAtoms atoms => NameAddr -> atoms -> atoms
+putDebMaintainer :: NameAddr -> Atoms -> Atoms
 putDebMaintainer maint atoms = insertAtom Source (DHMaintainer maint) atoms
 
-debMaintainer :: HasAtoms atoms => atoms -> Maybe NameAddr
+debMaintainer :: Atoms -> Maybe NameAddr
 debMaintainer atoms =
     foldAtoms from Nothing atoms
     where
@@ -761,7 +780,7 @@ debMaintainer atoms =
       from Source (DHMaintainer x) _ = Just x
       from _ _ x = x
 
-buildDir :: HasAtoms atoms => FilePath -> atoms -> FilePath
+buildDir :: FilePath -> Atoms -> FilePath
 buildDir def atoms =
     fromMaybe def $ foldAtoms from Nothing atoms
     where
@@ -769,31 +788,31 @@ buildDir def atoms =
       from Source (BuildDir path') _ = Just path'
       from _ _ x = x
 
-intermediateFile :: HasAtoms atoms => FilePath -> Text -> atoms -> atoms
+intermediateFile :: FilePath -> Text -> Atoms -> Atoms
 intermediateFile path text atoms = insertAtom Source (DHIntermediate path text) atoms
 
-getIntermediateFiles :: HasAtoms atoms => atoms -> [(FilePath, Text)]
+getIntermediateFiles :: Atoms -> [(FilePath, Text)]
 getIntermediateFiles atoms =
     foldAtoms from [] atoms
     where
       from Source (DHIntermediate path text) xs = (path, text) : xs
       from _ _ xs = xs
 
-setBuildDir :: HasAtoms atoms => FilePath -> atoms -> atoms
+setBuildDir :: FilePath -> Atoms -> Atoms
 setBuildDir path atoms =
     replaceAtoms f Source (BuildDir path) atoms
     where
       f Source (BuildDir _) = True
       f _ _ = False
 
-cabalFlagAssignments :: HasAtoms atoms => atoms -> Set (FlagName, Bool)
+cabalFlagAssignments :: Atoms -> Set (FlagName, Bool)
 cabalFlagAssignments atoms =
     foldAtoms from mempty atoms
     where
       from Source (DHCabalFlagAssignments xs) ys = union xs ys
       from _ _ ys = ys
 
-putCabalFlagAssignments :: HasAtoms atoms => Set (FlagName, Bool) -> atoms -> atoms
+putCabalFlagAssignments :: Set (FlagName, Bool) -> Atoms -> Atoms
 putCabalFlagAssignments xs atoms =
     modifyAtoms' f g atoms
     where
@@ -801,7 +820,7 @@ putCabalFlagAssignments xs atoms =
       f _ _ = Nothing
       g xss = singleton (Source, DHCabalFlagAssignments (mconcat (Set.toList xss)))
 
-flags :: HasAtoms atoms => atoms -> Flags
+flags :: Atoms -> Flags
 flags atoms =
     fromMaybe defaultFlags $ foldAtoms from Nothing atoms
     where
@@ -809,7 +828,7 @@ flags atoms =
       from Source (DHFlags fs) _ = Just fs
       from _ _ x = x
 
-mapFlags :: HasAtoms atoms => (Flags -> Flags) -> atoms -> atoms
+mapFlags :: (Flags -> Flags) -> Atoms -> Atoms
 mapFlags f atoms =
     modifyAtoms' g h atoms
     where
@@ -829,8 +848,8 @@ mapFlags f atoms =
       p Source (DHFlags x) = Just x
       p _ _ = Nothing
 -}
-
-getWatch :: HasAtoms atoms => atoms -> Maybe Text
+{-
+getWatch :: Atoms -> Maybe Text
 getWatch atoms =
     foldAtoms from Nothing atoms
     where
@@ -839,20 +858,21 @@ getWatch atoms =
       from Source (DebWatch x) _ = Just x
       from _ _ x = x
 
-watchAtom :: HasAtoms atoms => PackageName -> atoms -> atoms
-watchAtom (PackageName pkgname) deb =
-    watchFile (pack $ "version=3\nopts=\"downloadurlmangle=s|archive/([\\w\\d_-]+)/([\\d\\.]+)/|archive/$1/$2/$1-$2.tar.gz|,\\\nfilenamemangle=s|(.*)/$|" ++ pkgname ++
-                      "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
-                      " \\\n    ([\\d\\.]*\\d)/\n") deb
-
-watchFile :: HasAtoms atoms => Text -> atoms -> atoms
+watchFile :: Text -> Atoms -> Atoms
 watchFile text deb = insertAtom Source (DebWatch text) deb
+-}
+
+watchAtom :: PackageName -> Text
+watchAtom (PackageName pkgname) =
+    pack $ "version=3\nopts=\"downloadurlmangle=s|archive/([\\w\\d_-]+)/([\\d\\.]+)/|archive/$1/$2/$1-$2.tar.gz|,\\\nfilenamemangle=s|(.*)/$|" ++ pkgname ++
+           "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
+           " \\\n    ([\\d\\.]*\\d)/\n"
 
 -- | Create equals dependencies.  For each pair (A, B), use dpkg-query
 -- to find out B's version number, version B.  Then write a rule into
 -- P's .substvar that makes P require that that exact version of A,
 -- and another that makes P conflict with any older version of A.
-tightDependencyFixup :: HasAtoms atoms => [(BinPkgName, BinPkgName)] -> BinPkgName -> atoms -> atoms
+tightDependencyFixup :: [(BinPkgName, BinPkgName)] -> BinPkgName -> Atoms -> Atoms
 tightDependencyFixup [] _ deb = deb
 tightDependencyFixup pairs p deb =
     insertAtom Source atom deb
@@ -871,13 +891,13 @@ tightDependencyFixup pairs p deb =
       name = display' p
       display' = pack . show . pretty
 
-sourceDebDescription :: HasAtoms atoms => atoms -> SourceDebDescription
+sourceDebDescription :: Atoms -> SourceDebDescription
 sourceDebDescription = fromMaybe newSourceDebDescription . debControl
 
-setSourceDebDescription :: HasAtoms atoms => SourceDebDescription -> atoms -> atoms
+setSourceDebDescription :: SourceDebDescription -> Atoms -> Atoms
 setSourceDebDescription d x = modifySourceDebDescription (const d) x
 
-modifySourceDebDescription :: HasAtoms atoms => (SourceDebDescription -> SourceDebDescription) -> atoms -> atoms
+modifySourceDebDescription :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
 modifySourceDebDescription f deb =
     modifyAtoms' g (Set.map (\ d -> (Source, DebControl (f d)))) deb
     where
@@ -898,26 +918,26 @@ newDebianization (log@(ChangeLog (entry : _))) level standards =
     defaultAtoms
 newDebianization _ _ _ = error "Invalid changelog"
 
-install :: HasAtoms atoms => BinPkgName -> FilePath -> FilePath -> atoms -> atoms
+install :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
 install p path d atoms = insertAtom (Binary p) (DHInstall path d) atoms
 
-installData :: HasAtoms atoms => BinPkgName -> FilePath -> FilePath -> atoms -> atoms
+installData :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
 installData p path dest atoms = insertAtom (Binary p) (DHInstallData path dest) atoms
 
-getInstalls :: HasAtoms atoms => atoms -> Map BinPkgName (Set (FilePath, FilePath))
+getInstalls :: Atoms -> Map BinPkgName (Set (FilePath, FilePath))
 getInstalls atoms =
     foldAtoms from Map.empty atoms
     where
       from (Binary p) (DHInstall src dst) mp = Map.insertWith Set.union p (singleton (src, dst)) mp
       from _ _ mp = mp
 
-installInit :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+installInit :: BinPkgName -> Text -> Atoms -> Atoms
 installInit p text atoms = insertAtom (Binary p) (DHInstallInit text) atoms
 
-logrotateStanza :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+logrotateStanza :: BinPkgName -> Text -> Atoms -> Atoms
 logrotateStanza p text atoms = insertAtom (Binary p) (DHLogrotateStanza text) atoms
 
-getPostInsts :: HasAtoms atoms => atoms -> Map BinPkgName Text
+getPostInsts :: Atoms -> Map BinPkgName Text
 getPostInsts atoms =
     fromMaybe Map.empty $ foldAtoms from Nothing atoms
     where
@@ -926,112 +946,111 @@ getPostInsts atoms =
       from Source (DHPostInst mp) _ = Just mp
       from _ _ x = x
 
-getPostInst :: HasAtoms atoms => atoms -> BinPkgName -> Maybe Text
+getPostInst :: Atoms -> BinPkgName -> Maybe Text
 getPostInst atoms b = Map.lookup b (getPostInsts atoms)
 
-putPostInst :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+putPostInst :: BinPkgName -> Text -> Atoms -> Atoms
 putPostInst p text atoms =
     modL postInst (\ m -> Map.insertWith f p text m) atoms
     where
       f a b = if a == b then a else error $ "putPostInst: conflicting postinsts: " ++ show (a, b)
 
-modPostInst :: HasAtoms atoms => BinPkgName -> (Maybe Text -> Maybe Text) -> atoms -> atoms
+modPostInst :: BinPkgName -> (Maybe Text -> Maybe Text) -> Atoms -> Atoms
 modPostInst p f atoms = modL postInst (\ m -> case Map.lookup p m of
                                                 Nothing -> case f Nothing of
                                                              Just t' -> Map.insert p t' m
                                                              Nothing -> m
                                                 Just t -> update (f . Just) p m) atoms
 
-postRm :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+postRm :: BinPkgName -> Text -> Atoms -> Atoms
 postRm p text atoms = insertAtom (Binary p) (DHPostRm text) atoms
 
-preInst :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+preInst :: BinPkgName -> Text -> Atoms -> Atoms
 preInst p text atoms = insertAtom (Binary p) (DHPreInst text) atoms
 
-preRm :: HasAtoms atoms => BinPkgName -> Text -> atoms -> atoms
+preRm :: BinPkgName -> Text -> Atoms -> Atoms
 preRm p text atoms = insertAtom (Binary p) (DHPreRm text) atoms
 
-link :: HasAtoms atoms => BinPkgName -> FilePath -> FilePath -> atoms -> atoms
+link :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
 link p path text atoms = insertAtom (Binary p) (DHLink path text) atoms
 
-file :: HasAtoms atoms => BinPkgName -> FilePath -> Text -> atoms -> atoms
+file :: BinPkgName -> FilePath -> Text -> Atoms -> Atoms
 file p path text atoms = insertAtom (Binary p) (DHFile path text) atoms 
 
-installDir :: HasAtoms atoms => BinPkgName -> FilePath -> atoms -> atoms
+installDir :: BinPkgName -> FilePath -> Atoms -> Atoms
 installDir p path atoms = insertAtom (Binary p) (DHInstallDir path) atoms
 
-rulesFragment :: HasAtoms atoms => Text -> atoms -> atoms
+rulesFragment :: Text -> Atoms -> Atoms
 rulesFragment text atoms = insertAtom Source (DebRulesFragment text) atoms
 
-installCabalExec :: HasAtoms atoms => BinPkgName -> String -> FilePath -> atoms -> atoms
+installCabalExec :: BinPkgName -> String -> FilePath -> Atoms -> Atoms
 installCabalExec p name d atoms = insertAtom (Binary p) (DHInstallCabalExec name d) atoms
 
-installCabalExecTo :: HasAtoms atoms => BinPkgName -> String -> FilePath -> atoms -> atoms
+installCabalExecTo :: BinPkgName -> String -> FilePath -> Atoms -> Atoms
 installCabalExecTo p name dest atoms = insertAtom (Binary p) (DHInstallCabalExecTo name dest) atoms
 
-installTo :: HasAtoms atoms => BinPkgName -> FilePath -> FilePath -> atoms -> atoms
+installTo :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
 installTo p from dest atoms = insertAtom (Binary p) (DHInstallTo from dest) atoms
 
 one :: (Eq a, Show a) => a -> a -> a
 one old new | old /= new = error $ "Conflict: " ++ show (old, new)
 one old _ = old
 
-getInstallDirs :: HasAtoms atoms => atoms -> Map BinPkgName (Set FilePath)
+getInstallDirs :: Atoms -> Map BinPkgName (Set FilePath)
 getInstallDirs atoms =
     foldAtoms from Map.empty atoms
     where
       from (Binary p) (DHInstallDir d) mp = Map.insertWith Set.union p (singleton d) mp
       from _ _ mp = mp
 
-getInstallInits :: HasAtoms atoms => atoms -> Map BinPkgName Text
+getInstallInits :: Atoms -> Map BinPkgName Text
 getInstallInits atoms =
     foldAtoms from Map.empty atoms
     where
       from (Binary p) (DHInstallInit t) mp = Map.insertWith one p t mp
       from _ _ mp = mp
 
-getLogrotateStanzas :: HasAtoms atoms => atoms -> Map BinPkgName (Set Text)
+getLogrotateStanzas :: Atoms -> Map BinPkgName (Set Text)
 getLogrotateStanzas atoms =
     foldAtoms from Map.empty atoms
     where
       from (Binary p) (DHLogrotateStanza t) mp = Map.insertWith Set.union p (singleton t) mp
       from _ _ mp = mp
 
-getLinks :: HasAtoms atoms => atoms -> Map BinPkgName (Set (FilePath, FilePath))
+getLinks :: Atoms -> Map BinPkgName (Set (FilePath, FilePath))
 getLinks atoms =
     foldAtoms from Map.empty atoms
     where
       from (Binary p) (DHLink loc txt) mp = Map.insertWith Set.union p (singleton (loc, txt)) mp
       from _ _ mp = mp
 
-getPostRms :: HasAtoms atoms => atoms -> Map BinPkgName Text
+getPostRms :: Atoms -> Map BinPkgName Text
 getPostRms atoms =
     foldAtoms from Map.empty atoms
     where
       from (Binary p) (DHPostRm t) mp = Map.insertWith one p t mp
       from _ _ mp = mp
 
-getPreInsts :: HasAtoms atoms => atoms -> Map BinPkgName Text
+getPreInsts :: Atoms -> Map BinPkgName Text
 getPreInsts atoms =
     foldAtoms from Map.empty atoms
     where
       from (Binary p) (DHPreInst t) mp = Map.insertWith one p t mp
       from _ _ mp = mp
 
-getPreRms :: HasAtoms atoms => atoms -> Map BinPkgName Text
+getPreRms :: Atoms -> Map BinPkgName Text
 getPreRms atoms =
     foldAtoms from Map.empty atoms
     where
       from (Binary p) (DHPreRm t) mp = Map.insertWith one p t mp
       from _ _ mp = mp
 
-foldExecs :: HasAtoms atoms =>
-             (BinPkgName -> Site -> r -> r)
+foldExecs :: (BinPkgName -> Site -> r -> r)
           -> (BinPkgName -> Server -> r -> r)
           -> (BinPkgName -> String -> r -> r)
           -> (BinPkgName -> InstallFile -> r -> r)
           -> r
-          -> atoms
+          -> Atoms
           -> r
 foldExecs site serv backup exec r0 atoms =
     foldAtoms from r0 atoms
@@ -1042,31 +1061,31 @@ foldExecs site serv backup exec r0 atoms =
       from (Binary p) (DHExecutable x) r = exec p x r
       from _ _ r = r
 
-foldAtomsFinalized :: (HasAtoms atoms, Show atoms) => (DebAtomKey -> DebAtom -> r -> r) -> r -> atoms -> r
+foldAtomsFinalized :: (DebAtomKey -> DebAtom -> r -> r) -> r -> Atoms -> r
 foldAtomsFinalized f r0 atoms =
     foldAtoms f r0 (expanded atoms)
     where
       -- The atoms in r plus the ones generated from r
-      expanded :: HasAtoms r => r -> r
+      expanded :: Atoms -> Atoms
       expanded r = foldAtoms insertAtom r (newAtoms r)
       -- All the atoms generated from those in r
-      newAtoms :: HasAtoms r => r -> r
+      newAtoms :: Atoms -> Atoms
       newAtoms r =
           -- I don't understand why folding an empty map causes an infinite recursion, but it does
-          if Map.null (getAtoms next)
+          if Map.null (unAtoms next)
           then r
           else foldAtoms insertAtom (newAtoms next) next
               where
                 next = nextAtoms r
       -- The next layer of atoms generated from r
-      nextAtoms :: HasAtoms r => r -> r
+      nextAtoms :: Atoms -> Atoms
       nextAtoms atoms = foldAtoms next mempty atoms
 
       builddir = buildDir "dist-ghc/build" atoms
       datadir = dataDir (error "foldAtomsFinalized") atoms
 
       -- Fully expand a single atom
-      next :: HasAtoms r => DebAtomKey -> DebAtom -> r -> r
+      next :: DebAtomKey -> DebAtom -> Atoms -> Atoms
       next (Binary b) (DHApacheSite domain' logdir text) r =
           link b ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain') .
           installDir b logdir .
@@ -1107,7 +1126,7 @@ foldAtomsFinalized f r0 atoms =
           r
       next _ _ r = r
 
-siteAtoms :: HasAtoms r => BinPkgName -> Site -> r -> r
+siteAtoms :: BinPkgName -> Site -> Atoms -> Atoms
 siteAtoms b site =
     installDir b "/etc/apache2/sites-available" .
     link b ("/etc/apache2/sites-available/" ++ domain site) ("/etc/apache2/sites-enabled/" ++ domain site) .
@@ -1165,7 +1184,7 @@ siteAtoms b site =
                    , "</VirtualHost>" ]
       port' = pack (show (port (server site)))
 
-serverAtoms :: HasAtoms r => BinPkgName -> Server -> Bool -> r -> r
+serverAtoms :: BinPkgName -> Server -> Bool -> Atoms -> Atoms
 serverAtoms b server isSite =
     putPostInst b debianPostinst .
     installInit b debianInit .
@@ -1231,7 +1250,7 @@ serverAtoms b server isSite =
 
 -- | A configuration file for the logrotate facility, installed via a line
 -- in debianFiles.
-serverLogrotate' :: HasAtoms r => BinPkgName -> r -> r
+serverLogrotate' :: BinPkgName -> Atoms -> Atoms
 serverLogrotate' b =
     logrotateStanza b (unlines $ [ pack (serverAccessLog b) <> " {"
                                  , "  weekly"
@@ -1246,7 +1265,7 @@ serverLogrotate' b =
                                  , "  missingok"
                                  , "}" ])
 
-backupAtoms :: HasAtoms r => BinPkgName -> String -> r -> r
+backupAtoms :: BinPkgName -> String -> Atoms -> Atoms
 backupAtoms b name =
     putPostInst b (unlines $
                   [ "#!/bin/sh"
@@ -1261,17 +1280,17 @@ backupAtoms b name =
                               , sourceDir = Nothing
                               , destDir = Just "/etc/cron.hourly" })
 
-execAtoms :: HasAtoms r => BinPkgName -> InstallFile -> r -> r
+execAtoms :: BinPkgName -> InstallFile -> Atoms -> Atoms
 execAtoms b ifile r =
     rulesFragment (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp")) .
     fileAtoms b ifile $
     r
 
-fileAtoms :: HasAtoms r => BinPkgName -> InstallFile -> r -> r
+fileAtoms :: BinPkgName -> InstallFile -> Atoms -> Atoms
 fileAtoms b installFile r =
     fileAtoms' b (sourceDir installFile) (execName installFile) (destDir installFile) (destName installFile) r
 
-fileAtoms' :: HasAtoms r => BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> r -> r
+fileAtoms' :: BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> Atoms -> Atoms
 fileAtoms' b sourceDir execName destDir destName r =
     case (sourceDir, execName == destName) of
       (Nothing, True) -> installCabalExec b execName d r
@@ -1281,7 +1300,7 @@ fileAtoms' b sourceDir execName destDir destName r =
     where
       d = fromMaybe "usr/bin" destDir
 
-foldCabalExecs :: HasAtoms atoms => (String -> r -> r) -> r -> atoms -> r
+foldCabalExecs :: (String -> r -> r) -> r -> Atoms -> r
 foldCabalExecs f r0 atoms =
     foldAtoms g r0 atoms
     where
@@ -1296,7 +1315,7 @@ foldCabalExecs f r0 atoms =
             (Just s, False) ->  g (Binary p) (DHInstallTo (s </> execName i) (d </> destName i)) r
       g _ _ r = r
 
-foldCabalDatas :: HasAtoms atoms => (FilePath -> r -> r) -> r -> atoms -> r
+foldCabalDatas :: (FilePath -> r -> r) -> r -> Atoms -> r
 foldCabalDatas f r0 atoms =
     foldAtoms g r0 atoms
     where
