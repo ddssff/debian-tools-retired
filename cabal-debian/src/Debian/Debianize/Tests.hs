@@ -58,6 +58,12 @@ newDebianization (log@(ChangeLog (entry : _))) level standards =
     defaultAtoms
 newDebianization _ _ _ = error "Invalid changelog"
 
+newDebianization' :: Int -> StandardsVersion -> Atoms
+newDebianization' level standards =
+    insertAtom Source (DebCompat level) $
+    modifySourceDebDescription (\ x -> x { standardsVersion = Just standards }) $
+    defaultAtoms
+
 tests :: Test
 tests = TestLabel "Debianization Tests" (TestList [test1, test2, test3, test4, test5, test6, test7, test8, test9])
 
@@ -237,9 +243,8 @@ test4 :: Test
 test4 =
     TestLabel "test4" $
     TestCase (do old <- inputDebianization "test-data/clckwrks-dot-com/output"
-                 let new = newDebianization (fromMaybe (error "missing debian/changelog") (getL changelog old)) 7 (StandardsVersion 3 9 4 Nothing)
-                 new' <- getSimplePackageDescription' "test-data/clckwrks-dot-com/input" new
-                 let new'' =
+                 new <- getSimplePackageDescription' "test-data/clckwrks-dot-com/input" $ newDebianization' 7 (StandardsVersion 3 9 4 Nothing)
+                 let new' =
                          (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://www.clckwrks.com/"}) x) $
                          setL sourceFormat (Just Native3) $
                          missingDependency (BinPkgName "libghc-clckwrks-theme-clckwrks-doc") $
@@ -248,9 +253,10 @@ test4 =
                          doBackups (BinPkgName "clckwrks-dot-com-backups") "clckwrks-dot-com-backups" $
                          fixRules $
                          tight $
-                         new'
-                 new''' <- cabalToDebianization "test-data/clckwrks-dot-com/input" new''
-                 assertEqual "test4" [] (diffDebianizations old (copyFirstLogEntry old new''')))
+                         setL changelog (getL changelog old) $
+                         new
+                 new'' <- cabalToDebianization "test-data/clckwrks-dot-com/input" new'
+                 assertEqual "test4" [] (diffDebianizations old (copyFirstLogEntry old new'')))
     where
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
@@ -343,7 +349,8 @@ test5 =
                            doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" $
                            doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) $
                            doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production")) $
-                           (newDebianization (fromMaybe (error "Missing debian/changelog") (getL changelog old)) (fromMaybe (error "Missing debian/compat file") $ getL compat old) standards)
+                           setL changelog (getL changelog old) $
+                           (newDebianization' (fromMaybe (error "Missing debian/compat file") $ getL compat old) standards)
                  new' <- cabalToDebianization "test-data/creativeprompts/input" new
                  assertEqual "test5" [] (diffDebianizations old (copyFirstLogEntry old new')))
     where
@@ -404,8 +411,7 @@ test6 :: Test
 test6 =
     TestLabel "test6" $
     TestCase ( do old <- inputDebianization "test-data/artvaluereport2/output"
-                  let log = getL changelog old
-                      standards = StandardsVersion 3 9 1 Nothing
+                  let standards = StandardsVersion 3 9 1 Nothing
                       compat' = 7
                   let new =  (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://appraisalreportonline.com"}) x) $
                              setL sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) $
@@ -431,7 +437,8 @@ test6 =
                                   ["libjs-jquery", "libjs-jquery-ui", "libjs-jcrop", "libjpeg-progs", "netpbm",
                                    "texlive-latex-recommended", "texlive-latex-extra", "texlive-fonts-recommended", "texlive-fonts-extra"] $
                              doExecutable (BinPkgName "artvaluereport2-server") (InstallFile "artvaluereport2-server" Nothing Nothing "artvaluereport2-server") $
-                             (newDebianization (fromMaybe (error "Missing debian/changelog") log) compat' standards)
+                             setL changelog (getL changelog old) $
+                             (newDebianization' compat' standards)
                   new' <- cabalToDebianization "test-data/artvaluereport2/input" new
                   withCurrentDirectory "/tmp" (writeDebianization new')
                   assertEqual "test6" [] (diffDebianizations old (copyFirstLogEntry old new'))
@@ -500,7 +507,7 @@ test7 =
                             Atom.conflicts (BinPkgName "cabal-debian")
                                     (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing) $
                             copyChangelog old $
-                            newDebianization (fromMaybe (error "Missing debian/changelog") (getL changelog old)) 7 (StandardsVersion 3 9 3 Nothing)
+                            newDebianization' 7 (StandardsVersion 3 9 3 Nothing)
                   new' <- cabalToDebianization "test-data/cabal-debian/input" new
                   assertEqual "test7" [] (diffDebianizations old (copyChangelog old new'))
              )
@@ -514,7 +521,8 @@ test8 =
                             insertAtom Source (BuildDep (BinPkgName "haskell-hsx-utils")) $
                             (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://artvaluereportonline.com"}) x) $
                             setL sourceFormat (Just Native3) $
-                            (newDebianization log 7 (StandardsVersion 3 9 3 Nothing))
+                            setL changelog (Just log) $
+                            (newDebianization' 7 (StandardsVersion 3 9 3 Nothing))
                   new' <- cabalToDebianization "test-data/artvaluereport-data/input" new
                   assertEqual "test8" [] (diffDebianizations old (copyChangelog old new'))
              )
@@ -523,13 +531,6 @@ test9 :: Test
 test9 =
     TestLabel "test9" $
     TestCase ( do old <- inputDebianization "test-data/alex/output"
-                  let entry =
-                          either (error "error in test changelog entry") fst
-                                 (parseEntry (unlines [ "alex (3.0.2) unstable; urgency=low"
-                                                      , ""
-                                                      , "  * Debianization generated by cabal-debian"
-                                                      , ""
-                                                      , " -- Simon Marlow <marlowsd@gmail.com>  Thu, 31 Jan 2013 10:51:47 -0800"]))
                   let new = putBuildDep (BinPkgName "alex") $
                             doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) $
                             setDebVersion (parseDebianVersion ("3.0.2-1~hackage1" :: String)) $
@@ -550,9 +551,9 @@ test9 =
                                               , "AlexWrapper-posn"
                                               , "AlexWrapper-posn-bytestring"
                                               , "AlexWrapper-strict-bytestring"]) $
-                            newDebianization (ChangeLog [entry]) 7 (StandardsVersion 3 9 3 Nothing)
+                            newDebianization' 7 (StandardsVersion 3 9 3 Nothing)
                   new' <- cabalToDebianization "test-data/alex/input" new
-                  assertEqual "test9" [] (diffDebianizations old new'))
+                  assertEqual "test9" [] (diffDebianizations old (copyFirstLogEntry old new')))
 
 data Change k a
     = Created k a
