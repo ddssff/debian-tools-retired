@@ -43,6 +43,7 @@ class (Monoid atoms,
     rulesHead :: Lens atoms (Maybe Text)
     packageDescription :: Lens atoms (Maybe PackageDescription)
     postInst :: Lens atoms (Map BinPkgName Text)
+    compat :: Lens atoms (Maybe Int)
 
 data DebAtomKey
     = Source

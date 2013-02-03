@@ -74,8 +74,6 @@ module Debian.Debianize.AtomsType
     , setChangeLog
     , updateChangeLog
     , changeLog
-    , compat
-    , putCompat
     , putCopyright
     , copyright
     , putDebControl
@@ -209,6 +207,9 @@ instance HasAtoms Atoms where
     getAtoms = unAtoms
     putAtoms mp _ = Atoms mp
 
+    -- Lenses to access values in the Atoms type.  This is an old
+    -- design which I plan to make private and turn into something
+    -- nicer, so these will remain ugly and repetitive for now.
     rulesHead = lens g s
         where
           g atoms = foldAtoms from Nothing atoms
@@ -219,6 +220,18 @@ instance HasAtoms Atoms where
           s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebRulesHead) x)) atoms
               where
                 f Source (DebRulesHead y) = Just y
+                f _ _ = Nothing
+
+    compat = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DebCompat x') (Just x) | x /= x' = error $ "Conflicting compat values:" ++ show (x, x')
+                from Source (DebCompat x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebCompat) x)) atoms
+              where
+                f Source (DebCompat y) = Just y
                 f _ _ = Nothing
 
     packageDescription = lens g s
@@ -755,17 +768,6 @@ buildDir def atoms =
       from Source (BuildDir path') (Just path) | path /= path' = error $ "Conflicting buildDir atoms: " ++ show path ++ " vs. " ++ show path'
       from Source (BuildDir path') _ = Just path'
       from _ _ x = x
-
-compat :: HasAtoms atoms => Int -> atoms -> Int
-compat def atoms =
-    fromMaybe def $ foldAtoms from Nothing atoms
-    where
-      from Source (DebCompat n') (Just n) | n /= n' = error $ "Conflicting compat levels: " ++ show (n, n')
-      from Source (DebCompat n) _ = Just n
-      from _ _ x = x
-
-putCompat :: HasAtoms atoms => Int -> atoms -> atoms
-putCompat n atoms = insertAtom Source (DebCompat n) atoms
 
 intermediateFile :: HasAtoms atoms => FilePath -> Text -> atoms -> atoms
 intermediateFile path text atoms = insertAtom Source (DHIntermediate path text) atoms

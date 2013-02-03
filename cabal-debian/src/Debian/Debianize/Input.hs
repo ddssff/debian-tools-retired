@@ -18,10 +18,10 @@ import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead))
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat))
 import Debian.Debianize.AtomsType (Atoms, install, installDir,
                                    defaultAtoms, modifySourceDebDescription, intermediateFile, warning, watchFile, logrotateStanza, putPostInst,
-                                   sourceFormat, putCompat, putCopyright, setChangeLog, installInit, postRm, preInst, preRm, link)
+                                   sourceFormat, putCopyright, setChangeLog, installInit, postRm, preInst, preRm, link)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')
@@ -172,7 +172,7 @@ inputAtoms _ path xs | elem path ["control"] = return xs
 inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ (either warning sourceFormat (readSourceFormat text)) xs
 inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ watchFile text xs
 inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> return $ setL rulesHead (Just text) xs
-inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> return $ putCompat (read (unpack text)) xs
+inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> return $ setL compat (Just (read (unpack text))) xs
 inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> return $ putCopyright (Right text) xs
 inputAtoms debian name@"changelog" xs =
     readFile (debian </> name) >>= return . parseChangeLog . unpack >>= \ log -> return $ setChangeLog log xs

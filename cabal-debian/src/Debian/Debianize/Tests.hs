@@ -7,7 +7,7 @@ module Debian.Debianize.Tests
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Function (on)
-import Data.Lens.Lazy (setL)
+import Data.Lens.Lazy (setL, getL)
 import Data.List (sortBy)
 import Data.Map as Map (differenceWithKey, intersectionWithKey)
 import qualified Data.Map as Map
@@ -17,11 +17,11 @@ import Data.Set as Set (Set, fromList, singleton)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead), DebAtomKey(..), DebAtom(..), InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat), DebAtomKey(..), DebAtom(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.AtomsType as Atom
     (Atoms, insertAtom, mapAtoms, tightDependencyFixup, missingDependency, setRevision, putExecMap, sourceFormat,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture, setSourcePackageName,
-     changeLog, updateChangeLog, compat, putCopyright, knownEpochMappings, sourceDebDescription, setSourceDebDescription, newDebianization)
+     changeLog, updateChangeLog, putCopyright, knownEpochMappings, sourceDebDescription, setSourceDebDescription, newDebianization)
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
@@ -62,7 +62,7 @@ test1 =
                           , "include /usr/share/cdbs/1/rules/debhelper.mk"
                           , "include /usr/share/cdbs/1/class/hlibrary.mk"
                           , "" ]) $
-          insertAtom Source (DebCompat 9) $ -- This will change as new version of debhelper are released
+          setL compat (Just 9) $ -- This will change as new version of debhelper are released
           putCopyright (Left BSD3) $
           setSourceDebDescription
                  (SourceDebDescription
@@ -108,7 +108,7 @@ test2 =
                            "include /usr/share/cdbs/1/rules/debhelper.mk",
                            "include /usr/share/cdbs/1/class/hlibrary.mk",
                            ""]) $
-          insertAtom Source (DebCompat 9) $
+          setL compat (Just 9) $
           putCopyright (Left BSD3) $
           setSourceDebDescription
                (SourceDebDescription
@@ -148,7 +148,7 @@ test3 =
       testDeb2 =
           sourceFormat Native3 $
           setL rulesHead (Just "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n") $
-          insertAtom Source (DebCompat 7) $
+          setL compat (Just 7) $
           putCopyright (Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n") $
           setSourceDebDescription
                (SourceDebDescription
@@ -315,7 +315,7 @@ test5 =
     TestCase (     do old <- inputDebianization "test-data/creativeprompts/output"
                       let standards = fromMaybe (error "test5") (standardsVersion (sourceDebDescription old))
                       new <- cabalToDebianization "test-data/creativeprompts/input"
-                               (newDebianization (changeLog old) (compat (error "Missing debian/compat file") old) standards)
+                               (newDebianization (changeLog old) (fromMaybe (error "Missing debian/compat file") $ getL compat old) standards)
                       let new' = finalizeDebianization $
                                  sourceFormat Native3 $
                                  setArchitecture (BinPkgName "creativeprompts-data") All $

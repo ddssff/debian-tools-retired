@@ -16,8 +16,8 @@ import Data.Set as Set (toList, member)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead), DebAtomKey(..), DebAtom(..))
-import Debian.Debianize.AtomsType (lookupAtom, foldAtoms, changeLog, compat, copyright)
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat), DebAtomKey(..), DebAtom(..))
+import Debian.Debianize.AtomsType (lookupAtom, foldAtoms, changeLog, copyright)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Utility (showDeps')
@@ -142,7 +142,7 @@ toFileMap atoms d =
       [("debian/control", pack (show (pretty (control d)))),
        ("debian/changelog", pack (show (pretty (changeLog atoms)))),
        ("debian/rules", rules atoms),
-       ("debian/compat", pack (show (compat (error "Missing DebCompat atom") atoms) <> "\n")),
+       ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom") $ getL compat atoms) <> "\n")),
        ("debian/copyright", either (\ x -> pack (show x) <> "\n") id (copyright (error "No DebCopyright atom") atoms))] ++
       sourceFormat atoms ++
       watch atoms ++
