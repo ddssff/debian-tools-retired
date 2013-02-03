@@ -233,7 +233,7 @@ test4 =
                          fixRules $
                          tight $
                          new'
-                 new''' <- cabalToDebianization "test-data/clckwrks-dot-com/input" new'' >>= return . finalizeDebianization
+                 new''' <- cabalToDebianization "test-data/clckwrks-dot-com/input" new''
                  assertEqual "test4" [] (diffDebianizations old (copyFirstLogEntry old new''')))
     where
       -- A log entry gets added when the Debianization is generated,
@@ -328,7 +328,7 @@ test5 =
                            doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) $
                            doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production")) $
                            (newDebianization (fromMaybe (error "Missing debian/changelog") (getL changelog old)) (fromMaybe (error "Missing debian/compat file") $ getL compat old) standards)
-                 new' <- cabalToDebianization "test-data/creativeprompts/input" new >>= return . finalizeDebianization
+                 new' <- cabalToDebianization "test-data/creativeprompts/input" new
                  assertEqual "test5" [] (diffDebianizations old (copyFirstLogEntry old new')))
     where
       theSite :: BinPkgName -> Site
@@ -416,7 +416,7 @@ test6 =
                                    "texlive-latex-recommended", "texlive-latex-extra", "texlive-fonts-recommended", "texlive-fonts-extra"] $
                              doExecutable (BinPkgName "artvaluereport2-server") (InstallFile "artvaluereport2-server" Nothing Nothing "artvaluereport2-server") $
                              (newDebianization (fromMaybe (error "Missing debian/changelog") log) compat' standards)
-                  new' <- cabalToDebianization "test-data/artvaluereport2/input" new >>= return . finalizeDebianization
+                  new' <- cabalToDebianization "test-data/artvaluereport2/input" new
                   withCurrentDirectory "/tmp" (writeDebianization new')
                   assertEqual "test6" [] (diffDebianizations old (copyFirstLogEntry old new'))
              )
@@ -485,7 +485,7 @@ test7 =
                                     (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing) $
                             copyChangelog old $
                             newDebianization (fromMaybe (error "Missing debian/changelog") (getL changelog old)) 7 (StandardsVersion 3 9 3 Nothing)
-                  new' <- cabalToDebianization "test-data/cabal-debian/input" new >>= return . finalizeDebianization
+                  new' <- cabalToDebianization "test-data/cabal-debian/input" new
                   assertEqual "test7" [] (diffDebianizations old (copyChangelog old new'))
              )
 
@@ -499,7 +499,7 @@ test8 =
                             (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://artvaluereportonline.com"}) x) $
                             setL sourceFormat (Just Native3) $
                             (newDebianization log 7 (StandardsVersion 3 9 3 Nothing))
-                  new' <- cabalToDebianization "test-data/artvaluereport-data/input" new >>= return . finalizeDebianization
+                  new' <- cabalToDebianization "test-data/artvaluereport-data/input" new
                   assertEqual "test8" [] (diffDebianizations old (copyChangelog old new'))
              )
 

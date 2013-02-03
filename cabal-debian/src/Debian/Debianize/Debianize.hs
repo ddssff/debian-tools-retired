@@ -23,6 +23,7 @@ import Debian.Debianize.AtomsType (Atoms, defaultAtoms, flags, watchAtom, setSou
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..))
+import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Flags (flagOptions, atomOptions)
 import Debian.Debianize.Input as Debian (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (outputDebianization)
@@ -124,6 +125,7 @@ debianization :: String              -- ^ current date
               -> Atoms      -- ^ Debianization specification
               -> Atoms      -- ^ New debianization
 debianization date copyright' maint standards deb =
+    finalizeDebianization $
     setSourcePriority Optional $
     setSourceSection (MainSection "haskell") $
     -- setSourceBinaries [] $
