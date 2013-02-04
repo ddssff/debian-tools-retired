@@ -17,11 +17,11 @@ import Data.Set as Set (fromList, union)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat, changelog, sourcePackageName, control), DebAtomKey(..), DebAtom(..), InstallFile(..), Server(..), Site(..))
-import Debian.Debianize.AtomsType as Atom
-    (Atoms, insertAtom, tightDependencyFixup, missingDependency, setRevision, putExecMap,
+import Debian.Debianize.Atoms as Atoms
+    (HasAtoms(rulesHead, compat, sourceFormat, changelog, sourcePackageName, control), InstallFile(..), Server(..), Site(..),
+     Atoms, insertAtom, tightDependencyFixup, missingDependency, setRevision, putExecMap,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture,
-     putCopyright, knownEpochMappings, modControl,
+     putCopyright, knownEpochMappings, modControl, install, DebAtom(BuildDep, BuildDepIndep, UtilsPackageName), DebAtomKey(Source, Binary),
      putBuildDep, setDebVersion, installData, modifySourceDebDescription', modifySourceDebDescription'', defaultAtoms)
 import Debian.Debianize.Cabal (getSimplePackageDescription')
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), newSourceDebDescription, BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
@@ -51,7 +51,7 @@ newDebianization :: ChangeLog -> Int -> StandardsVersion -> Atoms
 newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ = error "defaultDebianization: Invalid changelog entry"
 newDebianization (log@(ChangeLog (entry : _))) level standards =
     setL changelog (Just log) $
-    insertAtom Source (DebCompat level) $
+    setL compat (Just level) $
     modControl (\ x -> x { source = Just (SrcPkgName (logPackage entry))
                                  , maintainer = (either error Just (parseMaintainer (logWho entry)))
                                  , standardsVersion = Just standards }) $
@@ -60,7 +60,7 @@ newDebianization _ _ _ = error "Invalid changelog"
 
 newDebianization' :: Int -> StandardsVersion -> Atoms
 newDebianization' level standards =
-    insertAtom Source (DebCompat level) $
+    setL compat (Just level) $
     modControl (\ x -> x { standardsVersion = Just standards }) $
     defaultAtoms
 
@@ -311,7 +311,7 @@ test5 =
                            setArchitecture (BinPkgName "creativeprompts-development") All $
                            setArchitecture (BinPkgName "creativeprompts-production") All $
                            insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
-                           Atom.depends (BinPkgName "creativeprompts-server") (anyrel (BinPkgName "markdown")) $
+                           Atoms.depends (BinPkgName "creativeprompts-server") (anyrel (BinPkgName "markdown")) $
                            putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $
                            doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" $
                            doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) $
@@ -390,17 +390,17 @@ test6 =
                              insertAtom Source (BuildDepIndep (BinPkgName "libjs-jquery")) $
                              insertAtom Source (BuildDepIndep (BinPkgName "libjs-jquery-u")) $
 
-                             Atom.depends (BinPkgName "artvaluereport2-development") (anyrel (BinPkgName "artvaluereport2-server")) $
-                             Atom.depends (BinPkgName "artvaluereport2-production") (anyrel (BinPkgName "artvaluereport2-server")) $
-                             Atom.depends (BinPkgName "artvaluereport2-production") (anyrel (BinPkgName "apache2")) $
-                             Atom.depends (BinPkgName "artvaluereport2-staging") (anyrel (BinPkgName "artvaluereport2-server")) $
+                             Atoms.depends (BinPkgName "artvaluereport2-development") (anyrel (BinPkgName "artvaluereport2-server")) $
+                             Atoms.depends (BinPkgName "artvaluereport2-production") (anyrel (BinPkgName "artvaluereport2-server")) $
+                             Atoms.depends (BinPkgName "artvaluereport2-production") (anyrel (BinPkgName "apache2")) $
+                             Atoms.depends (BinPkgName "artvaluereport2-staging") (anyrel (BinPkgName "artvaluereport2-server")) $
                              -- This should go into the "real" data directory.  And maybe a different icon for each server?
-                             insertAtom (Binary (BinPkgName "artvaluereport2-server")) (DHInstall "theme/ArtValueReport_SunsetSpectrum.ico" "usr/share/artvaluereport2-data") $
+                             install (BinPkgName "artvaluereport2-server") "theme/ArtValueReport_SunsetSpectrum.ico" "usr/share/artvaluereport2-data" $
                              doBackups (BinPkgName "artvaluereport2-backups") "artvaluereport2-backups" $
                              doWebsite (BinPkgName "artvaluereport2-production") (theSite (BinPkgName "artvaluereport2-production")) $
                              doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging")) $
                              doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development")) $
-                             flip (foldr (\ s deb -> Atom.depends (BinPkgName "artvaluereport2-server") (anyrel (BinPkgName s)) deb))
+                             flip (foldr (\ s deb -> Atoms.depends (BinPkgName "artvaluereport2-server") (anyrel (BinPkgName s)) deb))
                                   ["libjs-jquery", "libjs-jquery-ui", "libjs-jcrop", "libjpeg-progs", "netpbm",
                                    "texlive-latex-recommended", "texlive-latex-extra", "texlive-fonts-recommended", "texlive-fonts-extra"] $
                              doExecutable (BinPkgName "artvaluereport2-server") (InstallFile "artvaluereport2-server" Nothing Nothing "artvaluereport2-server") $
@@ -470,8 +470,8 @@ test7 =
                   let new = modControl (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
                             setL sourceFormat (Just Native3) $
                             insertAtom Source (UtilsPackageName (BinPkgName "cabal-debian")) $
-                            Atom.depends (BinPkgName "cabal-debian") (anyrel (BinPkgName "apt-file")) $
-                            Atom.conflicts (BinPkgName "cabal-debian")
+                            Atoms.depends (BinPkgName "cabal-debian") (anyrel (BinPkgName "apt-file")) $
+                            Atoms.conflicts (BinPkgName "cabal-debian")
                                     (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing) $
                             copyChangelog old $
                             newDebianization' 7 (StandardsVersion 3 9 3 Nothing)

@@ -7,8 +7,8 @@ import Data.Char (toLower, isDigit, ord)
 import Data.Lens.Lazy (setL)
 import Data.Set (fromList)
 import Data.Version (parseVersion)
-import Debian.Debianize.AtomsClass (HasAtoms(..), Flags(..), DebAction(..), InstallFile(..))
-import Debian.Debianize.AtomsType (Atoms, missingDependency, doExecutable, setBuildDir,
+import Debian.Debianize.Atoms (HasAtoms(..), Flags(..), DebAction(..), InstallFile(..),
+                                   Atoms, missingDependency, doExecutable, setBuildDir,
                                    putCabalFlagAssignments, mapFlags, setRevision, setDebVersion, setOmitLTDeps, putExtraDevDep,
                                    putCompilerVersion, putNoProfilingLibrary, putNoDocumentationLibrary, putDebMaintainer, putBuildDep, putBuildDepIndep,
                                    depends, conflicts, putExtraLibMapping, putEpochMapping, putExecMap)

@@ -24,9 +24,9 @@ import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, unlines)
 import Data.Version (Version, showVersion)
 import Debian.Control
-import Debian.Debianize.AtomsClass (HasAtoms(packageDescription, rulesHead), PackageInfo(devDeb, profDeb, docDeb),
-                                    DebType(Dev, Prof, Doc), VersionSplits(..))
-import Debian.Debianize.AtomsType (Atoms, noProfilingLibrary, noDocumentationLibrary, compiler, versionSplits,
+import Debian.Debianize.Atoms (HasAtoms(packageDescription, rulesHead), PackageInfo(devDeb, profDeb, docDeb),
+                                   DebType(Dev, Prof, Doc), VersionSplits(..),
+                                   Atoms, noProfilingLibrary, noDocumentationLibrary, compiler, versionSplits,
                                    filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile (PackageType(..))

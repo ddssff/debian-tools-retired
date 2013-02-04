@@ -1,6 +1,5 @@
 module Debian.Debianize
-    ( module Debian.Debianize.AtomsClass
-    , module Debian.Debianize.AtomsType
+    ( module Debian.Debianize.Atoms
     , module Debian.Debianize.Bundled
     , module Debian.Debianize.Cabal
     , module Debian.Debianize.Combinators
@@ -20,8 +19,7 @@ module Debian.Debianize
     , module Debian.Policy
     ) where
 
-import Debian.Debianize.AtomsClass
-import Debian.Debianize.AtomsType
+import Debian.Debianize.Atoms
 import Debian.Debianize.Bundled
 import Debian.Debianize.Cabal
 import Debian.Debianize.Combinators hiding (buildDeps)

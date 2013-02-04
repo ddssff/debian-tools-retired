@@ -16,8 +16,9 @@ import Data.Set as Set (toList, member)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.AtomsClass (HasAtoms(compat, sourceFormat, watch, changelog, control), DebAtomKey(..), DebAtom(..))
-import Debian.Debianize.AtomsType (Atoms, foldAtoms, copyright)
+import Debian.Debianize.Atoms (HasAtoms(compat, sourceFormat, watch, changelog, control),
+                                   DebAtomKey(..), DebAtom(..),
+                                   Atoms, foldAtoms, copyright)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), newSourceDebDescription, BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Dependencies (getRulesHead)

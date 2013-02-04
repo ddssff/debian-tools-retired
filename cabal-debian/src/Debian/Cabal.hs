@@ -51,13 +51,3 @@ module Debian.Cabal
     , tightDependencyFixup
     , module Debian.Debianize.Server -}
     ) where
-
-{-
-import CabalDebian.Flags (Flags(..), DebAction(..), defaultFlags, compileArgs, withEnvironmentArgs, withEnvironmentFlags, putEnvironmentArgs,
-                          debianize, callDebianize, runDebianize)
-import Debian.Cabal.PackageInfo (DebType)
-import Debian.Cabal.SubstVars (substvars)
-import Debian.Debianize.Combinators (tightDependencyFixup)
-import Debian.Debianize.Server
-import Debian.Debianize.Types (DebAtom(..))
--}

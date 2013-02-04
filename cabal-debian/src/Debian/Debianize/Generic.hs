@@ -13,8 +13,7 @@ import Data.Generics (Data, Typeable, GenericQ, toConstr, showConstr, gzipWithQ,
 import Data.List (sort)
 import qualified Data.Text as T
 import Data.Set as Set (Set, toList, fromList, difference)
-import Debian.Debianize.AtomsClass (DebAtom(..))
-import Debian.Debianize.AtomsType (Atoms)
+import Debian.Debianize.Atoms (Atoms)
 import Debian.Debianize.ControlFile (VersionControlSpec, XField)
 import Debian.Debianize.Utility (showDeps)
 import Debian.Relation (Relation)
@@ -22,7 +21,6 @@ import Triplets (mkQ2, extQ2)
 
 -- These instances are only used here, to create debugging messages.
 deriving instance Typeable Atoms
-deriving instance Typeable DebAtom
 
 -- deriving instance Data Debianization
 -- deriving instance Data DebAtom
