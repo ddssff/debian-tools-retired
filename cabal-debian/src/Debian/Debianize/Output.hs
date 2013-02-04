@@ -66,8 +66,8 @@ describeDebianization :: Atoms -> Atoms -> String
 describeDebianization old new =
     concat . Map.elems $ zipMaps doFile oldFiles newFiles
     where
-      oldFiles = toFileMap old (fromMaybe newSourceDebDescription . getL control $ old)
-      newFiles = toFileMap new (fromMaybe newSourceDebDescription . getL control $ new)
+      oldFiles = toFileMap old
+      newFiles = toFileMap new
       doFile :: FilePath -> Maybe Text -> Maybe Text -> Maybe String
       doFile path (Just _) Nothing = Just (path ++ ": Deleted\n")
       doFile path Nothing (Just n) = Just (path ++ ": Created\n" ++ indent " | " (unpack n))
@@ -79,7 +79,7 @@ describeDebianization old new =
 
 writeDebianization :: Atoms -> IO ()
 writeDebianization d =
-    mapM_ (uncurry doFile) (toList (toFileMap d (fromMaybe newSourceDebDescription . getL control $ d))) >>
+    mapM_ (uncurry doFile) (toList (toFileMap d)) >>
     getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})
     where
       doFile path text =

@@ -19,7 +19,7 @@ import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat, watch, changelog, control))
-import Debian.Debianize.AtomsType (Atoms, install, installDir,
+import Debian.Debianize.AtomsType (Atoms, install, installDir, modControl,
                                    defaultAtoms, intermediateFile, warning, logrotateStanza, putPostInst,
                                    putCopyright, installInit, postRm, preInst, preRm, link)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
@@ -39,7 +39,7 @@ inputDebianization top =
     do (ctl, _) <- inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e))
        -- Different from snd of above?
        atoms <- inputAtomsFromDirectory debian defaultAtoms `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
-       return $ modL control (fmap (const ctl)) atoms
+       return $ modControl (const ctl) atoms
     where
       debian = top </> "debian"
 

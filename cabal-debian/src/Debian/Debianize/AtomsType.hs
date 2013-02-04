@@ -81,6 +81,7 @@ module Debian.Debianize.AtomsType
     , mapFlags
     , watchAtom
     , tightDependencyFixup
+    , modControl
     , modifySourceDebDescription'
     , modifySourceDebDescription''
     -- , newDebianization
@@ -830,6 +831,9 @@ setSourceDebDescription' d x = modifySourceDebDescription' (const d) x
 
 modifySourceDebDescription :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
 modifySourceDebDescription f deb = modL control (fmap f) deb
+
+modControl :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
+modControl = modifySourceDebDescription'
 
 modifySourceDebDescription' :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
 modifySourceDebDescription' f deb = modL control (Just . f . fromMaybe newSourceDebDescription) deb

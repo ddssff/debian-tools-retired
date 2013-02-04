@@ -16,9 +16,9 @@ import Data.Set as Set (toList, member)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.AtomsClass (HasAtoms(compat, sourceFormat, watch, changelog), DebAtomKey(..), DebAtom(..))
+import Debian.Debianize.AtomsClass (HasAtoms(compat, sourceFormat, watch, changelog, control), DebAtomKey(..), DebAtom(..))
 import Debian.Debianize.AtomsType (Atoms, foldAtoms, copyright)
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), newSourceDebDescription, BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Utility (showDeps')
@@ -129,10 +129,10 @@ prerm deb =
 -- considering building one into the other, but it is handy to look at
 -- the Debianization produced by finalizeDebianization in the unit
 -- tests.)
-toFileMap :: Atoms -> SourceDebDescription -> Map FilePath Text
-toFileMap atoms d =
+toFileMap :: Atoms -> Map FilePath Text
+toFileMap atoms =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
-      [("debian/control", pack (show (pretty (control d)))),
+      [("debian/control", pack (show (pretty (controlFile d)))),
        ("debian/changelog", pack (show (pretty (fromMaybe (error "Missing debian/changelog") (getL changelog atoms))))),
        ("debian/rules", rules atoms),
        ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom") $ getL compat atoms) <> "\n")),
@@ -149,6 +149,7 @@ toFileMap atoms d =
       preinst atoms ++
       prerm atoms ++
       intermediates atoms
+    where d = fromMaybe newSourceDebDescription (getL control atoms)
 
 rules :: Atoms -> Text
 rules deb =
@@ -157,8 +158,8 @@ rules deb =
       append Source (DebRulesFragment x) text = text <> "\n" <> x
       append _ _ text = text
 
-control :: SourceDebDescription -> Control' String
-control src =
+controlFile :: SourceDebDescription -> Control' String
+controlFile src =
     Control
     { unControl =
           (Paragraph
