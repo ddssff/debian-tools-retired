@@ -71,8 +71,6 @@ module Debian.Debianize.AtomsType
     , doBackups
     , putCopyright
     , copyright
-    , putDebControl
-    , debControl
     , warning
     , debMaintainer
     , buildDir
@@ -83,9 +81,8 @@ module Debian.Debianize.AtomsType
     , mapFlags
     , watchAtom
     , tightDependencyFixup
-    , sourceDebDescription
-    , setSourceDebDescription
-    , modifySourceDebDescription
+    , modifySourceDebDescription'
+    , modifySourceDebDescription''
     -- , newDebianization
     , putBuildDep
     , putBuildDepIndep
@@ -131,19 +128,18 @@ module Debian.Debianize.AtomsType
 
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
-import Data.Lens.Lazy (lens, getL, setL, modL)
+import Data.Lens.Lazy (lens, getL, modL)
 import Data.List as List (map)
 import Data.Map as Map (Map, lookup, insertWith, foldWithKey, empty, null, insert, update)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
-import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert, member, map)
+import Data.Set as Set (Set, maxView, toList, fromList, null, empty, union, singleton, fold, insert, member)
 import Data.Text (Text, unpack)
 import Data.Version (Version)
-import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.AtomsClass (HasAtoms(..), DebAtomKey(..), DebAtom(..), Flags(..), DebAction(..), PackageInfo(..), Site(..), Server(..), InstallFile(..), VersionSplits, knownVersionSplits)
 import Debian.Debianize.Utility (setMapMaybe)
 import Debian.Orphans ()
-import Debian.Policy (PackageArchitectures, PackagePriority, Section, StandardsVersion, parseMaintainer,
+import Debian.Policy (PackageArchitectures, PackagePriority, Section,
                       apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName, Relation)
 import Debian.Version (DebianVersion)
@@ -160,9 +156,9 @@ import Data.Monoid ((<>))
 --import Data.Set as Set (Set, maxView, toList, null, union, singleton, insert, member)
 import Data.Text (pack, unlines)
 import Data.Version (showVersion)
-import Debian.Debianize.ControlFile (SourceDebDescription(source, maintainer, standardsVersion), newSourceDebDescription)
+import Debian.Debianize.ControlFile (SourceDebDescription, newSourceDebDescription)
 import Debian.Orphans ()
-import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName), Relation(..))
+import Debian.Relation (BinPkgName(BinPkgName), Relation(..))
 import Distribution.Package (PackageName(..))
 import Distribution.PackageDescription as Cabal (PackageDescription(package))
 import System.FilePath ((</>), makeRelative, splitFileName, takeDirectory, takeFileName)
@@ -305,6 +301,18 @@ instance HasAtoms Atoms where
           s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebLogComments) x)) atoms
               where
                 f Source (DebLogComments y) = Just y
+                f _ _ = Nothing
+
+    control = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DebControl x') (Just x) | x /= x' = error $ "Conflicting control values:" ++ show (x, x')
+                from Source (DebControl x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebControl) x)) atoms
+              where
+                f Source (DebControl y) = Just y
                 f _ _ = Nothing
 
 lookupAtom :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Maybe a
@@ -715,17 +723,6 @@ copyright def atoms =
       from Source (DebCopyright x) _ = Just x
       from _ _ x = x
 
-debControl :: Atoms -> Maybe SourceDebDescription
-debControl atoms =
-    foldAtoms from Nothing atoms
-    where
-      from Source (DebControl x') (Just x) | x /= x' = error $ "Conflicting Source Deb Descriptions: " ++ show (x, x')
-      from Source (DebControl x) _ = Just x
-      from _ _ x = x
-
-putDebControl :: SourceDebDescription -> Atoms -> Atoms
-putDebControl deb atoms = insertAtom Source (DebControl deb) atoms
-
 warning :: Text -> Atoms -> Atoms
 warning text deb = insertAtom Source (Warning text) deb
 
@@ -828,18 +825,17 @@ tightDependencyFixup pairs p deb =
       name = display' p
       display' = pack . show . pretty
 
-sourceDebDescription :: Atoms -> SourceDebDescription
-sourceDebDescription = fromMaybe newSourceDebDescription . debControl
-
-setSourceDebDescription :: SourceDebDescription -> Atoms -> Atoms
-setSourceDebDescription d x = modifySourceDebDescription (const d) x
+setSourceDebDescription' :: SourceDebDescription -> Atoms -> Atoms
+setSourceDebDescription' d x = modifySourceDebDescription' (const d) x
 
 modifySourceDebDescription :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
-modifySourceDebDescription f deb =
-    modifyAtoms' g (Set.map (\ d -> (Source, DebControl (f d)))) deb
-    where
-      g Source (DebControl d) = Just d
-      g _ _ = Nothing
+modifySourceDebDescription f deb = modL control (fmap f) deb
+
+modifySourceDebDescription' :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
+modifySourceDebDescription' f deb = modL control (Just . f . fromMaybe newSourceDebDescription) deb
+
+modifySourceDebDescription'' :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
+modifySourceDebDescription'' f deb = modL control (Just . f . fromMaybe (error "modifySourceDebDescription")) deb
 
 install :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
 install p path d atoms = insertAtom (Binary p) (DHInstall path d) atoms

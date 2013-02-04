@@ -17,12 +17,12 @@ import Control.Applicative ((<$>))
 import Data.Lens.Lazy (getL, setL)
 import Data.Maybe
 import Data.Text (Text)
-import Debian.Debianize.AtomsClass (HasAtoms(packageDescription, watch, changelog), Flags(..), DebAction(..))
+import Debian.Debianize.AtomsClass (HasAtoms(packageDescription, watch, changelog, control), Flags(..), DebAction(..))
 import Debian.Debianize.AtomsType (Atoms, defaultAtoms, flags, watchAtom, setSourcePriority,
-                                   setSourceSection, compilerVersion, cabalFlagAssignments, putCopyright, sourceDebDescription)
+                                   setSourceSection, compilerVersion, cabalFlagAssignments, putCopyright)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries)
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..))
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), newSourceDebDescription)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Flags (flagOptions, atomOptions)
 import Debian.Debianize.Input as Debian (inputDebianization, inputChangeLog)
@@ -111,7 +111,7 @@ cabalToDebianization top old =
        date <- getCurrentLocalRFC822Time
        copyright <- withCurrentDirectory top $ inputCopyright pkgDesc
        maint <- inputMaintainer pkgDesc old' >>= maybe (error "Missing value for --maintainer") return
-       let standards = fromMaybe (error "cabalToDebianization") (standardsVersion (sourceDebDescription old'))
+       let standards = fromMaybe (error "cabalToDebianization") (standardsVersion (fromMaybe newSourceDebDescription . getL control $ old'))
        return $ debianization date copyright maint standards (scrub old')
     where
       -- We really don't want to inherit very much information from

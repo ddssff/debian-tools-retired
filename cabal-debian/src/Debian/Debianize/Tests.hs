@@ -13,18 +13,18 @@ import Data.Map as Map (differenceWithKey, intersectionWithKey)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mconcat, (<>), mempty)
-import Data.Set as Set (fromList)
+import Data.Set as Set (fromList, union)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat, changelog, sourcePackageName), DebAtomKey(..), DebAtom(..), InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat, changelog, sourcePackageName, control), DebAtomKey(..), DebAtom(..), InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.AtomsType as Atom
     (Atoms, insertAtom, tightDependencyFixup, missingDependency, setRevision, putExecMap,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture,
-     putCopyright, knownEpochMappings, sourceDebDescription, setSourceDebDescription,
-     putBuildDep, setDebVersion, installData, modifySourceDebDescription, defaultAtoms)
+     putCopyright, knownEpochMappings,
+     putBuildDep, setDebVersion, installData, modifySourceDebDescription', modifySourceDebDescription'', defaultAtoms)
 import Debian.Debianize.Cabal (getSimplePackageDescription')
-import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
+import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), newSourceDebDescription, BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
@@ -52,16 +52,16 @@ newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ = error "defaultDebianizati
 newDebianization (log@(ChangeLog (entry : _))) level standards =
     setL changelog (Just log) $
     insertAtom Source (DebCompat level) $
-    modifySourceDebDescription (\ x -> x { source = Just (SrcPkgName (logPackage entry))
-                                         , maintainer = (either error Just (parseMaintainer (logWho entry)))
-                                         , standardsVersion = Just standards }) $
+    modL control (fmap (\ x -> x { source = Just (SrcPkgName (logPackage entry))
+                                 , maintainer = (either error Just (parseMaintainer (logWho entry)))
+                                 , standardsVersion = Just standards })) $
     defaultAtoms
 newDebianization _ _ _ = error "Invalid changelog"
 
 newDebianization' :: Int -> StandardsVersion -> Atoms
 newDebianization' level standards =
     insertAtom Source (DebCompat level) $
-    modifySourceDebDescription (\ x -> x { standardsVersion = Just standards }) $
+    modL control (fmap (\ x -> x { standardsVersion = Just standards })) $
     defaultAtoms
 
 tests :: Test
@@ -85,24 +85,12 @@ test1 =
                           , "include /usr/share/cdbs/1/class/hlibrary.mk" ]) $
           setL compat (Just 9) $ -- This will change as new version of debhelper are released
           putCopyright (Left BSD3) $
-          setSourceDebDescription
-                 (SourceDebDescription
-                      { source = Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"})
-                      , maintainer = Just (NameAddr (Just "David Fox") "dsf@seereason.com")
-                      , changedBy = Nothing
-                      , uploaders = []
-                      , dmUploadAllowed = False
-                      , priority = Nothing
-                      , section = Nothing
-                      , buildDepends = []
-                      , buildConflicts = []
-                      , buildDependsIndep = []
-                      , buildConflictsIndep = []
-                      , standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)) -- This will change as new versions of debian-policy are released
-                      , homepage = Nothing
-                      , vcsFields = Set.fromList []
-                      , xFields = Set.fromList []
-                      , binaryPackages = [] }) $
+          modL control
+             (fmap
+              (\ y -> y { source = Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"})
+                        , maintainer = Just (NameAddr (Just "David Fox") "dsf@seereason.com")
+                        , standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)) -- This will change as new versions of debian-policy are released
+                        })) $
           (newDebianization log 9 (StandardsVersion 3 9 3 (Just 1)))
       log = ChangeLog [Entry { logPackage = "haskell-cabal-debian"
                              , logVersion = buildDebianVersion Nothing "2.6.2" Nothing
@@ -128,24 +116,12 @@ test2 =
                            "include /usr/share/cdbs/1/class/hlibrary.mk"]) $
           setL compat (Just 9) $
           putCopyright (Left BSD3) $
-          setSourceDebDescription
-               (SourceDebDescription
+          modL control
+             (fmap
+              (\ y -> y
                 { source = Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"}),
                   maintainer = Just (NameAddr {nameAddr_name = Just "David Fox", nameAddr_addr = "dsf@seereason.com"}),
-                  changedBy = Nothing,
-                  uploaders = [],
-                  dmUploadAllowed = False,
-                  priority = Nothing,
-                  section = Nothing,
-                  buildDepends = [],
-                  buildConflicts = [],
-                  buildDependsIndep = [],
-                  buildConflictsIndep = [],
-                  standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)),
-                  homepage = Nothing,
-                  vcsFields = Set.fromList [],
-                  xFields = Set.fromList [],
-                  binaryPackages = [] }) $
+                  standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)) })) $
           (newDebianization log 9 (StandardsVersion 3 9 3 (Just 1)))
       log = ChangeLog [Entry {logPackage = "haskell-cabal-debian",
                               logVersion = Debian.Version.parseDebianVersion ("2.6.2" :: String),
@@ -168,25 +144,19 @@ test3 =
           setL rulesHead (Just "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n") $
           setL compat (Just 7) $
           putCopyright (Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n") $
-          setSourceDebDescription
-               (SourceDebDescription
+          modL control
+             (fmap
+              (\ y -> y
                 { source = Just (SrcPkgName {unSrcPkgName = "haskell-devscripts"})
                 , maintainer = Just (NameAddr {nameAddr_name = Just "Debian Haskell Group", nameAddr_addr = "pkg-haskell-maintainers@lists.alioth.debian.org"})
-                , changedBy = Nothing
                 , uploaders = [NameAddr {nameAddr_name = Just "Marco Silva", nameAddr_addr = "marcot@debian.org"},NameAddr {nameAddr_name = Just "Joachim Breitner", nameAddr_addr = "nomeata@debian.org"}]
-                , dmUploadAllowed = False
                 , priority = Just Extra
                 , section = Just (MainSection "haskell")
-                , buildDepends = [[Rel (BinPkgName {unBinPkgName = "debhelper"}) (Just (GRE (Debian.Version.parseDebianVersion ("7" :: String)))) Nothing]]
-                , buildConflicts = []
-                , buildDependsIndep =
-                    [[Rel (BinPkgName {unBinPkgName = "perl"}) Nothing Nothing]]
-                , buildConflictsIndep = []
+                , buildDepends = (buildDepends y) ++ [[Rel (BinPkgName {unBinPkgName = "debhelper"}) (Just (GRE (Debian.Version.parseDebianVersion ("7" :: String)))) Nothing]]
+                , buildDependsIndep = (buildDependsIndep y) ++ [[Rel (BinPkgName {unBinPkgName = "perl"}) Nothing Nothing]]
                 , standardsVersion = Just (StandardsVersion 3 9 4 Nothing)
-                , homepage = Nothing
-                , vcsFields = Set.fromList [ VCSBrowser "http://darcs.debian.org/cgi-bin/darcsweb.cgi?r=pkg-haskell/haskell-devscripts"
-                                           , VCSDarcs "http://darcs.debian.org/pkg-haskell/haskell-devscripts"]
-                , xFields = Set.fromList []
+                , vcsFields = Set.union (vcsFields y) (Set.fromList [ VCSBrowser "http://darcs.debian.org/cgi-bin/darcsweb.cgi?r=pkg-haskell/haskell-devscripts"
+                                                                    , VCSDarcs "http://darcs.debian.org/pkg-haskell/haskell-devscripts"])
                 , binaryPackages = [BinaryDebDescription { package = BinPkgName {unBinPkgName = "haskell-devscripts"}
                                                          , architecture = All
                                                          , binarySection = Nothing
@@ -222,7 +192,7 @@ test3 =
                                                              , Deb.conflicts = []
                                                              , provides = []
                                                              , replaces = []
-                                                             , builtUsing = [] }}]}) $
+                                                             , builtUsing = [] }}]})) $
           (newDebianization log 7 (StandardsVersion 3 9 4 Nothing))
       log = ChangeLog [Entry { logPackage = "haskell-devscripts"
                              , logVersion = Debian.Version.parseDebianVersion ("0.8.13" :: String)
@@ -245,7 +215,7 @@ test4 =
     TestCase (do old <- inputDebianization "test-data/clckwrks-dot-com/output"
                  new <- getSimplePackageDescription' "test-data/clckwrks-dot-com/input" $ newDebianization' 7 (StandardsVersion 3 9 4 Nothing)
                  let new' =
-                         (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://www.clckwrks.com/"}) x) $
+                         modL control (fmap (\ y -> y {homepage = Just "http://www.clckwrks.com/"})) $
                          setL sourceFormat (Just Native3) $
                          missingDependency (BinPkgName "libghc-clckwrks-theme-clckwrks-doc") $
                          setRevision "" $
@@ -338,7 +308,7 @@ test5 :: Test
 test5 =
     TestLabel "test5" $
     TestCase (do old <- inputDebianization "test-data/creativeprompts/output"
-                 let standards = fromMaybe (error "test5") (standardsVersion (sourceDebDescription old))
+                 let standards = fromMaybe (error "test5") (standardsVersion (fromMaybe newSourceDebDescription . getL control $ old))
                  let new = setL sourceFormat (Just Native3) $
                            setArchitecture (BinPkgName "creativeprompts-data") All $
                            setArchitecture (BinPkgName "creativeprompts-development") All $
@@ -413,7 +383,7 @@ test6 =
     TestCase ( do old <- inputDebianization "test-data/artvaluereport2/output"
                   let standards = StandardsVersion 3 9 1 Nothing
                       compat' = 7
-                  let new =  (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://appraisalreportonline.com"}) x) $
+                  let new =  modL control (fmap (\ y -> y {homepage = Just "http://appraisalreportonline.com"})) $
                              setL sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) $
                              insertAtom Source (UtilsPackageName (BinPkgName "artvaluereport2-server")) $
                              setArchitecture (BinPkgName "artvaluereport2-development") All $
@@ -500,7 +470,7 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase ( do old <- inputDebianization "."
-                  let new = (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://src.seereason.com/cabal-debian"}) x) $
+                  let new = modL control (fmap (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"})) $
                             setL sourceFormat (Just Native3) $
                             insertAtom Source (UtilsPackageName (BinPkgName "cabal-debian")) $
                             Atom.depends (BinPkgName "cabal-debian") (anyrel (BinPkgName "apt-file")) $
@@ -519,7 +489,7 @@ test8 =
                   log <- inputChangeLog "test-data/artvaluereport-data/input/debian"
                   let new = knownEpochMappings $
                             insertAtom Source (BuildDep (BinPkgName "haskell-hsx-utils")) $
-                            (\ x -> setSourceDebDescription ((sourceDebDescription x) {homepage = Just "http://artvaluereportonline.com"}) x) $
+                            modL control (fmap (\ y -> y {homepage = Just "http://artvaluereportonline.com"})) $
                             setL sourceFormat (Just Native3) $
                             setL changelog (Just log) $
                             (newDebianization' 7 (StandardsVersion 3 9 3 Nothing))
@@ -575,8 +545,8 @@ diffDebianizations :: Atoms -> Atoms -> String -- [Change FilePath T.Text]
 diffDebianizations old new =
     show (mconcat (map prettyChange (filter (not . isUnchanged) (diffMaps old' new'))))
     where
-      old' = toFileMap old (sortBinaryDebs (sourceDebDescription old))
-      new' = toFileMap new (sortBinaryDebs (sourceDebDescription new))
+      old' = toFileMap old (sortBinaryDebs (fromMaybe newSourceDebDescription . getL control $ old))
+      new' = toFileMap new (sortBinaryDebs (fromMaybe newSourceDebDescription . getL control $ new))
       isUnchanged (Unchanged _ _) = True
       isUnchanged _ = False
       prettyChange (Unchanged p _) = text ("Unchanged: " <> p <> "\n")

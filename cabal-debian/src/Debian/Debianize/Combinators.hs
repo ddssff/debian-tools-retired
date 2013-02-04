@@ -20,9 +20,9 @@ import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, unpack, intercalate)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.AtomsClass (HasAtoms(packageDescription, sourcePackageName, changelog, comments))
-import Debian.Debianize.AtomsType (Atoms, revision, debVersion, extraLibMap, epochMap, sourceDebDescription, setSourceDebDescription)
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
+import Debian.Debianize.AtomsClass (HasAtoms(packageDescription, sourcePackageName, changelog, comments, control))
+import Debian.Debianize.AtomsType (Atoms, revision, debVersion, extraLibMap, epochMap)
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), newSourceDebDescription, BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 -- import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Utility (trim)
@@ -44,9 +44,9 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 versionInfo :: NameAddr -> String -> Atoms -> Atoms
 versionInfo debianMaintainer date deb =
     modL changelog (const (Just newLog)) $
-    setSourceDebDescription ((sourceDebDescription deb)
-                             { source = Just sourceName
-                             , Debian.maintainer = Just debianMaintainer }) deb
+    modL control (fmap (const ((fromMaybe newSourceDebDescription . getL control $ deb)
+                                       { source = Just sourceName
+                                       , Debian.maintainer = Just debianMaintainer }))) deb
     where
       newLog =
           case getL changelog deb of
@@ -116,7 +116,7 @@ defaultRulesHead atoms =
 -}
 
 putStandards :: StandardsVersion -> Atoms -> Atoms
-putStandards x deb = setSourceDebDescription ((sourceDebDescription deb) {standardsVersion = Just x}) deb
+putStandards x deb = modL control (fmap (const ((fromMaybe newSourceDebDescription . getL control $ deb) {standardsVersion = Just x}))) deb
 
 describe :: Atoms -> PackageType -> PackageIdentifier -> Text
 describe atoms typ ident =
@@ -126,15 +126,15 @@ describe atoms typ ident =
 
 buildDeps :: Atoms -> Atoms
 buildDeps deb =
-    setSourceDebDescription ((sourceDebDescription deb) { Debian.buildDepends = debianBuildDeps deb
-                                                        , buildDependsIndep = debianBuildDepsIndep deb }) deb
+    modL control (fmap (const ((fromMaybe newSourceDebDescription . getL control $ deb) { Debian.buildDepends = debianBuildDeps deb
+                                                                                                , buildDependsIndep = debianBuildDepsIndep deb }))) deb
 
 -- | Convert the extraLibs field of the cabal build info into debian
 -- binary package names and make them dependendencies of the debian
 -- devel package (if there is one.)
 addExtraLibDependencies :: Atoms -> Atoms
 addExtraLibDependencies deb =
-    setSourceDebDescription ((sourceDebDescription deb) {binaryPackages = map f (binaryPackages (sourceDebDescription deb))}) deb
+    modL control (fmap (const ((fromMaybe newSourceDebDescription . getL control $ deb) {binaryPackages = map f (binaryPackages (fromMaybe newSourceDebDescription . getL control $ deb))}))) deb
     where
       f :: BinaryDebDescription -> BinaryDebDescription
       f bin
@@ -215,7 +215,7 @@ anyrel' x = [D.Rel x Nothing Nothing]
 
 oldFilterMissing :: [BinPkgName] -> Atoms -> Atoms
 oldFilterMissing missing deb =
-    setSourceDebDescription (e (sourceDebDescription deb)) deb
+    modL control (fmap (const (e (fromMaybe newSourceDebDescription . getL control $ deb)))) deb
     where
       e src = src { Debian.buildDepends = f (Debian.buildDepends src)
                   , Debian.buildDependsIndep = f (Debian.buildDependsIndep src)
@@ -233,4 +233,4 @@ oldFilterMissing missing deb =
                                 , builtUsing = f (builtUsing rels) }
 
 setSourceBinaries :: [BinaryDebDescription] -> Atoms -> Atoms
-setSourceBinaries xs deb = setSourceDebDescription ((sourceDebDescription deb) {binaryPackages = xs}) deb
+setSourceBinaries xs deb = modL control (fmap (const ((fromMaybe newSourceDebDescription . getL control $ deb) {binaryPackages = xs}))) deb

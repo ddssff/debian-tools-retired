@@ -11,16 +11,16 @@ import Debug.Trace (trace)
 import Control.Exception (SomeException, catch)
 import Control.Monad (foldM, filterM)
 import Data.Char (isSpace)
-import Data.Lens.Lazy (setL)
+import Data.Lens.Lazy (setL, modL)
 import Data.Maybe (fromMaybe)
 import Data.Set (fromList, insert)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat, watch, changelog))
+import Debian.Debianize.AtomsClass (HasAtoms(rulesHead, compat, sourceFormat, watch, changelog, control))
 import Debian.Debianize.AtomsType (Atoms, install, installDir,
-                                   defaultAtoms, modifySourceDebDescription, intermediateFile, warning, logrotateStanza, putPostInst,
+                                   defaultAtoms, intermediateFile, warning, logrotateStanza, putPostInst,
                                    putCopyright, installInit, postRm, preInst, preRm, link)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
@@ -36,10 +36,10 @@ import System.IO.Error (catchIOError)
 
 inputDebianization :: FilePath -> IO Atoms
 inputDebianization top =
-    do (deb, _) <- inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e))
+    do (ctl, _) <- inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e))
        -- Different from snd of above?
        atoms <- inputAtomsFromDirectory debian defaultAtoms `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
-       return $ modifySourceDebDescription (const deb) atoms
+       return $ modL control (fmap (const ctl)) atoms
     where
       debian = top </> "debian"
 

@@ -47,6 +47,7 @@ class (Monoid atoms,
     sourcePackageName :: Lens atoms (Maybe SrcPkgName)
     changelog :: Lens atoms (Maybe ChangeLog)
     comments :: Lens atoms (Maybe [[Text]]) -- ^ Comment entries for the latest changelog entry
+    control :: Lens atoms (Maybe SourceDebDescription)
 
 data DebAtomKey
     = Source

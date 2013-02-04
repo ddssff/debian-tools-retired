@@ -17,9 +17,9 @@ import Data.Map as Map (toList, elems)
 import Data.Maybe (fromMaybe)
 import Data.Text as Text (Text, unpack, split)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logVersion))
-import Debian.Debianize.AtomsClass (HasAtoms(changelog), Flags(validate, dryRun))
-import Debian.Debianize.AtomsType (Atoms, flags, sourceDebDescription)
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
+import Debian.Debianize.AtomsClass (HasAtoms(changelog, control), Flags(validate, dryRun))
+import Debian.Debianize.AtomsType (Atoms, flags)
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(source, binaryPackages), newSourceDebDescription, BinaryDebDescription(package))
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Utility (replaceFile, zipMaps)
 import System.Directory (Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing)
@@ -48,10 +48,10 @@ validateDebianization :: Atoms -> Atoms -> IO ()
 validateDebianization old new =
     do let oldVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL changelog old))))
            newVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL changelog new))))
-           oldSource = source . sourceDebDescription $ old
-           newSource = source . sourceDebDescription $ new
-           oldPackages = map Debian.package . binaryPackages . sourceDebDescription $ old
-           newPackages = map Debian.package . binaryPackages . sourceDebDescription $ new
+           oldSource = source . fromMaybe newSourceDebDescription . getL control $ old
+           newSource = source . fromMaybe newSourceDebDescription . getL control $ new
+           oldPackages = map Debian.package . binaryPackages . fromMaybe newSourceDebDescription . getL control $ old
+           newPackages = map Debian.package . binaryPackages . fromMaybe newSourceDebDescription . getL control $ new
        case () of
          _ | oldVersion /= newVersion -> error ("Version mismatch, expected " ++ show (pretty oldVersion) ++ ", found " ++ show (pretty newVersion))
            | oldSource /= newSource -> error ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource))
@@ -66,8 +66,8 @@ describeDebianization :: Atoms -> Atoms -> String
 describeDebianization old new =
     concat . Map.elems $ zipMaps doFile oldFiles newFiles
     where
-      oldFiles = toFileMap old (sourceDebDescription old)
-      newFiles = toFileMap new (sourceDebDescription new)
+      oldFiles = toFileMap old (fromMaybe newSourceDebDescription . getL control $ old)
+      newFiles = toFileMap new (fromMaybe newSourceDebDescription . getL control $ new)
       doFile :: FilePath -> Maybe Text -> Maybe Text -> Maybe String
       doFile path (Just _) Nothing = Just (path ++ ": Deleted\n")
       doFile path Nothing (Just n) = Just (path ++ ": Created\n" ++ indent " | " (unpack n))
@@ -79,7 +79,7 @@ describeDebianization old new =
 
 writeDebianization :: Atoms -> IO ()
 writeDebianization d =
-    mapM_ (uncurry doFile) (toList (toFileMap d (sourceDebDescription d))) >>
+    mapM_ (uncurry doFile) (toList (toFileMap d (fromMaybe newSourceDebDescription . getL control $ d))) >>
     getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})
     where
       doFile path text =
