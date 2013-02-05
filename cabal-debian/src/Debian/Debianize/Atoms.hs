@@ -97,8 +97,6 @@ module Debian.Debianize.Atoms
     , watchAtom
     , tightDependencyFixup
     , modControl
-    , modifySourceDebDescription'
-    , modifySourceDebDescription''
     -- , newDebianization
     , putBuildDep
     , putBuildDepIndep
@@ -1093,22 +1091,8 @@ tightDependencyFixup pairs p deb =
       name = display' p
       display' = pack . show . pretty
 
-{-
-setSourceDebDescription' :: SourceDebDescription -> Atoms -> Atoms
-setSourceDebDescription' d x = modifySourceDebDescription' (const d) x
-
-modifySourceDebDescription :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
-modifySourceDebDescription f deb = modL control (fmap f) deb
--}
-
 modControl :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
-modControl = modifySourceDebDescription'
-
-modifySourceDebDescription' :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
-modifySourceDebDescription' f deb = modL control (Just . f . fromMaybe newSourceDebDescription) deb
-
-modifySourceDebDescription'' :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
-modifySourceDebDescription'' f deb = modL control (Just . f . fromMaybe (error "modifySourceDebDescription")) deb
+modControl f deb = modL control (Just . f . fromMaybe newSourceDebDescription) deb
 
 install :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
 install p path d atoms = insertAtom (Binary p) (DHInstall path d) atoms

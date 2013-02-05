@@ -20,6 +20,7 @@ module Debian.Debianize.Utility
     , getDirectoryContents'
     , setMapMaybe
     , zipMaps
+    , foldEmpty
     ) where
 
 import Control.Exception as E (catch, try, bracket, IOException)
@@ -212,3 +213,7 @@ zipMaps f m n =
                                Just c -> Map.insert k c r -- Only n has an entry for k
                                Nothing -> r
                   Just _ -> r
+
+foldEmpty :: r -> ([a] -> r) -> [a] -> r
+foldEmpty r _ [] = r
+foldEmpty _ f l = f l

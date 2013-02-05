@@ -25,7 +25,7 @@ import Debian.Debianize.Atoms (HasAtoms(packageDescription, sourcePackageName, c
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), newSourceDebDescription, BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 -- import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
-import Debian.Debianize.Utility (trim)
+import Debian.Debianize.Utility (trim, foldEmpty)
 import Debian.Policy (StandardsVersion)
 import qualified Debian.Relation as D
 import Debian.Relation (BinPkgName, SrcPkgName(..), Relation(Rel))
@@ -92,7 +92,7 @@ convertVersion debinfo cabalVersion =
       Right (debianEpoch, debianRevision) ->
           buildDebianVersion debianEpoch
                              (show (pretty cabalVersion))
-                             (Just debianRevision)
+                             (foldEmpty Nothing Just debianRevision)
 
 {-
 -- | Ensure a valid rulesHead value in atoms.
