@@ -136,7 +136,7 @@ module Debian.Debianize.Atoms
     , foldPriorities
     , foldSections
     , foldDescriptions
-    , foldAtomsFinalized
+    , finalizeAtoms
     , foldCabalDatas
     , foldCabalExecs
     ) where
@@ -1247,25 +1247,19 @@ foldExecs site serv backup exec r0 atoms =
       from (Binary p) (DHExecutable x) r = exec p x r
       from _ _ r = r
 
-foldAtomsFinalized :: (DebAtomKey -> DebAtom -> r -> r) -> r -> Atoms -> r
-foldAtomsFinalized f r0 atoms =
-    foldAtoms f r0 (expanded atoms)
+finalizeAtoms :: Atoms -> Atoms
+finalizeAtoms atoms =
+    expanded
     where
-      -- The atoms in r plus the ones generated from r
-      expanded :: Atoms -> Atoms
-      expanded r = foldAtoms insertAtom r (newAtoms r)
-      -- All the atoms generated from those in r
-      newAtoms :: Atoms -> Atoms
-      newAtoms r =
+      expanded = foldAtoms insertAtom atoms (newer atoms)
+
+      newer :: Atoms -> Atoms
+      newer x =
+          let x' = foldAtoms next mempty x in
           -- I don't understand why folding an empty map causes an infinite recursion, but it does
-          if Map.null (unAtoms next)
-          then r
-          else foldAtoms insertAtom (newAtoms next) next
-              where
-                next = nextAtoms r
-      -- The next layer of atoms generated from r
-      nextAtoms :: Atoms -> Atoms
-      nextAtoms atoms = foldAtoms next mempty atoms
+          if Map.null (unAtoms x')
+          then x'
+          else foldAtoms insertAtom x' (newer x')
 
       builddir = buildDir "dist-ghc/build" atoms
       datadir = dataDir (error "foldAtomsFinalized") atoms

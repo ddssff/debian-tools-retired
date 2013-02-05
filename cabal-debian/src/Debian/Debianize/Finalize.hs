@@ -16,7 +16,7 @@ import Debian.Debianize.Atoms (HasAtoms(packageDescription, control), DebAtomKey
                                    Atoms, insertAtom, modControl,
                                    setArchitecture, binaryPackageDeps,
                                    binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
-                                   foldAtomsFinalized, rulesFragment, installData, installCabalExec, foldCabalDatas, foldCabalExecs)
+                                   finalizeAtoms, foldAtoms, rulesFragment, installData, installCabalExec, foldCabalDatas, foldCabalExecs)
 import Debian.Debianize.Combinators (describe, buildDeps)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), newSourceDebDescription, BinaryDebDescription(..), PackageRelations(..),
                                                newBinaryDebDescription, modifyBinaryDeb,
@@ -38,11 +38,14 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- this function is not idempotent.  (Exported for use in unit tests.)
 finalizeDebianization  :: Atoms -> Atoms
 finalizeDebianization deb0 =
-    foldAtomsFinalized g deb'' deb'' -- Apply tweaks to the debianization
+    deb'''''
     where
       -- Fixme - makeUtilsPackage does stuff that needs to go through foldAtomsFinalized
-      deb' = foldAtomsFinalized f deb0 deb0
-      deb'' = makeUtilsPackage $ librarySpecs $ buildDeps $ deb'
+      deb' = finalizeAtoms deb0
+      deb'' = foldAtoms f deb' deb'
+      deb''' = makeUtilsPackage $ librarySpecs $ buildDeps $ deb''
+      deb'''' = finalizeAtoms deb'''
+      deb''''' = foldAtoms g deb'''' deb'''' -- Apply tweaks to the debianization
 
       -- Create the binary packages
       f :: DebAtomKey -> DebAtom -> Atoms -> Atoms
@@ -149,7 +152,8 @@ makeUtilsPackage deb =
       (datas, execs) ->
           let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)
               atoms = setL packageDescription (Just pkgDesc) . makeUtilsAtoms p datas execs $ mempty
-              deb' = foldAtomsFinalized insertAtom deb atoms in
+              atoms' = finalizeAtoms atoms
+              deb' = foldAtoms insertAtom deb atoms' in
           modControl (\ y -> modifyBinaryDeb p (f deb' p (if Set.null execs then All else Any)) y) deb'
     where
       f _ _ _ (Just bin) = bin

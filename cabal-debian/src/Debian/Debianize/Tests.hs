@@ -89,6 +89,12 @@ test1 =
               (\ y -> y { source = Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"})
                         , maintainer = Just (NameAddr (Just "David Fox") "dsf@seereason.com")
                         , standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)) -- This will change as new versions of debian-policy are released
+                        , buildDepends = [[Rel (BinPkgName "debhelper") (Just (GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
+                                                  [Rel (BinPkgName "haskell-devscripts") (Just (GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
+                                                  [Rel (BinPkgName "cdbs") Nothing Nothing],
+                                                  [Rel (BinPkgName "ghc") Nothing Nothing],
+                                                  [Rel (BinPkgName "ghc-prof") Nothing Nothing]]
+                        , buildDependsIndep = [[Rel (BinPkgName "ghc-doc") Nothing Nothing]]
                         }) $
           (newDebianization log 9 (StandardsVersion 3 9 3 (Just 1)))
       log = ChangeLog [Entry { logPackage = "haskell-cabal-debian"
@@ -119,7 +125,14 @@ test2 =
               (\ y -> y
                 { source = Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"}),
                   maintainer = Just (NameAddr {nameAddr_name = Just "David Fox", nameAddr_addr = "dsf@seereason.com"}),
-                  standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)) }) $
+                  standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)),
+                  buildDepends = [[Rel (BinPkgName "debhelper") (Just (GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
+                                  [Rel (BinPkgName "haskell-devscripts") (Just (GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
+                                  [Rel (BinPkgName "cdbs") Nothing Nothing],
+                                  [Rel (BinPkgName "ghc") Nothing Nothing],
+                                  [Rel (BinPkgName "ghc-prof") Nothing Nothing]],
+                  buildDependsIndep = [[Rel (BinPkgName "ghc-doc") Nothing Nothing]]
+                }) $
           (newDebianization log 9 (StandardsVersion 3 9 3 (Just 1)))
       log = ChangeLog [Entry {logPackage = "haskell-cabal-debian",
                               logVersion = Debian.Version.parseDebianVersion ("2.6.2" :: String),
@@ -502,6 +515,7 @@ test9 =
                             doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) $
                             setDebVersion (parseDebianVersion ("3.0.2-1~hackage1" :: String)) $
                             setL sourceFormat (Just Native3) $
+                            modControl (\ y -> y {homepage = Just "http://www.haskell.org/alex/"}) $
                             (\ atoms -> foldr (\ name atoms -> installData (BinPkgName "alex") name name atoms)
                                               atoms
                                               [ "AlexTemplate"
