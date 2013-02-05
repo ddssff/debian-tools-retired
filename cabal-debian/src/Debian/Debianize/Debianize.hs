@@ -14,10 +14,10 @@ module Debian.Debianize.Debianize
     ) where
 
 import Control.Applicative ((<$>))
-import Data.Lens.Lazy (getL, setL)
+import Data.Lens.Lazy (getL, setL, modL)
 import Data.Maybe
 import Data.Text (Text)
-import Debian.Debianize.Atoms (HasAtoms(packageDescription, watch, changelog, control), Flags(..), DebAction(..),
+import Debian.Debianize.Atoms (HasAtoms(packageDescription, compat, watch, changelog, control), Flags(..), DebAction(..),
                                    Atoms, defaultAtoms, flags, watchAtom, setSourcePriority,
                                    setSourceSection, compilerVersion, cabalFlagAssignments, putCopyright)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
@@ -29,7 +29,7 @@ import Debian.Debianize.Input as Debian (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Utility (withCurrentDirectory)
-import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection))
+import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Distribution.Package (PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
@@ -43,7 +43,7 @@ import System.Posix.Env (setEnv)
 import System.Process (readProcessWithExitCode)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
--- | THe main function for the cabal-debian executable
+-- | The main function for the cabal-debian executable
 cabalDebian :: IO ()
 cabalDebian =
   withFlags defaultAtoms $ \ atoms ->
@@ -112,7 +112,8 @@ cabalToDebianization top old =
        copyright <- withCurrentDirectory top $ inputCopyright pkgDesc
        maint <- inputMaintainer pkgDesc old' >>= maybe (error "Missing value for --maintainer") return
        let standards = standardsVersion (fromMaybe newSourceDebDescription . getL control $ old')
-       return $ maybe id putStandards standards $ debianization date copyright maint (scrub old')
+       level <- getDebhelperCompatLevel
+       return $ maybe id putStandards standards $ debianization date copyright maint level (scrub old')
     where
       -- We really don't want to inherit very much information from
       -- the old debianization, so we should do more here.
@@ -121,10 +122,12 @@ cabalToDebianization top old =
 debianization :: String              -- ^ current date
               -> Text                -- ^ copyright
               -> NameAddr            -- ^ maintainer
+              -> Int		-- ^ Default standards version
               -> Atoms      -- ^ Debianization specification
               -> Atoms      -- ^ New debianization
-debianization date copyright' maint deb =
+debianization date copyright' maint level deb =
     finalizeDebianization $
+    modL compat (maybe (Just level) Just) $
     setSourcePriority Optional $
     setSourceSection (MainSection "haskell") $
     -- setSourceBinaries [] $
