@@ -6,19 +6,19 @@ module Debian.Debianize.Finalize
     ) where
 
 import Data.Char (toLower)
-import Data.Lens.Lazy (setL, getL, modL)
+import Data.Lens.Lazy (setL, getL)
 import Data.List as List (map)
 import Data.Maybe
 import Data.Monoid (Monoid, mempty)
 import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, empty, map)
 import Data.Text (pack)
-import Debian.Debianize.Atoms (HasAtoms(packageDescription, control), DebAtomKey(..), DebAtom(..),
+import Debian.Debianize.Atoms (HasAtoms(packageDescription), DebAtomKey(..), DebAtom(..),
                                    Atoms, insertAtom, modControl,
                                    setArchitecture, binaryPackageDeps,
                                    binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
                                    finalizeAtoms, foldAtoms, rulesFragment, installData, installCabalExec, foldCabalDatas, foldCabalExecs)
 import Debian.Debianize.Combinators (describe, buildDeps)
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), newSourceDebDescription, BinaryDebDescription(..), PackageRelations(..),
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                newBinaryDebDescription, modifyBinaryDeb,
                                                PackageType(Exec, Development, Profiling, Documentation, Utilities))
 import Debian.Debianize.Dependencies (debianName)
@@ -49,11 +49,11 @@ finalizeDebianization deb0 =
 
       -- Create the binary packages
       f :: DebAtomKey -> DebAtom -> Atoms -> Atoms
-      f k@(Binary b) a@(DHWebsite _) atoms = cabalExecBinaryPackage b atoms
-      f k@(Binary b) a@(DHServer _) atoms = cabalExecBinaryPackage b atoms
-      f k@(Binary b) a@(DHBackups _) atoms = setArchitecture b Any . cabalExecBinaryPackage b $ atoms
-      f k@(Binary b) a@(DHExecutable _) atoms = cabalExecBinaryPackage b atoms
-      f k a atoms = atoms
+      f (Binary b) (DHWebsite _) atoms = cabalExecBinaryPackage b atoms
+      f (Binary b) (DHServer _) atoms = cabalExecBinaryPackage b atoms
+      f (Binary b) (DHBackups _) atoms = setArchitecture b Any . cabalExecBinaryPackage b $ atoms
+      f (Binary b) (DHExecutable _) atoms = cabalExecBinaryPackage b atoms
+      f _ _ atoms = atoms
 
       -- Apply the hints in the atoms to the debianization
       g :: DebAtomKey -> DebAtom -> Atoms -> Atoms

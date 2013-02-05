@@ -1,5 +1,5 @@
 {-# LANGUAGE RankNTypes, ScopedTypeVariables, TemplateHaskell, DeriveDataTypeable, StandaloneDeriving #-}
-{-# OPTIONS -Wwarn #-}
+{-# OPTIONS -Wwarn -fno-warn-name-shadowing -fno-warn-orphans #-}
 module Triplets
     ( gzipWithM3
     , gzipWithT3

@@ -28,6 +28,7 @@ module Debian.Debianize.Atoms
     , mapAtoms
     -- , partitionAtoms
     , replaceAtoms
+    , deleteAtoms
     -- , modifyAtoms
     , partitionAtoms'
     , modifyAtoms'
@@ -625,7 +626,10 @@ partitionAtoms f deb =
             False -> (atoms, insertAtom k atom deb')
 
 replaceAtoms :: (DebAtomKey -> DebAtom -> Bool) -> DebAtomKey -> DebAtom -> Atoms -> Atoms
-replaceAtoms f k atom atoms = insertAtom k atom (snd (partitionAtoms f atoms))
+replaceAtoms p k atom atoms = insertAtom k atom (deleteAtoms p atoms)
+
+deleteAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> Atoms
+deleteAtoms p atoms = snd (partitionAtoms p atoms)
 
 -- | Split atoms out of a HasAtoms instance by predicate.
 partitionAtoms' :: (Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> (Set a, Atoms)
@@ -1089,11 +1093,13 @@ tightDependencyFixup pairs p deb =
       name = display' p
       display' = pack . show . pretty
 
+{-
 setSourceDebDescription' :: SourceDebDescription -> Atoms -> Atoms
 setSourceDebDescription' d x = modifySourceDebDescription' (const d) x
 
 modifySourceDebDescription :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
 modifySourceDebDescription f deb = modL control (fmap f) deb
+-}
 
 modControl :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
 modControl = modifySourceDebDescription'

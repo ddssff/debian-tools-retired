@@ -11,14 +11,14 @@ import Debug.Trace (trace)
 import Control.Exception (SomeException, catch)
 import Control.Monad (foldM, filterM)
 import Data.Char (isSpace)
-import Data.Lens.Lazy (setL, modL)
+import Data.Lens.Lazy (setL)
 import Data.Maybe (fromMaybe)
 import Data.Set (fromList, insert)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.Atoms (HasAtoms(rulesHead, compat, sourceFormat, watch, changelog, control),
+import Debian.Debianize.Atoms (HasAtoms(rulesHead, compat, sourceFormat, watch, changelog),
                                    Atoms, install, installDir, modControl,
                                    defaultAtoms, intermediateFile, warning, logrotateStanza, putPostInst,
                                    putCopyright, installInit, postRm, preInst, preRm, link)
