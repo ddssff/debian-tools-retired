@@ -107,12 +107,12 @@ debianize top args =
 cabalToDebianization :: FilePath -> Atoms -> IO Atoms
 cabalToDebianization top old =
     do old' <- getSimplePackageDescription (verbosity (flags old)) (compilerVersion old) (cabalFlagAssignments old) top old
-       let pkgDesc = fromMaybe (error "cabalToDebianization") (getL packageDescription old')
+       let pkgDesc = fromMaybe (error "cabalToDebianization: No package description") (getL packageDescription old')
        date <- getCurrentLocalRFC822Time
        copyright <- withCurrentDirectory top $ inputCopyright pkgDesc
        maint <- inputMaintainer pkgDesc old' >>= maybe (error "Missing value for --maintainer") return
-       let standards = fromMaybe (error "cabalToDebianization") (standardsVersion (fromMaybe newSourceDebDescription . getL control $ old'))
-       return $ debianization date copyright maint standards (scrub old')
+       let standards = standardsVersion (fromMaybe newSourceDebDescription . getL control $ old')
+       return $ maybe id putStandards standards $ debianization date copyright maint (scrub old')
     where
       -- We really don't want to inherit very much information from
       -- the old debianization, so we should do more here.
@@ -121,17 +121,15 @@ cabalToDebianization top old =
 debianization :: String              -- ^ current date
               -> Text                -- ^ copyright
               -> NameAddr            -- ^ maintainer
-              -> StandardsVersion
               -> Atoms      -- ^ Debianization specification
               -> Atoms      -- ^ New debianization
-debianization date copyright' maint standards deb =
+debianization date copyright' maint deb =
     finalizeDebianization $
     setSourcePriority Optional $
     setSourceSection (MainSection "haskell") $
     -- setSourceBinaries [] $
     setL watch (Just (watchAtom (pkgName $ Cabal.package $ pkgDesc)))  $
     putCopyright (Right copyright') $
-    putStandards standards $
     versionInfo maint date $
     addExtraLibDependencies $
     -- Do we want to replace the atoms in the old deb, or add these?
