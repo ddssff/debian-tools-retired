@@ -24,9 +24,9 @@ import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, unlines)
 import Data.Version (Version, showVersion)
 import Debian.Control
-import Debian.Debianize.Atoms (HasAtoms(packageDescription, rulesHead), PackageInfo(devDeb, profDeb, docDeb),
+import Debian.Debianize.Atoms (HasAtoms(packageDescription, rulesHead, compiler), PackageInfo(devDeb, profDeb, docDeb),
                                    DebType(Dev, Prof, Doc), VersionSplits(..),
-                                   Atoms, noProfilingLibrary, noDocumentationLibrary, compiler, versionSplits,
+                                   Atoms, noProfilingLibrary, noDocumentationLibrary, versionSplits,
                                    filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile (PackageType(..))
@@ -275,7 +275,7 @@ dependencies atoms typ name cabalRange =
       -- specify the virtual package (e.g. libghc-base-dev) we would
       -- have to make sure not to specify a version number.
       doBundled :: [D.Relation] -> [D.Relation]
-      doBundled rels | ghcBuiltIn (compiler (error "dependencies") atoms) name = rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
+      doBundled rels | ghcBuiltIn (fromMaybe (error "dependencies") $ getL compiler atoms) name = rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
       doBundled rels = rels
 
       compilerPackageName Documentation = D.BinPkgName "ghc-doc"

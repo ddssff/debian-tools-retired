@@ -35,8 +35,6 @@ module Debian.Debianize.Atoms
     , getMaybeSingleton
     , getSingleton
     -- * Future class methods
-    , compiler
-    , setCompiler
     , dataDir
     , compilerVersion
     , putCompilerVersion
@@ -199,6 +197,7 @@ class (Monoid atoms,
     changelog :: Lens atoms (Maybe ChangeLog)
     comments :: Lens atoms (Maybe [[Text]]) -- ^ Comment entries for the latest changelog entry
     control :: Lens atoms SourceDebDescription
+    compiler :: Lens atoms (Maybe Compiler)
 
 data DebAtomKey
     = Source
@@ -577,6 +576,18 @@ instance HasAtoms Atoms where
                 f Source (DebControl y) = Just y
                 f _ _ = Nothing
 
+    compiler = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DHCompiler x') (Just x) | x /= x' = error $ "Conflicting compat values:" ++ show (x, x')
+                from Source (DHCompiler x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DHCompiler) x)) atoms
+              where
+                f Source (DHCompiler y) = Just y
+                f _ _ = Nothing
+
 lookupAtom :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Maybe a
 lookupAtom mbin from xs =
     case maxView (lookupAtoms mbin from xs) of
@@ -662,19 +673,6 @@ getMaybeSingleton multiple f atoms =
 
 getSingleton :: (Eq a) => a -> (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> a
 getSingleton def f atoms = fromMaybe def (getMaybeSingleton Nothing f atoms)
-
-compiler :: Compiler -> Atoms -> Compiler
-compiler def deb =
-    lookupAtomDef def Source from deb
-    where from (DHCompiler x) = Just x
-          from _ = Nothing
-
-setCompiler :: Compiler -> Atoms -> Atoms
-setCompiler comp atoms =
-    replaceAtoms f Source (DHCompiler comp) atoms
-    where
-      f Source (DHCompiler _) = True
-      f _ _ = False
 
 dataDir :: FilePath -> Atoms -> FilePath
 dataDir def atoms =

@@ -14,8 +14,8 @@ import Data.Maybe
 import Data.Set (Set, toList)
 import Data.Text (Text, pack)
 import Data.Version (Version)
-import Debian.Debianize.Atoms (HasAtoms(packageDescription), Flags(..),
-                                   Atoms, flags, compilerVersion, cabalFlagAssignments, setCompiler, debMaintainer)
+import Debian.Debianize.Atoms (HasAtoms(packageDescription, compiler), Flags(..),
+                                   Atoms, flags, compilerVersion, cabalFlagAssignments, debMaintainer)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
@@ -58,14 +58,14 @@ getSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top a
       descPath <- defaultPackageDesc vb
       genPkgDesc <- readPackageDescription vb descPath
       (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
-      let compiler = case compilerVersion of
-                       (Just ver) -> compiler' {compilerId = CompilerId GHC ver}
-                       _ -> compiler'
-      pkgDesc <- case finalizePackageDescription (toList cabalFlagAssignments) (const True) (Platform buildArch buildOS) (compilerId compiler) [] genPkgDesc of
+      let compiler'' = case compilerVersion of
+                         (Just ver) -> compiler' {compilerId = CompilerId GHC ver}
+                         _ -> compiler'
+      pkgDesc <- case finalizePackageDescription (toList cabalFlagAssignments) (const True) (Platform buildArch buildOS) (compilerId compiler'') [] genPkgDesc of
                    Left e -> error $ "finalize failed: " ++ show e
                    Right (pd, _) -> return pd
       liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
-      return $ setCompiler compiler $ setL packageDescription (Just pkgDesc) $ atoms
+      return $ setL compiler (Just compiler'') $ setL packageDescription (Just pkgDesc) $ atoms
     where
       vb = intToVerbosity' verbosity
 

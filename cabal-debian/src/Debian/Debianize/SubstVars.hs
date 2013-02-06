@@ -11,13 +11,14 @@ import Control.Exception (SomeException, try)
 import Control.Monad (foldM)
 import Control.Monad.Reader (ReaderT(runReaderT))
 import Control.Monad.Trans (lift)
+import Data.Lens.Lazy (getL)
 import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
-import Debian.Debianize.Atoms (Flags(dryRun, verbosity), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType,
-                                   Atoms, putPackageInfo, flags, filterMissing, packageInfo, compilerVersion, cabalFlagAssignments, compiler)
+import Debian.Debianize.Atoms (HasAtoms(compiler), Flags(dryRun, verbosity), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType,
+                                   Atoms, putPackageInfo, flags, filterMissing, packageInfo, compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps, debNameFromType)
 import Debian.Debianize.Cabal (getSimplePackageDescription)
 import Debian.Control
@@ -48,7 +49,7 @@ substvars :: Atoms
 substvars atoms debType =
     do atoms' <- getSimplePackageDescription (verbosity (flags atoms)) (compilerVersion atoms) (cabalFlagAssignments atoms) "." atoms
        debVersions <- buildDebVersionMap
-       atoms'' <- libPaths (compiler (error "substvars") atoms') debVersions atoms'
+       atoms'' <- libPaths (fromMaybe (error "substvars") $ getL compiler atoms') debVersions atoms'
        control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
        substvars' atoms'' debType control
 
