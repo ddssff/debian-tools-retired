@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 module Debian.Debianize.Atoms
     ( HasAtoms(..)
-    , DebAtomKey(..)
-    , DebAtom(..)
+
+    , Atoms
     , Flags(..)
     , DebAction(..)
     , PackageInfo(..)
@@ -11,29 +11,11 @@ module Debian.Debianize.Atoms
     , InstallFile(..)
     , DebType(..)
     , VersionSplits(..)
-    , knownVersionSplits
-    , oldClckwrksSiteFlags
-    , oldClckwrksServerFlags
-    , Atoms(Atoms, unAtoms)
+
     , defaultFlags
     , defaultAtoms
-    , insertAtom
-    , insertAtoms
-    , insertAtoms'
-    , lookupAtom
-    , lookupAtomDef
-    , lookupAtoms
-    , hasAtom
-    , foldAtoms
-    , mapAtoms
-    , replaceAtoms
-    , deleteAtoms
-    , partitionAtoms'
-    , modifyAtoms'
-    , getMaybeSingleton
-    , getSingleton
-
     , filterMissing
+    , knownVersionSplits
     , knownEpochMappings
     , binaryPackageDeps
     , binaryPackageConflicts
@@ -50,6 +32,8 @@ module Debian.Debianize.Atoms
     , finalizeAtoms
     , foldCabalDatas
     , foldCabalExecs
+    , oldClckwrksSiteFlags
+    , oldClckwrksServerFlags
     ) where
 
 import Data.Generics (Data, Typeable)
@@ -78,9 +62,8 @@ import Data.List as List (map)
 import Data.Map as Map (lookup, insertWith, empty, null, insert)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
-import Data.Set as Set (maxView, toList, fromList, null, empty, union, singleton, fold, insert, member)
+import Data.Set as Set (maxView, toList, empty, union, singleton, fold, insert, member)
 import Data.Text (unpack)
-import Debian.Debianize.Utility (setMapMaybe)
 import Debian.Orphans ()
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Distribution.Package (PackageIdentifier(..))
@@ -99,19 +82,6 @@ import Distribution.PackageDescription as Cabal (PackageDescription(package))
 import System.FilePath ((</>), makeRelative, splitFileName, takeDirectory, takeFileName)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
-lookupAtom :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Maybe a
-lookupAtom mbin from xs =
-    case maxView (lookupAtoms mbin from xs) of
-      Nothing -> Nothing
-      Just (x, s) | Set.null s -> Just x
-      Just (x, s) -> error $ "lookupAtom - multiple: " ++ show (x : toList s)
-
-lookupAtomDef :: (Show a, Ord a) => a -> DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> a
-lookupAtomDef def key from xs = fromMaybe def $ lookupAtom key from xs
-
-lookupAtoms :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Set a
-lookupAtoms mbin from x = maybe Set.empty (setMapMaybe from) (Map.lookup mbin (unAtoms x))
-
 insertAtom :: DebAtomKey -> DebAtom -> Atoms -> Atoms
 insertAtom mbin atom (Atoms x) = Atoms (insertWith union mbin (singleton atom) x)
 
@@ -121,18 +91,8 @@ insertAtoms s atoms =
       Nothing -> atoms
       Just ((k, a), s') -> insertAtoms s' (insertAtom k a atoms)
 
-insertAtoms' :: [(DebAtomKey, DebAtom)] -> Atoms -> Atoms
-insertAtoms' xs atoms = insertAtoms (Set.fromList xs) atoms
-
-hasAtom :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Bool
-hasAtom key p xs = not . Set.null . lookupAtoms key p $ xs
-
 foldAtoms :: (DebAtomKey -> DebAtom -> r -> r) -> r -> Atoms -> r
 foldAtoms f r0 (Atoms xs) = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 xs
-
--- | Map each atom of a HasAtoms instance to zero or more new atoms.
-mapAtoms :: (DebAtomKey -> DebAtom -> Set (DebAtomKey, DebAtom)) -> Atoms -> Atoms
-mapAtoms f atoms@(Atoms xs) = foldAtoms (\ k atom xs' -> insertAtoms (f k atom) xs') (Atoms xs) atoms
 
 -- | Split atoms out of a HasAtoms instance by predicate.
 partitionAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> (Set (DebAtomKey, DebAtom), Atoms)
@@ -143,9 +103,6 @@ partitionAtoms f deb =
           case f k atom of
             True -> (Set.insert (k, atom) atoms, deb')
             False -> (atoms, insertAtom k atom deb')
-
-replaceAtoms :: (DebAtomKey -> DebAtom -> Bool) -> DebAtomKey -> DebAtom -> Atoms -> Atoms
-replaceAtoms p k atom atoms = insertAtom k atom (deleteAtoms p atoms)
 
 deleteAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> Atoms
 deleteAtoms p atoms = snd (partitionAtoms p atoms)
@@ -170,20 +127,6 @@ modifyAtoms' f g atoms =
     insertAtoms (g s) atoms'
     where
       (s, atoms') = partitionAtoms' f atoms
-
-getMaybeSingleton :: (Eq a) => Maybe a -> (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> Maybe a
-getMaybeSingleton multiple f atoms =
-    foldAtoms from Nothing atoms
-    where
-      from k a (Just x) =
-          case f k a of
-            Just x' -> if x /= x' then multiple else Just x
-            Nothing -> Just x
-      from k a Nothing =
-          f k a
-
-getSingleton :: (Eq a) => a -> (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> a
-getSingleton def f atoms = fromMaybe def (getMaybeSingleton Nothing f atoms)
 
 data DebAtomKey
     = Source
@@ -492,27 +435,27 @@ class (Monoid atoms, Show atoms {- Show instance for debugging only -}) => HasAt
     depends :: Lens atoms (Map BinPkgName (Set Relation)) -- This should be [[Relation]] for full generality, or Set (Set Relation)
     conflicts :: Lens atoms (Map BinPkgName (Set Relation)) -- This too
 
-    apacheSite :: Lens atoms (Map BinPkgName (String, FilePath, Text))    -- DHApacheSite String FilePath Text
-    logrotateStanza :: Lens atoms (Map BinPkgName (Set Text))    -- DHLogrotateStanza Text
-    sourcePriority :: Lens atoms (Maybe PackagePriority)    -- DHPriority PackagePriority
-    binaryPriorities :: Lens atoms (Map BinPkgName PackagePriority)    -- DHPriority PackagePriority
-    sourceSection :: Lens atoms (Maybe Section)    -- DHSection Section
-    binarySections :: Lens atoms (Map BinPkgName Section)    -- DHSection Section
-    description :: Lens atoms (Map BinPkgName Text)    -- DHDescription Text
-    executable :: Lens atoms (Map BinPkgName InstallFile)    -- DHExecutable InstallFile
-    serverInfo :: Lens atoms (Map BinPkgName Server)-- DHServer Server
-    website :: Lens atoms (Map BinPkgName Site)    -- DHWebsite Site
-    backups :: Lens atoms (Map BinPkgName String)    -- DHBackups String
+    apacheSite :: Lens atoms (Map BinPkgName (String, FilePath, Text))
+    logrotateStanza :: Lens atoms (Map BinPkgName (Set Text))
+    sourcePriority :: Lens atoms (Maybe PackagePriority)
+    binaryPriorities :: Lens atoms (Map BinPkgName PackagePriority)
+    sourceSection :: Lens atoms (Maybe Section)
+    binarySections :: Lens atoms (Map BinPkgName Section)
+    description :: Lens atoms (Map BinPkgName Text)
+    executable :: Lens atoms (Map BinPkgName InstallFile)
+    serverInfo :: Lens atoms (Map BinPkgName Server)
+    website :: Lens atoms (Map BinPkgName Site)
+    backups :: Lens atoms (Map BinPkgName String)
 
-    link :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))    -- DHLink FilePath FilePath
-    install :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))    -- DHInstall FilePath FilePath
-    installTo :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))    -- DHInstallTo FilePath FilePath
-    installData :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))    -- DHInstallData FilePath FilePath
-    file :: Lens atoms (Map BinPkgName (Set (FilePath, Text)))    -- DHFile FilePath Text
-    installCabalExec :: Lens atoms (Map BinPkgName (Set (String, FilePath)))    -- DHInstallCabalExec String FilePath
-    installCabalExecTo :: Lens atoms (Map BinPkgName (Set (String, FilePath)))    -- DHInstallCabalExecTo String FilePath
-    installDir :: Lens atoms (Map BinPkgName (Set FilePath))    -- DHInstallDir FilePath
-    installInit :: Lens atoms (Map BinPkgName Text)    -- DHInstallInit Text
+    link :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
+    install :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
+    installTo :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
+    installData :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
+    file :: Lens atoms (Map BinPkgName (Set (FilePath, Text)))
+    installCabalExec :: Lens atoms (Map BinPkgName (Set (String, FilePath)))
+    installCabalExecTo :: Lens atoms (Map BinPkgName (Set (String, FilePath)))
+    installDir :: Lens atoms (Map BinPkgName (Set FilePath))
+    installInit :: Lens atoms (Map BinPkgName Text)
 
 instance HasAtoms Atoms where
     -- Lenses to access values in the Atoms type.  This is an old

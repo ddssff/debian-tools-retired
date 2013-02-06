@@ -1,6 +1,6 @@
 -- | Convert a Debianization into a list of files that can then be
 -- written out.
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 module Debian.Debianize.Files
     ( toFileMap
     ) where
@@ -8,17 +8,17 @@ module Debian.Debianize.Files
 -- import Debug.Trace
 
 import Data.Lens.Lazy (getL)
-import Data.List as List (map)
-import Data.Map as Map (Map, toList, empty, insertWith, fromListWithKey, mapKeys)
+import Data.List as List (map, unlines)
+import Data.Map as Map (Map, toList, fromListWithKey, mapKeys)
 import Data.Maybe
-import Data.Monoid (Monoid, (<>))
+import Data.Monoid ((<>))
 import Data.Set as Set (toList, member)
-import Data.String (IsString)
-import Data.Text (Text, pack, unpack)
+import Data.Text as Text (Text, pack, unpack, unlines)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.Atoms (HasAtoms(compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm),
-                                   DebAtomKey(..), DebAtom(..),
-                                   Atoms, foldAtoms, copyright)
+import Debian.Debianize.Atoms (HasAtoms(compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
+                                        intermediateFiles, install, installDir, installInit, logrotateStanza, link,
+                                        postInst, postRm, preInst, preRm, rulesHead, rulesFragments),
+                               Atoms, copyright)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Dependencies (getRulesHead)
@@ -35,58 +35,44 @@ watchFile :: Atoms -> [(FilePath, Text)]
 watchFile deb = maybe [] (\ x -> [("debian/watch", x)]) (getL watch deb)
 
 intermediates :: Atoms -> [(FilePath, Text)]
-intermediates deb =
-    foldAtoms atomf [] deb
-    where
-      atomf Source (DHIntermediate path text) files = (path,  text) : files
-      atomf _ _ files = files
+intermediates deb = Set.toList $ getL intermediateFiles deb
 
 installs :: Atoms -> [(FilePath, Text)]
 installs deb =
-    Map.toList $ foldAtoms atomf Map.empty deb
+    map (\ (path, pairs) -> (path, pack (List.unlines (map (\ (src, dst) -> src <> " " <> dst) (Set.toList pairs))))) $
+    Map.toList $
+    mapKeys pathf $
+    getL install deb
     where
-      atomf (Binary name) (DHInstall src dst) files = Map.insertWith with1 (pathf name)  (pack (src ++ " " ++ dst)) files
-      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".install"
 
 dirs :: Atoms -> [(FilePath, Text)]
 dirs deb =
-    Map.toList $ foldAtoms atomf Map.empty deb
+    map (\ (path, dirs) -> (path, pack (List.unlines (Set.toList dirs)))) $ Map.toList $ mapKeys pathf $ getL installDir deb
     where
-      atomf (Binary name) (DHInstallDir d) files = Map.insertWith with1 (pathf name) (pack d) files
-      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".dirs"
-
-with1 :: (IsString m, Monoid m) => m -> m -> m
-with1 old new = old <> "\n" <> new
-
-with2 :: String -> t -> t1 -> t2
-with2 msg _ _ = error msg
 
 init :: Atoms -> [(FilePath, Text)]
 init deb =
-    Map.toList $ foldAtoms atomf Map.empty deb
+    Map.toList $ mapKeys pathf $ getL installInit deb
     where
-      atomf (Binary name) (DHInstallInit t) files = Map.insertWith (with2 "init") (pathf name) t files
-      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".init"
 
 -- FIXME - use a map and insertWith, check for multiple entries
 logrotate :: Atoms -> [(FilePath, Text)]
 logrotate deb =
-    Map.toList $ foldAtoms atomf Map.empty deb
+    map (\ (path, stanzas) -> (path, Text.unlines (Set.toList stanzas))) $ Map.toList $ mapKeys pathf $ getL logrotateStanza deb
     where
-      atomf (Binary name) (DHLogrotateStanza t) files = Map.insertWith with1 (pathf name) t files
-      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".logrotate"
 
 -- | Assemble all the links by package and output one file each
 links :: Atoms -> [(FilePath, Text)]
 links deb =
-    Map.toList $ foldAtoms atomf Map.empty deb
+    map (\ (path, pairs) -> (path, pack (List.unlines (map (\ (loc, txt) -> loc ++ " " ++ txt) (Set.toList pairs))))) $
+    Map.toList $
+    mapKeys pathf $
+    getL link deb
     where
-      atomf (Binary name) (DHLink loc txt) files = Map.insertWith with1 (pathf name) (pack (loc ++ " " ++ txt)) files
-      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".links"
 
 postinstFiles :: Atoms -> [(FilePath, Text)]
@@ -142,11 +128,7 @@ toFileMap atoms =
     where d = getL control atoms
 
 rules :: Atoms -> Text
-rules deb =
-    foldAtoms append (getRulesHead deb) deb
-    where
-      append Source (DebRulesFragment x) text = text <> "\n" <> x
-      append _ _ text = text
+rules deb = Text.unlines (maybe (getRulesHead deb) id (getL rulesHead deb) : reverse (Set.toList (getL rulesFragments deb)))
 
 controlFile :: SourceDebDescription -> Control' String
 controlFile src =

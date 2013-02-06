@@ -19,11 +19,10 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
 import Debian.Debianize.Atoms as Atoms
     (HasAtoms(rulesHead, compat, sourceFormat, changelog, sourcePackageName, control, missingDependencies, revision,
-              binaryArchitectures, copyright, debVersion, execMap, buildDeps), InstallFile(..), Server(..), Site(..),
-     Atoms, insertAtom, tightDependencyFixup,
+              binaryArchitectures, copyright, debVersion, execMap, buildDeps, buildDepsIndep, utilsPackageName), InstallFile(..), Server(..), Site(..),
+     Atoms, tightDependencyFixup,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups,
-     install, DebAtom(BuildDep, BuildDepIndep, UtilsPackageName), DebAtomKey(Source),
-     installData, defaultAtoms)
+     install, installData, defaultAtoms)
 import Debian.Debianize.Cabal (getSimplePackageDescription')
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Dependencies (getRulesHead)
@@ -324,7 +323,7 @@ test5 =
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-data") All) $
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-development") All) $
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-production") All) $
-                           insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
+                           setL utilsPackageName (Just (BinPkgName "creativeprompts-data")) $
                            modL Atoms.depends (Map.insertWith union (BinPkgName "creativeprompts-server") (singleton (anyrel (BinPkgName "markdown")))) $
                            modL execMap (Map.insertWith (error "Conflict in execMap") "trhsx" (BinPkgName "haskell-hsx-utils")) $
                            doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" $
@@ -396,13 +395,13 @@ test6 =
                       compat' = 7
                   let new =  modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) $
                              setL sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) $
-                             insertAtom Source (UtilsPackageName (BinPkgName "artvaluereport2-server")) $
+                             setL utilsPackageName (Just (BinPkgName "artvaluereport2-server")) $
                              modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-development") All) $
                              modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-production") All) $
                              modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-staging") All) $
-                             insertAtom Source (BuildDepIndep (BinPkgName "libjs-jcrop")) $
-                             insertAtom Source (BuildDepIndep (BinPkgName "libjs-jquery")) $
-                             insertAtom Source (BuildDepIndep (BinPkgName "libjs-jquery-u")) $
+                             modL buildDepsIndep (Set.insert (BinPkgName "libjs-jcrop")) $
+                             modL buildDepsIndep (Set.insert (BinPkgName "libjs-jquery")) $
+                             modL buildDepsIndep (Set.insert (BinPkgName "libjs-jquery-u")) $
 
                              modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-development") (singleton (anyrel (BinPkgName "artvaluereport2-server")))) $
                              modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-production") (singleton (anyrel (BinPkgName "artvaluereport2-server")))) $
@@ -483,7 +482,7 @@ test7 =
     TestCase ( do old <- inputDebianization "."
                   let new = modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
                             setL sourceFormat (Just Native3) $
-                            insertAtom Source (UtilsPackageName (BinPkgName "cabal-debian")) $
+                            setL utilsPackageName (Just (BinPkgName "cabal-debian")) $
                             modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (anyrel (BinPkgName "apt-file")))) $
                             modL Atoms.conflicts (Map.insertWith union (BinPkgName "cabal-debian")
                                     (singleton (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing))) $
@@ -498,7 +497,7 @@ test8 =
     TestLabel "test8" $
     TestCase ( do old <- inputDebianization "test-data/artvaluereport-data/output"
                   log <- inputChangeLog "test-data/artvaluereport-data/input/debian"
-                  let new = insertAtom Source (BuildDep (BinPkgName "haskell-hsx-utils")) $
+                  let new = modL buildDeps (Set.insert (BinPkgName "haskell-hsx-utils")) $
                             modL control (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) $
                             setL sourceFormat (Just Native3) $
                             setL changelog (Just log) $
