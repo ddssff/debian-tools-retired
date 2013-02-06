@@ -26,59 +26,23 @@ module Debian.Debianize.Atoms
     , hasAtom
     , foldAtoms
     , mapAtoms
-    -- , partitionAtoms
     , replaceAtoms
     , deleteAtoms
-    -- , modifyAtoms
     , partitionAtoms'
     , modifyAtoms'
     , getMaybeSingleton
     , getSingleton
-    -- * Future class methods
-    -- * DependencyHint getter and setters
+
     , filterMissing
     , knownEpochMappings
     , binaryPackageDeps
     , binaryPackageConflicts
-    , setSourcePriority
-    , setSourceSection
-    , setSourceDescription
-    , setPriority
-    , setSection
-    , setDescription
     , doExecutable
     , doServer
     , doWebsite
     , doBackups
     , watchAtom
     , tightDependencyFixup
-    , installInit
-    , install
-    , installData
-    , getInstalls
-    , logrotateStanza
-{-
-    , putPostInst
-    , getPostInsts
-    , getPostInst
-    , modPostInst
-    , postRm
-    , preInst
-    , preRm
--}
-    , link
-    , file
-    , installDir
-    , installCabalExec
-    , installCabalExecTo
-    , installTo
-    , getInstallDirs
-    , getInstallInits
-    , getLogrotateStanzas
-    , getLinks
-    , getPostRms
-    , getPreInsts
-    , getPreRms
     , foldExecs
     , foldPriorities
     , foldSections
@@ -111,7 +75,7 @@ import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Lens.Lazy (lens, getL, modL)
 import Data.List as List (map)
-import Data.Map as Map (lookup, insertWith, empty, null, insert, update)
+import Data.Map as Map (lookup, insertWith, empty, null, insert)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
 import Data.Set as Set (maxView, toList, fromList, null, empty, union, singleton, fold, insert, member)
@@ -528,50 +492,27 @@ class (Monoid atoms, Show atoms {- Show instance for debugging only -}) => HasAt
     depends :: Lens atoms (Map BinPkgName (Set Relation)) -- This should be [[Relation]] for full generality, or Set (Set Relation)
     conflicts :: Lens atoms (Map BinPkgName (Set Relation)) -- This too
 
-{-
-    apacheSites :: Lens atoms (Map BinPkgName (String, FilePath, Text))    -- DHApacheSite String FilePath Text
-    logrotateStanzas :: Lens atoms (Map BinPkgName Text)    -- DHLogrotateStanza Text
-    priorities :: Lens atoms (Map BinPkgName PackagePriority)    -- DHPriority PackagePriority
-    sections :: Lens atoms (Map BinPkgName Section)    -- DHSection Section
-    descriptions :: Lens atoms (Map BinPkgName PackageDescription)    -- DHDescription Text
-    executables :: Lens atoms (Map BinPkgName InstallFile)
-    servers :: Lens atoms (Map BinPkgName Server)
-    websites :: Lens atoms (Map BinPkgName Site)
-    backups :: Lens atoms (Map BinPkgName String)
+    apacheSite :: Lens atoms (Map BinPkgName (String, FilePath, Text))    -- DHApacheSite String FilePath Text
+    logrotateStanza :: Lens atoms (Map BinPkgName (Set Text))    -- DHLogrotateStanza Text
+    sourcePriority :: Lens atoms (Maybe PackagePriority)    -- DHPriority PackagePriority
+    binaryPriorities :: Lens atoms (Map BinPkgName PackagePriority)    -- DHPriority PackagePriority
+    sourceSection :: Lens atoms (Maybe Section)    -- DHSection Section
+    binarySections :: Lens atoms (Map BinPkgName Section)    -- DHSection Section
+    description :: Lens atoms (Map BinPkgName Text)    -- DHDescription Text
+    executable :: Lens atoms (Map BinPkgName InstallFile)    -- DHExecutable InstallFile
+    serverInfo :: Lens atoms (Map BinPkgName Server)-- DHServer Server
+    website :: Lens atoms (Map BinPkgName Site)    -- DHWebsite Site
+    backups :: Lens atoms (Map BinPkgName String)    -- DHBackups String
 
-    links :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
-    installs :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
-    installTos :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
-    installDatas :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
-    files :: Lens atoms (Map BinPkgName (Set (FilePath, Text)))
-    installCabalExecs :: Lens atoms (Map BinPkgName (Set (String, FilePath)))
-    installCabalExecTos :: Lens atoms (Map BinPkgName (Set (String, FilePath)))
-    installDirs :: Lens atoms (Map BinPkgName (Set FilePath))
-    installInits :: Lens atoms (Map BinPkgName (Set Text))
--}
-
-
-
-    -- DHLink FilePath FilePath
-    -- DHPostRm Text
-    -- DHPreInst Text
-    -- DHPreRm Text
-    -- DHArch PackageArchitectures
-
-
-
-    -- DHInstall FilePath FilePath
-    -- DHInstallTo FilePath FilePath
-    -- DHInstallData FilePath FilePath
-    -- DHFile FilePath Text
-    -- DHInstallCabalExec String FilePath
-    -- DHInstallCabalExecTo String FilePath
-    -- DHInstallDir FilePath
-    -- DHInstallInit Text
-    -- DHExecutable InstallFile
-    -- DHServer Server
-    -- DHWebsite Site
-    -- DHBackups String
+    link :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))    -- DHLink FilePath FilePath
+    install :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))    -- DHInstall FilePath FilePath
+    installTo :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))    -- DHInstallTo FilePath FilePath
+    installData :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))    -- DHInstallData FilePath FilePath
+    file :: Lens atoms (Map BinPkgName (Set (FilePath, Text)))    -- DHFile FilePath Text
+    installCabalExec :: Lens atoms (Map BinPkgName (Set (String, FilePath)))    -- DHInstallCabalExec String FilePath
+    installCabalExecTo :: Lens atoms (Map BinPkgName (Set (String, FilePath)))    -- DHInstallCabalExecTo String FilePath
+    installDir :: Lens atoms (Map BinPkgName (Set FilePath))    -- DHInstallDir FilePath
+    installInit :: Lens atoms (Map BinPkgName Text)    -- DHInstallInit Text
 
 instance HasAtoms Atoms where
     -- Lenses to access values in the Atoms type.  This is an old
@@ -892,6 +833,30 @@ instance HasAtoms Atoms where
                 f Source (DHArch y) = Just y
                 f _ _ = Nothing
 
+    sourcePriority = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DHPriority x') (Just x) | x /= x' = error $ "Conflicting rulesHead values:" ++ show (x, x')
+                from Source (DHPriority x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DHPriority) x)) atoms
+              where
+                f Source (DHPriority y) = Just y
+                f _ _ = Nothing
+
+    sourceSection = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DHSection x') (Just x) | x /= x' = error $ "Conflicting rulesHead values:" ++ show (x, x')
+                from Source (DHSection x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DHSection) x)) atoms
+              where
+                f Source (DHSection y) = Just y
+                f _ _ = Nothing
+
     binaryArchitectures = lens g s
         where
           g atoms = foldAtoms from Map.empty atoms
@@ -1060,6 +1025,188 @@ instance HasAtoms Atoms where
                 p (Binary _) (Conflicts _) = True
                 p _ _ = False
 
+    apacheSite = lens g s -- :: Lens atoms (Map BinPkgName (String, FilePath, Text))    -- DHApacheSite String FilePath Text
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHApacheSite dom log text) x = Map.insertWith (error "backups") b (dom, log, text) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b (dom, log, text) atoms' -> insertAtom (Binary b) (DHApacheSite dom log text) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHApacheSite _ _ _) = True
+                p _ _ = False
+    logrotateStanza = lens g s -- :: Lens atoms (Map BinPkgName (Set Text))    -- DHLogrotateStanza Text
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHLogrotateStanza r) x = Map.insertWith Set.union b (singleton r) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b ts atoms'-> Set.fold (\ t atoms'' -> insertAtom (Binary b) (DHLogrotateStanza t) atoms'') atoms' ts) (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHLogrotateStanza _) = True
+                p _ _ = False
+    binaryPriorities = lens g s -- :: Lens atoms (Map BinPkgName PackagePriority)    -- DHPriority PackagePriority
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHPriority p) x = Map.insertWith (error "priorities") b p x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b p atoms'-> insertAtom (Binary b) (DHPriority p) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHPriority _) = True
+                p _ _ = False
+    binarySections = lens g s -- :: Lens atoms (Map BinPkgName PackageSection)    -- DHSection (Maybe Section)
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHSection p) x = Map.insertWith (error "sections") b p x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b p atoms'-> insertAtom (Binary b) (DHSection p) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHSection _) = True
+                p _ _ = False
+    description = lens g s -- :: Lens atoms (Map BinPkgName Text)    -- DHDescription Text
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHDescription d) x = Map.insertWith (error "description") b d x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b y atoms'-> insertAtom (Binary b) (DHDescription y) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHDescription _) = True
+                p _ _ = False
+    executable = lens g s -- :: Lens atoms (Map BinPkgName InstallFile)    -- DHExecutable InstallFile
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHExecutable f) x = Map.insertWith (error "executable") b f x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b y atoms'-> insertAtom (Binary b) (DHExecutable y) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHExecutable _) = True
+                p _ _ = False
+    serverInfo = lens g s -- :: Lens atoms (Map BinPkgName Server)-- DHServer Server
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHServer s) x = Map.insertWith (error "server") b s x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b y atoms'-> insertAtom (Binary b) (DHServer y) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHServer _) = True
+                p _ _ = False
+    website = lens g s -- :: Lens atoms (Map BinPkgName Site)    -- DHWebsite Site
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHWebsite s) x = Map.insertWith (error "website") b s x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b y atoms'-> insertAtom (Binary b) (DHWebsite y) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHWebsite _) = True
+                p _ _ = False
+    backups = lens g s -- :: Lens atoms (Map BinPkgName String)    -- DHBackups String
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHBackups s) x = Map.insertWith (error "backups") b s x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b y atoms'-> insertAtom (Binary b) (DHBackups y) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHBackups _) = True
+                p _ _ = False
+
+    link = lens g s -- :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))    -- DHLink FilePath FilePath
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHLink loc txt) x = Map.insertWith Set.union b (singleton (loc, txt)) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b pairs atoms'-> Set.fold (\ (loc, txt) atoms'' -> insertAtom (Binary b) (DHLink loc txt) atoms'') atoms' pairs) (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHLink _ _) = True
+                p _ _ = False
+    install = lens g s -- :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))    -- DHInstall FilePath FilePath
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHInstall src dst) x = Map.insertWith Set.union b (singleton (src, dst)) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b pairs atoms'-> Set.fold (\ (src, dst) atoms'' -> insertAtom (Binary b) (DHInstall src dst) atoms'') atoms' pairs) (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHInstall _ _) = True
+                p _ _ = False
+    installTo = lens g s -- :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))    -- DHInstallTo FilePath FilePath
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHInstallTo src dst) x = Map.insertWith Set.union b (singleton (src, dst)) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b pairs atoms'-> Set.fold (\ (src, dst) atoms'' -> insertAtom (Binary b) (DHInstallTo src dst) atoms'') atoms' pairs) (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHInstallTo _ _) = True
+                p _ _ = False
+    installData = lens g s -- :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))    -- DHInstallData FilePath FilePath
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHInstallData src dst) x = Map.insertWith Set.union b (singleton (src, dst)) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b pairs atoms'-> Set.fold (\ (src, dst) atoms'' -> insertAtom (Binary b) (DHInstallData src dst) atoms'') atoms' pairs) (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHInstallData _ _) = True
+                p _ _ = False
+    file = lens g s -- :: Lens atoms (Map BinPkgName (Set (FilePath, Text)))    -- DHFile FilePath Text
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHFile path text) x = Map.insertWith Set.union b (singleton (path, text)) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b pairs atoms'-> Set.fold (\ (path, text) atoms'' -> insertAtom (Binary b) (DHFile path text) atoms'') atoms' pairs) (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHFile _ _) = True
+                p _ _ = False
+    installCabalExec = lens g s -- :: Lens atoms (Map BinPkgName (Set (String, FilePath)))    -- DHInstallCabalExec String FilePath
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHInstallCabalExec name dst) x = Map.insertWith Set.union b (singleton (name, dst)) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b pairs atoms'-> Set.fold (\ (name, dst) atoms'' -> insertAtom (Binary b) (DHInstallCabalExec name dst) atoms'') atoms' pairs) (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHInstallCabalExec _ _) = True
+                p _ _ = False
+    installCabalExecTo = lens g s -- :: Lens atoms (Map BinPkgName (Set (String, FilePath)))    -- DHInstallCabalExecTo String FilePath
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHInstallCabalExecTo name dst) x = Map.insertWith Set.union b (singleton (name, dst)) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b pairs atoms'-> Set.fold (\ (name, dst) atoms'' -> insertAtom (Binary b) (DHInstallCabalExecTo name dst) atoms'') atoms' pairs) (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHInstallCabalExecTo _ _) = True
+                p _ _ = False
+    installDir = lens g s -- :: Lens atoms (Map BinPkgName (Set FilePath))    -- DHInstallDir FilePath
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHInstallDir path) x = Map.insertWith Set.union b (singleton path) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b paths atoms'-> Set.fold (\ path atoms'' -> insertAtom (Binary b) (DHInstallDir path) atoms'') atoms' paths) (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHInstallDir _) = True
+                p _ _ = False
+    installInit = lens g s -- :: Lens atoms (Map BinPkgName Text)    -- DHInstallInit Text
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHInstallInit text) x = Map.insertWith (error "installInit") b text x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b text atoms'-> insertAtom (Binary b) (DHInstallInit text) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHInstallInit _) = True
+                p _ _ = False
+
 binaryPackageDeps :: BinPkgName -> Atoms -> [[Relation]]
 binaryPackageDeps b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL depends atoms))
 
@@ -1103,24 +1250,6 @@ foldDescriptions description r0 atoms =
     where
       from (Binary p) (DHDescription x) r = description p x r
       from _ _ r = r
-
-setSourcePriority :: PackagePriority -> Atoms -> Atoms
-setSourcePriority x deb = insertAtom Source (DHPriority x) deb
-
-setSourceSection :: Section -> Atoms -> Atoms
-setSourceSection x deb = insertAtom Source (DHSection x) deb
-
-setSourceDescription :: Text -> Atoms -> Atoms
-setSourceDescription x deb = insertAtom Source (DHDescription x) deb
-
-setPriority :: BinPkgName -> PackagePriority -> Atoms -> Atoms
-setPriority k x deb = insertAtom (Binary k) (DHPriority x) deb
-
-setSection :: BinPkgName -> Section -> Atoms -> Atoms
-setSection k x deb = insertAtom (Binary k) (DHSection x) deb
-
-setDescription :: BinPkgName -> Text -> Atoms -> Atoms
-setDescription k x deb = insertAtom (Binary k) (DHDescription x) deb
 
 doExecutable :: BinPkgName -> InstallFile -> Atoms -> Atoms
 doExecutable bin x deb = insertAtom (Binary bin) (DHExecutable x) deb
@@ -1166,132 +1295,6 @@ tightDependencyFixup pairs p deb =
       name = display' p
       display' = pack . show . pretty
 
-install :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
-install p path d atoms = insertAtom (Binary p) (DHInstall path d) atoms
-
-installData :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
-installData p path dest atoms = insertAtom (Binary p) (DHInstallData path dest) atoms
-
-getInstalls :: Atoms -> Map BinPkgName (Set (FilePath, FilePath))
-getInstalls atoms =
-    foldAtoms from Map.empty atoms
-    where
-      from (Binary p) (DHInstall src dst) mp = Map.insertWith Set.union p (singleton (src, dst)) mp
-      from _ _ mp = mp
-
-installInit :: BinPkgName -> Text -> Atoms -> Atoms
-installInit p text atoms = insertAtom (Binary p) (DHInstallInit text) atoms
-
-logrotateStanza :: BinPkgName -> Text -> Atoms -> Atoms
-logrotateStanza p text atoms = insertAtom (Binary p) (DHLogrotateStanza text) atoms
-
-{-
-getPostInsts :: Atoms -> Map BinPkgName Text
-getPostInsts atoms =
-    fromMaybe Map.empty $ foldAtoms from Nothing atoms
-    where
-      from :: DebAtomKey -> DebAtom -> Maybe (Map BinPkgName Text) -> Maybe (Map BinPkgName Text)
-      from (Binary b) (DHPostInst t) (Just mp) | mp /= mp' = error "Multiple PostInst maps"
-      from Source (DHPostInst mp) _ = Just mp
-      from _ _ x = x
-
-getPostInst :: Atoms -> BinPkgName -> Maybe Text
-getPostInst atoms b = Map.lookup b (getPostInsts atoms)
-
-putPostInst :: BinPkgName -> Text -> Atoms -> Atoms
-putPostInst p text atoms =
-    modL postInst (\ m -> Map.insertWith f p text m) atoms
-    where
-      f a b = if a == b then a else error $ "putPostInst: conflicting postinsts: " ++ show (a, b)
-
-modPostInst :: BinPkgName -> (Maybe Text -> Maybe Text) -> Atoms -> Atoms
-modPostInst p f atoms = modL postInst (\ m -> case Map.lookup p m of
-                                                Nothing -> case f Nothing of
-                                                             Just t' -> Map.insert p t' m
-                                                             Nothing -> m
-                                                Just t -> update (f . Just) p m) atoms
-
-postRm :: BinPkgName -> Text -> Atoms -> Atoms
-postRm p text atoms = insertAtom (Binary p) (DHPostRm text) atoms
-
-preInst :: BinPkgName -> Text -> Atoms -> Atoms
-preInst p text atoms = insertAtom (Binary p) (DHPreInst text) atoms
-
-preRm :: BinPkgName -> Text -> Atoms -> Atoms
-preRm p text atoms = insertAtom (Binary p) (DHPreRm text) atoms
--}
-
-link :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
-link p path text atoms = insertAtom (Binary p) (DHLink path text) atoms
-
-file :: BinPkgName -> FilePath -> Text -> Atoms -> Atoms
-file p path text atoms = insertAtom (Binary p) (DHFile path text) atoms 
-
-installDir :: BinPkgName -> FilePath -> Atoms -> Atoms
-installDir p path atoms = insertAtom (Binary p) (DHInstallDir path) atoms
-
-installCabalExec :: BinPkgName -> String -> FilePath -> Atoms -> Atoms
-installCabalExec p name d atoms = insertAtom (Binary p) (DHInstallCabalExec name d) atoms
-
-installCabalExecTo :: BinPkgName -> String -> FilePath -> Atoms -> Atoms
-installCabalExecTo p name dest atoms = insertAtom (Binary p) (DHInstallCabalExecTo name dest) atoms
-
-installTo :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
-installTo p from dest atoms = insertAtom (Binary p) (DHInstallTo from dest) atoms
-
-one :: (Eq a, Show a) => a -> a -> a
-one old new | old /= new = error $ "Conflict: " ++ show (old, new)
-one old _ = old
-
-getInstallDirs :: Atoms -> Map BinPkgName (Set FilePath)
-getInstallDirs atoms =
-    foldAtoms from Map.empty atoms
-    where
-      from (Binary p) (DHInstallDir d) mp = Map.insertWith Set.union p (singleton d) mp
-      from _ _ mp = mp
-
-getInstallInits :: Atoms -> Map BinPkgName Text
-getInstallInits atoms =
-    foldAtoms from Map.empty atoms
-    where
-      from (Binary p) (DHInstallInit t) mp = Map.insertWith one p t mp
-      from _ _ mp = mp
-
-getLogrotateStanzas :: Atoms -> Map BinPkgName (Set Text)
-getLogrotateStanzas atoms =
-    foldAtoms from Map.empty atoms
-    where
-      from (Binary p) (DHLogrotateStanza t) mp = Map.insertWith Set.union p (singleton t) mp
-      from _ _ mp = mp
-
-getLinks :: Atoms -> Map BinPkgName (Set (FilePath, FilePath))
-getLinks atoms =
-    foldAtoms from Map.empty atoms
-    where
-      from (Binary p) (DHLink loc txt) mp = Map.insertWith Set.union p (singleton (loc, txt)) mp
-      from _ _ mp = mp
-
-getPostRms :: Atoms -> Map BinPkgName Text
-getPostRms atoms =
-    foldAtoms from Map.empty atoms
-    where
-      from (Binary p) (DHPostRm t) mp = Map.insertWith one p t mp
-      from _ _ mp = mp
-
-getPreInsts :: Atoms -> Map BinPkgName Text
-getPreInsts atoms =
-    foldAtoms from Map.empty atoms
-    where
-      from (Binary p) (DHPreInst t) mp = Map.insertWith one p t mp
-      from _ _ mp = mp
-
-getPreRms :: Atoms -> Map BinPkgName Text
-getPreRms atoms =
-    foldAtoms from Map.empty atoms
-    where
-      from (Binary p) (DHPreRm t) mp = Map.insertWith one p t mp
-      from _ _ mp = mp
-
 foldExecs :: (BinPkgName -> Site -> r -> r)
           -> (BinPkgName -> Server -> r -> r)
           -> (BinPkgName -> String -> r -> r)
@@ -1328,12 +1331,12 @@ finalizeAtoms atoms =
       -- Fully expand a single atom
       next :: DebAtomKey -> DebAtom -> Atoms -> Atoms
       next (Binary b) (DHApacheSite domain' logdir text) r =
-          link b ("/etc/apache2/sites-available/" ++ domain') ("/etc/apache2/sites-enabled/" ++ domain') .
-          installDir b logdir .
-          file b ("/etc/apache2/sites-available" </> domain') text $
+          modL link (Map.insertWith Set.union b (singleton ("/etc/apache2/sites-available/" ++ domain', "/etc/apache2/sites-enabled/" ++ domain'))) .
+          modL installDir (Map.insertWith Set.union b (singleton logdir)) .
+          modL file (Map.insertWith Set.union b (singleton ("/etc/apache2/sites-available" </> domain', text))) $
           r
       next (Binary b) (DHInstallCabalExec name dst) r =
-          install b (builddir </> name </> name) dst $
+          modL install (Map.insertWith Set.union b (singleton (builddir </> name </> name, dst))) $
           r
       next (Binary b) (DHInstallCabalExecTo n d) r =
           modL rulesFragments (Set.insert (unlines [ pack ("binary-fixup" </> show (pretty b)) <> "::"
@@ -1341,14 +1344,14 @@ finalizeAtoms atoms =
           r
       next (Binary b) (DHInstallData s d) r =
           if takeFileName s == takeFileName d
-          then install b s (datadir </> makeRelative "/" (takeDirectory d)) r
-          else installTo b s (datadir </> makeRelative "/" d) r
+          then modL install (Map.insertWith Set.union b (singleton (s, datadir </> makeRelative "/" (takeDirectory d)))) r
+          else modL installTo (Map.insertWith Set.union b (singleton (s, datadir </> makeRelative "/" d))) r
       next (Binary p) (DHInstallTo s d) r =
           modL rulesFragments (Set.insert (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
                                                    , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])) $
           r
       next (Binary p) (DHFile path s) r =
-          modL intermediateFiles (Set.insert (tmpPath, s)) . install p tmpPath destDir' $ r
+          modL intermediateFiles (Set.insert (tmpPath, s)) . modL install (Map.insertWith Set.union p (singleton (tmpPath, destDir'))) $ r
           where
             (destDir', destName') = splitFileName path
             tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
@@ -1369,22 +1372,22 @@ finalizeAtoms atoms =
 
 siteAtoms :: BinPkgName -> Site -> Atoms -> Atoms
 siteAtoms b site =
-    installDir b "/etc/apache2/sites-available" .
-    link b ("/etc/apache2/sites-available/" ++ domain site) ("/etc/apache2/sites-enabled/" ++ domain site) .
-    file b ("/etc/apache2/sites-available" </> domain site) apacheConfig .
-    installDir b (apacheLogDirectory b) .
-    logrotateStanza b (unlines $              [ pack (apacheAccessLog b) <> " {"
+    modL installDir (Map.insertWith Set.union b (singleton "/etc/apache2/sites-available")) .
+    modL link (Map.insertWith Set.union b (singleton ("/etc/apache2/sites-available/" ++ domain site, "/etc/apache2/sites-enabled/" ++ domain site))) .
+    modL file (Map.insertWith Set.union b (singleton ("/etc/apache2/sites-available" </> domain site, apacheConfig))) .
+    modL installDir (Map.insertWith Set.union b (singleton (apacheLogDirectory b))) .
+    modL logrotateStanza (Map.insertWith Set.union b (singleton (unlines $              [ pack (apacheAccessLog b) <> " {"
                                               , "  weekly"
                                               , "  rotate 5"
                                               , "  compress"
                                               , "  missingok"
-                                              , "}"]) .
-    logrotateStanza b (unlines $              [ pack (apacheErrorLog b) <> " {"
+                                              , "}"]))) .
+    modL logrotateStanza (Map.insertWith Set.union b (singleton (unlines $              [ pack (apacheErrorLog b) <> " {"
                                               , "  weekly"
                                               , "  rotate 5"
                                               , "  compress"
                                               , "  missingok"
-                                              , "}" ]) .
+                                              , "}" ]))) .
     serverAtoms b (server site) True
     where
       -- An apache site configuration file.  This is installed via a line
@@ -1428,7 +1431,7 @@ siteAtoms b site =
 serverAtoms :: BinPkgName -> Server -> Bool -> Atoms -> Atoms
 serverAtoms b server isSite =
     modL postInst (insertWith (error "serverAtoms") b debianPostinst) .
-    installInit b debianInit .
+    modL installInit (Map.insertWith (error "serverAtoms") b debianInit) .
     serverLogrotate' b .
     execAtoms b exec
     where
@@ -1493,18 +1496,18 @@ serverAtoms b server isSite =
 -- in debianFiles.
 serverLogrotate' :: BinPkgName -> Atoms -> Atoms
 serverLogrotate' b =
-    logrotateStanza b (unlines $ [ pack (serverAccessLog b) <> " {"
+    modL logrotateStanza (insertWith Set.union b (singleton (unlines $ [ pack (serverAccessLog b) <> " {"
                                  , "  weekly"
                                  , "  rotate 5"
                                  , "  compress"
                                  , "  missingok"
-                                 , "}" ]) .
-    logrotateStanza b (unlines $ [ pack (serverAppLog b) <> " {"
+                                 , "}" ]))) .
+    modL logrotateStanza (insertWith Set.union b (singleton (unlines $ [ pack (serverAppLog b) <> " {"
                                  , "  weekly"
                                  , "  rotate 5"
                                  , "  compress"
                                  , "  missingok"
-                                 , "}" ])
+                                 , "}" ])))
 
 backupAtoms :: BinPkgName -> String -> Atoms -> Atoms
 backupAtoms b name =
@@ -1535,10 +1538,10 @@ fileAtoms b installFile r =
 fileAtoms' :: BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> Atoms -> Atoms
 fileAtoms' b sourceDir execName destDir destName r =
     case (sourceDir, execName == destName) of
-      (Nothing, True) -> installCabalExec b execName d r
-      (Just s, True) -> install b (s </> execName) d r
-      (Nothing, False) -> installCabalExecTo b execName (d </> destName) r
-      (Just s, False) -> installTo b (s </> execName) (d </> destName) r
+      (Nothing, True) -> modL installCabalExec (insertWith Set.union b (singleton (execName, d))) r
+      (Just s, True) -> modL install (insertWith Set.union b (singleton (s </> execName, d))) r
+      (Nothing, False) -> modL installCabalExecTo (insertWith Set.union b (singleton (execName, (d </> destName)))) r
+      (Just s, False) -> modL installTo (insertWith Set.union b (singleton (s </> execName, d </> destName))) r
     where
       d = fromMaybe "usr/bin" destDir
 

@@ -11,7 +11,7 @@ import Data.List as List (map)
 import Data.Map as Map (insertWith)
 import Data.Maybe
 import Data.Monoid (Monoid, mempty)
-import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, empty, map)
+import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, empty, map, union, singleton)
 import Data.Text (pack)
 import Debian.Debianize.Atoms (HasAtoms(packageDescription, control, binaryArchitectures, rulesFragments), DebAtomKey(..), DebAtom(..),
                                    Atoms, insertAtom, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
@@ -176,8 +176,8 @@ makeUtilsAtoms p datas execs atoms0 =
     where
       g :: Atoms -> Atoms
       g atoms = Set.fold execAtom (Set.fold dataAtom atoms datas) execs
-      dataAtom path atoms = installData p path path atoms
-      execAtom name atoms = installCabalExec p name "usr/bin" atoms
+      dataAtom path atoms = modL installData (insertWith union p (singleton (path, path))) atoms
+      execAtom name atoms = modL installCabalExec (insertWith union p (singleton (name, "usr/bin"))) atoms
 
 anyrel :: String -> [Relation]
 anyrel x = anyrel' (BinPkgName x)

@@ -11,7 +11,7 @@ import Data.Lens.Lazy (getL)
 import Data.List as List (map)
 import Data.Map as Map (Map, toList, empty, insertWith, fromListWithKey, mapKeys)
 import Data.Maybe
-import Data.Monoid (Monoid, (<>), mempty)
+import Data.Monoid (Monoid, (<>))
 import Data.Set as Set (toList, member)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack)

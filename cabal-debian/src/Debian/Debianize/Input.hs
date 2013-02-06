@@ -14,7 +14,7 @@ import Data.Char (isSpace)
 import Data.Lens.Lazy (setL, modL)
 import Data.Map as Map (insertWith)
 import Data.Maybe (fromMaybe)
-import Data.Set as Set (fromList, insert)
+import Data.Set as Set (fromList, insert, union, singleton)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
@@ -182,8 +182,8 @@ inputAtoms debian name xs =
     case (BinPkgName (dropExtension name), takeExtension name) of
       (p, ".install") ->   readFile (debian </> name) >>= \ text -> return $ foldr (readInstall p) xs (lines text)
       (p, ".dirs") ->      readFile (debian </> name) >>= \ text -> return $ foldr (readDir p) xs (lines text)
-      (p, ".init") ->      readFile (debian </> name) >>= \ text -> return $ installInit p text xs
-      (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> return $ logrotateStanza p text xs
+      (p, ".init") ->      readFile (debian </> name) >>= \ text -> return $ modL installInit (insertWith (error "inputAtoms") p text) xs
+      (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> return $ modL logrotateStanza (insertWith Set.union p (singleton text)) xs
       (p, ".links") ->     readFile (debian </> name) >>= \ text -> return $ foldr (readLink p) xs (lines text)
       (p, ".postinst") ->  readFile (debian </> name) >>= \ text -> return $ modL postInst (insertWith (error "inputAtoms") p text) xs
       (p, ".postrm") ->    readFile (debian </> name) >>= \ text -> return $ modL postRm (insertWith (error "inputAtoms") p text) xs
@@ -201,7 +201,7 @@ inputAtoms debian name xs =
 readLink :: BinPkgName -> Text -> Atoms -> Atoms
 readLink p line atoms =
     case words line of
-      [a, b] -> link p (unpack a) (unpack b) atoms
+      [a, b] -> modL link (insertWith Set.union p (singleton (unpack a, unpack b))) atoms
       [] -> atoms
       _ -> trace ("readLink: " ++ show line) atoms
 
@@ -209,7 +209,7 @@ readInstall :: BinPkgName -> Text -> Atoms -> Atoms
 readInstall p line atoms =
     case break isSpace line of
       (_, b) | null b -> error $ "readInstall: syntax error in .install file for " ++ show p ++ ": " ++ show line
-      (a, b) -> install p (unpack (strip a)) (unpack (strip b)) atoms
+      (a, b) -> modL install (insertWith union p (singleton (unpack (strip a), unpack (strip b)))) atoms
 
 readDir :: BinPkgName -> Text -> Atoms -> Atoms
-readDir p line atoms = installDir p (unpack line) atoms
+readDir p line atoms = modL installDir (insertWith union p (singleton (unpack line))) atoms

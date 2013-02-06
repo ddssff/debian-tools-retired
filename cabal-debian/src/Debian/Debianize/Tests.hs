@@ -409,7 +409,7 @@ test6 =
                              modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-production") (singleton (anyrel (BinPkgName "apache2")))) $
                              modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-staging") (singleton (anyrel (BinPkgName "artvaluereport2-server")))) $
                              -- This should go into the "real" data directory.  And maybe a different icon for each server?
-                             install (BinPkgName "artvaluereport2-server") "theme/ArtValueReport_SunsetSpectrum.ico" "usr/share/artvaluereport2-data" $
+                             modL install (Map.insertWith union (BinPkgName "artvaluereport2-server") (singleton ("theme/ArtValueReport_SunsetSpectrum.ico", "usr/share/artvaluereport2-data"))) $
                              doBackups (BinPkgName "artvaluereport2-backups") "artvaluereport2-backups" $
                              doWebsite (BinPkgName "artvaluereport2-production") (theSite (BinPkgName "artvaluereport2-production")) $
                              doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging")) $
@@ -516,7 +516,7 @@ test9 =
                             setL debVersion (Just (parseDebianVersion ("3.0.2-1~hackage1" :: String))) $
                             setL sourceFormat (Just Native3) $
                             modL control (\ y -> y {homepage = Just "http://www.haskell.org/alex/"}) $
-                            (\ atoms -> foldr (\ name atoms -> installData (BinPkgName "alex") name name atoms)
+                            (\ atoms -> foldr (\ name atoms -> modL installData (Map.insertWith union (BinPkgName "alex") (singleton (name, name))) atoms)
                                               atoms
                                               [ "AlexTemplate"
                                               , "AlexTemplate-debug"

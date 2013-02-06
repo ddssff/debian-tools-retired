@@ -17,9 +17,9 @@ import Control.Applicative ((<$>))
 import Data.Lens.Lazy (getL, setL, modL)
 import Data.Maybe
 import Data.Text (Text)
-import Debian.Debianize.Atoms (HasAtoms(packageDescription, compat, watch, changelog, control, copyright), Flags(..), DebAction(..),
-                                   Atoms, defaultAtoms, flags, watchAtom, setSourcePriority,
-                                   setSourceSection, compilerVersion, cabalFlagAssignments)
+import Debian.Debianize.Atoms (HasAtoms(packageDescription, compat, watch, changelog, control, copyright, sourcePriority, sourceSection), Flags(..), DebAction(..),
+                                   Atoms, defaultAtoms, flags, watchAtom,
+                                   compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..))
@@ -128,8 +128,8 @@ debianization :: String              -- ^ current date
 debianization date copyright' maint level deb =
     finalizeDebianization $
     modL compat (maybe (Just level) Just) $
-    setSourcePriority Optional $
-    setSourceSection (MainSection "haskell") $
+    setL sourcePriority (Just Optional) $
+    setL sourceSection (Just (MainSection "haskell")) $
     -- setSourceBinaries [] $
     setL watch (Just (watchAtom (pkgName $ Cabal.package $ pkgDesc)))  $
     setL copyright (Just (Right copyright')) $
