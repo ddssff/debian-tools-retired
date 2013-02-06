@@ -37,10 +37,10 @@ outputDebianization old new =
        -- rather than storing them apart from the package in the
        -- autobuilder configuration.
        case old of
-         Just old' | validate (flags new) -> validateDebianization old' new
-         _ | validate (flags new) -> error "No existing debianization to validate"
-         Just old' | dryRun (flags new) -> putStr ("Debianization (dry run):\n" ++ describeDebianization old' new)
-         _ | dryRun (flags new) -> error "No existing debianiztion to compare new one to"
+         Just old' | validate (getL flags new) -> validateDebianization old' new
+         _ | validate (getL flags new) -> error "No existing debianization to validate"
+         Just old' | dryRun (getL flags new) -> putStr ("Debianization (dry run):\n" ++ describeDebianization old' new)
+         _ | dryRun (getL flags new) -> error "No existing debianiztion to compare new one to"
          _ -> writeDebianization new
 
 validateDebianization :: Atoms -> Atoms -> IO ()

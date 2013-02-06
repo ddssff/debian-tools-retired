@@ -9,13 +9,13 @@ module Debian.Debianize.Cabal
 import Control.Exception (bracket)
 import Control.Monad (when)
 import Control.Monad.Trans (MonadIO, liftIO)
-import Data.Lens.Lazy (setL)
+import Data.Lens.Lazy (getL, setL)
 import Data.Maybe
 import Data.Set (Set, toList)
 import Data.Text (Text, pack)
 import Data.Version (Version)
-import Debian.Debianize.Atoms (HasAtoms(packageDescription, compiler), Flags(..),
-                                   Atoms, flags, compilerVersion, cabalFlagAssignments, debMaintainer)
+import Debian.Debianize.Atoms as Debian (HasAtoms(packageDescription, compiler, maintainer), Flags(..),
+                                         Atoms, flags, compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
@@ -50,7 +50,7 @@ withSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top 
 
 getSimplePackageDescription' :: FilePath -> Atoms -> IO Atoms
 getSimplePackageDescription' top old =
-    getSimplePackageDescription (verbosity (flags old)) (compilerVersion old) (cabalFlagAssignments old) top old
+    getSimplePackageDescription (verbosity (getL flags old)) (getL compilerVersion old) (getL cabalFlagAssignments old) top old
 
 getSimplePackageDescription :: Int -> Maybe Version -> Set (FlagName, Bool) -> FilePath -> Atoms -> IO Atoms
 getSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top atoms =
@@ -110,7 +110,7 @@ showLicense (UnknownLicense _) = "Unknown"
 -- cabal package, or from the value returned by getDebianMaintainer.
 inputMaintainer :: PackageDescription -> Atoms -> IO (Maybe NameAddr)
 inputMaintainer pkgDesc atoms =
-    return (debMaintainer atoms) >>=
+    return (getL Debian.maintainer atoms) >>=
     return . maybe (parse cabalMaintainer) Just >>=
     maybe getDebianMaintainer (return . Just) >>=
     return . maybe (Just haskellMaintainer) Just

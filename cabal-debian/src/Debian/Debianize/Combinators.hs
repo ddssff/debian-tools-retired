@@ -70,8 +70,8 @@ versionInfo debianMaintainer date deb =
       merge old new =
           old { logComments = logComments old ++ logComments new
               , logDate = date }
-      debinfo = maybe (Right (epoch, revision deb)) Left (debVersion deb)
-      epoch = Map.lookup (pkgName pkgId) (epochMap deb)
+      debinfo = maybe (Right (epoch, fromMaybe "" (getL revision deb))) Left (getL debVersion deb)
+      epoch = Map.lookup (pkgName pkgId) (getL epochMap deb)
       pkgId = Cabal.package pkgDesc
       pkgDesc = fromMaybe (error "versionInfo: no PackageDescription") $ getL packageDescription deb
 
@@ -140,7 +140,7 @@ addExtraLibDependencies deb =
       f bin = bin
       g :: Debian.PackageRelations -> Debian.PackageRelations
       g rels = rels { depends = depends rels ++
-                                map anyrel' (concatMap (\ cab -> maybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] Set.toList (Map.lookup cab (extraLibMap deb)))
+                                map anyrel' (concatMap (\ cab -> maybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] Set.toList (Map.lookup cab (getL extraLibMap deb)))
                                                        (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc)) }
       pkgDesc = fromMaybe (error "addExtraLibDependencies: no PackageDescription") $ getL packageDescription deb
 

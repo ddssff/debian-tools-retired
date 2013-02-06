@@ -11,21 +11,21 @@ import Control.Exception (SomeException, try)
 import Control.Monad (foldM)
 import Control.Monad.Reader (ReaderT(runReaderT))
 import Control.Monad.Trans (lift)
-import Data.Lens.Lazy (getL)
+import Data.Lens.Lazy (getL, modL)
 import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
 import Debian.Debianize.Atoms (HasAtoms(compiler), Flags(dryRun, verbosity), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType,
-                                   Atoms, putPackageInfo, flags, filterMissing, packageInfo, compilerVersion, cabalFlagAssignments)
+                                   Atoms, flags, filterMissing, packageInfo, compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps, debNameFromType)
 import Debian.Debianize.Cabal (getSimplePackageDescription)
 import Debian.Control
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps,
                                     dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
 import qualified Debian.Relation as D
-import Distribution.Package (Dependency(..))
+import Distribution.Package (Dependency(..), PackageName(PackageName))
 import Distribution.Simple.Compiler (CompilerFlavor(..), compilerFlavor, Compiler(..))
 import Distribution.Simple.Utils (die)
 import Distribution.Text (display)
@@ -47,7 +47,7 @@ substvars :: Atoms
           -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> IO ()
 substvars atoms debType =
-    do atoms' <- getSimplePackageDescription (verbosity (flags atoms)) (compilerVersion atoms) (cabalFlagAssignments atoms) "." atoms
+    do atoms' <- getSimplePackageDescription (verbosity (getL flags atoms)) (getL compilerVersion atoms) (getL cabalFlagAssignments atoms) "." atoms
        debVersions <- buildDebVersionMap
        atoms'' <- libPaths (fromMaybe (error "substvars") $ getL compiler atoms') debVersions atoms'
        control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
@@ -68,7 +68,7 @@ substvars' atoms debType control =
           readFile path' >>= \ old ->
           let new = addDeps old in
           diffFile path' (pack new) >>= maybe (putStrLn ("cabal-debian substvars: No updates found for " ++ show path'))
-                                              (\ diff -> if dryRun (flags atoms) then putStr diff else replaceFile path' new)
+                                              (\ diff -> if dryRun (getL flags atoms) then putStr diff else replaceFile path' new)
       ([], Nothing) -> return ()
       (missing, _) ->
           die ("These debian packages need to be added to the build dependency list so the required cabal packages are available:\n  " ++ intercalate "\n  " (map (show . pretty . fst) missing) ++
@@ -90,7 +90,7 @@ substvars' atoms debType control =
       missingBuildDeps =
           let requiredDebs =
                   concat (map (\ (Dependency name _) ->
-                               case packageInfo name atoms of
+                               case Map.lookup name (getL packageInfo atoms) of
                                  Just info ->
                                      let prof = maybe (devDeb info) Just (profDeb info) in
                                      let doc = docDeb info in
@@ -131,7 +131,9 @@ packageInfo' compiler debVersions atoms (d, f) =
           do dev <- debOfFile ("^" ++ d </> p ++ "-" ++ v </> cdir </> "libHS" ++ p ++ "-" ++ v ++ ".a$")
              prof <- debOfFile ("^" ++ d </> p ++ "-" ++ v </> cdir </> "libHS" ++ p ++ "-" ++ v ++ "_p.a$")
              doc <- debOfFile ("/" ++ p ++ ".haddock$")
-             return $ putPackageInfo (PackageInfo { cabalName = p
-                                                  , devDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) dev
-                                                  , profDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) prof
-                                                  , docDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) doc }) atoms
+             return $ modL packageInfo (Map.insert
+                                           (PackageName p)
+                                           (PackageInfo { cabalName = PackageName p
+                                                        , devDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) dev
+                                                        , profDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) prof
+                                                        , docDeb = maybe Nothing (\ x -> Just (x, debVersions ! x)) doc })) atoms

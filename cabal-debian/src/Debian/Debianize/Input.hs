@@ -13,15 +13,15 @@ import Control.Monad (foldM, filterM)
 import Data.Char (isSpace)
 import Data.Lens.Lazy (setL, modL)
 import Data.Maybe (fromMaybe)
-import Data.Set (fromList, insert)
+import Data.Set as Set (fromList, insert)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.Atoms (HasAtoms(rulesHead, compat, sourceFormat, watch, changelog, control),
+import Debian.Debianize.Atoms (HasAtoms(rulesHead, compat, sourceFormat, watch, changelog, control, copyright, intermediateFiles),
                                    Atoms, install, installDir,
-                                   defaultAtoms, intermediateFile, warning, logrotateStanza, putPostInst,
-                                   putCopyright, installInit, postRm, preInst, preRm, link)
+                                   defaultAtoms, warning, logrotateStanza, putPostInst,
+                                   installInit, postRm, preInst, preRm, link)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')
@@ -152,28 +152,28 @@ inputChangeLog debian = readFile (debian </> "changelog") >>= return . parseChan
 
 inputAtomsFromDirectory :: FilePath -> Atoms -> IO Atoms -- .install files, .init files, etc.
 inputAtomsFromDirectory debian xs =
-    debianFiles xs >>= intermediateFiles (debian </> "cabalInstall")
+    findFiles xs >>= doFiles (debian </> "cabalInstall")
     where
-      debianFiles :: Atoms -> IO Atoms
-      debianFiles xs' =
+      findFiles :: Atoms -> IO Atoms
+      findFiles xs' =
           getDirectoryContents' debian >>=
           return . (++ ["source/format"]) >>=
           filterM (doesFileExist . (debian </>)) >>=
           foldM (\ xs'' name -> inputAtoms debian name xs'') xs'
-      intermediateFiles :: FilePath -> Atoms -> IO Atoms
-      intermediateFiles tmp xs' =
+      doFiles :: FilePath -> Atoms -> IO Atoms
+      doFiles tmp xs' =
           do sums <- getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
              paths <- mapM (\ sum -> getDirectoryContents' (tmp </> sum) >>= return . map (sum </>)) sums >>= return . concat
              files <- mapM (readFile . (tmp </>)) paths
-             foldM (\ xs'' (path, file) -> return $ intermediateFile ("debian/cabalInstall" </> path) file xs'') xs' (zip paths files)
+             foldM (\ xs'' (path, file) -> return $ modL intermediateFiles (Set.insert ("debian/cabalInstall" </> path, file)) xs'') xs' (zip paths files)
 
 inputAtoms :: FilePath -> FilePath -> Atoms -> IO Atoms
 inputAtoms _ path xs | elem path ["control"] = return xs
-inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ (either warning (setL sourceFormat . Just) (readSourceFormat text)) xs
+inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ (either (modL warning . Set.insert) (setL sourceFormat . Just) (readSourceFormat text)) xs
 inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ setL watch (Just text) xs
 inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> return $ setL rulesHead (Just text) xs
 inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> return $ setL compat (Just (read (unpack text))) xs
-inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> return $ putCopyright (Right text) xs
+inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> return $ setL copyright (Just (Right text)) xs
 inputAtoms debian name@"changelog" xs =
     readFile (debian </> name) >>= return . parseChangeLog . unpack >>= \ log -> return $ setL changelog (Just log) xs
 inputAtoms debian name xs =

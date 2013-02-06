@@ -8,15 +8,15 @@ module Debian.Debianize.Finalize
 import Data.Char (toLower)
 import Data.Lens.Lazy (setL, getL, modL)
 import Data.List as List (map)
+import Data.Map as Map (insertWith)
 import Data.Maybe
 import Data.Monoid (Monoid, mempty)
 import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, empty, map)
 import Data.Text (pack)
-import Debian.Debianize.Atoms (HasAtoms(packageDescription, control), DebAtomKey(..), DebAtom(..),
-                                   Atoms, insertAtom,
-                                   setArchitecture, binaryPackageDeps,
+import Debian.Debianize.Atoms (HasAtoms(packageDescription, control, binaryArchitectures, rulesFragments), DebAtomKey(..), DebAtom(..),
+                                   Atoms, insertAtom, binaryPackageDeps,
                                    binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
-                                   finalizeAtoms, foldAtoms, rulesFragment, installData, installCabalExec, foldCabalDatas, foldCabalExecs)
+                                   finalizeAtoms, foldAtoms, installData, installCabalExec, foldCabalDatas, foldCabalExecs)
 import Debian.Debianize.Combinators (describe, buildDeps)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                newBinaryDebDescription, modifyBinaryDeb,
@@ -51,7 +51,7 @@ finalizeDebianization deb0 =
       f :: DebAtomKey -> DebAtom -> Atoms -> Atoms
       f (Binary b) (DHWebsite _) atoms = cabalExecBinaryPackage b atoms
       f (Binary b) (DHServer _) atoms = cabalExecBinaryPackage b atoms
-      f (Binary b) (DHBackups _) atoms = setArchitecture b Any . cabalExecBinaryPackage b $ atoms
+      f (Binary b) (DHBackups _) atoms = modL binaryArchitectures (Map.insertWith (\ _ x -> x) b Any) . cabalExecBinaryPackage b $ atoms
       f (Binary b) (DHExecutable _) atoms = cabalExecBinaryPackage b atoms
       f _ _ atoms = atoms
 
@@ -84,7 +84,7 @@ binaryPackageRelations :: BinPkgName -> PackageType -> Atoms -> PackageRelations
 binaryPackageRelations b typ deb =
     PackageRelations
     { depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                (if typ == Development then List.map anyrel' (toList (extraDevDeps deb)) else []) ++
+                (if typ == Development then List.map anyrel' (toList (getL extraDevDeps deb)) else []) ++
                 binaryPackageDeps b deb
     , recommends = [anyrel "${haskell:Recommends}"]
     , suggests = [anyrel "${haskell:Suggests}"]
@@ -109,8 +109,8 @@ librarySpecs deb =
                                (binaryPackages y) })
          deb
     where
-      doc = dev && not (noDocumentationLibrary deb)
-      prof = dev && not (noProfilingLibrary deb)
+      doc = dev && not (getL noDocumentationLibrary deb)
+      prof = dev && not (getL noProfilingLibrary deb)
       dev = isJust (Cabal.library pkgDesc)
       pkgDesc = fromMaybe (error "librarySpecs: no PackageDescription") $ getL packageDescription deb
       PackageName cabal = pkgName (Cabal.package pkgDesc)
@@ -150,7 +150,7 @@ makeUtilsPackage deb =
     case (Set.difference availableData installedData, Set.difference availableExec installedExec) of
       (datas, execs) | Set.null datas && Set.null execs -> deb
       (datas, execs) ->
-          let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (utilsPackageName deb)
+          let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (getL utilsPackageName deb)
               atoms = setL packageDescription (Just pkgDesc) . makeUtilsAtoms p datas execs $ mempty
               atoms' = finalizeAtoms atoms
               deb' = foldAtoms insertAtom deb atoms' in
@@ -173,7 +173,7 @@ makeUtilsAtoms :: BinPkgName -> Set FilePath -> Set String -> Atoms -> Atoms
 makeUtilsAtoms p datas execs atoms0 =
     if Set.null datas && Set.null execs
     then atoms0
-    else rulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n")) . g $ atoms0
+    else modL rulesFragments (Set.insert (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))) . g $ atoms0
     where
       g :: Atoms -> Atoms
       g atoms = Set.fold execAtom (Set.fold dataAtom atoms datas) execs

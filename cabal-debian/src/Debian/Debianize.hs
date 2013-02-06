@@ -34,6 +34,6 @@ import Debian.Debianize.Interspersed
 import Debian.Debianize.Output
 import Debian.Debianize.SubstVars
 import Debian.Debianize.Tests
-import Debian.Debianize.ControlFile hiding (depends, conflicts)
+import Debian.Debianize.ControlFile hiding (depends, conflicts, maintainer)
 import Debian.Debianize.Utility
 import Debian.Policy

@@ -35,46 +35,16 @@ module Debian.Debianize.Atoms
     , getMaybeSingleton
     , getSingleton
     -- * Future class methods
-    , dataDir
-    , compilerVersion
-    , putCompilerVersion
-    , noProfilingLibrary
-    , putNoProfilingLibrary
-    , noDocumentationLibrary
-    , putNoDocumentationLibrary
-    , utilsPackageName
     -- * DependencyHint getter and setters
-    , missingDependency
-    , setRevision
-    , revision
-    , setDebVersion
-    , debVersion
-    , setOmitLTDeps
-    , omitLTDeps
-    , versionSplits
-    , buildDeps
-    , buildDepsIndep
-    , missingDependencies
-    , extraLibMap
-    , execMap
     , filterMissing
-    , putExecMap
-    , putExtraDevDep
-    , extraDevDeps
-    , putEpochMapping
-    , epochMap
     , knownEpochMappings
     , depends
     , conflicts
     , binaryPackageDeps
     , binaryPackageConflicts
-    , putPackageInfo
-    , packageInfo
-    , setSourceArchitecture
     , setSourcePriority
     , setSourceSection
     , setSourceDescription
-    , setArchitecture
     , setPriority
     , setSection
     , setDescription
@@ -82,25 +52,8 @@ module Debian.Debianize.Atoms
     , doServer
     , doWebsite
     , doBackups
-    , putCopyright
-    , copyright
-    , warning
-    , debMaintainer
-    , buildDir
-    , setBuildDir
-    , cabalFlagAssignments
-    , putCabalFlagAssignments
-    , flags
-    , mapFlags
     , watchAtom
     , tightDependencyFixup
-    -- , newDebianization
-    , putBuildDep
-    , putBuildDepIndep
-    , putExtraLibMapping
-    , putDebMaintainer
-    , intermediateFile
-    , getIntermediateFiles
     , installInit
     , install
     , installData
@@ -116,7 +69,6 @@ module Debian.Debianize.Atoms
     , link
     , file
     , installDir
-    , rulesFragment
     , installCabalExec
     , installCabalExecTo
     , installTo
@@ -128,7 +80,6 @@ module Debian.Debianize.Atoms
     , getPreInsts
     , getPreRms
     , foldExecs
-    , foldArchitectures
     , foldPriorities
     , foldSections
     , foldDescriptions
@@ -138,8 +89,8 @@ module Debian.Debianize.Atoms
     ) where
 
 import Data.Generics (Data, Typeable)
-import Data.Lens.Lazy (Lens)
-import Data.Map (Map)
+import Data.Lens.Lazy (Lens, setL)
+import Data.Map as Map (Map, fold, fromList)
 import Data.Monoid (Monoid)
 import Data.Set (Set)
 import Data.Text (Text)
@@ -160,7 +111,7 @@ import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Lens.Lazy (lens, getL, modL)
 import Data.List as List (map)
-import Data.Map as Map (Map, lookup, insertWith, foldWithKey, empty, null, insert, update)
+import Data.Map as Map (lookup, insertWith, foldWithKey, empty, null, insert, update)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
 import Data.Set as Set (maxView, toList, fromList, null, empty, union, singleton, fold, insert, member)
@@ -184,20 +135,91 @@ import Distribution.PackageDescription as Cabal (PackageDescription(package))
 import System.FilePath ((</>), makeRelative, splitFileName, takeDirectory, takeFileName)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
-class (Monoid atoms,
-       Show atoms) -- for debugging
-    => HasAtoms atoms where
-    rulesHead :: Lens atoms (Maybe Text)
-    packageDescription :: Lens atoms (Maybe PackageDescription)
-    postInst :: Lens atoms (Map BinPkgName Text)
-    compat :: Lens atoms (Maybe Int)
-    sourceFormat :: Lens atoms (Maybe SourceFormat)
-    watch :: Lens atoms (Maybe Text)
-    sourcePackageName :: Lens atoms (Maybe SrcPkgName)
-    changelog :: Lens atoms (Maybe ChangeLog)
-    comments :: Lens atoms (Maybe [[Text]]) -- ^ Comment entries for the latest changelog entry
-    control :: Lens atoms SourceDebDescription
-    compiler :: Lens atoms (Maybe Compiler)
+lookupAtom :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Maybe a
+lookupAtom mbin from xs =
+    case maxView (lookupAtoms mbin from xs) of
+      Nothing -> Nothing
+      Just (x, s) | Set.null s -> Just x
+      Just (x, s) -> error $ "lookupAtom - multiple: " ++ show (x : toList s)
+
+lookupAtomDef :: (Show a, Ord a) => a -> DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> a
+lookupAtomDef def key from xs = fromMaybe def $ lookupAtom key from xs
+
+lookupAtoms :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Set a
+lookupAtoms mbin from x = maybe Set.empty (setMapMaybe from) (Map.lookup mbin (unAtoms x))
+
+insertAtom :: DebAtomKey -> DebAtom -> Atoms -> Atoms
+insertAtom mbin atom (Atoms x) = Atoms (insertWith union mbin (singleton atom) x)
+
+insertAtoms :: Set (DebAtomKey, DebAtom) -> Atoms -> Atoms
+insertAtoms s atoms =
+    case maxView s of
+      Nothing -> atoms
+      Just ((k, a), s') -> insertAtoms s' (insertAtom k a atoms)
+
+insertAtoms' :: [(DebAtomKey, DebAtom)] -> Atoms -> Atoms
+insertAtoms' xs atoms = insertAtoms (Set.fromList xs) atoms
+
+hasAtom :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Bool
+hasAtom key p xs = not . Set.null . lookupAtoms key p $ xs
+
+foldAtoms :: (DebAtomKey -> DebAtom -> r -> r) -> r -> Atoms -> r
+foldAtoms f r0 (Atoms xs) = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 xs
+
+-- | Map each atom of a HasAtoms instance to zero or more new atoms.
+mapAtoms :: (DebAtomKey -> DebAtom -> Set (DebAtomKey, DebAtom)) -> Atoms -> Atoms
+mapAtoms f atoms@(Atoms xs) = foldAtoms (\ k atom xs' -> insertAtoms (f k atom) xs') (Atoms xs) atoms
+
+-- | Split atoms out of a HasAtoms instance by predicate.
+partitionAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> (Set (DebAtomKey, DebAtom), Atoms)
+partitionAtoms f deb =
+    foldAtoms g (mempty, Atoms mempty) deb
+    where
+      g k atom (atoms, deb') =
+          case f k atom of
+            True -> (Set.insert (k, atom) atoms, deb')
+            False -> (atoms, insertAtom k atom deb')
+
+replaceAtoms :: (DebAtomKey -> DebAtom -> Bool) -> DebAtomKey -> DebAtom -> Atoms -> Atoms
+replaceAtoms p k atom atoms = insertAtom k atom (deleteAtoms p atoms)
+
+deleteAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> Atoms
+deleteAtoms p atoms = snd (partitionAtoms p atoms)
+
+-- | Split atoms out of a HasAtoms instance by predicate.
+partitionAtoms' :: (Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> (Set a, Atoms)
+partitionAtoms' f deb =
+    foldAtoms g (mempty, Atoms mempty) deb
+    where
+      g k atom (xs, deb') =
+          case f k atom of
+            Just x -> (Set.insert x xs, deb')
+            Nothing -> (xs, insertAtom k atom deb')
+
+-- | Like modifyAtoms, but...
+modifyAtoms' :: (Ord a) =>
+               (DebAtomKey -> DebAtom -> Maybe a)
+            -> (Set a -> Set (DebAtomKey, DebAtom))
+            -> Atoms
+            -> Atoms
+modifyAtoms' f g atoms =
+    insertAtoms (g s) atoms'
+    where
+      (s, atoms') = partitionAtoms' f atoms
+
+getMaybeSingleton :: (Eq a) => Maybe a -> (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> Maybe a
+getMaybeSingleton multiple f atoms =
+    foldAtoms from Nothing atoms
+    where
+      from k a (Just x) =
+          case f k a of
+            Just x' -> if x /= x' then multiple else Just x
+            Nothing -> Just x
+      from k a Nothing =
+          f k a
+
+getSingleton :: (Eq a) => a -> (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> a
+getSingleton def f atoms = fromMaybe def (getMaybeSingleton Nothing f atoms)
 
 data DebAtomKey
     = Source
@@ -350,7 +372,7 @@ data Flags = Flags
 
 data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq, Ord)
 
-data PackageInfo = PackageInfo { cabalName :: String
+data PackageInfo = PackageInfo { cabalName :: PackageName
                                , devDeb :: Maybe (BinPkgName, DebianVersion)
                                , profDeb :: Maybe (BinPkgName, DebianVersion)
                                , docDeb :: Maybe (BinPkgName, DebianVersion) } deriving (Eq, Ord, Show)
@@ -414,6 +436,12 @@ knownVersionSplits =
       , splits = [(Version [2] [], PackageName "quickcheck2")] }
     ]
 
+-- | We should always call this, just as we should always apply
+-- knownVersionSplits.
+knownEpochMappings :: Map PackageName Int
+knownEpochMappings =
+    Map.fromList [(PackageName "HaXml", 1)]
+
 oldClckwrksSiteFlags :: Site -> [String]
 oldClckwrksSiteFlags x =
     [ -- According to the happstack-server documentation this needs a trailing slash.
@@ -442,7 +470,8 @@ newtype Atoms = Atoms {unAtoms :: Map DebAtomKey (Set DebAtom)} deriving (Eq, Sh
 
 defaultAtoms :: Atoms
 defaultAtoms =
-    insertAtom Source (DebVersionSplits knownVersionSplits) $
+    setL epochMap knownEpochMappings $
+    setL versionSplits knownVersionSplits $
     Atoms mempty
 
 instance Monoid Atoms where
@@ -450,6 +479,76 @@ instance Monoid Atoms where
     -- this in the expandAtoms recursion.
     mempty = Atoms mempty -- defaultAtoms
     mappend a b = foldAtoms insertAtom a b
+
+class (Monoid atoms,
+       Show atoms) -- for debugging
+    => HasAtoms atoms where
+    rulesHead :: Lens atoms (Maybe Text) -- DebRulesHead Text
+    packageDescription :: Lens atoms (Maybe PackageDescription) -- DHPackageDescription PackageDescription
+    postInst :: Lens atoms (Map BinPkgName Text) -- DHPostInst (Map BinPkgName Text)
+    compat :: Lens atoms (Maybe Int) -- DebCompat Int
+    sourceFormat :: Lens atoms (Maybe SourceFormat) -- DebSourceFormat SourceFormat
+    watch :: Lens atoms (Maybe Text) -- DebWatch Text
+    sourcePackageName :: Lens atoms (Maybe SrcPkgName) -- SourcePackageName SrcPkgName
+    changelog :: Lens atoms (Maybe ChangeLog) -- DebChangeLog ChangeLog
+    comments :: Lens atoms (Maybe [[Text]]) -- ^ Comment entries for the latest changelog entry (DebLogComments [[Text]])
+    control :: Lens atoms SourceDebDescription -- DebControl SourceDebDescription
+    compilerVersion :: Lens atoms (Maybe Version) -- CompilerVersion Version
+    compiler :: Lens atoms (Maybe Compiler) -- DHCompiler Compiler
+    dataDir :: Lens atoms (Maybe FilePath) -- DataDir FilePath
+    noProfilingLibrary :: Lens atoms Bool -- NoProfilingLibrary
+    noDocumentationLibrary :: Lens atoms Bool -- NoDocumentationLibrary
+    utilsPackageName :: Lens atoms (Maybe BinPkgName) -- UtilsPackageName BinPkgName
+    missingDependencies :: Lens atoms (Set BinPkgName) -- MissingDependency BinPkgName
+    flags :: Lens atoms Flags -- DHFlags Flags
+
+    buildDir :: Lens atoms (Maybe FilePath) -- BuildDir FilePath
+    revision :: Lens atoms (Maybe String) -- DebRevision String
+    debVersion :: Lens atoms (Maybe DebianVersion) -- DebVersion DebianVersion
+    packageInfo :: Lens atoms (Map PackageName PackageInfo) -- DebPackageInfo PackageInfo
+    versionSplits :: Lens atoms [VersionSplits] -- DebVersionSplits [VersionSplits]
+    sourceArchitecture :: Lens atoms (Maybe PackageArchitectures) -- DHArch PackageArchitectures
+    binaryArchitectures :: Lens atoms (Map BinPkgName PackageArchitectures) -- DHArch PackageArchitectures
+    maintainer :: Lens atoms (Maybe NameAddr) -- DHMaintainer NameAddr
+    copyright :: Lens atoms (Maybe (Either License Text)) -- DebCopyright (Either License Text)
+
+    rulesFragments :: Lens atoms (Set Text) -- DebRulesFragment Text
+    omitLTDeps :: Lens atoms Bool -- OmitLTDeps
+    buildDeps :: Lens atoms (Set BinPkgName) -- BuildDep BinPkgName
+    buildDepsIndep :: Lens atoms (Set BinPkgName) -- BuildDepIndep BinPkgName
+    extraLibMap :: Lens atoms (Map String (Set BinPkgName)) -- ExtraLibMapping String BinPkgName
+    execMap :: Lens atoms (Map String BinPkgName) -- ExecMapping String BinPkgName
+    epochMap :: Lens atoms (Map PackageName Int) -- EpochMapping PackageName Int
+    extraDevDeps :: Lens atoms (Set BinPkgName) -- DevDepends BinPkgName
+    intermediateFiles :: Lens atoms (Set (FilePath, Text)) -- DHIntermediate FilePath Text
+    warning :: Lens atoms (Set Text) -- Warning Text
+    cabalFlagAssignments :: Lens atoms (Set (FlagName, Bool)) -- DHCabalFlagAssignments (Set (FlagName, Bool))
+
+-- Maps
+    -- depends :: Lens atoms (Map BinPkgName (Set Relation)) -- Depends Relation
+    -- conflicts :: Lens atoms (Map BinPkgName (Set Relation)) -- Conflicts Relation
+    -- DHApacheSite String FilePath Text
+    -- DHLogrotateStanza Text
+    -- DHLink FilePath FilePath
+    -- DHPostRm Text
+    -- DHPreInst Text
+    -- DHPreRm Text
+    -- DHArch PackageArchitectures
+    -- DHPriority PackagePriority
+    -- DHSection Section
+    -- DHDescription Text
+    -- DHInstall FilePath FilePath
+    -- DHInstallTo FilePath FilePath
+    -- DHInstallData FilePath FilePath
+    -- DHFile FilePath Text
+    -- DHInstallCabalExec String FilePath
+    -- DHInstallCabalExecTo String FilePath
+    -- DHInstallDir FilePath
+    -- DHInstallInit Text
+    -- DHExecutable InstallFile
+    -- DHServer Server
+    -- DHWebsite Site
+    -- DHBackups String
 
 instance HasAtoms Atoms where
     -- Lenses to access values in the Atoms type.  This is an old
@@ -576,6 +675,18 @@ instance HasAtoms Atoms where
                 f Source (DebControl y) = Just y
                 f _ _ = Nothing
 
+    compilerVersion = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (CompilerVersion x') (Just x) | x /= x' = error $ "Conflicting compat values:" ++ show (x, x')
+                from Source (CompilerVersion x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . CompilerVersion) x)) atoms
+              where
+                f Source (CompilerVersion y) = Just y
+                f _ _ = Nothing
+
     compiler = lens g s
         where
           g atoms = foldAtoms from Nothing atoms
@@ -588,289 +699,303 @@ instance HasAtoms Atoms where
                 f Source (DHCompiler y) = Just y
                 f _ _ = Nothing
 
-lookupAtom :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Maybe a
-lookupAtom mbin from xs =
-    case maxView (lookupAtoms mbin from xs) of
-      Nothing -> Nothing
-      Just (x, s) | Set.null s -> Just x
-      Just (x, s) -> error $ "lookupAtom - multiple: " ++ show (x : toList s)
+    dataDir = lens g s
+        where
+          g atoms =
+              fmap (\ p -> let PackageName pkgname = pkgName. package $ p in
+                           "usr/share" </> (pkgname ++ "-" ++ (showVersion . pkgVersion . package $ p))) (getL packageDescription atoms)
+          s _ _ = error "setL dataDir"
 
-lookupAtomDef :: (Show a, Ord a) => a -> DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> a
-lookupAtomDef def key from xs = fromMaybe def $ lookupAtom key from xs
+    noProfilingLibrary = lens g s
+        where
+          g atoms = foldAtoms from False atoms
+              where
+                from Source NoProfilingLibrary _ = True
+                from _ _ x = x
+          s x atoms = (if x then insertAtom Source NoProfilingLibrary else id) (deleteAtoms p atoms)
+              where
+                p Source NoProfilingLibrary = True
+                p _ _ = False
 
-lookupAtoms :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Set a
-lookupAtoms mbin from x = maybe Set.empty (setMapMaybe from) (Map.lookup mbin (unAtoms x))
+    noDocumentationLibrary = lens g s
+        where
+          g atoms = foldAtoms from False atoms
+              where
+                from Source NoDocumentationLibrary _ = True
+                from _ _ x = x
+          s x atoms = (if x then insertAtom Source NoProfilingLibrary else id) (deleteAtoms p atoms)
+              where
+                p Source NoDocumentationLibrary = True
+                p _ _ = False
 
-insertAtom :: DebAtomKey -> DebAtom -> Atoms -> Atoms
-insertAtom mbin atom (Atoms x) = Atoms (insertWith union mbin (singleton atom) x)
+    utilsPackageName = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (UtilsPackageName x') (Just x) | x /= x' = error $ "Conflicting compat values:" ++ show (x, x')
+                from Source (UtilsPackageName x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . UtilsPackageName) x)) atoms
+              where
+                f Source (UtilsPackageName y) = Just y
+                f _ _ = Nothing
 
-insertAtoms :: Set (DebAtomKey, DebAtom) -> Atoms -> Atoms
-insertAtoms s atoms =
-    case maxView s of
-      Nothing -> atoms
-      Just ((k, a), s') -> insertAtoms s' (insertAtom k a atoms)
+    missingDependencies = lens g s
+        where
+          g atoms = foldAtoms from Set.empty atoms
+              where
+                from Source (MissingDependency b) x = Set.insert b x
+                from _ _ x = x
+          s x atoms = Set.fold (\ b atoms' -> insertAtom Source (MissingDependency b) atoms') (deleteAtoms p atoms) x
+              where
+                p Source (MissingDependency _) = True
+                p _ _ = False
 
-insertAtoms' :: [(DebAtomKey, DebAtom)] -> Atoms -> Atoms
-insertAtoms' xs atoms = insertAtoms (fromList xs) atoms
+    flags = lens g s
+        where
+          g atoms = fromMaybe defaultFlags $ foldAtoms from Nothing atoms
+              where
+                from Source (DHFlags x') (Just x) | x /= x' = error $ "Conflicting control values:" ++ show (x, x')
+                from Source (DHFlags x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const ((singleton . (Source,) . DHFlags) x)) atoms
+              where
+                f Source (DHFlags y) = Just y
+                f _ _ = Nothing
 
-hasAtom :: (Show a, Ord a) => DebAtomKey -> (DebAtom -> Maybe a) -> Atoms -> Bool
-hasAtom key p xs = not . Set.null . lookupAtoms key p $ xs
+    buildDir = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (BuildDir x') (Just x) | x /= x' = error $ "Conflicting rulesHead values:" ++ show (x, x')
+                from Source (BuildDir x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . BuildDir) x)) atoms
+              where
+                f Source (BuildDir y) = Just y
+                f _ _ = Nothing
 
-foldAtoms :: (DebAtomKey -> DebAtom -> r -> r) -> r -> Atoms -> r
-foldAtoms f r0 (Atoms xs) = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 xs
+    revision = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DebRevision x') (Just x) | x /= x' = error $ "Conflicting rulesHead values:" ++ show (x, x')
+                from Source (DebRevision x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebRevision) x)) atoms
+              where
+                f Source (DebRevision y) = Just y
+                f _ _ = Nothing
 
--- | Map each atom of a HasAtoms instance to zero or more new atoms.
-mapAtoms :: (DebAtomKey -> DebAtom -> Set (DebAtomKey, DebAtom)) -> Atoms -> Atoms
-mapAtoms f atoms@(Atoms xs) = foldAtoms (\ k atom xs' -> insertAtoms (f k atom) xs') (Atoms xs) atoms
+    debVersion = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DebVersion x') (Just x) | x /= x' = error $ "Conflicting rulesHead values:" ++ show (x, x')
+                from Source (DebVersion x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebVersion) x)) atoms
+              where
+                f Source (DebVersion y) = Just y
+                f _ _ = Nothing
 
--- | Split atoms out of a HasAtoms instance by predicate.
-partitionAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> (Set (DebAtomKey, DebAtom), Atoms)
-partitionAtoms f deb =
-    foldAtoms g (mempty, Atoms mempty) deb
-    where
-      g k atom (atoms, deb') =
-          case f k atom of
-            True -> (Set.insert (k, atom) atoms, deb')
-            False -> (atoms, insertAtom k atom deb')
+    packageInfo = lens g s
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from Source (DebPackageInfo i) x = Map.insert (cabalName i) i x
+                from _ _ x = x
+          s x atoms =
+              Map.fold (\ i atoms' -> insertAtom Source (DebPackageInfo i) atoms') (deleteAtoms p atoms) x
+              where
+                p Source (DebPackageInfo _) = True
+                p _ _ = False
 
-replaceAtoms :: (DebAtomKey -> DebAtom -> Bool) -> DebAtomKey -> DebAtom -> Atoms -> Atoms
-replaceAtoms p k atom atoms = insertAtom k atom (deleteAtoms p atoms)
+    versionSplits = lens g s
+        where
+          g atoms = foldAtoms from [] atoms
+              where
+                from Source (DebVersionSplits xs') xs = xs ++ xs'
+                from _ _ xs = xs
+          s x atoms = insertAtom Source (DebVersionSplits x) (deleteAtoms p atoms)
+              where
+                p Source (DebVersionSplits _) = True
+                p _ _ = False
 
-deleteAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> Atoms
-deleteAtoms p atoms = snd (partitionAtoms p atoms)
+    sourceArchitecture = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DHArch x') (Just x) | x /= x' = error $ "Conflicting rulesHead values:" ++ show (x, x')
+                from Source (DHArch x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DHArch) x)) atoms
+              where
+                f Source (DHArch y) = Just y
+                f _ _ = Nothing
 
--- | Split atoms out of a HasAtoms instance by predicate.
-partitionAtoms' :: (Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> (Set a, Atoms)
-partitionAtoms' f deb =
-    foldAtoms g (mempty, Atoms mempty) deb
-    where
-      g k atom (xs, deb') =
-          case f k atom of
-            Just x -> (Set.insert x xs, deb')
-            Nothing -> (xs, insertAtom k atom deb')
+    binaryArchitectures = lens g s
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (DHArch x) m = Map.insert b x m
+                from _ _ m = m
+          s x atoms = Map.foldWithKey (\ b a atoms' -> insertAtom (Binary b) (DHArch a) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHArch _) = True
+                p _ _ = False
 
--- | Like modifyAtoms, but...
-modifyAtoms' :: (Ord a) =>
-               (DebAtomKey -> DebAtom -> Maybe a)
-            -> (Set a -> Set (DebAtomKey, DebAtom))
-            -> Atoms
-            -> Atoms
-modifyAtoms' f g atoms =
-    insertAtoms (g s) atoms'
-    where
-      (s, atoms') = partitionAtoms' f atoms
+    maintainer = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DHMaintainer x') (Just x) | x /= x' = error $ "Conflicting rulesHead values:" ++ show (x, x')
+                from Source (DHMaintainer x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DHMaintainer) x)) atoms
+              where
+                f Source (DHMaintainer y) = Just y
+                f _ _ = Nothing
 
-getMaybeSingleton :: (Eq a) => Maybe a -> (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> Maybe a
-getMaybeSingleton multiple f atoms =
-    foldAtoms from Nothing atoms
-    where
-      from k a (Just x) =
-          case f k a of
-            Just x' -> if x /= x' then multiple else Just x
-            Nothing -> Just x
-      from k a Nothing =
-          f k a
+    copyright = lens g s
+        where
+          g atoms = foldAtoms from Nothing atoms
+              where
+                from Source (DebCopyright x') (Just x) | x /= x' = error $ "Conflicting rulesHead values:" ++ show (x, x')
+                from Source (DebCopyright x) _ = Just x
+                from _ _ x = x
+          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebCopyright) x)) atoms
+              where
+                f Source (DebCopyright y) = Just y
+                f _ _ = Nothing
 
-getSingleton :: (Eq a) => a -> (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> a
-getSingleton def f atoms = fromMaybe def (getMaybeSingleton Nothing f atoms)
+    omitLTDeps = lens g s
+        where
+          g atoms = foldAtoms from False atoms
+              where
+                from Source OmitLTDeps _ = True
+                from _ _ x = x
+          s x atoms = (if x then insertAtom Source OmitLTDeps else id) (deleteAtoms p atoms)
+              where
+                p Source OmitLTDeps = True
+                p _ _ = False
+    --  :: Lens atoms Bool -- OmitLTDeps
 
-dataDir :: FilePath -> Atoms -> FilePath
-dataDir def atoms =
-    maybe def dataDirectory $ getL packageDescription atoms
-    where
-      -- This is the directory where the files listed in the Data-Files
-      -- section of the .cabal file need to be installed.
-      dataDirectory :: PackageDescription -> FilePath
-      dataDirectory pkgDesc =
-          "usr/share" </> (pkgname ++ "-" ++ (showVersion . pkgVersion . package $ pkgDesc))
-          where
-            PackageName pkgname = pkgName . package $ pkgDesc
+    buildDeps = lens g s
+        where
+          g atoms = foldAtoms from Set.empty atoms
+              where
+                from Source (BuildDep d) x = Set.insert d x
+                from _ _ x = x
+          s x atoms = Set.fold (\ d atoms' -> insertAtom Source (BuildDep d) atoms') (deleteAtoms p atoms) x
+              where
+                p Source (BuildDep _) = True
+                p _ _ = False
+    --  :: Lens atoms (Set BinPkgName) -- BuildDep BinPkgName
+    buildDepsIndep = lens g s
+        where
+          g atoms = foldAtoms from Set.empty atoms
+              where
+                from Source (BuildDepIndep d) x = Set.insert d x
+                from _ _ x = x
+          s x atoms = Set.fold (\ d atoms' -> insertAtom Source (BuildDepIndep d) atoms') (deleteAtoms p atoms) x
+              where
+                p Source (BuildDepIndep _) = True
+                p _ _ = False
+    --  :: Lens atoms (Set BinPkgName) -- BuildDepIndep BinPkgName
+    epochMap = lens g s
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from Source (EpochMapping name epoch) x = Map.insertWith (error "Conflicting Epochs") name epoch x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ name epoch atoms' -> insertAtom Source (EpochMapping name epoch) atoms') (deleteAtoms p atoms) x
+              where
+                p Source (EpochMapping _ _) = True
+                p _ _ = False
+    --  :: Lens atoms (Map PackageName Int) -- EpochMapping PackageName Int
+    extraDevDeps = lens g s
+        where
+          g atoms = foldAtoms from Set.empty atoms
+              where
+                from Source (DevDepends b) x = Set.insert b x
+                from _ _ x = x
+          s x atoms = Set.fold (\ d atoms' -> insertAtom Source (DevDepends d) atoms') (deleteAtoms p atoms) x
+              where
+                p Source (DevDepends _) = True
+                p _ _ = False
+    --  :: Lens atoms (Set BinPkgName) -- DevDepends BinPkgName
+    intermediateFiles = lens g s
+        where
+          g atoms = foldAtoms from Set.empty atoms
+              where
+                from Source (DHIntermediate path text) x = Set.insert (path, text) x
+                from _ _ x = x
+          s x atoms =  Set.fold (\ (path, text) atoms' -> insertAtom Source (DHIntermediate path text) atoms') (deleteAtoms p atoms) x
+              where
+                p Source (DHIntermediate _ _) = True
+                p _ _ = False
+    --  :: Lens atoms (Set (FilePath, Text)) -- DHIntermediate FilePath Text
+    warning = lens g s
+        where
+          g atoms = foldAtoms from Set.empty atoms
+              where
+                from Source (Warning t) x = Set.insert t x
+                from _ _ x = x
+          s x atoms = Set.fold (\ text atoms' -> insertAtom Source (Warning text) atoms') (deleteAtoms p atoms) x
+              where
+                p Source (Warning _) = True
+                p _ _ = False
+    --  :: Lens atoms (Set Text) -- Warning Text
+    rulesFragments = lens g s
+        where
+          g atoms = foldAtoms from Set.empty atoms
+              where
+                from Source (DebRulesFragment t) x = Set.insert t x
+                from _ _ x = x
+          s x atoms = Set.fold (\ text atoms' -> insertAtom Source (DebRulesFragment text) atoms') (deleteAtoms p atoms) x
+              where
+                p Source (DebRulesFragment _) = True
+                p _ _ = False
+    -- :: Lens atoms (Set Text) -- DebRulesFragment Text
+    extraLibMap = lens g s
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from Source (ExtraLibMapping cabal debian) x = Map.insertWith union cabal (singleton debian) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ cabal debian atoms' -> Set.fold (\ debian' atoms'' -> insertAtom Source (ExtraLibMapping cabal debian') atoms'') atoms' debian) (deleteAtoms p atoms) x
+              where
+                p Source (ExtraLibMapping _ _) = True
+                p _ _ = False
+    --  :: Lens atoms (Map String (Set BinPkgName)) -- ExtraLibMapping String BinPkgName
+    execMap = lens g s
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from Source (ExecMapping cabal debian) x = Map.insertWith (error "Conflict in execMap") cabal debian x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ cabal debian atoms' -> insertAtom Source (ExecMapping cabal debian) atoms') (deleteAtoms p atoms) x
+              where
+                p Source (ExecMapping _ _) = True
+                p _ _ = False
+    --  :: Lens atoms (Map String (Set BinPkgName)) -- ExecMapping String BinPkgName
+    cabalFlagAssignments = lens g s
+        where
+          g atoms = foldAtoms from Set.empty atoms
+              where
+                from Source (DHCabalFlagAssignments pairs) x = union pairs x
+                from _ _ x = x
+          s x atoms = insertAtom Source (DHCabalFlagAssignments x) (deleteAtoms p atoms)
+              where
+                p Source (DHCabalFlagAssignments _) = True
+                p _ _ = False
 
-compilerVersion :: Atoms -> Maybe Version
-compilerVersion deb =
-    lookupAtom Source from deb
-    where from (CompilerVersion x) = Just x
-          from _ = Nothing
-
-putCompilerVersion :: Version -> Atoms -> Atoms
-putCompilerVersion ver deb = insertAtom Source (CompilerVersion ver) deb
-
-putNoProfilingLibrary :: Atoms -> Atoms
-putNoProfilingLibrary deb = insertAtom Source NoProfilingLibrary deb
-
-noProfilingLibrary :: Atoms -> Bool
-noProfilingLibrary deb =
-    not . Set.null . lookupAtoms Source isNoProfilingLibrary $ deb
-    where
-      isNoProfilingLibrary NoProfilingLibrary = Just NoProfilingLibrary
-      isNoProfilingLibrary _ = Nothing
-
-putNoDocumentationLibrary :: Atoms -> Atoms
-putNoDocumentationLibrary deb = insertAtom Source NoDocumentationLibrary deb
-
-noDocumentationLibrary :: Atoms -> Bool
-noDocumentationLibrary deb =
-    hasAtom Source isNoDocumentationLibrary deb
-    where
-      isNoDocumentationLibrary NoDocumentationLibrary = Just NoDocumentationLibrary
-      isNoDocumentationLibrary _ = Nothing
-
-utilsPackageName :: Atoms -> Maybe BinPkgName
-utilsPackageName deb =
-    foldAtoms from Nothing deb
-    where
-      from Source (UtilsPackageName r) Nothing = Just r
-      from Source (UtilsPackageName _) (Just _) = error "Multiple values for UtilsPackageName"
-      from _ _ r = r
-
-missingDependency :: BinPkgName -> Atoms -> Atoms
-missingDependency b deb = insertAtom Source (MissingDependency b) deb
-
-setRevision :: String -> Atoms -> Atoms
-setRevision s deb =
-    replaceAtoms from Source (DebRevision s) deb
-    where
-      from :: DebAtomKey -> DebAtom -> Bool
-      from Source (DebRevision _) = True
-      from _ _ = False
-
-revision :: Atoms -> String
-revision atoms =
-    getSingleton "" from atoms
-    where
-      from Source (DebRevision s) = Just s
-      from _ _ = Nothing
-
-setDebVersion :: DebianVersion -> Atoms -> Atoms
-setDebVersion v deb =
-    replaceAtoms from Source (DebVersion v) deb
-    where
-      from :: DebAtomKey -> DebAtom -> Bool
-      from Source (DebVersion _) = True
-      from _ _ = False
-
-debVersion :: Atoms -> Maybe DebianVersion
-debVersion atoms =
-    getMaybeSingleton (error "Conflicting DebVersion values") from atoms
-    where
-      from Source (DebVersion v) = Just v
-      from _ _ = Nothing
-
-setOmitLTDeps :: Atoms -> Atoms
-setOmitLTDeps deb =
-    replaceAtoms from Source OmitLTDeps deb
-    where
-      from :: DebAtomKey -> DebAtom -> Bool
-      from Source OmitLTDeps = True
-      from _ _ = False
-
-omitLTDeps :: Atoms -> Bool
-omitLTDeps atoms =
-    not $ Set.null $ fst $ partitionAtoms' from atoms
-    where
-      from Source OmitLTDeps = Just ()
-      from _ _ = Nothing
-
-buildDeps :: Atoms -> Set BinPkgName
-buildDeps atoms =
-    foldAtoms from mempty atoms
-    where
-      from Source (BuildDep x) s = Set.insert x s
-      from _ _ s = s
-
-putBuildDep :: BinPkgName -> Atoms -> Atoms
-putBuildDep bin atoms = insertAtom Source (BuildDep bin) atoms
-
-buildDepsIndep :: Atoms -> Set BinPkgName
-buildDepsIndep atoms =
-    foldAtoms from mempty atoms
-    where
-      from Source (BuildDepIndep x) s = Set.insert x s
-      from _ _ s = s
-
-putBuildDepIndep :: BinPkgName -> Atoms -> Atoms
-putBuildDepIndep bin atoms = insertAtom Source (BuildDep bin) atoms
-
-missingDependencies :: Atoms -> Set BinPkgName
-missingDependencies atoms =
-    foldAtoms from mempty atoms
-    where
-      from Source (MissingDependency x) s = Set.insert x s
-      from _ _ s = s
-
-extraLibMap :: Atoms -> Map.Map String (Set BinPkgName)
-extraLibMap atoms =
-    foldAtoms from mempty atoms
-    where
-      from Source (ExtraLibMapping cabal debian) m =
-          Map.insertWith union cabal (singleton debian) m
-      from _ _ m = m
-
-putExtraLibMapping :: String -> BinPkgName -> Atoms -> Atoms
-putExtraLibMapping cab deb atoms = insertAtom Source (ExtraLibMapping cab deb) atoms
-
-putExecMap :: String -> BinPkgName -> Atoms -> Atoms
-putExecMap cabal debian deb = insertAtom Source (ExecMapping cabal debian) deb
-
-putPackageInfo :: PackageInfo -> Atoms -> Atoms
-putPackageInfo info atoms = insertAtom Source (DebPackageInfo info) atoms
-
-packageInfo :: PackageName -> Atoms -> Maybe PackageInfo
-packageInfo (PackageName name) atoms =
-    foldAtoms from Nothing atoms
-    where
-      from Source (DebPackageInfo p) Nothing | cabalName p == name = Just p
-      from Source (DebPackageInfo p') (Just _) | cabalName p' == name = error $ "Multiple DebPackageInfo entries for " ++ name
-      from _ _ x = x
-
-execMap :: Atoms -> Map.Map String BinPkgName
-execMap atoms =
-    foldAtoms from mempty atoms
-    where
-      from Source (ExecMapping cabal debian) m =
-          Map.insertWith (\ a b -> if a /= b
-                                   then error $ "Conflicting mapping for Build-Tool " ++ cabal ++ ": " ++ show (a, b)
-                                   else a) cabal debian m
-      from _ _ m = m
-
-putEpochMapping :: PackageName -> Int -> Atoms -> Atoms
-putEpochMapping cab n atoms = insertAtom Source (EpochMapping cab n) atoms
-
-epochMap :: Atoms -> Map.Map PackageName Int
-epochMap atoms =
-    foldAtoms from mempty atoms
-    where
-      from Source (EpochMapping name epoch) m =
-          Map.insertWith (\ a b -> if a /= b
-                                   then error $ "Conflicting epochs for " ++ show name ++ ": " ++ show (a, b)
-                                   else a) name epoch m
-      from _ _ m = m
-
--- | We should always call this, just as we should always apply
--- knownVersionSplits.
-knownEpochMappings :: Atoms -> Atoms
-knownEpochMappings = putEpochMapping (PackageName "HaXml") 1
+    --  :: Lens atoms (Set (FlagName, Bool)) -- DHCabalFlagAssignments (Set (FlagName, Bool))
 
 filterMissing :: Atoms -> [[Relation]] -> [[Relation]]
 filterMissing atoms rels =
-    filter (/= []) (List.map (filter (\ (Rel name _ _) -> not (Set.member name (missingDependencies atoms)))) rels)
-
-versionSplits :: Atoms -> [VersionSplits]
-versionSplits atoms =
-    getSingleton (error "versionSplits") from atoms
-    where
-      from Source (DebVersionSplits x) = Just x
-      from _ _ = Nothing
-
-putExtraDevDep :: BinPkgName -> Atoms -> Atoms
-putExtraDevDep bin atoms = insertAtom Source (DevDepends bin) atoms
-
-extraDevDeps :: Atoms -> Set BinPkgName
-extraDevDeps atoms =
-    foldAtoms f mempty atoms
-    where
-      f Source (DevDepends p) s = Set.insert p s
-      f _ _ s = s
+    filter (/= []) (List.map (filter (\ (Rel name _ _) -> not (Set.member name (getL missingDependencies atoms)))) rels)
 
 depends :: BinPkgName -> Relation -> Atoms -> Atoms
 depends pkg rel atoms = insertAtom (Binary pkg) (Depends rel) atoms
@@ -889,21 +1014,6 @@ binaryPackageConflicts p atoms =
     foldAtoms f [] atoms
     where f (Binary p') (Conflicts rel) rels | p == p' = [rel] : rels
           f _ _ rels = rels
-
-setSourceArchitecture :: PackageArchitectures -> Atoms -> Atoms
-setSourceArchitecture x deb = insertAtom Source (DHArch x) deb
-
-foldArchitectures :: (PackageArchitectures -> r -> r)
-                 -> (BinPkgName -> PackageArchitectures -> r -> r)
-                 -> r
-                 -> Atoms
-                 -> r
-foldArchitectures sourceArch binaryArch r0 atoms =
-    foldAtoms from r0 atoms
-    where
-      from (Binary p) (DHArch x) r = binaryArch p x r
-      from Source (DHArch x) r = sourceArch x r
-      from _ _ r = r
 
 foldPriorities :: (PackagePriority -> r -> r)
                -> (BinPkgName -> PackagePriority -> r -> r)
@@ -948,9 +1058,6 @@ setSourceSection x deb = insertAtom Source (DHSection x) deb
 setSourceDescription :: Text -> Atoms -> Atoms
 setSourceDescription x deb = insertAtom Source (DHDescription x) deb
 
-setArchitecture :: BinPkgName -> PackageArchitectures -> Atoms -> Atoms
-setArchitecture k x deb = insertAtom (Binary k) (DHArch x) deb
-
 setPriority :: BinPkgName -> PackagePriority -> Atoms -> Atoms
 setPriority k x deb = insertAtom (Binary k) (DHPriority x) deb
 
@@ -974,90 +1081,6 @@ doBackups bin s deb =
     insertAtom (Binary bin) (DHBackups s) $
     depends bin (Rel (BinPkgName "anacron") Nothing Nothing) $
     deb
-
-putCopyright :: Either License Text -> Atoms -> Atoms
-putCopyright copy deb = insertAtom Source (DebCopyright copy) deb
-
-copyright :: Either License Text -> Atoms -> Either License Text
-copyright def atoms =
-    fromMaybe def $ foldAtoms from Nothing atoms
-    where
-      from Source (DebCopyright x') (Just x) | x /= x' = error $ "Conflicting copyright atoms: " ++ show x ++ " vs. " ++ show x'
-      from Source (DebCopyright x) _ = Just x
-      from _ _ x = x
-
-warning :: Text -> Atoms -> Atoms
-warning text deb = insertAtom Source (Warning text) deb
-
-putDebMaintainer :: NameAddr -> Atoms -> Atoms
-putDebMaintainer maint atoms = insertAtom Source (DHMaintainer maint) atoms
-
-debMaintainer :: Atoms -> Maybe NameAddr
-debMaintainer atoms =
-    foldAtoms from Nothing atoms
-    where
-      from Source (DHMaintainer x) (Just maint) | x /= maint = error $ "Conflicting maintainer values: " ++ show x ++ " vs. " ++ show maint
-      from Source (DHMaintainer x) _ = Just x
-      from _ _ x = x
-
-buildDir :: FilePath -> Atoms -> FilePath
-buildDir def atoms =
-    fromMaybe def $ foldAtoms from Nothing atoms
-    where
-      from Source (BuildDir path') (Just path) | path /= path' = error $ "Conflicting buildDir atoms: " ++ show path ++ " vs. " ++ show path'
-      from Source (BuildDir path') _ = Just path'
-      from _ _ x = x
-
-intermediateFile :: FilePath -> Text -> Atoms -> Atoms
-intermediateFile path text atoms = insertAtom Source (DHIntermediate path text) atoms
-
-getIntermediateFiles :: Atoms -> [(FilePath, Text)]
-getIntermediateFiles atoms =
-    foldAtoms from [] atoms
-    where
-      from Source (DHIntermediate path text) xs = (path, text) : xs
-      from _ _ xs = xs
-
-setBuildDir :: FilePath -> Atoms -> Atoms
-setBuildDir path atoms =
-    replaceAtoms f Source (BuildDir path) atoms
-    where
-      f Source (BuildDir _) = True
-      f _ _ = False
-
-cabalFlagAssignments :: Atoms -> Set (FlagName, Bool)
-cabalFlagAssignments atoms =
-    foldAtoms from mempty atoms
-    where
-      from Source (DHCabalFlagAssignments xs) ys = union xs ys
-      from _ _ ys = ys
-
-putCabalFlagAssignments :: Set (FlagName, Bool) -> Atoms -> Atoms
-putCabalFlagAssignments xs atoms =
-    modifyAtoms' f g atoms
-    where
-      f Source (DHCabalFlagAssignments xs') = Just (union xs xs')
-      f _ _ = Nothing
-      g xss = singleton (Source, DHCabalFlagAssignments (mconcat (Set.toList xss)))
-
-flags :: Atoms -> Flags
-flags atoms =
-    fromMaybe defaultFlags $ foldAtoms from Nothing atoms
-    where
-      from Source (DHFlags _) (Just _) = error "Conflicting Flag atoms"
-      from Source (DHFlags fs) _ = Just fs
-      from _ _ x = x
-
-mapFlags :: (Flags -> Flags) -> Atoms -> Atoms
-mapFlags f atoms =
-    modifyAtoms' g h atoms
-    where
-      g Source (DHFlags x) = Just x
-      g _ _ = Nothing
-      h xs = singleton (Source, DHFlags (f (case maxView xs of
-                                              Just (_, s) | not (Set.null s) -> error "Conflicting Flag atoms"
-                                              Just (x, _) -> x
-                                              Nothing -> defaultFlags)))
 
 watchAtom :: PackageName -> Text
 watchAtom (PackageName pkgname) =
@@ -1149,9 +1172,6 @@ file p path text atoms = insertAtom (Binary p) (DHFile path text) atoms
 
 installDir :: BinPkgName -> FilePath -> Atoms -> Atoms
 installDir p path atoms = insertAtom (Binary p) (DHInstallDir path) atoms
-
-rulesFragment :: Text -> Atoms -> Atoms
-rulesFragment text atoms = insertAtom Source (DebRulesFragment text) atoms
 
 installCabalExec :: BinPkgName -> String -> FilePath -> Atoms -> Atoms
 installCabalExec p name d atoms = insertAtom (Binary p) (DHInstallCabalExec name d) atoms
@@ -1245,8 +1265,8 @@ finalizeAtoms atoms =
           then x'
           else foldAtoms insertAtom x' (newer x')
 
-      builddir = buildDir "dist-ghc/build" atoms
-      datadir = dataDir (error "foldAtomsFinalized") atoms
+      builddir = fromMaybe {-(error "finalizeAtoms: no buildDir")-} "dist-ghc/build" $ getL buildDir atoms
+      datadir = fromMaybe (error "finalizeAtoms: no dataDir") $ getL dataDir atoms
 
       -- Fully expand a single atom
       next :: DebAtomKey -> DebAtom -> Atoms -> Atoms
@@ -1259,19 +1279,19 @@ finalizeAtoms atoms =
           install b (builddir </> name </> name) dst $
           r
       next (Binary b) (DHInstallCabalExecTo n d) r =
-          rulesFragment (unlines [ pack ("binary-fixup" </> show (pretty b)) <> "::"
-                                 , "\tinstall -Dp " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty b) </> makeRelative "/" d) ]) $
+          modL rulesFragments (Set.insert (unlines [ pack ("binary-fixup" </> show (pretty b)) <> "::"
+                                                   , "\tinstall -Dp " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty b) </> makeRelative "/" d) ])) $
           r
       next (Binary b) (DHInstallData s d) r =
           if takeFileName s == takeFileName d
           then install b s (datadir </> makeRelative "/" (takeDirectory d)) r
           else installTo b s (datadir </> makeRelative "/" d) r
       next (Binary p) (DHInstallTo s d) r =
-          rulesFragment (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
-                                 , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ]) $
+          modL rulesFragments (Set.insert (unlines [ pack ("binary-fixup" </> show (pretty p)) <> "::"
+                                                   , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])) $
           r
       next (Binary p) (DHFile path s) r =
-          intermediateFile tmpPath s . install p tmpPath destDir' $ r
+          modL intermediateFiles (Set.insert (tmpPath, s)) . install p tmpPath destDir' $ r
           where
             (destDir', destName') = splitFileName path
             tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
@@ -1446,7 +1466,7 @@ backupAtoms b name =
 
 execAtoms :: BinPkgName -> InstallFile -> Atoms -> Atoms
 execAtoms b ifile r =
-    rulesFragment (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp")) .
+    modL rulesFragments (Set.insert (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp"))) .
     fileAtoms b ifile $
     r
 

@@ -17,9 +17,9 @@ import Control.Applicative ((<$>))
 import Data.Lens.Lazy (getL, setL, modL)
 import Data.Maybe
 import Data.Text (Text)
-import Debian.Debianize.Atoms (HasAtoms(packageDescription, compat, watch, changelog, control), Flags(..), DebAction(..),
+import Debian.Debianize.Atoms (HasAtoms(packageDescription, compat, watch, changelog, control, copyright), Flags(..), DebAction(..),
                                    Atoms, defaultAtoms, flags, watchAtom, setSourcePriority,
-                                   setSourceSection, compilerVersion, cabalFlagAssignments, putCopyright)
+                                   setSourceSection, compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..))
@@ -47,7 +47,7 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 cabalDebian :: IO ()
 cabalDebian =
   withFlags defaultAtoms $ \ atoms ->
-      case debAction (flags atoms) of
+      case debAction (getL flags atoms) of
         SubstVar debType -> substvars atoms debType
         Debianize -> withEnvironmentArgs (debianize ".")
         Usage -> do
@@ -106,7 +106,7 @@ debianize top args =
 -- computed from the cabal package description.)
 cabalToDebianization :: FilePath -> Atoms -> IO Atoms
 cabalToDebianization top old =
-    do old' <- getSimplePackageDescription (verbosity (flags old)) (compilerVersion old) (cabalFlagAssignments old) top old
+    do old' <- getSimplePackageDescription (verbosity (getL flags old)) (getL compilerVersion old) (getL cabalFlagAssignments old) top old
        let pkgDesc = fromMaybe (error "cabalToDebianization: No package description") (getL packageDescription old')
        date <- getCurrentLocalRFC822Time
        copyright <- withCurrentDirectory top $ inputCopyright pkgDesc
@@ -132,7 +132,7 @@ debianization date copyright' maint level deb =
     setSourceSection (MainSection "haskell") $
     -- setSourceBinaries [] $
     setL watch (Just (watchAtom (pkgName $ Cabal.package $ pkgDesc)))  $
-    putCopyright (Right copyright') $
+    setL copyright (Just (Right copyright')) $
     versionInfo maint date $
     addExtraLibDependencies $
     -- Do we want to replace the atoms in the old deb, or add these?
