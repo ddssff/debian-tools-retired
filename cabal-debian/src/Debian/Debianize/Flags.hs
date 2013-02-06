@@ -76,9 +76,9 @@ atomOptions =
              "Specify a package to add to the architecture independent build dependency list for this source package, e.g. '--build-dep-indep perl'.",
       Option "" ["dev-dep"] (ReqArg (\ name atoms -> modL extraDevDeps (Set.insert (BinPkgName name)) atoms) "Debian binary package name")
              "Specify a package to add to the Depends: list of the -dev package, e.g. '--dev-dep libncurses5-dev'.  It might be good if this implied --build-dep.",
-      Option "" ["depends"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> depends p r atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
+      Option "" ["depends"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL depends (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
              "Generalized --dev-dep - specify pairs A:B of debian binary package names, each A gets a Depends: B",
-      Option "" ["conflicts"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> conflicts p r atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
+      Option "" ["conflicts"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL conflicts (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
              "Specify pairs A:B of debian binary package names, each A gets a Conflicts: B.  Note that B can have debian style version relations",
       Option "" ["map-dep"] (ReqArg (\ pair atoms -> case break (== '=') pair of
                                                        (cab, (_ : deb)) -> modL extraLibMap (Map.insertWith Set.union cab (singleton (b deb))) atoms

@@ -38,8 +38,6 @@ module Debian.Debianize.Atoms
     -- * DependencyHint getter and setters
     , filterMissing
     , knownEpochMappings
-    , depends
-    , conflicts
     , binaryPackageDeps
     , binaryPackageConflicts
     , setSourcePriority
@@ -90,7 +88,7 @@ module Debian.Debianize.Atoms
 
 import Data.Generics (Data, Typeable)
 import Data.Lens.Lazy (Lens, setL)
-import Data.Map as Map (Map, fold, fromList)
+import Data.Map as Map (Map, fold, fromList, foldWithKey)
 import Data.Monoid (Monoid)
 import Data.Set (Set)
 import Data.Text (Text)
@@ -111,7 +109,7 @@ import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Lens.Lazy (lens, getL, modL)
 import Data.List as List (map)
-import Data.Map as Map (lookup, insertWith, foldWithKey, empty, null, insert, update)
+import Data.Map as Map (lookup, insertWith, empty, null, insert, update)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
 import Data.Set as Set (maxView, toList, fromList, null, empty, union, singleton, fold, insert, member)
@@ -480,53 +478,51 @@ instance Monoid Atoms where
     mempty = Atoms mempty -- defaultAtoms
     mappend a b = foldAtoms insertAtom a b
 
-class (Monoid atoms,
-       Show atoms) -- for debugging
-    => HasAtoms atoms where
-    rulesHead :: Lens atoms (Maybe Text) -- DebRulesHead Text
-    packageDescription :: Lens atoms (Maybe PackageDescription) -- DHPackageDescription PackageDescription
-    postInst :: Lens atoms (Map BinPkgName Text) -- DHPostInst (Map BinPkgName Text)
-    compat :: Lens atoms (Maybe Int) -- DebCompat Int
-    sourceFormat :: Lens atoms (Maybe SourceFormat) -- DebSourceFormat SourceFormat
-    watch :: Lens atoms (Maybe Text) -- DebWatch Text
-    sourcePackageName :: Lens atoms (Maybe SrcPkgName) -- SourcePackageName SrcPkgName
-    changelog :: Lens atoms (Maybe ChangeLog) -- DebChangeLog ChangeLog
+class (Monoid atoms, Show atoms {- Show instance for debugging only -}) => HasAtoms atoms where
+    rulesHead :: Lens atoms (Maybe Text)
+    packageDescription :: Lens atoms (Maybe PackageDescription)
+    postInst :: Lens atoms (Map BinPkgName Text)
+    compat :: Lens atoms (Maybe Int)
+    sourceFormat :: Lens atoms (Maybe SourceFormat)
+    watch :: Lens atoms (Maybe Text)
+    sourcePackageName :: Lens atoms (Maybe SrcPkgName)
+    changelog :: Lens atoms (Maybe ChangeLog)
     comments :: Lens atoms (Maybe [[Text]]) -- ^ Comment entries for the latest changelog entry (DebLogComments [[Text]])
-    control :: Lens atoms SourceDebDescription -- DebControl SourceDebDescription
-    compilerVersion :: Lens atoms (Maybe Version) -- CompilerVersion Version
-    compiler :: Lens atoms (Maybe Compiler) -- DHCompiler Compiler
-    dataDir :: Lens atoms (Maybe FilePath) -- DataDir FilePath
-    noProfilingLibrary :: Lens atoms Bool -- NoProfilingLibrary
-    noDocumentationLibrary :: Lens atoms Bool -- NoDocumentationLibrary
-    utilsPackageName :: Lens atoms (Maybe BinPkgName) -- UtilsPackageName BinPkgName
-    missingDependencies :: Lens atoms (Set BinPkgName) -- MissingDependency BinPkgName
-    flags :: Lens atoms Flags -- DHFlags Flags
+    control :: Lens atoms SourceDebDescription
+    compilerVersion :: Lens atoms (Maybe Version)
+    compiler :: Lens atoms (Maybe Compiler)
+    dataDir :: Lens atoms (Maybe FilePath)
+    noProfilingLibrary :: Lens atoms Bool
+    noDocumentationLibrary :: Lens atoms Bool
+    utilsPackageName :: Lens atoms (Maybe BinPkgName)
+    missingDependencies :: Lens atoms (Set BinPkgName)
+    flags :: Lens atoms Flags
 
-    buildDir :: Lens atoms (Maybe FilePath) -- BuildDir FilePath
-    revision :: Lens atoms (Maybe String) -- DebRevision String
-    debVersion :: Lens atoms (Maybe DebianVersion) -- DebVersion DebianVersion
-    packageInfo :: Lens atoms (Map PackageName PackageInfo) -- DebPackageInfo PackageInfo
-    versionSplits :: Lens atoms [VersionSplits] -- DebVersionSplits [VersionSplits]
-    sourceArchitecture :: Lens atoms (Maybe PackageArchitectures) -- DHArch PackageArchitectures
-    binaryArchitectures :: Lens atoms (Map BinPkgName PackageArchitectures) -- DHArch PackageArchitectures
-    maintainer :: Lens atoms (Maybe NameAddr) -- DHMaintainer NameAddr
-    copyright :: Lens atoms (Maybe (Either License Text)) -- DebCopyright (Either License Text)
+    buildDir :: Lens atoms (Maybe FilePath)
+    revision :: Lens atoms (Maybe String)
+    debVersion :: Lens atoms (Maybe DebianVersion)
+    packageInfo :: Lens atoms (Map PackageName PackageInfo)
+    versionSplits :: Lens atoms [VersionSplits]
+    sourceArchitecture :: Lens atoms (Maybe PackageArchitectures)
+    binaryArchitectures :: Lens atoms (Map BinPkgName PackageArchitectures)
+    maintainer :: Lens atoms (Maybe NameAddr)
+    copyright :: Lens atoms (Maybe (Either License Text))
 
-    rulesFragments :: Lens atoms (Set Text) -- DebRulesFragment Text
-    omitLTDeps :: Lens atoms Bool -- OmitLTDeps
-    buildDeps :: Lens atoms (Set BinPkgName) -- BuildDep BinPkgName
-    buildDepsIndep :: Lens atoms (Set BinPkgName) -- BuildDepIndep BinPkgName
-    extraLibMap :: Lens atoms (Map String (Set BinPkgName)) -- ExtraLibMapping String BinPkgName
-    execMap :: Lens atoms (Map String BinPkgName) -- ExecMapping String BinPkgName
-    epochMap :: Lens atoms (Map PackageName Int) -- EpochMapping PackageName Int
-    extraDevDeps :: Lens atoms (Set BinPkgName) -- DevDepends BinPkgName
-    intermediateFiles :: Lens atoms (Set (FilePath, Text)) -- DHIntermediate FilePath Text
-    warning :: Lens atoms (Set Text) -- Warning Text
-    cabalFlagAssignments :: Lens atoms (Set (FlagName, Bool)) -- DHCabalFlagAssignments (Set (FlagName, Bool))
+    rulesFragments :: Lens atoms (Set Text)
+    omitLTDeps :: Lens atoms Bool
+    buildDeps :: Lens atoms (Set BinPkgName)
+    buildDepsIndep :: Lens atoms (Set BinPkgName)
+    extraLibMap :: Lens atoms (Map String (Set BinPkgName))
+    execMap :: Lens atoms (Map String BinPkgName)
+    epochMap :: Lens atoms (Map PackageName Int)
+    extraDevDeps :: Lens atoms (Set BinPkgName)
+    intermediateFiles :: Lens atoms (Set (FilePath, Text))
+    warning :: Lens atoms (Set Text)
+    cabalFlagAssignments :: Lens atoms (Set (FlagName, Bool))
 
--- Maps
-    -- depends :: Lens atoms (Map BinPkgName (Set Relation)) -- Depends Relation
-    -- conflicts :: Lens atoms (Map BinPkgName (Set Relation)) -- Conflicts Relation
+    depends :: Lens atoms (Map BinPkgName (Set Relation)) -- This should be [[Relation]] for full generality, or Set (Set Relation)
+    conflicts :: Lens atoms (Map BinPkgName (Set Relation)) -- This too
+
     -- DHApacheSite String FilePath Text
     -- DHLogrotateStanza Text
     -- DHLink FilePath FilePath
@@ -879,8 +875,6 @@ instance HasAtoms Atoms where
               where
                 p Source OmitLTDeps = True
                 p _ _ = False
-    --  :: Lens atoms Bool -- OmitLTDeps
-
     buildDeps = lens g s
         where
           g atoms = foldAtoms from Set.empty atoms
@@ -891,7 +885,6 @@ instance HasAtoms Atoms where
               where
                 p Source (BuildDep _) = True
                 p _ _ = False
-    --  :: Lens atoms (Set BinPkgName) -- BuildDep BinPkgName
     buildDepsIndep = lens g s
         where
           g atoms = foldAtoms from Set.empty atoms
@@ -902,7 +895,6 @@ instance HasAtoms Atoms where
               where
                 p Source (BuildDepIndep _) = True
                 p _ _ = False
-    --  :: Lens atoms (Set BinPkgName) -- BuildDepIndep BinPkgName
     epochMap = lens g s
         where
           g atoms = foldAtoms from Map.empty atoms
@@ -913,7 +905,6 @@ instance HasAtoms Atoms where
               where
                 p Source (EpochMapping _ _) = True
                 p _ _ = False
-    --  :: Lens atoms (Map PackageName Int) -- EpochMapping PackageName Int
     extraDevDeps = lens g s
         where
           g atoms = foldAtoms from Set.empty atoms
@@ -924,7 +915,6 @@ instance HasAtoms Atoms where
               where
                 p Source (DevDepends _) = True
                 p _ _ = False
-    --  :: Lens atoms (Set BinPkgName) -- DevDepends BinPkgName
     intermediateFiles = lens g s
         where
           g atoms = foldAtoms from Set.empty atoms
@@ -935,7 +925,6 @@ instance HasAtoms Atoms where
               where
                 p Source (DHIntermediate _ _) = True
                 p _ _ = False
-    --  :: Lens atoms (Set (FilePath, Text)) -- DHIntermediate FilePath Text
     warning = lens g s
         where
           g atoms = foldAtoms from Set.empty atoms
@@ -946,7 +935,6 @@ instance HasAtoms Atoms where
               where
                 p Source (Warning _) = True
                 p _ _ = False
-    --  :: Lens atoms (Set Text) -- Warning Text
     rulesFragments = lens g s
         where
           g atoms = foldAtoms from Set.empty atoms
@@ -957,7 +945,6 @@ instance HasAtoms Atoms where
               where
                 p Source (DebRulesFragment _) = True
                 p _ _ = False
-    -- :: Lens atoms (Set Text) -- DebRulesFragment Text
     extraLibMap = lens g s
         where
           g atoms = foldAtoms from Map.empty atoms
@@ -968,7 +955,6 @@ instance HasAtoms Atoms where
               where
                 p Source (ExtraLibMapping _ _) = True
                 p _ _ = False
-    --  :: Lens atoms (Map String (Set BinPkgName)) -- ExtraLibMapping String BinPkgName
     execMap = lens g s
         where
           g atoms = foldAtoms from Map.empty atoms
@@ -979,7 +965,6 @@ instance HasAtoms Atoms where
               where
                 p Source (ExecMapping _ _) = True
                 p _ _ = False
-    --  :: Lens atoms (Map String (Set BinPkgName)) -- ExecMapping String BinPkgName
     cabalFlagAssignments = lens g s
         where
           g atoms = foldAtoms from Set.empty atoms
@@ -991,29 +976,37 @@ instance HasAtoms Atoms where
                 p Source (DHCabalFlagAssignments _) = True
                 p _ _ = False
 
-    --  :: Lens atoms (Set (FlagName, Bool)) -- DHCabalFlagAssignments (Set (FlagName, Bool))
+    depends = lens g s -- Lens atoms (Map BinPkgName (Set Relation)) -- Depends Relation
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (Depends rel) x = Map.insertWith union b (singleton rel) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b rels atoms' -> Set.fold (\ rel atoms'' -> insertAtom (Binary b) (Depends rel) atoms'') atoms' rels) (deleteAtoms p atoms) x
+              where
+                p (Binary _) (Depends _) = True
+                p _ _ = False
+
+    conflicts = lens g s -- Lens atoms (Map BinPkgName (Set Relation)) -- Conflicts Relation
+        where
+          g atoms = foldAtoms from Map.empty atoms
+              where
+                from (Binary b) (Conflicts rel) x = Map.insertWith union b (singleton rel) x
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b rels atoms' -> Set.fold (\ rel atoms'' -> insertAtom (Binary b) (Conflicts rel) atoms'') atoms' rels) (deleteAtoms p atoms) x
+              where
+                p (Binary _) (Conflicts _) = True
+                p _ _ = False
+
+binaryPackageDeps :: BinPkgName -> Atoms -> [[Relation]]
+binaryPackageDeps b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL depends atoms))
+
+binaryPackageConflicts :: BinPkgName -> Atoms -> [[Relation]]
+binaryPackageConflicts b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL conflicts atoms))
 
 filterMissing :: Atoms -> [[Relation]] -> [[Relation]]
 filterMissing atoms rels =
     filter (/= []) (List.map (filter (\ (Rel name _ _) -> not (Set.member name (getL missingDependencies atoms)))) rels)
-
-depends :: BinPkgName -> Relation -> Atoms -> Atoms
-depends pkg rel atoms = insertAtom (Binary pkg) (Depends rel) atoms
-
-conflicts :: BinPkgName -> Relation -> Atoms -> Atoms
-conflicts pkg rel atoms = insertAtom (Binary pkg) (Conflicts rel) atoms
-
-binaryPackageDeps :: BinPkgName -> Atoms -> [[Relation]]
-binaryPackageDeps p atoms =
-    foldAtoms f [] atoms
-    where f (Binary p') (Depends rel) rels | p == p' = [rel] : rels
-          f _ _ rels = rels
-
-binaryPackageConflicts :: BinPkgName -> Atoms -> [[Relation]]
-binaryPackageConflicts p atoms =
-    foldAtoms f [] atoms
-    where f (Binary p') (Conflicts rel) rels | p == p' = [rel] : rels
-          f _ _ rels = rels
 
 foldPriorities :: (PackagePriority -> r -> r)
                -> (BinPkgName -> PackagePriority -> r -> r)
@@ -1079,7 +1072,7 @@ doWebsite bin x deb = insertAtom (Binary bin) (DHWebsite x) deb
 doBackups :: BinPkgName -> String -> Atoms -> Atoms
 doBackups bin s deb =
     insertAtom (Binary bin) (DHBackups s) $
-    depends bin (Rel (BinPkgName "anacron") Nothing Nothing) $
+    modL depends (Map.insertWith union bin (singleton (Rel (BinPkgName "anacron") Nothing Nothing))) $
     deb
 
 watchAtom :: PackageName -> Text

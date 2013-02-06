@@ -13,7 +13,7 @@ import Data.Map as Map (differenceWithKey, intersectionWithKey)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mconcat, (<>), mempty)
-import Data.Set as Set (fromList, union, insert)
+import Data.Set as Set (fromList, union, insert, singleton)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
@@ -325,7 +325,7 @@ test5 =
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-development") All) $
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-production") All) $
                            insertAtom Source (UtilsPackageName (BinPkgName "creativeprompts-data")) $
-                           Atoms.depends (BinPkgName "creativeprompts-server") (anyrel (BinPkgName "markdown")) $
+                           modL Atoms.depends (Map.insertWith union (BinPkgName "creativeprompts-server") (singleton (anyrel (BinPkgName "markdown")))) $
                            modL execMap (Map.insertWith (error "Conflict in execMap") "trhsx" (BinPkgName "haskell-hsx-utils")) $
                            doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" $
                            doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) $
@@ -404,17 +404,17 @@ test6 =
                              insertAtom Source (BuildDepIndep (BinPkgName "libjs-jquery")) $
                              insertAtom Source (BuildDepIndep (BinPkgName "libjs-jquery-u")) $
 
-                             Atoms.depends (BinPkgName "artvaluereport2-development") (anyrel (BinPkgName "artvaluereport2-server")) $
-                             Atoms.depends (BinPkgName "artvaluereport2-production") (anyrel (BinPkgName "artvaluereport2-server")) $
-                             Atoms.depends (BinPkgName "artvaluereport2-production") (anyrel (BinPkgName "apache2")) $
-                             Atoms.depends (BinPkgName "artvaluereport2-staging") (anyrel (BinPkgName "artvaluereport2-server")) $
+                             modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-development") (singleton (anyrel (BinPkgName "artvaluereport2-server")))) $
+                             modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-production") (singleton (anyrel (BinPkgName "artvaluereport2-server")))) $
+                             modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-production") (singleton (anyrel (BinPkgName "apache2")))) $
+                             modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-staging") (singleton (anyrel (BinPkgName "artvaluereport2-server")))) $
                              -- This should go into the "real" data directory.  And maybe a different icon for each server?
                              install (BinPkgName "artvaluereport2-server") "theme/ArtValueReport_SunsetSpectrum.ico" "usr/share/artvaluereport2-data" $
                              doBackups (BinPkgName "artvaluereport2-backups") "artvaluereport2-backups" $
                              doWebsite (BinPkgName "artvaluereport2-production") (theSite (BinPkgName "artvaluereport2-production")) $
                              doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging")) $
                              doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development")) $
-                             flip (foldr (\ s deb -> Atoms.depends (BinPkgName "artvaluereport2-server") (anyrel (BinPkgName s)) deb))
+                             flip (foldr (\ s deb -> modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-server") (singleton (anyrel (BinPkgName s)))) deb))
                                   ["libjs-jquery", "libjs-jquery-ui", "libjs-jcrop", "libjpeg-progs", "netpbm",
                                    "texlive-latex-recommended", "texlive-latex-extra", "texlive-fonts-recommended", "texlive-fonts-extra"] $
                              doExecutable (BinPkgName "artvaluereport2-server") (InstallFile "artvaluereport2-server" Nothing Nothing "artvaluereport2-server") $
@@ -484,9 +484,9 @@ test7 =
                   let new = modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
                             setL sourceFormat (Just Native3) $
                             insertAtom Source (UtilsPackageName (BinPkgName "cabal-debian")) $
-                            Atoms.depends (BinPkgName "cabal-debian") (anyrel (BinPkgName "apt-file")) $
-                            Atoms.conflicts (BinPkgName "cabal-debian")
-                                    (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing) $
+                            modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (anyrel (BinPkgName "apt-file")))) $
+                            modL Atoms.conflicts (Map.insertWith union (BinPkgName "cabal-debian")
+                                    (singleton (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing))) $
                             copyChangelog old $
                             newDebianization' 7 (StandardsVersion 3 9 3 Nothing)
                   new' <- cabalToDebianization "." new

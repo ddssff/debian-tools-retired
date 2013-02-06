@@ -14,9 +14,8 @@ import Data.Monoid (Monoid, mempty)
 import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, empty, map)
 import Data.Text (pack)
 import Debian.Debianize.Atoms (HasAtoms(packageDescription, control, binaryArchitectures, rulesFragments), DebAtomKey(..), DebAtom(..),
-                                   Atoms, insertAtom, binaryPackageDeps,
-                                   binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
-                                   finalizeAtoms, foldAtoms, installData, installCabalExec, foldCabalDatas, foldCabalExecs)
+                                   Atoms, insertAtom, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
+                                   finalizeAtoms, foldAtoms, installData, installCabalExec, foldCabalDatas, foldCabalExecs, binaryPackageDeps, binaryPackageConflicts)
 import Debian.Debianize.Combinators (describe, buildDeps)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                newBinaryDebDescription, modifyBinaryDeb,
