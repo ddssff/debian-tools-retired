@@ -6,14 +6,14 @@ module Debian.Debianize.Finalize
     ) where
 
 import Data.Char (toLower)
-import Data.Lens.Lazy (setL, getL)
+import Data.Lens.Lazy (setL, getL, modL)
 import Data.List as List (map)
 import Data.Maybe
 import Data.Monoid (Monoid, mempty)
 import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, empty, map)
 import Data.Text (pack)
-import Debian.Debianize.Atoms (HasAtoms(packageDescription), DebAtomKey(..), DebAtom(..),
-                                   Atoms, insertAtom, modControl,
+import Debian.Debianize.Atoms (HasAtoms(packageDescription, control), DebAtomKey(..), DebAtom(..),
+                                   Atoms, insertAtom,
                                    setArchitecture, binaryPackageDeps,
                                    binaryPackageConflicts, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
                                    finalizeAtoms, foldAtoms, rulesFragment, installData, installCabalExec, foldCabalDatas, foldCabalExecs)
@@ -57,17 +57,17 @@ finalizeDebianization deb0 =
 
       -- Apply the hints in the atoms to the debianization
       g :: DebAtomKey -> DebAtom -> Atoms -> Atoms
-      g Source (DHPriority x) deb =        modControl (\ y -> y {priority = Just x}) deb
-      g Source (DHSection x) deb =         modControl (\ y -> y {section = Just x}) deb
-      g (Binary b) (DHArch x) deb =        modControl (\ y -> modifyBinaryDeb b ((\ bin -> bin {architecture = x}) . fromMaybe (newBinaryDebDescription b Any)) y) deb
-      g (Binary b) (DHPriority x) deb =    modControl (\ y -> modifyBinaryDeb b ((\ bin -> bin {binaryPriority = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y) deb
-      g (Binary b) (DHSection x) deb =     modControl (\ y -> modifyBinaryDeb b ((\ bin -> bin {binarySection = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y) deb
-      g (Binary b) (DHDescription x) deb = modControl (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y) deb
+      g Source (DHPriority x) deb =        modL control (\ y -> y {priority = Just x}) deb
+      g Source (DHSection x) deb =         modL control (\ y -> y {section = Just x}) deb
+      g (Binary b) (DHArch x) deb =        modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {architecture = x}) . fromMaybe (newBinaryDebDescription b Any)) y) deb
+      g (Binary b) (DHPriority x) deb =    modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {binaryPriority = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y) deb
+      g (Binary b) (DHSection x) deb =     modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {binarySection = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y) deb
+      g (Binary b) (DHDescription x) deb = modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y) deb
       g _ _ deb = deb
 
 cabalExecBinaryPackage :: BinPkgName -> Atoms -> Atoms
 cabalExecBinaryPackage b deb =
-    modControl (\ y -> y {binaryPackages = bin : binaryPackages y}) deb
+    modL control (\ y -> y {binaryPackages = bin : binaryPackages y}) deb
     where
       bin = BinaryDebDescription
             { Debian.package = b
@@ -101,7 +101,7 @@ librarySpecs :: Atoms -> Atoms
 librarySpecs deb | isNothing (getL packageDescription deb) = deb
 librarySpecs deb =
     (if doc then insertAtom (Binary (debName)) (DHLink ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt") ("/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")) else id) $
-    modControl
+    modL control
          (\ y -> y { binaryPackages =
                                (if dev then [librarySpec deb Any Development (Cabal.package pkgDesc)] else []) ++
                                (if prof then [librarySpec deb Any Profiling (Cabal.package pkgDesc)] else []) ++
@@ -154,7 +154,7 @@ makeUtilsPackage deb =
               atoms = setL packageDescription (Just pkgDesc) . makeUtilsAtoms p datas execs $ mempty
               atoms' = finalizeAtoms atoms
               deb' = foldAtoms insertAtom deb atoms' in
-          modControl (\ y -> modifyBinaryDeb p (f deb' p (if Set.null execs then All else Any)) y) deb'
+          modL control (\ y -> modifyBinaryDeb p (f deb' p (if Set.null execs then All else Any)) y) deb'
     where
       f _ _ _ (Just bin) = bin
       f deb' p arch Nothing =

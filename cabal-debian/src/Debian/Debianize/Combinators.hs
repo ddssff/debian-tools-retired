@@ -21,8 +21,8 @@ import Data.Text as Text (Text, pack, unpack, intercalate)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Atoms (HasAtoms(packageDescription, sourcePackageName, changelog, comments, control),
-                                   Atoms, revision, debVersion, extraLibMap, epochMap, modControl)
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), newSourceDebDescription, BinaryDebDescription(..), PackageRelations(..), PackageType(..))
+                                   Atoms, revision, debVersion, extraLibMap, epochMap)
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
 -- import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
 import Debian.Debianize.Utility (trim, foldEmpty)
@@ -44,7 +44,7 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 versionInfo :: NameAddr -> String -> Atoms -> Atoms
 versionInfo debianMaintainer date deb =
     modL changelog (const (Just newLog)) $
-    modControl (\ y -> y { source = Just sourceName, Debian.maintainer = Just debianMaintainer }) deb
+    modL control (\ y -> y { source = Just sourceName, Debian.maintainer = Just debianMaintainer }) deb
     where
       newLog =
           case getL changelog deb of
@@ -114,7 +114,7 @@ defaultRulesHead atoms =
 -}
 
 putStandards :: StandardsVersion -> Atoms -> Atoms
-putStandards x deb = modControl (\ y -> y {standardsVersion = Just x}) deb
+putStandards x deb = modL control (\ y -> y {standardsVersion = Just x}) deb
 
 describe :: Atoms -> PackageType -> PackageIdentifier -> Text
 describe atoms typ ident =
@@ -124,14 +124,14 @@ describe atoms typ ident =
 
 buildDeps :: Atoms -> Atoms
 buildDeps deb =
-    modControl (\ y -> y { Debian.buildDepends = debianBuildDeps deb, buildDependsIndep = debianBuildDepsIndep deb }) deb
+    modL control (\ y -> y { Debian.buildDepends = debianBuildDeps deb, buildDependsIndep = debianBuildDepsIndep deb }) deb
 
 -- | Convert the extraLibs field of the cabal build info into debian
 -- binary package names and make them dependendencies of the debian
 -- devel package (if there is one.)
 addExtraLibDependencies :: Atoms -> Atoms
 addExtraLibDependencies deb =
-    modControl (\ y -> y {binaryPackages = map f (binaryPackages (fromMaybe newSourceDebDescription . getL control $ deb))}) deb
+    modL control (\ y -> y {binaryPackages = map f (binaryPackages (getL control deb))}) deb
     where
       f :: BinaryDebDescription -> BinaryDebDescription
       f bin
@@ -212,7 +212,7 @@ anyrel' x = [D.Rel x Nothing Nothing]
 
 oldFilterMissing :: [BinPkgName] -> Atoms -> Atoms
 oldFilterMissing missing deb =
-    modControl e deb
+    modL control e deb
     where
       e src = src { Debian.buildDepends = f (Debian.buildDepends src)
                   , Debian.buildDependsIndep = f (Debian.buildDependsIndep src)
@@ -230,4 +230,4 @@ oldFilterMissing missing deb =
                                 , builtUsing = f (builtUsing rels) }
 
 setSourceBinaries :: [BinaryDebDescription] -> Atoms -> Atoms
-setSourceBinaries xs deb = modControl (\ y -> y {binaryPackages = xs}) deb
+setSourceBinaries xs deb = modL control (\ y -> y {binaryPackages = xs}) deb

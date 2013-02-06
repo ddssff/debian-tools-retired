@@ -19,7 +19,7 @@ import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Fiel
 import Debian.Debianize.Atoms (HasAtoms(compat, sourceFormat, watch, changelog, control),
                                    DebAtomKey(..), DebAtom(..),
                                    Atoms, foldAtoms, copyright)
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), newSourceDebDescription, BinaryDebDescription(..), PackageRelations(..),
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Utility (showDeps')
@@ -150,7 +150,7 @@ toFileMap atoms =
       preinst atoms ++
       prerm atoms ++
       intermediates atoms
-    where d = fromMaybe newSourceDebDescription (getL control atoms)
+    where d = getL control atoms
 
 rules :: Atoms -> Text
 rules deb =

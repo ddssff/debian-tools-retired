@@ -22,14 +22,14 @@ import Debian.Debianize.Atoms (HasAtoms(packageDescription, compat, watch, chang
                                    setSourceSection, compilerVersion, cabalFlagAssignments, putCopyright)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries)
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), newSourceDebDescription)
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..))
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Flags (flagOptions, atomOptions)
 import Debian.Debianize.Input as Debian (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Utility (withCurrentDirectory)
-import Debian.Policy (StandardsVersion, PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel)
+import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Distribution.Package (PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
@@ -111,7 +111,7 @@ cabalToDebianization top old =
        date <- getCurrentLocalRFC822Time
        copyright <- withCurrentDirectory top $ inputCopyright pkgDesc
        maint <- inputMaintainer pkgDesc old' >>= maybe (error "Missing value for --maintainer") return
-       let standards = standardsVersion (fromMaybe newSourceDebDescription . getL control $ old')
+       let standards = standardsVersion (getL control old')
        level <- getDebhelperCompatLevel
        return $ maybe id putStandards standards $ debianization date copyright maint level (scrub old')
     where

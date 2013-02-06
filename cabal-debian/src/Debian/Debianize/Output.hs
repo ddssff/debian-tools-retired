@@ -18,7 +18,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text as Text (Text, unpack, split)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logVersion))
 import Debian.Debianize.Atoms (HasAtoms(changelog, control), Flags(validate, dryRun), Atoms, flags)
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(source, binaryPackages), newSourceDebDescription, BinaryDebDescription(package))
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Utility (replaceFile, zipMaps)
 import System.Directory (Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing)
@@ -47,10 +47,10 @@ validateDebianization :: Atoms -> Atoms -> IO ()
 validateDebianization old new =
     do let oldVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL changelog old))))
            newVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL changelog new))))
-           oldSource = source . fromMaybe newSourceDebDescription . getL control $ old
-           newSource = source . fromMaybe newSourceDebDescription . getL control $ new
-           oldPackages = map Debian.package . binaryPackages . fromMaybe newSourceDebDescription . getL control $ old
-           newPackages = map Debian.package . binaryPackages . fromMaybe newSourceDebDescription . getL control $ new
+           oldSource = source . getL control $ old
+           newSource = source . getL control $ new
+           oldPackages = map Debian.package . binaryPackages . getL control $ old
+           newPackages = map Debian.package . binaryPackages . getL control $ new
        case () of
          _ | oldVersion /= newVersion -> error ("Version mismatch, expected " ++ show (pretty oldVersion) ++ ", found " ++ show (pretty newVersion))
            | oldSource /= newSource -> error ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource))

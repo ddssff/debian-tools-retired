@@ -21,10 +21,10 @@ import Debian.Debianize.Atoms as Atoms
     (HasAtoms(rulesHead, compat, sourceFormat, changelog, sourcePackageName, control), InstallFile(..), Server(..), Site(..),
      Atoms, insertAtom, tightDependencyFixup, missingDependency, setRevision, putExecMap,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups, setArchitecture,
-     putCopyright, knownEpochMappings, modControl, install, DebAtom(BuildDep, BuildDepIndep, UtilsPackageName), DebAtomKey(Source, Binary),
+     putCopyright, knownEpochMappings, install, DebAtom(BuildDep, BuildDepIndep, UtilsPackageName), DebAtomKey(Source),
      putBuildDep, setDebVersion, installData, defaultAtoms)
 import Debian.Debianize.Cabal (getSimplePackageDescription')
-import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), newSourceDebDescription, BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
+import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
@@ -52,16 +52,16 @@ newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ = error "defaultDebianizati
 newDebianization (log@(ChangeLog (entry : _))) level standards =
     setL changelog (Just log) $
     setL compat (Just level) $
-    modControl (\ x -> x { source = Just (SrcPkgName (logPackage entry))
-                                 , maintainer = (either error Just (parseMaintainer (logWho entry)))
-                                 , standardsVersion = Just standards }) $
+    modL control (\ x -> x { source = Just (SrcPkgName (logPackage entry))
+                           , maintainer = (either error Just (parseMaintainer (logWho entry)))
+                           , standardsVersion = Just standards }) $
     defaultAtoms
 newDebianization _ _ _ = error "Invalid changelog"
 
 newDebianization' :: Int -> StandardsVersion -> Atoms
 newDebianization' level standards =
     setL compat (Just level) $
-    modControl (\ x -> x { standardsVersion = Just standards }) $
+    modL control (\ x -> x { standardsVersion = Just standards }) $
     defaultAtoms
 
 tests :: Test
@@ -85,7 +85,7 @@ test1 =
                           , "include /usr/share/cdbs/1/class/hlibrary.mk" ]) $
           setL compat (Just 9) $ -- This will change as new version of debhelper are released
           putCopyright (Left BSD3) $
-          modControl
+          modL control
               (\ y -> y { source = Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"})
                         , maintainer = Just (NameAddr (Just "David Fox") "dsf@seereason.com")
                         , standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)) -- This will change as new versions of debian-policy are released
@@ -121,7 +121,7 @@ test2 =
                            "include /usr/share/cdbs/1/class/hlibrary.mk"]) $
           setL compat (Just 9) $
           putCopyright (Left BSD3) $
-          modControl
+          modL control
               (\ y -> y
                 { source = Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"}),
                   maintainer = Just (NameAddr {nameAddr_name = Just "David Fox", nameAddr_addr = "dsf@seereason.com"}),
@@ -155,7 +155,7 @@ test3 =
           setL rulesHead (Just "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n") $
           setL compat (Just 7) $
           putCopyright (Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n") $
-          modControl
+          modL control
               (\ y -> y
                 { source = Just (SrcPkgName {unSrcPkgName = "haskell-devscripts"})
                 , maintainer = Just (NameAddr {nameAddr_name = Just "Debian Haskell Group", nameAddr_addr = "pkg-haskell-maintainers@lists.alioth.debian.org"})
@@ -225,7 +225,7 @@ test4 =
     TestCase (do old <- inputDebianization "test-data/clckwrks-dot-com/output"
                  new <- getSimplePackageDescription' "test-data/clckwrks-dot-com/input" $ newDebianization' 7 (StandardsVersion 3 9 4 Nothing)
                  let new' =
-                         modControl (\ y -> y {homepage = Just "http://www.clckwrks.com/"}) $
+                         modL control (\ y -> y {homepage = Just "http://www.clckwrks.com/"}) $
                          setL sourceFormat (Just Native3) $
                          missingDependency (BinPkgName "libghc-clckwrks-theme-clckwrks-doc") $
                          setRevision "" $
@@ -318,7 +318,7 @@ test5 :: Test
 test5 =
     TestLabel "test5" $
     TestCase (do old <- inputDebianization "test-data/creativeprompts/output"
-                 let standards = fromMaybe (error "test5") (standardsVersion (fromMaybe newSourceDebDescription . getL control $ old))
+                 let standards = fromMaybe (error "test5") (standardsVersion (getL control old))
                  let new = setL sourceFormat (Just Native3) $
                            setArchitecture (BinPkgName "creativeprompts-data") All $
                            setArchitecture (BinPkgName "creativeprompts-development") All $
@@ -393,7 +393,7 @@ test6 =
     TestCase ( do old <- inputDebianization "test-data/artvaluereport2/output"
                   let standards = StandardsVersion 3 9 1 Nothing
                       compat' = 7
-                  let new =  modControl (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) $
+                  let new =  modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) $
                              setL sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) $
                              insertAtom Source (UtilsPackageName (BinPkgName "artvaluereport2-server")) $
                              setArchitecture (BinPkgName "artvaluereport2-development") All $
@@ -480,7 +480,7 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase ( do old <- inputDebianization "."
-                  let new = modControl (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
+                  let new = modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
                             setL sourceFormat (Just Native3) $
                             insertAtom Source (UtilsPackageName (BinPkgName "cabal-debian")) $
                             Atoms.depends (BinPkgName "cabal-debian") (anyrel (BinPkgName "apt-file")) $
@@ -499,7 +499,7 @@ test8 =
                   log <- inputChangeLog "test-data/artvaluereport-data/input/debian"
                   let new = knownEpochMappings $
                             insertAtom Source (BuildDep (BinPkgName "haskell-hsx-utils")) $
-                            modControl (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) $
+                            modL control (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) $
                             setL sourceFormat (Just Native3) $
                             setL changelog (Just log) $
                             (newDebianization' 7 (StandardsVersion 3 9 3 Nothing))
@@ -515,7 +515,7 @@ test9 =
                             doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) $
                             setDebVersion (parseDebianVersion ("3.0.2-1~hackage1" :: String)) $
                             setL sourceFormat (Just Native3) $
-                            modControl (\ y -> y {homepage = Just "http://www.haskell.org/alex/"}) $
+                            modL control (\ y -> y {homepage = Just "http://www.haskell.org/alex/"}) $
                             (\ atoms -> foldr (\ name atoms -> installData (BinPkgName "alex") name name atoms)
                                               atoms
                                               [ "AlexTemplate"
@@ -576,7 +576,7 @@ diffDebianizations old new =
                      -- detect whether the file has a final newline
                      -- character.
                      (contextDiff 2 (T.split (== '\n') a) (T.split (== '\n') b))
-      sortBinaryDebs atoms = modControl (\ deb -> deb {binaryPackages = sortBy (compare `on` package) (binaryPackages deb)}) atoms
+      sortBinaryDebs atoms = modL control (\ deb -> deb {binaryPackages = sortBy (compare `on` package) (binaryPackages deb)}) atoms
 
 testEntry :: ChangeLogEntry
 testEntry =

@@ -96,7 +96,6 @@ module Debian.Debianize.Atoms
     , mapFlags
     , watchAtom
     , tightDependencyFixup
-    , modControl
     -- , newDebianization
     , putBuildDep
     , putBuildDepIndep
@@ -199,7 +198,7 @@ class (Monoid atoms,
     sourcePackageName :: Lens atoms (Maybe SrcPkgName)
     changelog :: Lens atoms (Maybe ChangeLog)
     comments :: Lens atoms (Maybe [[Text]]) -- ^ Comment entries for the latest changelog entry
-    control :: Lens atoms (Maybe SourceDebDescription)
+    control :: Lens atoms SourceDebDescription
 
 data DebAtomKey
     = Source
@@ -568,12 +567,12 @@ instance HasAtoms Atoms where
 
     control = lens g s
         where
-          g atoms = foldAtoms from Nothing atoms
+          g atoms = fromMaybe newSourceDebDescription $ foldAtoms from Nothing atoms
               where
                 from Source (DebControl x') (Just x) | x /= x' = error $ "Conflicting control values:" ++ show (x, x')
                 from Source (DebControl x) _ = Just x
                 from _ _ x = x
-          s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DebControl) x)) atoms
+          s x atoms = modifyAtoms' f (const ((singleton . (Source,) . DebControl) x)) atoms
               where
                 f Source (DebControl y) = Just y
                 f _ _ = Nothing
@@ -1090,9 +1089,6 @@ tightDependencyFixup pairs p deb =
       newer  (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (>>$${Version})' " <> display' installed <> " >> debian/" <> name <> ".substvars"
       name = display' p
       display' = pack . show . pretty
-
-modControl :: (SourceDebDescription -> SourceDebDescription) -> Atoms -> Atoms
-modControl f deb = modL control (Just . f . fromMaybe newSourceDebDescription) deb
 
 install :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
 install p path d atoms = insertAtom (Binary p) (DHInstall path d) atoms
