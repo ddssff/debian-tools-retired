@@ -57,6 +57,7 @@ module Debian.Debianize.Atoms
     , installData
     , getInstalls
     , logrotateStanza
+{-
     , putPostInst
     , getPostInsts
     , getPostInst
@@ -64,6 +65,7 @@ module Debian.Debianize.Atoms
     , postRm
     , preInst
     , preRm
+-}
     , link
     , file
     , installDir
@@ -312,7 +314,6 @@ data DebAtom
     | DebCopyright (Either License Text)	  -- ^ Copyright information, either as a Cabal License value or
                                                   -- the full text.
     | DebControl SourceDebDescription		  -- ^ The parsed contents of the control file
-    | DHPostInst (Map BinPkgName Text)	 	  -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
 
     -- From here down are atoms to be associated with a Debian binary
     -- package.  This could be done with more type safety, separate
@@ -320,6 +321,7 @@ data DebAtom
     | DHApacheSite String FilePath Text           -- ^ Have Apache configure a site using PACKAGE, DOMAIN, LOGDIR, and APACHECONFIGFILE
     | DHLogrotateStanza Text		          -- ^ Add a stanza of a logrotate file to the binary package
     | DHLink FilePath FilePath          	  -- ^ Create a symbolic link in the binary package
+    | DHPostInst Text			 	  -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
     | DHPostRm Text                     	  -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
     | DHPreInst Text                    	  -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
     | DHPreRm Text                      	  -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
@@ -482,6 +484,9 @@ class (Monoid atoms, Show atoms {- Show instance for debugging only -}) => HasAt
     rulesHead :: Lens atoms (Maybe Text)
     packageDescription :: Lens atoms (Maybe PackageDescription)
     postInst :: Lens atoms (Map BinPkgName Text)
+    postRm :: Lens atoms (Map BinPkgName Text)
+    preInst :: Lens atoms (Map BinPkgName Text)
+    preRm :: Lens atoms (Map BinPkgName Text)
     compat :: Lens atoms (Maybe Int)
     sourceFormat :: Lens atoms (Maybe SourceFormat)
     watch :: Lens atoms (Maybe Text)
@@ -523,16 +528,38 @@ class (Monoid atoms, Show atoms {- Show instance for debugging only -}) => HasAt
     depends :: Lens atoms (Map BinPkgName (Set Relation)) -- This should be [[Relation]] for full generality, or Set (Set Relation)
     conflicts :: Lens atoms (Map BinPkgName (Set Relation)) -- This too
 
-    -- DHApacheSite String FilePath Text
-    -- DHLogrotateStanza Text
+{-
+    apacheSites :: Lens atoms (Map BinPkgName (String, FilePath, Text))    -- DHApacheSite String FilePath Text
+    logrotateStanzas :: Lens atoms (Map BinPkgName Text)    -- DHLogrotateStanza Text
+    priorities :: Lens atoms (Map BinPkgName PackagePriority)    -- DHPriority PackagePriority
+    sections :: Lens atoms (Map BinPkgName Section)    -- DHSection Section
+    descriptions :: Lens atoms (Map BinPkgName PackageDescription)    -- DHDescription Text
+    executables :: Lens atoms (Map BinPkgName InstallFile)
+    servers :: Lens atoms (Map BinPkgName Server)
+    websites :: Lens atoms (Map BinPkgName Site)
+    backups :: Lens atoms (Map BinPkgName String)
+
+    links :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
+    installs :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
+    installTos :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
+    installDatas :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
+    files :: Lens atoms (Map BinPkgName (Set (FilePath, Text)))
+    installCabalExecs :: Lens atoms (Map BinPkgName (Set (String, FilePath)))
+    installCabalExecTos :: Lens atoms (Map BinPkgName (Set (String, FilePath)))
+    installDirs :: Lens atoms (Map BinPkgName (Set FilePath))
+    installInits :: Lens atoms (Map BinPkgName (Set Text))
+-}
+
+
+
     -- DHLink FilePath FilePath
     -- DHPostRm Text
     -- DHPreInst Text
     -- DHPreRm Text
     -- DHArch PackageArchitectures
-    -- DHPriority PackagePriority
-    -- DHSection Section
-    -- DHDescription Text
+
+
+
     -- DHInstall FilePath FilePath
     -- DHInstallTo FilePath FilePath
     -- DHInstallData FilePath FilePath
@@ -612,16 +639,51 @@ instance HasAtoms Atoms where
 
     postInst = lens g s
         where
-          g atoms = fromMaybe Map.empty $ foldAtoms from mempty atoms
+          g atoms = foldAtoms from mempty atoms
               where
-                from :: DebAtomKey -> DebAtom -> Maybe (Map BinPkgName Text) -> Maybe (Map BinPkgName Text)
-                from Source (DHPostInst x') (Just x) | x' /= x = error $ "Conflicting postinsts: " ++ show (x, x')
-                from Source (DHPostInst x) _ = Just x
+                from :: DebAtomKey -> DebAtom -> Map BinPkgName Text -> Map BinPkgName Text
+                from (Binary b) (DHPostInst t) x = Map.insertWith (error "Conflicting postInsts") b t x
                 from _ _ x = x
-          s x atoms = modifyAtoms' f (const ((singleton . (Source,) . DHPostInst) x)) atoms
+          s x atoms = Map.foldWithKey (\ b t atoms' -> insertAtom (Binary b) (DHPostInst t) atoms') (deleteAtoms p atoms) x
               where
-                f Source (DHPostInst m) = Just m
-                f _ _ = Nothing
+                p (Binary _) (DHPostInst _) = True
+                p _ _ = False
+
+    postRm = lens g s
+        where
+          g atoms = foldAtoms from mempty atoms
+              where
+                from :: DebAtomKey -> DebAtom -> Map BinPkgName Text -> Map BinPkgName Text
+                from (Binary b) (DHPostRm t) m = Map.insertWith (error "Conflicting postRms") b t m
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b t atoms' -> insertAtom (Binary b) (DHPostRm t) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHPostRm _) = True
+                p _ _ = False
+
+    preInst = lens g s
+        where
+          g atoms = foldAtoms from mempty atoms
+              where
+                from :: DebAtomKey -> DebAtom -> Map BinPkgName Text -> Map BinPkgName Text
+                from (Binary b) (DHPreInst t) m = Map.insertWith (error "Conflicting preInsts") b t m
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b t atoms' -> insertAtom (Binary b) (DHPreInst t) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHPreInst _) = True
+                p _ _ = False
+
+    preRm = lens g s
+        where
+          g atoms = foldAtoms from mempty atoms
+              where
+                from :: DebAtomKey -> DebAtom -> Map BinPkgName Text -> Map BinPkgName Text
+                from (Binary b) (DHPreRm t) m = Map.insertWith (error "Conflicting preRms") b t m
+                from _ _ x = x
+          s x atoms = Map.foldWithKey (\ b t atoms' -> insertAtom (Binary b) (DHPreRm t) atoms') (deleteAtoms p atoms) x
+              where
+                p (Binary _) (DHPreRm _) = True
+                p _ _ = False
 
     sourcePackageName = lens g s
         where
@@ -1123,12 +1185,13 @@ installInit p text atoms = insertAtom (Binary p) (DHInstallInit text) atoms
 logrotateStanza :: BinPkgName -> Text -> Atoms -> Atoms
 logrotateStanza p text atoms = insertAtom (Binary p) (DHLogrotateStanza text) atoms
 
+{-
 getPostInsts :: Atoms -> Map BinPkgName Text
 getPostInsts atoms =
     fromMaybe Map.empty $ foldAtoms from Nothing atoms
     where
       from :: DebAtomKey -> DebAtom -> Maybe (Map BinPkgName Text) -> Maybe (Map BinPkgName Text)
-      from Source (DHPostInst mp') (Just mp) | mp /= mp' = error "Multiple PostInst maps"
+      from (Binary b) (DHPostInst t) (Just mp) | mp /= mp' = error "Multiple PostInst maps"
       from Source (DHPostInst mp) _ = Just mp
       from _ _ x = x
 
@@ -1156,6 +1219,7 @@ preInst p text atoms = insertAtom (Binary p) (DHPreInst text) atoms
 
 preRm :: BinPkgName -> Text -> Atoms -> Atoms
 preRm p text atoms = insertAtom (Binary p) (DHPreRm text) atoms
+-}
 
 link :: BinPkgName -> FilePath -> FilePath -> Atoms -> Atoms
 link p path text atoms = insertAtom (Binary p) (DHLink path text) atoms
@@ -1363,7 +1427,7 @@ siteAtoms b site =
 
 serverAtoms :: BinPkgName -> Server -> Bool -> Atoms -> Atoms
 serverAtoms b server isSite =
-    putPostInst b debianPostinst .
+    modL postInst (insertWith (error "serverAtoms") b debianPostinst) .
     installInit b debianInit .
     serverLogrotate' b .
     execAtoms b exec
@@ -1444,14 +1508,15 @@ serverLogrotate' b =
 
 backupAtoms :: BinPkgName -> String -> Atoms -> Atoms
 backupAtoms b name =
-    putPostInst b (unlines $
+    modL postInst (insertWith (error "backupAtoms") b
+                 (unlines $
                   [ "#!/bin/sh"
                   , ""
                   , "case \"$1\" in"
                   , "  configure)"
                   , "    " <> pack ("/etc/cron.hourly" </> name) <> " --initialize"
                   , "    ;;"
-                  , "esac" ]) .
+                  , "esac" ])) .
     execAtoms b (InstallFile { execName = name
                               , destName = name
                               , sourceDir = Nothing

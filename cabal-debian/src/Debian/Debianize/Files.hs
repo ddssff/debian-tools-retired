@@ -16,7 +16,7 @@ import Data.Set as Set (toList, member)
 import Data.String (IsString)
 import Data.Text (Text, pack, unpack)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.Atoms (HasAtoms(compat, sourceFormat, watch, changelog, control),
+import Debian.Debianize.Atoms (HasAtoms(compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm),
                                    DebAtomKey(..), DebAtom(..),
                                    Atoms, foldAtoms, copyright)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
@@ -89,39 +89,28 @@ links deb =
       atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".links"
 
-postinst :: Atoms -> [(FilePath, Text)]
-postinst deb =
-    Map.toList $ fromMaybe empty $ foldAtoms atomf Nothing deb
+postinstFiles :: Atoms -> [(FilePath, Text)]
+postinstFiles deb =
+    Map.toList $ mapKeys pathf $ getL postInst deb
     where
-      atomf :: DebAtomKey -> DebAtom -> Maybe (Map FilePath Text) -> Maybe (Map FilePath Text)
-      atomf Source (DHPostInst mp') Nothing = Just (mapKeys pathf mp')
-      atomf Source (DHPostInst mp') (Just mp) = error $ "Multiple postInst maps: " ++ show (mp, mp')
-      atomf _ _ mp = mp
-      -- f (BinPkgName name) t = (pathf name, t)
       pathf (BinPkgName name) = "debian" </> show (pretty name) ++ ".postinst"
 
-postrm :: Atoms -> [(FilePath, Text)]
-postrm deb =
-    Map.toList $ foldAtoms atomf mempty deb
+postrmFiles :: Atoms -> [(FilePath, Text)]
+postrmFiles deb =
+    Map.toList $ mapKeys pathf $ getL postRm deb
     where
-      atomf (Binary name) (DHPostRm t) files = Map.insertWith (<>) (pathf name) t files
-      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".postrm"
 
-preinst :: Atoms -> [(FilePath, Text)]
-preinst deb =
-    Map.toList $ foldAtoms atomf mempty deb
+preinstFiles :: Atoms -> [(FilePath, Text)]
+preinstFiles deb =
+    Map.toList $ mapKeys pathf $ getL preInst deb
     where
-      atomf (Binary name) (DHPreInst t) files = Map.insertWith (<>) (pathf name) t files
-      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".preinst"
 
-prerm :: Atoms -> [(FilePath, Text)]
-prerm deb =
-    Map.toList $ foldAtoms atomf mempty deb
+prermFiles :: Atoms -> [(FilePath, Text)]
+prermFiles deb =
+    Map.toList $ mapKeys pathf $ getL preRm deb
     where
-      atomf (Binary name) (DHPreRm t) files = Map.insertWith (<>) (pathf name) t files
-      atomf _ _ files = files
       pathf name = "debian" </> show (pretty name) ++ ".prerm"
 
 -- | Turn the Debianization into a list of files, making sure the text
@@ -145,10 +134,10 @@ toFileMap atoms =
       init atoms ++
       logrotate atoms ++
       links atoms ++
-      postinst atoms ++
-      postrm atoms ++
-      preinst atoms ++
-      prerm atoms ++
+      postinstFiles atoms ++
+      postrmFiles atoms ++
+      preinstFiles atoms ++
+      prermFiles atoms ++
       intermediates atoms
     where d = getL control atoms
 

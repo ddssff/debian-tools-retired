@@ -22,7 +22,7 @@ import Debian.Debianize.Atoms as Atoms
               binaryArchitectures, copyright, debVersion, execMap, buildDeps), InstallFile(..), Server(..), Site(..),
      Atoms, insertAtom, tightDependencyFixup,
      depends, conflicts, doExecutable, doWebsite, doServer, doBackups,
-     knownEpochMappings, install, DebAtom(BuildDep, BuildDepIndep, UtilsPackageName), DebAtomKey(Source),
+     install, DebAtom(BuildDep, BuildDepIndep, UtilsPackageName), DebAtomKey(Source),
      installData, defaultAtoms)
 import Debian.Debianize.Cabal (getSimplePackageDescription')
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
