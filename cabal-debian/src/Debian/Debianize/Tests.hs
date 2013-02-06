@@ -488,7 +488,7 @@ test7 =
                                     (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing) $
                             copyChangelog old $
                             newDebianization' 7 (StandardsVersion 3 9 3 Nothing)
-                  new' <- cabalToDebianization "test-data/cabal-debian/input" new
+                  new' <- cabalToDebianization "." new
                   assertEqual "test7" [] (diffDebianizations old (copyChangelog old new'))
              )
 
