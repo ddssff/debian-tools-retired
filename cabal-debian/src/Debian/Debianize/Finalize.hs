@@ -8,26 +8,28 @@ module Debian.Debianize.Finalize
 import Data.Char (toLower)
 import Data.Lens.Lazy (setL, getL, modL)
 import Data.List as List (map)
-import Data.Map as Map (insertWith, foldWithKey)
+import Data.Map as Map (insertWith, foldWithKey, elems)
 import Data.Maybe
-import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, empty, map, union, singleton)
+import Data.Monoid ((<>))
+import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, map, union, singleton)
 import Data.Text (pack)
 import Debian.Debianize.Atoms as Atoms
     (HasAtoms(packageDescription, control, binaryArchitectures, rulesFragments, website, serverInfo, link,
-              backups, executable, sourcePriority, sourceSection, binaryPriorities, binarySections, description),
+              backups, executable, sourcePriority, sourceSection, binaryPriorities, binarySections, description,
+              install, installTo, installData, installCabalExecTo),
      Atoms, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
-     finalizeAtoms, installData, installCabalExec, foldCabalDatas, foldCabalExecs,
-     binaryPackageDeps, binaryPackageConflicts)
-import Debian.Debianize.Combinators (describe, buildDeps)
+     installData, installCabalExec)
+import Debian.Debianize.Combinators (describe, buildDeps, finalizeAtoms)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                newBinaryDebDescription, modifyBinaryDeb,
                                                PackageType(Exec, Development, Profiling, Documentation, Utilities))
-import Debian.Debianize.Dependencies (debianName)
+import Debian.Debianize.Dependencies (debianName, binaryPackageDeps, binaryPackageConflicts)
+import Debian.Debianize.Types (InstallFile(..))
 import Debian.Policy (PackageArchitectures(Any, All), Section(..))
 import Debian.Relation (Relation(Rel), BinPkgName(BinPkgName))
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
-import Prelude hiding (init, unlines, writeFile)
+import Prelude hiding (init, unlines, writeFile, map)
 import System.FilePath ((</>), (<.>))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
@@ -163,9 +165,18 @@ makeUtilsPackage deb =
       availableData = Set.fromList (Cabal.dataFiles pkgDesc)
       availableExec = Set.map Cabal.exeName (Set.filter (Cabal.buildable . Cabal.buildInfo) (Set.fromList (Cabal.executables pkgDesc)))
       installedData :: Set FilePath
-      installedData = foldCabalDatas Set.insert Set.empty deb
+      installedData = Set.fromList ((List.map fst . concat . List.map toList . elems $ getL install deb) <>
+                                    (List.map fst . concat . List.map toList . elems $ getL installTo deb) <>
+                                    (List.map fst . concat . List.map toList . elems $ getL installData deb))
       installedExec :: Set String
-      installedExec = foldCabalExecs (Set.insert :: String -> Set String -> Set String) (Set.empty :: Set String) deb
+      installedExec = Set.fromList ((List.map fst . concat . List.map toList . elems $ getL installCabalExec deb) <>
+                                    (List.map fst . concat . List.map toList .  elems $ getL installCabalExecTo deb) <>
+                                    (List.map ename . elems $ getL executable deb))
+          where ename i =
+                    case sourceDir i of
+                      (Nothing) -> execName i
+                      (Just s) ->  s </> execName i
+      -- installedExec = foldCabalExecs (Set.insert :: String -> Set String -> Set String) (Set.empty :: Set String) deb
 
 makeUtilsAtoms :: BinPkgName -> Set FilePath -> Set String -> Atoms -> Atoms
 makeUtilsAtoms p datas execs atoms0 =

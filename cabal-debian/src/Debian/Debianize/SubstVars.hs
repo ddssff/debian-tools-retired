@@ -18,9 +18,9 @@ import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
 import Debian.Control
-import Debian.Debianize.Atoms (HasAtoms(compiler), Atoms, flags, filterMissing, packageInfo, compilerVersion, cabalFlagAssignments)
+import Debian.Debianize.Atoms (HasAtoms(compiler), Atoms, flags, packageInfo, compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.Cabal (getSimplePackageDescription)
-import Debian.Debianize.Dependencies (cabalDependencies, debDeps, debNameFromType)
+import Debian.Debianize.Dependencies (cabalDependencies, debDeps, debNameFromType, filterMissing)
 import Debian.Debianize.Types (Flags(dryRun, verbosity), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType)
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps, dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
 import qualified Debian.Relation as D

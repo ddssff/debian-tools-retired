@@ -11,12 +11,15 @@ module Debian.Debianize.Dependencies
     , debianName
     , debNameFromType
     , getRulesHead
+    , filterMissing
+    , binaryPackageDeps
+    , binaryPackageConflicts
     ) where
 
 import Data.Char (isSpace, toLower)
 import Data.Function (on)
 import Data.Lens.Lazy (getL)
-import Data.List (nub, minimumBy, isSuffixOf)
+import Data.List as List (nub, minimumBy, isSuffixOf, map)
 import Data.Map as Map (Map, lookup, insertWith, empty)
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
 import Data.Monoid ((<>))
@@ -24,9 +27,8 @@ import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, unlines)
 import Data.Version (Version, showVersion)
 import Debian.Control
-import Debian.Debianize.Atoms (HasAtoms(packageDescription, rulesHead, compiler),
-                                   Atoms, noProfilingLibrary, noDocumentationLibrary, versionSplits,
-                                   filterMissing, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo)
+import Debian.Debianize.Atoms (HasAtoms(packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary, missingDependencies,
+                                        versionSplits, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo, depends, conflicts), Atoms)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile (PackageType(..))
 import Debian.Debianize.Interspersed (Interspersed(leftmost, pairs, foldInverted), foldTriples)
@@ -413,3 +415,13 @@ getRulesHead atoms =
             ["include /usr/share/cdbs/1/rules/debhelper.mk",
              "include /usr/share/cdbs/1/class/hlibrary.mk"]
       name pkgDesc = pack (show (pretty (debianName atoms Cabal (Cabal.package pkgDesc) :: BinPkgName)))
+
+filterMissing :: Atoms -> [[Relation]] -> [[Relation]]
+filterMissing atoms rels =
+    filter (/= []) (List.map (filter (\ (D.Rel name _ _) -> not (Set.member name (getL missingDependencies atoms)))) rels)
+
+binaryPackageDeps :: BinPkgName -> Atoms -> [[Relation]]
+binaryPackageDeps b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL depends atoms))
+
+binaryPackageConflicts :: BinPkgName -> Atoms -> [[Relation]]
+binaryPackageConflicts b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL conflicts atoms))
