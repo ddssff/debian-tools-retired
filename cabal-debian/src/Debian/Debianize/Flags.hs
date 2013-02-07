@@ -90,11 +90,11 @@ atomOptions =
              "Add this string to the cabal version to get the debian version number.  By default this is '-1~hackage1'.  Debian policy says this must either be empty (--revision '') or begin with a dash.",
       Option "" ["epoch-map"] (ReqArg (\ pair atoms -> case break (== '=') pair of
                                                          (_, (_ : ['0'])) -> atoms
-                                                         (cab, (_ : [d])) | isDigit d -> modL epochMap (Map.insertWith (error "Conflict in epochMap") (PackageName cab) (ord d - ord '0')) atoms
+                                                         (cab, (_ : [d])) | isDigit d -> modL epochMap (Map.insertWith (flip const) (PackageName cab) (ord d - ord '0')) atoms
                                                          _ -> error "usage: --epoch-map CABALNAME=DIGIT") "CABALNAME=DIGIT")
              "Specify a mapping from the cabal package name to a digit to use as the debian package epoch number, e.g. --epoch-map HTTP=1",
       Option "" ["exec-map"] (ReqArg (\ s atoms -> case break (== '=') s of
-                                                     (cab, (_ : deb)) -> modL execMap (Map.insertWith (error "Conflict in execMap") cab (b deb)) atoms
+                                                     (cab, (_ : deb)) -> modL execMap (Map.insertWith (flip const) cab (b deb)) atoms
                                                      _ -> error "usage: --exec-map CABALNAME=DEBNAME") "EXECNAME=DEBIANNAME")
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
       Option "" ["omit-lt-deps"] (NoArg (setL omitLTDeps True))

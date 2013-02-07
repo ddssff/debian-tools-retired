@@ -52,7 +52,7 @@ finalizeDebianization deb0 =
       f :: Atoms -> Atoms
       f atoms = (\ atoms' -> Map.foldWithKey (\ b _ atoms'' -> cabalExecBinaryPackage b atoms'') atoms' (getL website atoms)) .
                 (\ atoms' -> Map.foldWithKey (\ b _ atoms'' -> cabalExecBinaryPackage b atoms'') atoms' (getL serverInfo atoms)) .
-                (\ atoms' -> Map.foldWithKey (\ b _ atoms'' -> modL binaryArchitectures (Map.insertWith (\ _ x -> x) b Any) . cabalExecBinaryPackage b $ atoms'') atoms' (getL backups atoms)) .
+                (\ atoms' -> Map.foldWithKey (\ b _ atoms'' -> modL binaryArchitectures (Map.insertWith (flip const) b Any) . cabalExecBinaryPackage b $ atoms'') atoms' (getL backups atoms)) .
                 (\ atoms' -> Map.foldWithKey (\ b _ atoms'' -> cabalExecBinaryPackage b atoms'') atoms' (getL executable atoms)) $ atoms
       -- Apply the hints in the atoms to the debianization
       g :: Atoms -> Atoms
