@@ -18,9 +18,9 @@ import Data.Lens.Lazy (getL, setL, modL)
 import Data.Maybe
 import Data.Text (Text)
 import Debian.Debianize.Atoms (HasAtoms(packageDescription, compat, watch, changelog, control, copyright, sourcePriority, sourceSection),
-                               Atoms, defaultAtoms, flags, compilerVersion, cabalFlagAssignments)
+                               Atoms, flags, compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
-import Debian.Debianize.Combinators (versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries)
+import Debian.Debianize.Combinators (versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries, defaultAtoms)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..))
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Flags (flagOptions, atomOptions)

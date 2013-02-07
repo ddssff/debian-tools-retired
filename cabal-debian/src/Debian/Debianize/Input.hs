@@ -21,9 +21,9 @@ import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import Debian.Debianize.Atoms (HasAtoms(rulesHead, compat, sourceFormat, watch, changelog, control, copyright, intermediateFiles,
                                         postInst, postRm, preInst, preRm),
-                                   Atoms, install, installDir,
-                                   defaultAtoms, warning, logrotateStanza,
+                                   Atoms, install, installDir, warning, logrotateStanza,
                                    installInit, link)
+import Debian.Debianize.Combinators (defaultAtoms)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')

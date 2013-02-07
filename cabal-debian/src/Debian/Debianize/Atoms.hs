@@ -2,15 +2,9 @@
 module Debian.Debianize.Atoms
     ( HasAtoms(..)
     , Atoms
-    , defaultAtoms
     , filterMissing
     , binaryPackageDeps
     , binaryPackageConflicts
-    , doExecutable
-    , doServer
-    , doWebsite
-    , doBackups
-    , tightDependencyFixup
     , foldExecs
     , foldPriorities
     , foldSections
@@ -23,8 +17,8 @@ module Debian.Debianize.Atoms
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Generics (Data, Typeable)
-import Data.Lens.Lazy (Lens, setL, lens, getL, modL)
-import Data.List as List (map, intersperse)
+import Data.Lens.Lazy (Lens, lens, getL, modL)
+import Data.List as List (map)
 import Data.Map as Map (Map, fold, foldWithKey, lookup, insertWith, empty, null, insert)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..), (<>))
@@ -34,11 +28,11 @@ import Data.Version (Version, showVersion)
 import Debian.Changes (ChangeLog)
 import Debian.Debianize.ControlFile (SourceDebDescription, newSourceDebDescription)
 import Debian.Debianize.Types (Flags(..), PackageInfo(..), Site(..), Server(..), InstallFile(..),
-                               VersionSplits(..), defaultFlags, knownVersionSplits, knownEpochMappings)
+                               VersionSplits(..), defaultFlags)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, SourceFormat, PackagePriority, Section,
                       apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
-import Debian.Relation (SrcPkgName, BinPkgName(BinPkgName), Relation(..))
+import Debian.Relation (SrcPkgName, BinPkgName, Relation(..))
 import Debian.Version (DebianVersion)
 import Distribution.License (License)
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..))
@@ -230,12 +224,6 @@ data DebAtom
 -- broken up into smaller atoms, many of which would be attached to
 -- binary packages.
 newtype Atoms = Atoms {unAtoms :: Map DebAtomKey (Set DebAtom)} deriving (Eq, Show)
-
-defaultAtoms :: Atoms
-defaultAtoms =
-    setL epochMap knownEpochMappings $
-    setL versionSplits knownVersionSplits $
-    Atoms mempty
 
 instance Monoid Atoms where
     -- We need mempty to actually be an empty map because we test for
@@ -1061,49 +1049,11 @@ foldDescriptions description r0 atoms =
       from (Binary p) (DHDescription x) r = description p x r
       from _ _ r = r
 
-doExecutable :: BinPkgName -> InstallFile -> Atoms -> Atoms
-doExecutable bin x deb = insertAtom (Binary bin) (DHExecutable x) deb
-
-doServer :: BinPkgName -> Server -> Atoms -> Atoms
-doServer bin x deb = insertAtom (Binary bin) (DHServer x) deb
-
-doWebsite :: BinPkgName -> Site -> Atoms -> Atoms
-doWebsite bin x deb = insertAtom (Binary bin) (DHWebsite x) deb
-
-doBackups :: BinPkgName -> String -> Atoms -> Atoms
-doBackups bin s deb =
-    insertAtom (Binary bin) (DHBackups s) $
-    modL depends (Map.insertWith union bin (singleton (Rel (BinPkgName "anacron") Nothing Nothing))) $
-    deb
-
 watchAtom :: PackageName -> Text
 watchAtom (PackageName pkgname) =
     pack $ "version=3\nopts=\"downloadurlmangle=s|archive/([\\w\\d_-]+)/([\\d\\.]+)/|archive/$1/$2/$1-$2.tar.gz|,\\\nfilenamemangle=s|(.*)/$|" ++ pkgname ++
            "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
            " \\\n    ([\\d\\.]*\\d)/\n"
-
--- | Create equals dependencies.  For each pair (A, B), use dpkg-query
--- to find out B's version number, version B.  Then write a rule into
--- P's .substvar that makes P require that that exact version of A,
--- and another that makes P conflict with any older version of A.
-tightDependencyFixup :: [(BinPkgName, BinPkgName)] -> BinPkgName -> Atoms -> Atoms
-tightDependencyFixup [] _ deb = deb
-tightDependencyFixup pairs p deb =
-    insertAtom Source atom deb
-    where
-      atom = DebRulesFragment
-              (unlines $
-               ([ "binary-fixup/" <> name <> "::"
-                , "\techo -n 'haskell:Depends=' >> debian/" <> name <> ".substvars" ] ++
-                intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (List.map equals pairs) ++
-                [ "\techo '' >> debian/" <> name <> ".substvars"
-                , "\techo -n 'haskell:Conflicts=' >> debian/" <> name <> ".substvars" ] ++
-                intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (List.map newer pairs) ++
-                [ "\techo '' >> debian/" <> name <> ".substvars" ]))
-      equals (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (=$${Version})' " <>  display' installed <> " >> debian/" <> name <> ".substvars"
-      newer  (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (>>$${Version})' " <> display' installed <> " >> debian/" <> name <> ".substvars"
-      name = display' p
-      display' = pack . show . pretty
 
 foldExecs :: (BinPkgName -> Site -> r -> r)
           -> (BinPkgName -> Server -> r -> r)

@@ -9,26 +9,32 @@ module Debian.Debianize.Combinators
     , addExtraLibDependencies
     , setSourceBinaries
     , oldFilterMissing
+    , doExecutable
+    , doServer
+    , doWebsite
+    , doBackups
+    , defaultAtoms
+    , tightDependencyFixup
     ) where
 
-import Data.Lens.Lazy (getL, modL)
-import Data.List as List (nub, intercalate)
-import qualified Data.Map as Map
+import Data.Lens.Lazy (getL, setL, modL)
+import Data.List as List (nub, intercalate, intersperse, map)
+import Data.Map as Map (lookup, insertWith)
 import Data.Maybe
-import Data.Monoid ((<>))
-import qualified Data.Set as Set
-import Data.Text as Text (Text, pack, unpack, intercalate)
+import Data.Monoid (mempty, (<>))
+import Data.Set as Set (toList, union, singleton, insert)
+import Data.Text as Text (Text, pack, unpack, intercalate, unlines)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize.Atoms (HasAtoms(packageDescription, sourcePackageName, changelog, comments, control),
-                                   Atoms, revision, debVersion, extraLibMap, epochMap)
+import Debian.Debianize.Atoms as Atoms (HasAtoms(packageDescription, sourcePackageName, changelog, comments, control, executable,
+                                                 serverInfo, website, backups, depends, versionSplits, rulesFragments),
+                                        Atoms, revision, debVersion, extraLibMap, epochMap)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianBuildDeps, debianBuildDepsIndep, debianName)
--- import Debian.Debianize.Types.PackageType (PackageType(Development, Profiling, Documentation, Exec, Utilities, Cabal, Source'))
+import Debian.Debianize.Types (InstallFile, Server, Site, knownVersionSplits, knownEpochMappings)
 import Debian.Debianize.Utility (trim, foldEmpty)
 import Debian.Policy (StandardsVersion)
-import qualified Debian.Relation as D
-import Debian.Relation (BinPkgName, SrcPkgName(..), Relation(Rel))
+import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(..), Relation(Rel))
 import Debian.Release (parseReleaseName)
 import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
 import Distribution.Package (PackageIdentifier(..))
@@ -139,8 +145,8 @@ addExtraLibDependencies deb =
               = bin { relations = g (relations bin) }
       f bin = bin
       g :: Debian.PackageRelations -> Debian.PackageRelations
-      g rels = rels { depends = depends rels ++
-                                map anyrel' (concatMap (\ cab -> maybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] Set.toList (Map.lookup cab (getL extraLibMap deb)))
+      g rels = rels { Debian.depends = Debian.depends rels ++
+                                map anyrel' (concatMap (\ cab -> maybe [BinPkgName ("lib" ++ cab ++ "-dev")] Set.toList (Map.lookup cab (getL extraLibMap deb)))
                                                        (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc)) }
       pkgDesc = fromMaybe (error "addExtraLibDependencies: no PackageDescription") $ getL packageDescription deb
 
@@ -199,16 +205,8 @@ debianDescriptionBase synopsis' description' author' maintainer' url =
       list :: b -> ([a] -> b) -> [a] -> b
       list d f l = case l of [] -> d; _ -> f l
 
-{-
-extraDeps :: [(D.BinPkgName, D.Relation)] -> D.BinPkgName -> [[D.Relation]]
-extraDeps deps p =
-    case filter ((== p) . fst) deps of
-      [] -> []
-      pairs -> map ((: []) . snd) pairs
--}
-
-anyrel' :: D.BinPkgName -> [D.Relation]
-anyrel' x = [D.Rel x Nothing Nothing]
+anyrel' :: BinPkgName -> [Relation]
+anyrel' x = [Rel x Nothing Nothing]
 
 oldFilterMissing :: [BinPkgName] -> Atoms -> Atoms
 oldFilterMissing missing deb =
@@ -219,7 +217,7 @@ oldFilterMissing missing deb =
                   , binaryPackages = map g (binaryPackages src) }
       f rels = filter (/= []) (map (filter (\ (Rel name _ _) -> not (elem name missing))) rels)
       g bin = bin { relations = h (relations bin) }
-      h rels = PackageRelations { depends = f (depends rels)
+      h rels = PackageRelations { Debian.depends = f (Debian.depends rels)
                                 , recommends = f (recommends rels)
                                 , suggests = f (suggests rels)
                                 , preDepends = f (preDepends rels)
@@ -231,3 +229,47 @@ oldFilterMissing missing deb =
 
 setSourceBinaries :: [BinaryDebDescription] -> Atoms -> Atoms
 setSourceBinaries xs deb = modL control (\ y -> y {binaryPackages = xs}) deb
+
+doExecutable :: BinPkgName -> InstallFile -> Atoms -> Atoms
+doExecutable bin x deb = modL executable (Map.insertWith (error "executable") bin x) deb
+
+doServer :: BinPkgName -> Server -> Atoms -> Atoms
+doServer bin x deb = modL serverInfo (Map.insertWith (error "serverInfo") bin x) deb
+
+doWebsite :: BinPkgName -> Site -> Atoms -> Atoms
+doWebsite bin x deb = modL website (Map.insertWith (error "website") bin x) deb
+
+doBackups :: BinPkgName -> String -> Atoms -> Atoms
+doBackups bin s deb =
+    modL backups (Map.insertWith (error "backups") bin s) $
+    modL Atoms.depends (Map.insertWith union bin (singleton (Rel (BinPkgName "anacron") Nothing Nothing))) $
+    deb
+
+defaultAtoms :: Atoms
+defaultAtoms =
+    setL epochMap knownEpochMappings $
+    setL versionSplits knownVersionSplits $
+    mempty
+
+-- | Create equals dependencies.  For each pair (A, B), use dpkg-query
+-- to find out B's version number, version B.  Then write a rule into
+-- P's .substvar that makes P require that that exact version of A,
+-- and another that makes P conflict with any older version of A.
+tightDependencyFixup :: [(BinPkgName, BinPkgName)] -> BinPkgName -> Atoms -> Atoms
+tightDependencyFixup [] _ deb = deb
+tightDependencyFixup pairs p deb =
+    modL rulesFragments
+             (Set.insert
+              (Text.unlines $
+               ([ "binary-fixup/" <> name <> "::"
+                , "\techo -n 'haskell:Depends=' >> debian/" <> name <> ".substvars" ] ++
+                intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (List.map equals pairs) ++
+                [ "\techo '' >> debian/" <> name <> ".substvars"
+                , "\techo -n 'haskell:Conflicts=' >> debian/" <> name <> ".substvars" ] ++
+                intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (List.map newer pairs) ++
+                [ "\techo '' >> debian/" <> name <> ".substvars" ]))) deb
+    where
+      equals (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (=$${Version})' " <>  display' installed <> " >> debian/" <> name <> ".substvars"
+      newer  (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (>>$${Version})' " <> display' installed <> " >> debian/" <> name <> ".substvars"
+      name = display' p
+      display' = pack . show . pretty

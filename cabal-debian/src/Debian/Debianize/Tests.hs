@@ -20,8 +20,9 @@ import Debian.Debianize.Debianize (cabalToDebianization)
 import Debian.Debianize.Atoms as Atoms
     (HasAtoms(rulesHead, compat, sourceFormat, changelog, sourcePackageName, control, missingDependencies, revision,
               binaryArchitectures, copyright, debVersion, execMap, buildDeps, buildDepsIndep, utilsPackageName, description),
-     Atoms, tightDependencyFixup, depends, conflicts, doExecutable, doWebsite, doServer, doBackups, install, installData, defaultAtoms)
+     Atoms, depends, conflicts, install, installData)
 import Debian.Debianize.Cabal (getSimplePackageDescription')
+import Debian.Debianize.Combinators (doExecutable, doWebsite, doServer, doBackups, defaultAtoms, tightDependencyFixup)
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
