@@ -1,6 +1,6 @@
 module Debian.Debianize.Flags
-    ( flagOptions
-    , atomOptions
+    ( compileArgs
+    , options
     ) where
 
 import Data.Char (toLower, isDigit, ord)
@@ -18,27 +18,22 @@ import Debian.Version (parseDebianVersion)
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
 import Prelude hiding (readFile, lines, null, log, sum)
-import System.Console.GetOpt (ArgDescr(..), OptDescr(..))
+import System.Console.GetOpt (ArgDescr(..), OptDescr(..), ArgOrder(RequireOrder), getOpt')
 import System.FilePath ((</>), splitFileName)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.Regex.TDFA ((=~))
 
-{-
-getFlags :: HasAtoms atoms => IO atoms
-getFlags = getArgs >>= parseArgs
+compileArgs :: Atoms -> [String] -> Atoms
+compileArgs atoms args =
+    case getOpt' RequireOrder options args of
+      (os, [], [], []) -> foldl (flip ($)) atoms os
+      (_, non, unk, errs) -> error ("Errors: " ++ show errs ++
+                                    ", Unrecognized: " ++ show unk ++
+                                    ", Non-Options: " ++ show non)
 
-parseArgs :: HasAtoms atoms => [String] -> atoms -> IO atoms
-parseArgs args atoms = do
-     when (debAction (flags opts) == Usage) $ do
-       printHelp stdout
-       exitWith ExitSuccess
-     return opts
-    where opts = compileArgs args atoms
--}
-
--- | Options that modify the Flags atom.
-flagOptions :: [OptDescr (Atoms -> Atoms)]
-flagOptions =
+-- | Options that modify other atoms.
+options :: [OptDescr (Atoms -> Atoms)]
+options =
     [ Option "v" ["verbose"] (ReqArg (\ s atoms -> modL flags (\ x -> x { verbosity = read s }) atoms) "n")
              "Change build verbosity",
       Option "n" ["dry-run", "compare"] (NoArg (\ atoms -> modL flags (\ x -> x {dryRun = True}) atoms))
@@ -49,13 +44,8 @@ flagOptions =
              "Generate a new debianization, replacing any existing one.  One of --debianize or --substvar is required.",
       Option "" ["substvar"] (ReqArg (\ name atoms -> modL flags (\ x -> x {debAction = SubstVar (read name)}) atoms) "Doc, Prof, or Dev")
              (unlines ["Write out the list of dependencies required for the dev, prof or doc package depending",
-                       "on the argument.  This value can be added to the appropriate substvars file."])
-    ]
-
--- | Options that modify other atoms.
-atomOptions :: [OptDescr (Atoms -> Atoms)]
-atomOptions =
-    [ Option "" ["executable"] (ReqArg (\ path x -> executableOption path (\ bin e -> doExecutable bin e x)) "SOURCEPATH or SOURCEPATH:DESTDIR")
+                       "on the argument.  This value can be added to the appropriate substvars file."]),
+      Option "" ["executable"] (ReqArg (\ path x -> executableOption path (\ bin e -> doExecutable bin e x)) "SOURCEPATH or SOURCEPATH:DESTDIR")
              "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
       Option "" ["ghc-version"] (ReqArg (\ ver x -> setL compilerVersion (Just (last (map fst (readP_to_S parseVersion ver)))) x) "VERSION")
              "Version of GHC in build environment",

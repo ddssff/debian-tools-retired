@@ -47,7 +47,7 @@ inputDebianization top =
 
 inputSourceDebDescription :: FilePath -> IO (SourceDebDescription, [Field])
 inputSourceDebDescription debian =
-    do paras <- parseControlFromFile (debian </> "control") >>= return . either (error . show) unControl
+    do paras <- parseControlFromFile (debian </> "control") >>= either (error . show) (return . unControl)
        case paras of
          [] -> error "Missing source paragraph"
          [_] -> error "Missing binary paragraph"

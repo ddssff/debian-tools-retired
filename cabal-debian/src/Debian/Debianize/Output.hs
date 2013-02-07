@@ -18,6 +18,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text as Text (Text, unpack, split)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logVersion))
 import Debian.Debianize.Atoms (HasAtoms(changelog, control), Atoms, flags)
+import Debian.Debianize.Combinators (defaultAtoms)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Types (Flags(validate, dryRun))
@@ -41,7 +42,7 @@ outputDebianization old new =
          Just old' | validate (getL flags new) -> validateDebianization old' new
          _ | validate (getL flags new) -> error "No existing debianization to validate"
          Just old' | dryRun (getL flags new) -> putStr ("Debianization (dry run):\n" ++ describeDebianization old' new)
-         _ | dryRun (getL flags new) -> error "No existing debianiztion to compare new one to"
+         _ | dryRun (getL flags new) -> putStr (describeDebianization defaultAtoms new)
          _ -> writeDebianization new
 
 validateDebianization :: Atoms -> Atoms -> IO ()
