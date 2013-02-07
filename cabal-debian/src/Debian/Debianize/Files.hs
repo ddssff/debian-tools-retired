@@ -160,7 +160,8 @@ controlFile src =
             mField "Section" (binarySection bin) ++
             mField "Priority" (binaryPriority bin) ++
             bField "Essential" (essential bin) ++
-            relFields (relations bin))
+            relFields (relations bin) ++
+            [Field ("Description", " " ++ unpack (description bin))])
       mField tag = maybe [] (\ x -> [Field (tag, " " <> show (pretty x))])
       bField tag flag = if flag then [Field (tag, " yes")] else []
       lField _ [] = []

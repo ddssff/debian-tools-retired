@@ -1,6 +1,7 @@
 haskell-cabal-debian (3.0.1) unstable; urgency=low
 
   * Don't build Debian version numbers with revision (Just "").
+  * Output the descriptions of the binary packages.
 
  -- David Fox <dsf@seereason.com>  Tue, 05 Feb 2013 14:48:33 -0800
 
