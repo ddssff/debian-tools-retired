@@ -1,3 +1,11 @@
+haskell-cabal-debian (3.0.2) unstable; urgency=low
+
+  * Fix argument and exception handling in cabal-debian
+  * Make Standards-Version field non-mandatory
+  * Make sure every binary deb paragraph has a non-empty description
+
+ -- David Fox <dsf@seereason.com>  Thu, 07 Feb 2013 10:03:25 -0800
+
 haskell-cabal-debian (3.0.1) unstable; urgency=low
 
   * Don't build Debian version numbers with revision (Just "").

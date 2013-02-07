@@ -13,7 +13,7 @@ import Data.Map as Map (Map, toList, fromListWithKey, mapKeys)
 import Data.Maybe
 import Data.Monoid ((<>))
 import Data.Set as Set (toList, member)
-import Data.Text as Text (Text, pack, unpack, unlines)
+import Data.Text as Text (Text, pack, unpack, unlines, strip, null)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.Atoms (HasAtoms(compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
                                         intermediateFiles, install, installDir, installInit, logrotateStanza, link,
@@ -161,7 +161,7 @@ controlFile src =
             mField "Priority" (binaryPriority bin) ++
             bField "Essential" (essential bin) ++
             relFields (relations bin) ++
-            [Field ("Description", " " ++ unpack (description bin))])
+            [Field ("Description", " " ++ unpack (ensureDescription (description bin)))])
       mField tag = maybe [] (\ x -> [Field (tag, " " <> show (pretty x))])
       bField tag flag = if flag then [Field (tag, " yes")] else []
       lField _ [] = []
@@ -179,6 +179,7 @@ controlFile src =
       showDests s = if member B s then "B" else "" <>
                     if member S s then "S" else "" <>
                     if member C s then "C" else ""
+      ensureDescription t = if Text.null (strip t) then "No description available." else t
 
 relFields :: PackageRelations -> [Field' [Char]]
 relFields rels =
