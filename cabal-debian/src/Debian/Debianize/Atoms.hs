@@ -1,86 +1,57 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 module Debian.Debianize.Atoms
     ( HasAtoms(..)
-
     , Atoms
-    , Flags(..)
-    , DebAction(..)
-    , PackageInfo(..)
-    , Site(..)
-    , Server(..)
-    , InstallFile(..)
-    , DebType(..)
-    , VersionSplits(..)
-
-    , defaultFlags
     , defaultAtoms
     , filterMissing
-    , knownVersionSplits
-    , knownEpochMappings
     , binaryPackageDeps
     , binaryPackageConflicts
     , doExecutable
     , doServer
     , doWebsite
     , doBackups
-    , watchAtom
     , tightDependencyFixup
     , foldExecs
     , foldPriorities
     , foldSections
     , foldDescriptions
-    , finalizeAtoms
     , foldCabalDatas
     , foldCabalExecs
-    , oldClckwrksSiteFlags
-    , oldClckwrksServerFlags
+    , finalizeAtoms
     ) where
-
-import Data.Generics (Data, Typeable)
-import Data.Lens.Lazy (Lens, setL)
-import Data.Map as Map (Map, fold, fromList, foldWithKey)
-import Data.Monoid (Monoid)
-import Data.Set (Set)
-import Data.Text (Text)
-import Data.Version (Version(Version))
-import Debian.Changes (ChangeLog)
-import Debian.Debianize.ControlFile (SourceDebDescription)
-import Debian.Orphans ()
-import Debian.Policy (PackageArchitectures, SourceFormat, PackagePriority, Section)
-import Debian.Relation (Relation, SrcPkgName, BinPkgName)
-import Debian.Version (DebianVersion)
-import Distribution.License (License)
-import Distribution.Package (PackageName(PackageName))
-import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
-import Distribution.Simple.Compiler (Compiler)
-import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Digest.Pure.MD5 (md5)
-import Data.Lens.Lazy (lens, getL, modL)
-import Data.List as List (map)
-import Data.Map as Map (lookup, insertWith, empty, null, insert)
+import Data.Generics (Data, Typeable)
+import Data.Lens.Lazy (Lens, setL, lens, getL, modL)
+import Data.List as List (map, intersperse)
+import Data.Map as Map (Map, fold, foldWithKey, lookup, insertWith, empty, null, insert)
 import Data.Maybe (fromMaybe)
-import Data.Monoid (Monoid(..))
-import Data.Set as Set (maxView, toList, empty, union, singleton, fold, insert, member)
-import Data.Text (unpack)
+import Data.Monoid (Monoid(..), (<>))
+import Data.Set as Set (Set, maxView, toList, empty, union, singleton, fold, insert, member)
+import Data.Text (Text, pack, unlines, unpack)
+import Data.Version (Version, showVersion)
+import Debian.Changes (ChangeLog)
+import Debian.Debianize.ControlFile (SourceDebDescription, newSourceDebDescription)
+import Debian.Debianize.Types (Flags(..), PackageInfo(..), Site(..), Server(..), InstallFile(..),
+                               VersionSplits(..), defaultFlags, knownVersionSplits, knownEpochMappings)
 import Debian.Orphans ()
-import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
-import Distribution.Package (PackageIdentifier(..))
+import Debian.Policy (PackageArchitectures, SourceFormat, PackagePriority, Section,
+                      apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
+import Debian.Relation (SrcPkgName, BinPkgName(BinPkgName), Relation(..))
+import Debian.Version (DebianVersion)
+import Distribution.License (License)
+import Distribution.Package (PackageName(PackageName), PackageIdentifier(..))
+import Distribution.PackageDescription as Cabal (PackageDescription(package), FlagName, PackageDescription)
+import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init, unlines, log)
-import System.Process (showCommandForUser)
-
-import Data.List (intersperse)
-import Data.Monoid ((<>))
---import Data.Set as Set (Set, maxView, toList, null, union, singleton, insert, member)
-import Data.Text (pack, unlines)
-import Data.Version (showVersion)
-import Debian.Debianize.ControlFile (newSourceDebDescription)
-import Debian.Orphans ()
-import Debian.Relation (BinPkgName(BinPkgName), Relation(..))
-import Distribution.PackageDescription as Cabal (PackageDescription(package))
 import System.FilePath ((</>), makeRelative, splitFileName, takeDirectory, takeFileName)
+import System.Process (showCommandForUser)
+import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
+
+-- All the internals of this module is a steaming pile of poo, except
+-- for the stuff that is exported.
 
 insertAtom :: DebAtomKey -> DebAtom -> Atoms -> Atoms
 insertAtom mbin atom (Atoms x) = Atoms (insertWith union mbin (singleton atom) x)
@@ -254,121 +225,6 @@ data DebAtom
                                                   -- reason to use this is because we don't yet know the name of the dev library package.
     deriving (Eq, Ord, Show, Typeable)
 
--- | This record supplies information about the task we want done -
--- debianization, validataion, help message, etc.
-data Flags = Flags
-    {
-    -------------------------
-    -- Modes of Operation ---
-    -------------------------
-      verbosity :: Int
-    -- ^ Run with progress messages at the given level of verboseness.
-    , dryRun :: Bool
-    -- ^ Don't write any files or create any directories, just explain
-    -- what would have been done.
-    , validate :: Bool
-    -- ^ Fail if the debianization already present doesn't match the
-    -- one we are going to generate closely enough that it is safe to
-    -- debianize during the run of dpkg-buildpackage, when Setup
-    -- configure is run.  Specifically, the version number in the top
-    -- changelog entry must match, and the sets of package names in
-    -- the control file must match.
-    , debAction :: DebAction
-    -- ^ What to do - Usage, Debianize or Substvar
-    } deriving (Eq, Ord, Show)
-
-data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq, Ord)
-
-data PackageInfo = PackageInfo { cabalName :: PackageName
-                               , devDeb :: Maybe (BinPkgName, DebianVersion)
-                               , profDeb :: Maybe (BinPkgName, DebianVersion)
-                               , docDeb :: Maybe (BinPkgName, DebianVersion) } deriving (Eq, Ord, Show)
-
--- | Information about the web site we are packaging.
-data Site
-    = Site
-      { domain :: String   -- ^ The domain name assigned to the server.
-                           -- An apache configuration will be generated to
-                           -- redirect requests from this domain to hostname:port
-      , serverAdmin :: String   -- ^ Apache ServerAdmin parameter
-      , server :: Server   -- ^ The hint to install the server job
-      } deriving (Read, Show, Eq, Ord)
-
--- | Information about the server we are packaging.
-data Server
-    = Server
-      { hostname :: String      -- ^ Host on which the server will run
-      , port :: Int             -- ^ Port on which the server will run.
-                                -- Obviously, this must assign each and
-                                -- every server package to a different
-                                -- port.
-      , headerMessage :: String -- ^ A comment that will be inserted to
-                                -- explain how the file was generated
-      , retry :: String         -- ^ start-stop-daemon --retry argument
-      , serverFlags :: [String] -- ^ Extra flags to pass to the server via the init script
-      , installFile :: InstallFile -- ^ The hint to install the server executable
-      } deriving (Read, Show, Eq, Ord)
-
-data InstallFile
-    = InstallFile
-      { execName :: String -- ^ The name of the executable file
-      , sourceDir :: Maybe FilePath -- ^ where to find it, default is dist/build/<execName>/
-      , destDir :: Maybe FilePath -- ^ where to put it, default is usr/bin/<execName>
-      , destName :: String  -- ^ name to give installed executable
-      } deriving (Read, Show, Eq, Ord)
-
--- | A redundant data type, too lazy to expunge.
-data DebType = Dev | Prof | Doc deriving (Eq, Ord, Read, Show)
-
-data VersionSplits
-    = VersionSplits {
-        packageName :: PackageName
-      , oldestPackage :: PackageName
-      , splits :: [(Version, PackageName)] -- Assumed to be in version number order
-      } deriving (Eq, Ord, Show)
-
--- | These are the instances of debian names changing that I know
--- about.  I know they really shouldn't be hard coded.  Send a patch.
--- Note that this inherits the lack of type safety of the mkPkgName
--- function.
-knownVersionSplits :: [VersionSplits]
-knownVersionSplits =
-    [ VersionSplits {
-        packageName = PackageName "parsec"
-      , oldestPackage = PackageName "parsec2"
-      , splits = [(Version [3] [], PackageName "parsec3")] }
-    , VersionSplits {
-        packageName = PackageName "QuickCheck"
-      , oldestPackage = PackageName "quickcheck1"
-      , splits = [(Version [2] [], PackageName "quickcheck2")] }
-    ]
-
--- | We should always call this, just as we should always apply
--- knownVersionSplits.
-knownEpochMappings :: Map PackageName Int
-knownEpochMappings =
-    Map.fromList [(PackageName "HaXml", 1)]
-
-oldClckwrksSiteFlags :: Site -> [String]
-oldClckwrksSiteFlags x =
-    [ -- According to the happstack-server documentation this needs a trailing slash.
-      "--base-uri", "http://" ++ domain x ++ "/"
-    , "--http-port", show port]
-oldClckwrksServerFlags :: Server -> [String]
-oldClckwrksServerFlags x =
-    [ -- According to the happstack-server documentation this needs a trailing slash.
-      "--base-uri", "http://" ++ hostname x ++ ":" ++ show (port x) ++ "/"
-    , "--http-port", show port]
-
-defaultFlags :: Flags
-defaultFlags =
-    Flags {
-      verbosity = 1
-    , debAction = Usage
-    , dryRun = False
-    , validate = False
-    }
-
 -- | Information about the mapping from cabal package names and
 -- versions to debian package names and versions.  (This could be
 -- broken up into smaller atoms, many of which would be attached to
@@ -388,8 +244,64 @@ instance Monoid Atoms where
     mappend a b = foldAtoms insertAtom a b
 
 class (Monoid atoms, Show atoms {- Show instance for debugging only -}) => HasAtoms atoms where
-    rulesHead :: Lens atoms (Maybe Text)
+
+    -- Modes of operation
+    flags :: Lens atoms Flags
+    compilerVersion :: Lens atoms (Maybe Version)
+    warning :: Lens atoms (Set Text)
+
+    -- Cabal info
     packageDescription :: Lens atoms (Maybe PackageDescription)
+    buildDir :: Lens atoms (Maybe FilePath)
+    dataDir :: Lens atoms (Maybe FilePath)
+    compiler :: Lens atoms (Maybe Compiler)
+    extraLibMap :: Lens atoms (Map String (Set BinPkgName))
+    execMap :: Lens atoms (Map String BinPkgName)
+    cabalFlagAssignments :: Lens atoms (Set (FlagName, Bool))
+
+    -- Global debian info
+    versionSplits :: Lens atoms [VersionSplits]
+    epochMap :: Lens atoms (Map PackageName Int)
+
+    -- High level information about the debianization
+    apacheSite :: Lens atoms (Map BinPkgName (String, FilePath, Text))
+    description :: Lens atoms (Map BinPkgName Text)
+    executable :: Lens atoms (Map BinPkgName InstallFile)
+    serverInfo :: Lens atoms (Map BinPkgName Server)
+    website :: Lens atoms (Map BinPkgName Site)
+    backups :: Lens atoms (Map BinPkgName String)
+
+    -- Lower level hints about the debianization
+    missingDependencies :: Lens atoms (Set BinPkgName)
+    utilsPackageName :: Lens atoms (Maybe BinPkgName)
+    sourcePackageName :: Lens atoms (Maybe SrcPkgName)
+    revision :: Lens atoms (Maybe String)
+    debVersion :: Lens atoms (Maybe DebianVersion)
+    maintainer :: Lens atoms (Maybe NameAddr)
+    packageInfo :: Lens atoms (Map PackageName PackageInfo)
+    omitLTDeps :: Lens atoms Bool
+    noProfilingLibrary :: Lens atoms Bool
+    noDocumentationLibrary :: Lens atoms Bool
+    copyright :: Lens atoms (Maybe (Either License Text))
+    sourceArchitecture :: Lens atoms (Maybe PackageArchitectures)
+    binaryArchitectures :: Lens atoms (Map BinPkgName PackageArchitectures)
+    sourcePriority :: Lens atoms (Maybe PackagePriority)
+    binaryPriorities :: Lens atoms (Map BinPkgName PackagePriority)
+    sourceSection :: Lens atoms (Maybe Section)
+    binarySections :: Lens atoms (Map BinPkgName Section)
+
+    -- Debian dependency info
+    buildDeps :: Lens atoms (Set BinPkgName) -- ^ Build dependencies
+    buildDepsIndep :: Lens atoms (Set BinPkgName) -- ^ Architecture independent
+    extraDevDeps :: Lens atoms (Set BinPkgName) -- ^ Extra install dependencies for the devel library
+    depends :: Lens atoms (Map BinPkgName (Set Relation)) -- ^ Install dependencies
+    -- This should be [[Relation]] for full generality, or Set (Set Relation)
+    conflicts :: Lens atoms (Map BinPkgName (Set Relation)) -- ^ Install conflicts
+    -- We should support all the other dependency fields - provides, replaces, etc.
+
+    -- Debianization files and file fragments
+    rulesHead :: Lens atoms (Maybe Text) -- ^ The beginning of the rules file
+    rulesFragments :: Lens atoms (Set Text) -- ^ Additional fragments of the rules file
     postInst :: Lens atoms (Map BinPkgName Text)
     postRm :: Lens atoms (Map BinPkgName Text)
     preInst :: Lens atoms (Map BinPkgName Text)
@@ -397,65 +309,20 @@ class (Monoid atoms, Show atoms {- Show instance for debugging only -}) => HasAt
     compat :: Lens atoms (Maybe Int)
     sourceFormat :: Lens atoms (Maybe SourceFormat)
     watch :: Lens atoms (Maybe Text)
-    sourcePackageName :: Lens atoms (Maybe SrcPkgName)
     changelog :: Lens atoms (Maybe ChangeLog)
     comments :: Lens atoms (Maybe [[Text]]) -- ^ Comment entries for the latest changelog entry (DebLogComments [[Text]])
     control :: Lens atoms SourceDebDescription
-    compilerVersion :: Lens atoms (Maybe Version)
-    compiler :: Lens atoms (Maybe Compiler)
-    dataDir :: Lens atoms (Maybe FilePath)
-    noProfilingLibrary :: Lens atoms Bool
-    noDocumentationLibrary :: Lens atoms Bool
-    utilsPackageName :: Lens atoms (Maybe BinPkgName)
-    missingDependencies :: Lens atoms (Set BinPkgName)
-    flags :: Lens atoms Flags
-
-    buildDir :: Lens atoms (Maybe FilePath)
-    revision :: Lens atoms (Maybe String)
-    debVersion :: Lens atoms (Maybe DebianVersion)
-    packageInfo :: Lens atoms (Map PackageName PackageInfo)
-    versionSplits :: Lens atoms [VersionSplits]
-    sourceArchitecture :: Lens atoms (Maybe PackageArchitectures)
-    binaryArchitectures :: Lens atoms (Map BinPkgName PackageArchitectures)
-    maintainer :: Lens atoms (Maybe NameAddr)
-    copyright :: Lens atoms (Maybe (Either License Text))
-
-    rulesFragments :: Lens atoms (Set Text)
-    omitLTDeps :: Lens atoms Bool
-    buildDeps :: Lens atoms (Set BinPkgName)
-    buildDepsIndep :: Lens atoms (Set BinPkgName)
-    extraLibMap :: Lens atoms (Map String (Set BinPkgName))
-    execMap :: Lens atoms (Map String BinPkgName)
-    epochMap :: Lens atoms (Map PackageName Int)
-    extraDevDeps :: Lens atoms (Set BinPkgName)
-    intermediateFiles :: Lens atoms (Set (FilePath, Text))
-    warning :: Lens atoms (Set Text)
-    cabalFlagAssignments :: Lens atoms (Set (FlagName, Bool))
-
-    depends :: Lens atoms (Map BinPkgName (Set Relation)) -- This should be [[Relation]] for full generality, or Set (Set Relation)
-    conflicts :: Lens atoms (Map BinPkgName (Set Relation)) -- This too
-
-    apacheSite :: Lens atoms (Map BinPkgName (String, FilePath, Text))
     logrotateStanza :: Lens atoms (Map BinPkgName (Set Text))
-    sourcePriority :: Lens atoms (Maybe PackagePriority)
-    binaryPriorities :: Lens atoms (Map BinPkgName PackagePriority)
-    sourceSection :: Lens atoms (Maybe Section)
-    binarySections :: Lens atoms (Map BinPkgName Section)
-    description :: Lens atoms (Map BinPkgName Text)
-    executable :: Lens atoms (Map BinPkgName InstallFile)
-    serverInfo :: Lens atoms (Map BinPkgName Server)
-    website :: Lens atoms (Map BinPkgName Site)
-    backups :: Lens atoms (Map BinPkgName String)
-
     link :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
-    install :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
-    installTo :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
-    installData :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
-    file :: Lens atoms (Map BinPkgName (Set (FilePath, Text)))
-    installCabalExec :: Lens atoms (Map BinPkgName (Set (String, FilePath)))
-    installCabalExecTo :: Lens atoms (Map BinPkgName (Set (String, FilePath)))
-    installDir :: Lens atoms (Map BinPkgName (Set FilePath))
-    installInit :: Lens atoms (Map BinPkgName Text)
+    install :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath))) -- ^ Install files into directories
+    installTo :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath))) -- ^ Rename and install files
+    installData :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath))) -- ^ Install files into the package data directory
+    file :: Lens atoms (Map BinPkgName (Set (FilePath, Text))) -- ^ Create a file in the deb with the given text
+    installCabalExec :: Lens atoms (Map BinPkgName (Set (String, FilePath))) -- ^ Install a cabal executable
+    installCabalExecTo :: Lens atoms (Map BinPkgName (Set (String, FilePath))) -- ^ Rename and install a cabal executable
+    installDir :: Lens atoms (Map BinPkgName (Set FilePath)) -- ^ Create directories in the package
+    installInit :: Lens atoms (Map BinPkgName Text) -- ^ Create an /etc/init.d file in the package
+    intermediateFiles :: Lens atoms (Set (FilePath, Text)) -- ^ Create a file in the debianization.  This is used to implement the file lens above.
 
 instance HasAtoms Atoms where
     -- Lenses to access values in the Atoms type.  This is an old

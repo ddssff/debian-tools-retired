@@ -17,13 +17,12 @@ import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
-import Debian.Debianize.Atoms (HasAtoms(compiler), Flags(dryRun, verbosity), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType,
-                                   Atoms, flags, filterMissing, packageInfo, compilerVersion, cabalFlagAssignments)
-import Debian.Debianize.Dependencies (cabalDependencies, debDeps, debNameFromType)
-import Debian.Debianize.Cabal (getSimplePackageDescription)
 import Debian.Control
-import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps,
-                                    dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
+import Debian.Debianize.Atoms (HasAtoms(compiler), Atoms, flags, filterMissing, packageInfo, compilerVersion, cabalFlagAssignments)
+import Debian.Debianize.Cabal (getSimplePackageDescription)
+import Debian.Debianize.Dependencies (cabalDependencies, debDeps, debNameFromType)
+import Debian.Debianize.Types (Flags(dryRun, verbosity), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType)
+import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps, dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
 import qualified Debian.Relation as D
 import Distribution.Package (Dependency(..), PackageName(PackageName))
 import Distribution.Simple.Compiler (CompilerFlavor(..), compilerFlavor, Compiler(..))

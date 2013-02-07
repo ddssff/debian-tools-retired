@@ -17,9 +17,8 @@ import Control.Applicative ((<$>))
 import Data.Lens.Lazy (getL, setL, modL)
 import Data.Maybe
 import Data.Text (Text)
-import Debian.Debianize.Atoms (HasAtoms(packageDescription, compat, watch, changelog, control, copyright, sourcePriority, sourceSection), Flags(..), DebAction(..),
-                                   Atoms, defaultAtoms, flags, watchAtom,
-                                   compilerVersion, cabalFlagAssignments)
+import Debian.Debianize.Atoms (HasAtoms(packageDescription, compat, watch, changelog, control, copyright, sourcePriority, sourceSection),
+                               Atoms, defaultAtoms, flags, compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..))
@@ -28,6 +27,7 @@ import Debian.Debianize.Flags (flagOptions, atomOptions)
 import Debian.Debianize.Input as Debian (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.SubstVars (substvars)
+import Debian.Debianize.Types (Flags(..), DebAction(..), watchAtom)
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel)
 import Debian.Time (getCurrentLocalRFC822Time)

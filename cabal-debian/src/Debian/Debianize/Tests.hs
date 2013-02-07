@@ -19,10 +19,8 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
 import Debian.Debianize.Atoms as Atoms
     (HasAtoms(rulesHead, compat, sourceFormat, changelog, sourcePackageName, control, missingDependencies, revision,
-              binaryArchitectures, copyright, debVersion, execMap, buildDeps, buildDepsIndep, utilsPackageName), InstallFile(..), Server(..), Site(..),
-     Atoms, tightDependencyFixup,
-     depends, conflicts, doExecutable, doWebsite, doServer, doBackups,
-     install, installData, defaultAtoms)
+                       binaryArchitectures, copyright, debVersion, execMap, buildDeps, buildDepsIndep, utilsPackageName),
+     Atoms, tightDependencyFixup, depends, conflicts, doExecutable, doWebsite, doServer, doBackups, install, installData, defaultAtoms)
 import Debian.Debianize.Cabal (getSimplePackageDescription')
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Dependencies (getRulesHead)
@@ -30,6 +28,7 @@ import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization)
 import Debian.Debianize.Output (writeDebianization)
+import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),

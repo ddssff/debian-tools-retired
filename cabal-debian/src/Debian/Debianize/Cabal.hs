@@ -14,8 +14,9 @@ import Data.Maybe
 import Data.Set (Set, toList)
 import Data.Text (Text, pack)
 import Data.Version (Version)
-import Debian.Debianize.Atoms as Debian (HasAtoms(packageDescription, compiler, maintainer), Flags(..),
+import Debian.Debianize.Atoms as Debian (HasAtoms(packageDescription, compiler, maintainer),
                                          Atoms, flags, compilerVersion, cabalFlagAssignments)
+import Debian.Debianize.Types (Flags(..))
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))

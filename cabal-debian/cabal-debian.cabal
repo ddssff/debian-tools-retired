@@ -67,6 +67,7 @@ Library
    Debian.Debianize.Output
    Debian.Debianize.SubstVars
    Debian.Debianize.Tests
+   Debian.Debianize.Types
    Debian.Debianize.Utility
    Debian.Orphans
    Debian.Policy

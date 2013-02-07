@@ -15,6 +15,7 @@ module Debian.Debianize
     , module Debian.Debianize.Output
     , module Debian.Debianize.SubstVars
     , module Debian.Debianize.Tests
+    , module Debian.Debianize.Types
     , module Debian.Debianize.Utility
     , module Debian.Policy
     ) where
@@ -34,6 +35,7 @@ import Debian.Debianize.Interspersed
 import Debian.Debianize.Output
 import Debian.Debianize.SubstVars
 import Debian.Debianize.Tests
+import Debian.Debianize.Types
 import Debian.Debianize.ControlFile hiding (depends, conflicts, maintainer, description, section)
 import Debian.Debianize.Utility
 import Debian.Policy
