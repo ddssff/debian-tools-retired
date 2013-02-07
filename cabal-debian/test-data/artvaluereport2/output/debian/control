@@ -261,6 +261,8 @@ Description: Haskell modules for fine art appraisal applications
  .
   Author: David Fox <dsf@seereason.com>, Clifford Beshers <beshers@seereason.com>
   Upstream-Maintainer: Clifford Beshers <beshers@seereason.com>
+ .
+ An executable built from the ArtValueReport2 package.
 
 Package: artvaluereport2-production
 Architecture: all
@@ -275,6 +277,8 @@ Description: Haskell modules for fine art appraisal applications
  .
   Author: David Fox <dsf@seereason.com>, Clifford Beshers <beshers@seereason.com>
   Upstream-Maintainer: Clifford Beshers <beshers@seereason.com>
+ .
+ An executable built from the ArtValueReport2 package.
 
 Package: artvaluereport2-server
 Architecture: any
@@ -289,6 +293,8 @@ Description: Haskell modules for fine art appraisal applications
  .
   Author: David Fox <dsf@seereason.com>, Clifford Beshers <beshers@seereason.com>
   Upstream-Maintainer: Clifford Beshers <beshers@seereason.com>
+ .
+ An executable built from the ArtValueReport2 package.
 
 Package: artvaluereport2-staging
 Architecture: all
@@ -303,3 +309,5 @@ Description: Haskell modules for fine art appraisal applications
  .
   Author: David Fox <dsf@seereason.com>, Clifford Beshers <beshers@seereason.com>
   Upstream-Maintainer: Clifford Beshers <beshers@seereason.com>
+ .
+ An executable built from the ArtValueReport2 package.

@@ -85,6 +85,9 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Description: clckwrks.com
+ .
+ An executable built from the clckwrks-dot-com package.
 
 Package: clckwrks-dot-com-backups
 Architecture: any
@@ -97,3 +100,6 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Description: clckwrks.com
+ .
+ An executable built from the clckwrks-dot-com package.

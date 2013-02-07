@@ -19,7 +19,7 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
 import Debian.Debianize.Atoms as Atoms
     (HasAtoms(rulesHead, compat, sourceFormat, changelog, sourcePackageName, control, missingDependencies, revision,
-                       binaryArchitectures, copyright, debVersion, execMap, buildDeps, buildDepsIndep, utilsPackageName),
+              binaryArchitectures, copyright, debVersion, execMap, buildDeps, buildDepsIndep, utilsPackageName, description),
      Atoms, tightDependencyFixup, depends, conflicts, doExecutable, doWebsite, doServer, doBackups, install, installData, defaultAtoms)
 import Debian.Debianize.Cabal (getSimplePackageDescription')
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
@@ -171,7 +171,8 @@ test3 =
                                                          , binarySection = Nothing
                                                          , binaryPriority = Nothing
                                                          , essential = False
-                                                         , description = (T.intercalate "\n"
+                                                         , Deb.description =
+                                                             (T.intercalate "\n"
                                                                           ["Tools to help Debian developers build Haskell packages",
                                                                            " This package provides a collection of scripts to help build Haskell",
                                                                            " packages for Debian.  Unlike haskell-utils, this package is not",
@@ -323,6 +324,21 @@ test5 =
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-development") All) $
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-production") All) $
                            setL utilsPackageName (Just (BinPkgName "creativeprompts-data")) $
+                           modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-data")
+                                                    (T.intercalate "\n" [ "creativeprompts.com data files"
+                                                               , "  Static data files for creativeprompts.com"])) $
+                           modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-production")
+                                                    (T.intercalate "\n" [ "Configuration for running the creativeprompts.com server"
+                                                               , "  Production version of the blog server, runs on port"
+                                                               , "  9021 with HTML validation turned off." ])) $
+                           modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-development")
+                                                    (T.intercalate "\n" [ "Configuration for running the creativeprompts.com server"
+                                                               , "  Testing version of the blog server, runs on port"
+                                                               , "  8000 with HTML validation turned on." ])) $
+                           modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-backups")
+                                                    (T.intercalate "\n" [ "backup program for creativeprompts.com"
+                                                               , "  Install this somewhere other than creativeprompts.com to run automated"
+                                                               , "  backups of the database."])) $
                            modL Atoms.depends (Map.insertWith union (BinPkgName "creativeprompts-server") (singleton (anyrel (BinPkgName "markdown")))) $
                            modL execMap (Map.insertWith (error "Conflict in execMap") "trhsx" (BinPkgName "haskell-hsx-utils")) $
                            doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" $
@@ -408,6 +424,11 @@ test6 =
                              modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-staging") (singleton (anyrel (BinPkgName "artvaluereport2-server")))) $
                              -- This should go into the "real" data directory.  And maybe a different icon for each server?
                              modL install (Map.insertWith union (BinPkgName "artvaluereport2-server") (singleton ("theme/ArtValueReport_SunsetSpectrum.ico", "usr/share/artvaluereport2-data"))) $
+                             modL Atoms.description (Map.insertWith (error "test6") (BinPkgName "artvaluereport2-backups")
+                                                    (T.intercalate "\n"
+                                                     [ "backup program for the appraisalreportonline.com site"
+                                                     , "  Install this somewhere other than where the server is running get"
+                                                     , "  automated backups of the database." ])) $
                              doBackups (BinPkgName "artvaluereport2-backups") "artvaluereport2-backups" $
                              doWebsite (BinPkgName "artvaluereport2-production") (theSite (BinPkgName "artvaluereport2-production")) $
                              doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging")) $
@@ -485,6 +506,15 @@ test7 =
                             modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (anyrel (BinPkgName "apt-file")))) $
                             modL Atoms.conflicts (Map.insertWith union (BinPkgName "cabal-debian")
                                     (singleton (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing))) $
+                            modL Atoms.description (Map.insertWith (error "test7") (BinPkgName "cabal-debian")
+                                                    (T.intercalate "\n"
+                                                      [ "Create a debianization for a cabal package"
+                                                      , " Tool for creating debianizations of Haskell packages based on the .cabal"
+                                                      , " file.  If apt-file is installed it will use it to discover what is the"
+                                                      , " debian package name of a C library."
+                                                      , " ."
+                                                      , "  Author: David Fox <dsf@seereason.com>"
+                                                      , "  Upstream-Maintainer: David Fox <dsf@seereason.com>" ])) $
                             copyChangelog old $
                             newDebianization' 7 (StandardsVersion 3 9 3 Nothing)
                   new' <- cabalToDebianization "." new

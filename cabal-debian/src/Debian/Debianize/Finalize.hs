@@ -98,7 +98,9 @@ binaryPackageRelations b typ deb =
 librarySpecs :: Atoms -> Atoms
 librarySpecs deb | isNothing (getL packageDescription deb) = deb
 librarySpecs deb =
-    (if doc then modL link (Map.insertWith Set.union debName (singleton ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt", "/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt"))) else id) $
+    (if doc
+     then modL link (Map.insertWith Set.union debName (singleton ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt", "/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")))
+     else id) $
     modL control
          (\ y -> y { binaryPackages =
                                (if dev then [librarySpec deb Any Development (Cabal.package pkgDesc)] else []) ++

@@ -1,0 +1,15 @@
+AlexTemplate usr/share/alex-3.0.2/.
+AlexTemplate-debug usr/share/alex-3.0.2/.
+AlexTemplate-ghc usr/share/alex-3.0.2/.
+AlexTemplate-ghc-debug usr/share/alex-3.0.2/.
+AlexWrapper-basic usr/share/alex-3.0.2/.
+AlexWrapper-basic-bytestring usr/share/alex-3.0.2/.
+AlexWrapper-gscan usr/share/alex-3.0.2/.
+AlexWrapper-monad usr/share/alex-3.0.2/.
+AlexWrapper-monad-bytestring usr/share/alex-3.0.2/.
+AlexWrapper-monadUserState usr/share/alex-3.0.2/.
+AlexWrapper-monadUserState-bytestring usr/share/alex-3.0.2/.
+AlexWrapper-posn usr/share/alex-3.0.2/.
+AlexWrapper-posn-bytestring usr/share/alex-3.0.2/.
+AlexWrapper-strict-bytestring usr/share/alex-3.0.2/.
+dist-ghc/build/alex/alex usr/bin

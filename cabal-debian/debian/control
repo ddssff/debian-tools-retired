@@ -100,7 +100,8 @@ Description: Create a debianization for a cabal package
   Author: David Fox <dsf@seereason.com>
   Upstream-Maintainer: David Fox <dsf@seereason.com>
  .
- This package contains the normal library files.
+ This package provides a library for the Haskell programming language.
+ See http:///www.haskell.org/ for more information on Haskell.
 
 Package: libghc-cabal-debian-prof
 Architecture: any
@@ -119,7 +120,8 @@ Description: Create a debianization for a cabal package
   Author: David Fox <dsf@seereason.com>
   Upstream-Maintainer: David Fox <dsf@seereason.com>
  .
- This package contains the libraries compiled with profiling enabled.
+ This package provides a library for the Haskell programming language, compiled
+ for profiling.  See http:///www.haskell.org/ for more information on Haskell.
 
 Package: libghc-cabal-debian-doc
 Architecture: all
@@ -139,7 +141,9 @@ Description: Create a debianization for a cabal package
   Author: David Fox <dsf@seereason.com>
   Upstream-Maintainer: David Fox <dsf@seereason.com>
  .
- This package contains the documentation files.
+ This package provides the documentation for a library for the Haskell
+ programming language.
+ See http:///www.haskell.org/ for more information on Haskell.
 
 Package: cabal-debian
 Architecture: any
