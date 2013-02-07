@@ -81,12 +81,11 @@ newSourceDebDescription =
       , xFields = Set.empty
       , binaryPackages = [] }
 
-newSourceDebDescription' :: SrcPkgName -> NameAddr -> StandardsVersion -> SourceDebDescription
-newSourceDebDescription' src who standards =
+newSourceDebDescription' :: SrcPkgName -> NameAddr -> SourceDebDescription
+newSourceDebDescription' src who =
     newSourceDebDescription
       { source = Just src
-      , maintainer = Just who
-      , standardsVersion = Just standards }
+      , maintainer = Just who }
 
 data VersionControlSpec
     = VCSBrowser Text

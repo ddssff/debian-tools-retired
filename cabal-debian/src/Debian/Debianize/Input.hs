@@ -58,21 +58,25 @@ parseSourceDebDescription (Paragraph fields) binaryParagraphs =
     foldr readField (src, []) fields'
     where
       fields' = map stripField fields
-      src = (newSourceDebDescription' findSource findMaint findStandards) {binaryPackages = bins}
+      src = (newSourceDebDescription' findSource findMaint) {binaryPackages = bins}
       findSource = findMap "Source" SrcPkgName fields'
       findMaint = findMap "Maintainer" (either error id . parseMaintainer) fields'
-      findStandards = findMap "Standards-Version" parseStandardsVersion fields'
+      -- findStandards = findMap "Standards-Version" parseStandardsVersion fields'
 
       (bins, _extra) = unzip $ map parseBinaryDebDescription binaryParagraphs
       readField :: Field -> (SourceDebDescription, [Field]) -> (SourceDebDescription, [Field])
+      -- Mandatory
       readField (Field ("Source", _)) x = x
       readField (Field ("Maintainer", _)) x = x
-      readField (Field ("Standards-Version", _)) x = x
+      -- readField (Field ("Standards-Version", _)) x = x
+      -- Recommended
+      readField (Field ("Standards-Version", value)) (desc, unrecognized) = (desc {standardsVersion = Just (parseStandardsVersion value)}, unrecognized)
+      readField (Field ("Priority", value)) (desc, unrecognized) = (desc {priority = Just (readPriority value)}, unrecognized)
+      readField (Field ("Section", value)) (desc, unrecognized) = (desc {section = Just (MainSection value)}, unrecognized)
+      -- Optional
       readField (Field ("Homepage", value)) (desc, unrecognized) = (desc {homepage = Just (strip (pack value))}, unrecognized)
       readField (Field ("Uploaders", value)) (desc, unrecognized) = (desc {uploaders = either (const []) id (parseUploaders value)}, unrecognized)
       readField (Field ("DM-Upload-Allowed", value)) (desc, unrecognized) = (desc {dmUploadAllowed = yes value}, unrecognized)
-      readField (Field ("Priority", value)) (desc, unrecognized) = (desc {priority = Just (readPriority value)}, unrecognized)
-      readField (Field ("Section", value)) (desc, unrecognized) = (desc {section = Just (MainSection value)}, unrecognized)
       readField (Field ("Build-Depends", value)) (desc, unrecognized) = (desc {buildDepends = rels value}, unrecognized)
       readField (Field ("Build-Conflicts", value)) (desc, unrecognized) = (desc {buildConflicts = rels value}, unrecognized)
       readField (Field ("Build-Depends-Indep", value)) (desc, unrecognized) = (desc {buildDependsIndep = rels value}, unrecognized)
