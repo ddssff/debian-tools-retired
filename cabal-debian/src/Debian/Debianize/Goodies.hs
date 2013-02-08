@@ -2,33 +2,69 @@
 -- are instead included as part of the library.
 {-# LANGUAGE OverloadedStrings #-}
 module Debian.Debianize.Goodies
-    ( tightDependencyFixup
+    ( defaultAtoms
+    , tightDependencyFixup
     , doServer
     , doWebsite
     , doBackups
     , doExecutable
     , debianDescription
     , describe
+    , watchAtom
+    , oldClckwrksSiteFlags
+    , oldClckwrksServerFlags
     ) where
 
-import Data.Lens.Lazy (getL, modL)
+import Data.Lens.Lazy (getL, setL, modL)
 import Data.List as List (map, intersperse, intercalate)
-import Data.Map as Map (insertWith)
+import Data.Map as Map (Map, fromList, insertWith)
 import Data.Maybe (fromMaybe)
-import Data.Monoid ((<>))
+import Data.Monoid (mempty, (<>))
 import Data.Set as Set (insert, union, singleton)
 import Data.Text as Text (Text, pack, unlines, intercalate)
-import Debian.Debianize.Atoms as Atoms (Atoms, rulesFragments, packageDescription, executable, serverInfo, website, backups, depends)
+import Data.Version (Version(Version))
+import Debian.Debianize.Atoms as Atoms (Atoms, rulesFragments, packageDescription, executable, serverInfo, website, backups, depends, epochMap, versionSplits)
 import Debian.Debianize.ControlFile as Debian (PackageType(..))
-import Debian.Debianize.Types (InstallFile, Server, Site)
+import Debian.Debianize.Types (InstallFile, Server(..), Site(..), VersionSplits(..))
 import Debian.Debianize.Utility (trim)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel))
-import Distribution.Package (PackageIdentifier(..))
+import Distribution.Package (PackageIdentifier(..), PackageName(PackageName))
 import qualified Distribution.PackageDescription as Cabal
 import Distribution.Text (display)
 import Prelude hiding (writeFile, init, unlines, log)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
+
+-- | This may not look like a goodie, but it incorporates knowledge
+-- about the debian repository - what the epoch number of HaXml is,
+-- the fact that the debian package name of parsec changed, etc.
+defaultAtoms :: Atoms
+defaultAtoms =
+    setL epochMap knownEpochMappings $
+    setL versionSplits knownVersionSplits $
+    mempty
+
+-- | These are the instances of debian names changing that I know
+-- about.  I know they really shouldn't be hard coded.  Send a patch.
+-- Note that this inherits the lack of type safety of the mkPkgName
+-- function.
+knownVersionSplits :: [VersionSplits]
+knownVersionSplits =
+    [ VersionSplits {
+        packageName = PackageName "parsec"
+      , oldestPackage = PackageName "parsec2"
+      , splits = [(Version [3] [], PackageName "parsec3")] }
+    , VersionSplits {
+        packageName = PackageName "QuickCheck"
+      , oldestPackage = PackageName "quickcheck1"
+      , splits = [(Version [2] [], PackageName "quickcheck2")] }
+    ]
+
+-- | We should always call this, just as we should always apply
+-- knownVersionSplits.
+knownEpochMappings :: Map PackageName Int
+knownEpochMappings =
+    Map.fromList [(PackageName "HaXml", 1)]
 
 -- | Create equals dependencies.  For each pair (A, B), use dpkg-query
 -- to find out B's version number, version B.  Then write a rule into
@@ -132,3 +168,20 @@ debianDescriptionBase synopsis' description' author' maintainer' url =
       addDot line = if all (flip elem " \t") line then "." else line
       list :: b -> ([a] -> b) -> [a] -> b
       list d f l = case l of [] -> d; _ -> f l
+
+oldClckwrksSiteFlags :: Site -> [String]
+oldClckwrksSiteFlags x =
+    [ -- According to the happstack-server documentation this needs a trailing slash.
+      "--base-uri", "http://" ++ domain x ++ "/"
+    , "--http-port", show port]
+oldClckwrksServerFlags :: Server -> [String]
+oldClckwrksServerFlags x =
+    [ -- According to the happstack-server documentation this needs a trailing slash.
+      "--base-uri", "http://" ++ hostname x ++ ":" ++ show (port x) ++ "/"
+    , "--http-port", show port]
+
+watchAtom :: PackageName -> Text
+watchAtom (PackageName pkgname) =
+    pack $ "version=3\nopts=\"downloadurlmangle=s|archive/([\\w\\d_-]+)/([\\d\\.]+)/|archive/$1/$2/$1-$2.tar.gz|,\\\nfilenamemangle=s|(.*)/$|" ++ pkgname ++
+           "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
+           " \\\n    ([\\d\\.]*\\d)/\n"

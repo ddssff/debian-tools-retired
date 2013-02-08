@@ -54,7 +54,6 @@ Library
    Debian.Debianize.Atoms
    Debian.Debianize.Bundled
    Debian.Debianize.Cabal
-   Debian.Debianize.Combinators
    Debian.Debianize.ControlFile
    Debian.Debianize.Debianize
    Debian.Debianize.Dependencies

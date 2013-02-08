@@ -4,11 +4,6 @@ module Debian.Debianize.Types
     , Server(..)
     , InstallFile(..)
     , VersionSplits(..)
-    , knownVersionSplits
-    , knownEpochMappings
-    , watchAtom
-    , oldClckwrksSiteFlags
-    , oldClckwrksServerFlags
     ) where
 
 import Data.Map as Map (Map, fromList)
@@ -64,42 +59,3 @@ data VersionSplits
       , oldestPackage :: PackageName
       , splits :: [(Version, PackageName)] -- Assumed to be in version number order
       } deriving (Eq, Ord, Show)
-
--- | These are the instances of debian names changing that I know
--- about.  I know they really shouldn't be hard coded.  Send a patch.
--- Note that this inherits the lack of type safety of the mkPkgName
--- function.
-knownVersionSplits :: [VersionSplits]
-knownVersionSplits =
-    [ VersionSplits {
-        packageName = PackageName "parsec"
-      , oldestPackage = PackageName "parsec2"
-      , splits = [(Version [3] [], PackageName "parsec3")] }
-    , VersionSplits {
-        packageName = PackageName "QuickCheck"
-      , oldestPackage = PackageName "quickcheck1"
-      , splits = [(Version [2] [], PackageName "quickcheck2")] }
-    ]
-
--- | We should always call this, just as we should always apply
--- knownVersionSplits.
-knownEpochMappings :: Map PackageName Int
-knownEpochMappings =
-    Map.fromList [(PackageName "HaXml", 1)]
-
-oldClckwrksSiteFlags :: Site -> [String]
-oldClckwrksSiteFlags x =
-    [ -- According to the happstack-server documentation this needs a trailing slash.
-      "--base-uri", "http://" ++ domain x ++ "/"
-    , "--http-port", show port]
-oldClckwrksServerFlags :: Server -> [String]
-oldClckwrksServerFlags x =
-    [ -- According to the happstack-server documentation this needs a trailing slash.
-      "--base-uri", "http://" ++ hostname x ++ ":" ++ show (port x) ++ "/"
-    , "--http-port", show port]
-
-watchAtom :: PackageName -> Text
-watchAtom (PackageName pkgname) =
-    pack $ "version=3\nopts=\"downloadurlmangle=s|archive/([\\w\\d_-]+)/([\\d\\.]+)/|archive/$1/$2/$1-$2.tar.gz|,\\\nfilenamemangle=s|(.*)/$|" ++ pkgname ++
-           "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
-           " \\\n    ([\\d\\.]*\\d)/\n"

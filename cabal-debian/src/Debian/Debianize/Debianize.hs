@@ -14,28 +14,28 @@ module Debian.Debianize.Debianize
 
 import Control.Applicative ((<$>))
 import Data.Lens.Lazy (getL, setL, modL)
-import Data.List as List (unlines, intercalate)
+import Data.List as List (unlines, intercalate, nub)
 import Data.Map as Map (lookup)
 import Data.Maybe
 import Data.Monoid ((<>))
+import Data.Set as Set (toList)
 import Data.Text as Text (Text, unpack)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Atoms (Atoms, packageDescription, compat, watch, control, copyright, changelog, comments,
                                sourcePriority, sourceSection, debAction, validate, dryRun, debVersion, revision,
-                               sourcePackageName, epochMap, DebAction(..))
+                               sourcePackageName, epochMap, extraLibMap, DebAction(..))
 import Debian.Debianize.Cabal (inputCabalization, inputCopyright, inputMaintainer)
-import Debian.Debianize.Combinators (addExtraLibDependencies, defaultAtoms)
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), PackageType(Source'))
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Finalize (finalizeDebianization)
+import Debian.Debianize.Goodies (defaultAtoms, watchAtom)
 import Debian.Debianize.Options (options, compileArgs)
 import Debian.Debianize.Output (validateDebianization, describeDebianization, writeDebianization)
 import Debian.Debianize.SubstVars (substvars)
-import Debian.Debianize.Types (watchAtom)
 import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty)
 import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel, StandardsVersion)
-import Debian.Relation (SrcPkgName(..))
+import Debian.Relation (SrcPkgName(..), BinPkgName(BinPkgName), Relation(Rel))
 import Debian.Release (parseReleaseName)
 import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
 import Debian.Time (getCurrentLocalRFC822Time)
@@ -203,6 +203,27 @@ convertVersion debinfo cabalVersion =
           buildDebianVersion debianEpoch
                              (show (pretty cabalVersion))
                              (foldEmpty Nothing Just debianRevision)
+
+-- | Convert the extraLibs field of the cabal build info into debian
+-- binary package names and make them dependendencies of the debian
+-- devel package (if there is one.)
+addExtraLibDependencies :: Atoms -> Atoms
+addExtraLibDependencies deb =
+    modL control (\ y -> y {binaryPackages = map f (binaryPackages (getL control deb))}) deb
+    where
+      f :: BinaryDebDescription -> BinaryDebDescription
+      f bin
+          | debianName deb Development (Cabal.package pkgDesc) == Debian.package bin
+              = bin { relations = g (relations bin) }
+      f bin = bin
+      g :: Debian.PackageRelations -> Debian.PackageRelations
+      g rels = rels { Debian.depends = Debian.depends rels ++
+                                map anyrel' (concatMap (\ cab -> maybe [BinPkgName ("lib" ++ cab ++ "-dev")] Set.toList (Map.lookup cab (getL extraLibMap deb)))
+                                                       (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc)) }
+      pkgDesc = fromMaybe (error "addExtraLibDependencies: no PackageDescription") $ getL packageDescription deb
+
+anyrel' :: BinPkgName -> [Relation]
+anyrel' x = [Rel x Nothing Nothing]
 
 compileAllArgs :: Atoms -> IO Atoms
 compileAllArgs atoms0 =

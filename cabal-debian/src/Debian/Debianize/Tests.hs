@@ -22,12 +22,11 @@ import Debian.Debianize.Atoms as Atoms
      binaryArchitectures, copyright, debVersion, execMap, buildDeps, buildDepsIndep, utilsPackageName, description,
      depends, conflicts, install, installData)
 import Debian.Debianize.Cabal (inputCabalization)
-import Debian.Debianize.Combinators (defaultAtoms)
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
-import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
+import Debian.Debianize.Goodies (defaultAtoms, tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization)
 import Debian.Debianize.Output (writeDebianization)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
