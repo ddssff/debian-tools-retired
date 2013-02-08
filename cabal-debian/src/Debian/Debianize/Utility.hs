@@ -21,6 +21,7 @@ module Debian.Debianize.Utility
     , setMapMaybe
     , zipMaps
     , foldEmpty
+    , maybeL
     ) where
 
 import Control.Exception as E (catch, try, bracket, IOException)
@@ -28,6 +29,7 @@ import Control.Monad (when)
 import Control.Monad.Reader (ReaderT, ask)
 import Data.Char (isSpace)
 import Data.List as List (isSuffixOf, intercalate, map)
+import Data.Lens.Lazy (Lens, modL)
 import Data.Map as Map (Map, foldWithKey, empty, fromList, findWithDefault, insert, map, lookup)
 import Data.Maybe (catMaybes, mapMaybe)
 import Data.Set (Set, toList)
@@ -217,3 +219,7 @@ zipMaps f m n =
 foldEmpty :: r -> ([a] -> r) -> [a] -> r
 foldEmpty r _ [] = r
 foldEmpty _ f l = f l
+
+-- | If the current value of getL x is Nothing, replace it with f.
+maybeL :: Lens a (Maybe b) -> Maybe b -> a -> a
+maybeL lens mb x = modL lens (maybe mb Just) x

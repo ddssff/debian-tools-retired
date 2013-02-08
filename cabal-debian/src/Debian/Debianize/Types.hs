@@ -8,13 +8,11 @@ module Debian.Debianize.Types
     , DebAction(..)
     ) where
 
-import Data.Map as Map (Map, fromList)
-import Data.Text (Text, pack)
-import Data.Version (Version(Version))
+import Data.Version (Version)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName)
 import Debian.Version (DebianVersion)
-import Distribution.Package (PackageName(PackageName))
+import Distribution.Package (PackageName)
 import Prelude hiding (init, unlines, log)
 
 data PackageInfo = PackageInfo { cabalName :: PackageName
