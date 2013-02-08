@@ -14,9 +14,8 @@ import Data.Maybe
 import Data.Set (Set, toList)
 import Data.Text (Text, pack)
 import Data.Version (Version)
-import Debian.Debianize.Atoms as Debian (HasAtoms(packageDescription, compiler, maintainer),
-                                         Atoms, flags, compilerVersion, cabalFlagAssignments)
-import Debian.Debianize.Types (Flags(..))
+import Debian.Debianize.Atoms as Debian (HasAtoms(packageDescription, compiler, maintainer, verbosity),
+                                         Atoms, compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
@@ -51,7 +50,7 @@ withSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top 
 
 getSimplePackageDescription' :: FilePath -> Atoms -> IO Atoms
 getSimplePackageDescription' top old =
-    getSimplePackageDescription (verbosity (getL flags old)) (getL compilerVersion old) (getL cabalFlagAssignments old) top old
+    getSimplePackageDescription (getL verbosity old) (getL compilerVersion old) (getL cabalFlagAssignments old) top old
 
 getSimplePackageDescription :: Int -> Maybe Version -> Set (FlagName, Bool) -> FilePath -> Atoms -> IO Atoms
 getSimplePackageDescription verbosity compilerVersion cabalFlagAssignments top atoms =

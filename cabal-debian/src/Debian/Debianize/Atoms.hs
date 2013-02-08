@@ -2,10 +2,12 @@
 module Debian.Debianize.Atoms
     ( Atoms
     , HasAtoms(..)
+    , DebType(..)
+    , DebAction(..)
     ) where
 
 import Data.Generics (Data, Typeable)
-import Data.Lens.Lazy (Lens, lens, getL)
+import Data.Lens.Lazy (Lens, lens, getL, modL)
 import Data.Map as Map (Map, fold, foldWithKey, insertWith, empty, insert)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
@@ -14,8 +16,7 @@ import Data.Text (Text)
 import Data.Version (Version, showVersion)
 import Debian.Changes (ChangeLog)
 import Debian.Debianize.ControlFile (SourceDebDescription, newSourceDebDescription)
-import Debian.Debianize.Types (Flags(..), PackageInfo(..), Site(..), Server(..), InstallFile(..),
-                               VersionSplits(..), defaultFlags)
+import Debian.Debianize.Types (PackageInfo(..), Site(..), Server(..), InstallFile(..), VersionSplits(..))
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, SourceFormat, PackagePriority, Section)
 import Debian.Relation (SrcPkgName, BinPkgName, Relation(..))
@@ -203,6 +204,43 @@ data DebAtom
                                                   -- reason to use this is because we don't yet know the name of the dev library package.
     deriving (Eq, Ord, Show, Typeable)
 
+-- | This record supplies information about the task we want done -
+-- debianization, validataion, help message, etc.
+data Flags = Flags
+    {
+    -------------------------
+    -- Modes of Operation ---
+    -------------------------
+      verbosity_ :: Int
+    -- ^ Run with progress messages at the given level of verboseness.
+    , dryRun_ :: Bool
+    -- ^ Don't write any files or create any directories, just explain
+    -- what would have been done.
+    , validate_ :: Bool
+    -- ^ Fail if the debianization already present doesn't match the
+    -- one we are going to generate closely enough that it is safe to
+    -- debianize during the run of dpkg-buildpackage, when Setup
+    -- configure is run.  Specifically, the version number in the top
+    -- changelog entry must match, and the sets of package names in
+    -- the control file must match.
+    , debAction_ :: DebAction
+    -- ^ What to do - Usage, Debianize or Substvar
+    } deriving (Eq, Ord, Show)
+
+data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq, Ord)
+
+-- | A redundant data type, too lazy to expunge.
+data DebType = Dev | Prof | Doc deriving (Eq, Ord, Read, Show)
+
+defaultFlags :: Flags
+defaultFlags =
+    Flags {
+      verbosity_ = 1
+    , debAction_ = Usage
+    , dryRun_ = False
+    , validate_ = False
+    }
+
 -- | Information about the mapping from cabal package names and
 -- versions to debian package names and versions.
 newtype Atoms = Atoms (Map DebAtomKey (Set DebAtom)) deriving (Eq, Show)
@@ -217,6 +255,10 @@ class (Monoid atoms, Show atoms {- Show instance for debugging only -}) => HasAt
 
     -- Modes of operation
     flags :: Lens atoms Flags
+    verbosity :: Lens atoms Int
+    dryRun :: Lens atoms Bool
+    validate :: Lens atoms Bool
+    debAction :: Lens atoms DebAction
     compilerVersion :: Lens atoms (Maybe Version)
     warning :: Lens atoms (Set Text)
 
@@ -541,6 +583,10 @@ instance HasAtoms Atoms where
               where
                 f Source (DHFlags y) = Just y
                 f _ _ = Nothing
+    verbosity = lens (\ a -> verbosity_ (getL flags a)) (\ b a -> modL flags (\ x -> x {verbosity_ = b}) a)
+    dryRun = lens (\ a -> dryRun_ (getL flags a)) (\ b a -> modL flags (\ x -> x {dryRun_ = b}) a)
+    validate = lens (\ a -> validate_ (getL flags a)) (\ b a -> modL flags (\ x -> x {validate_ = b}) a)
+    debAction = lens (\ a -> debAction_ (getL flags a)) (\ b a -> modL flags (\ x -> x {debAction_ = b}) a)
 
     buildDir = lens g s
         where

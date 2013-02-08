@@ -18,10 +18,10 @@ import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
 import Debian.Control
-import Debian.Debianize.Atoms (HasAtoms(compiler), Atoms, flags, packageInfo, compilerVersion, cabalFlagAssignments)
+import Debian.Debianize.Atoms (HasAtoms(compiler, verbosity, dryRun), Atoms, packageInfo, compilerVersion, cabalFlagAssignments, DebType)
 import Debian.Debianize.Cabal (getSimplePackageDescription)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps, debNameFromType, filterMissing)
-import Debian.Debianize.Types (Flags(dryRun, verbosity), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType)
+import Debian.Debianize.Types (PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb))
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps, dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
 import qualified Debian.Relation as D
 import Distribution.Package (Dependency(..), PackageName(PackageName))
@@ -46,7 +46,7 @@ substvars :: Atoms
           -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> IO ()
 substvars atoms debType =
-    do atoms' <- getSimplePackageDescription (verbosity (getL flags atoms)) (getL compilerVersion atoms) (getL cabalFlagAssignments atoms) "." atoms
+    do atoms' <- getSimplePackageDescription (getL verbosity atoms) (getL compilerVersion atoms) (getL cabalFlagAssignments atoms) "." atoms
        debVersions <- buildDebVersionMap
        atoms'' <- libPaths (fromMaybe (error "substvars") $ getL compiler atoms') debVersions atoms'
        control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
@@ -67,7 +67,7 @@ substvars' atoms debType control =
           readFile path' >>= \ old ->
           let new = addDeps old in
           diffFile path' (pack new) >>= maybe (putStrLn ("cabal-debian substvars: No updates found for " ++ show path'))
-                                              (\ diff -> if dryRun (getL flags atoms) then putStr diff else replaceFile path' new)
+                                              (\ diff -> if getL dryRun atoms then putStr diff else replaceFile path' new)
       ([], Nothing) -> return ()
       (missing, _) ->
           die ("These debian packages need to be added to the build dependency list so the required cabal packages are available:\n  " ++ intercalate "\n  " (map (show . pretty . fst) missing) ++

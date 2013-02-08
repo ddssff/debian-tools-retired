@@ -1,4 +1,4 @@
-module Debian.Debianize.Flags
+module Debian.Debianize.Options
     ( compileArgs
     , options
     ) where
@@ -8,9 +8,9 @@ import Data.Lens.Lazy (setL, modL)
 import Data.Map as Map (insertWith)
 import Data.Set as Set (fromList, insert, union, singleton)
 import Data.Version (parseVersion)
-import Debian.Debianize.Atoms (HasAtoms(..), Atoms, depends, conflicts)
+import Debian.Debianize.Atoms (HasAtoms(..), Atoms, depends, conflicts, DebAction(..))
 import Debian.Debianize.Combinators (doExecutable)
-import Debian.Debianize.Types (Flags(..), DebAction(..), InstallFile(..))
+import Debian.Debianize.Types (InstallFile(..))
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relation(..))
@@ -34,15 +34,15 @@ compileArgs atoms args =
 -- | Options that modify other atoms.
 options :: [OptDescr (Atoms -> Atoms)]
 options =
-    [ Option "v" ["verbose"] (ReqArg (\ s atoms -> modL flags (\ x -> x { verbosity = read s }) atoms) "n")
+    [ Option "v" ["verbose"] (ReqArg (\ s atoms -> setL verbosity (read s) atoms) "n")
              "Change build verbosity",
-      Option "n" ["dry-run", "compare"] (NoArg (\ atoms -> modL flags (\ x -> x {dryRun = True}) atoms))
+      Option "n" ["dry-run", "compare"] (NoArg (\ atoms -> setL dryRun True atoms))
              "Just compare the existing debianization to the one we would generate.",
-      Option "h?" ["help"] (NoArg (\ atoms -> modL flags (\ x -> x {debAction = Usage}) atoms))
+      Option "h?" ["help"] (NoArg (\ atoms -> setL debAction Usage atoms))
              "Show this help text",
-      Option "" ["debianize"] (NoArg (\ atoms -> modL flags (\ x -> x {debAction = Debianize}) atoms))
+      Option "" ["debianize"] (NoArg (\ atoms -> setL debAction Debianize atoms))
              "Generate a new debianization, replacing any existing one.  One of --debianize or --substvar is required.",
-      Option "" ["substvar"] (ReqArg (\ name atoms -> modL flags (\ x -> x {debAction = SubstVar (read name)}) atoms) "Doc, Prof, or Dev")
+      Option "" ["substvar"] (ReqArg (\ name atoms -> setL debAction (SubstVar (read name)) atoms) "Doc, Prof, or Dev")
              (unlines ["Write out the list of dependencies required for the dev, prof or doc package depending",
                        "on the argument.  This value can be added to the appropriate substvars file."]),
       Option "" ["executable"] (ReqArg (\ path x -> executableOption path (\ bin e -> doExecutable bin e x)) "SOURCEPATH or SOURCEPATH:DESTDIR")

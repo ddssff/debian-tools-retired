@@ -17,11 +17,10 @@ import Data.Map as Map (toList, elems)
 import Data.Maybe (fromMaybe)
 import Data.Text as Text (Text, unpack, split)
 import Debian.Changes (ChangeLog(ChangeLog), ChangeLogEntry(logVersion))
-import Debian.Debianize.Atoms (HasAtoms(changelog, control), Atoms, flags)
+import Debian.Debianize.Atoms (HasAtoms(changelog, control, validate, dryRun), Atoms)
 import Debian.Debianize.Combinators (defaultAtoms)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
 import Debian.Debianize.Files (toFileMap)
-import Debian.Debianize.Types (Flags(validate, dryRun))
 import Debian.Debianize.Utility (replaceFile, zipMaps)
 import System.Directory (Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing)
 import System.FilePath ((</>), takeDirectory)
@@ -39,10 +38,10 @@ outputDebianization old new =
        -- rather than storing them apart from the package in the
        -- autobuilder configuration.
        case old of
-         Just old' | validate (getL flags new) -> validateDebianization old' new
-         _ | validate (getL flags new) -> error "No existing debianization to validate"
-         Just old' | dryRun (getL flags new) -> putStr ("Debianization (dry run):\n" ++ describeDebianization old' new)
-         _ | dryRun (getL flags new) -> putStr (describeDebianization defaultAtoms new)
+         Just old' | getL validate new -> validateDebianization old' new
+         _ | getL validate new -> error "No existing debianization to validate"
+         Just old' | getL dryRun new -> putStr ("Debianization (dry run):\n" ++ describeDebianization old' new)
+         _ | getL dryRun new -> putStr (describeDebianization defaultAtoms new)
          _ -> writeDebianization new
 
 validateDebianization :: Atoms -> Atoms -> IO ()

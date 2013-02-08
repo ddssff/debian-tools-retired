@@ -17,17 +17,18 @@ import Control.Exception (ErrorCall, catch)
 import Data.Lens.Lazy (getL, setL, modL)
 import Data.Maybe
 import Data.Text (Text)
-import Debian.Debianize.Atoms (HasAtoms(packageDescription, compat, watch, changelog, control, copyright, sourcePriority, sourceSection),
-                               Atoms, flags, compilerVersion, cabalFlagAssignments)
+import Debian.Debianize.Atoms (HasAtoms(packageDescription, compat, watch, changelog, control, copyright, sourcePriority,
+                                        sourceSection, debAction, verbosity, compilerVersion, cabalFlagAssignments),
+                               Atoms, DebAction(..))
 import Debian.Debianize.Cabal (getSimplePackageDescription, inputCopyright, inputMaintainer)
 import Debian.Debianize.Combinators (versionInfo, addExtraLibDependencies, putStandards, setSourceBinaries, defaultAtoms)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..))
 import Debian.Debianize.Finalize (finalizeDebianization)
-import Debian.Debianize.Flags (options, compileArgs)
+import Debian.Debianize.Options (options, compileArgs)
 import Debian.Debianize.Input as Debian (inputDebianization, inputChangeLog)
 import Debian.Debianize.Output (outputDebianization)
 import Debian.Debianize.SubstVars (substvars)
-import Debian.Debianize.Types (Flags(..), DebAction(..), watchAtom)
+import Debian.Debianize.Types (watchAtom)
 import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel)
 import Debian.Time (getCurrentLocalRFC822Time)
@@ -47,7 +48,7 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 cabalDebian :: IO ()
 cabalDebian =
     compileAllArgs defaultAtoms >>= \ atoms ->
-      case debAction (getL flags atoms) of
+      case getL debAction atoms of
         SubstVar debType -> substvars atoms debType
         Debianize ->  debianize "." atoms
         Usage -> do
@@ -106,7 +107,7 @@ debianize top atoms =
 -- computed from the cabal package description.)
 cabalToDebianization :: FilePath -> Atoms -> IO Atoms
 cabalToDebianization top old =
-    do old' <- getSimplePackageDescription (verbosity (getL flags old)) (getL compilerVersion old) (getL cabalFlagAssignments old) top old
+    do old' <- getSimplePackageDescription (getL verbosity old) (getL compilerVersion old) (getL cabalFlagAssignments old) top old
        let pkgDesc = fromMaybe (error "cabalToDebianization: No package description") (getL packageDescription old')
        date <- getCurrentLocalRFC822Time
        copyright <- withCurrentDirectory top $ inputCopyright pkgDesc

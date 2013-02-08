@@ -60,10 +60,10 @@ Library
    Debian.Debianize.Dependencies
    Debian.Debianize.Files
    Debian.Debianize.Finalize
-   Debian.Debianize.Flags
    Debian.Debianize.Generic
    Debian.Debianize.Interspersed
    Debian.Debianize.Input
+   Debian.Debianize.Options
    Debian.Debianize.Output
    Debian.Debianize.SubstVars
    Debian.Debianize.Tests

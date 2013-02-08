@@ -1,13 +1,9 @@
 module Debian.Debianize.Types
-    ( Flags(..)
-    , DebAction(..)
-    , PackageInfo(..)
+    ( PackageInfo(..)
     , Site(..)
     , Server(..)
     , InstallFile(..)
-    , DebType(..)
     , VersionSplits(..)
-    , defaultFlags
     , knownVersionSplits
     , knownEpochMappings
     , watchAtom
@@ -23,31 +19,6 @@ import Debian.Relation (BinPkgName)
 import Debian.Version (DebianVersion)
 import Distribution.Package (PackageName(PackageName))
 import Prelude hiding (init, unlines, log)
-
--- | This record supplies information about the task we want done -
--- debianization, validataion, help message, etc.
-data Flags = Flags
-    {
-    -------------------------
-    -- Modes of Operation ---
-    -------------------------
-      verbosity :: Int
-    -- ^ Run with progress messages at the given level of verboseness.
-    , dryRun :: Bool
-    -- ^ Don't write any files or create any directories, just explain
-    -- what would have been done.
-    , validate :: Bool
-    -- ^ Fail if the debianization already present doesn't match the
-    -- one we are going to generate closely enough that it is safe to
-    -- debianize during the run of dpkg-buildpackage, when Setup
-    -- configure is run.  Specifically, the version number in the top
-    -- changelog entry must match, and the sets of package names in
-    -- the control file must match.
-    , debAction :: DebAction
-    -- ^ What to do - Usage, Debianize or Substvar
-    } deriving (Eq, Ord, Show)
-
-data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq, Ord)
 
 data PackageInfo = PackageInfo { cabalName :: PackageName
                                , devDeb :: Maybe (BinPkgName, DebianVersion)
@@ -86,9 +57,6 @@ data InstallFile
       , destDir :: Maybe FilePath -- ^ where to put it, default is usr/bin/<execName>
       , destName :: String  -- ^ name to give installed executable
       } deriving (Read, Show, Eq, Ord)
-
--- | A redundant data type, too lazy to expunge.
-data DebType = Dev | Prof | Doc deriving (Eq, Ord, Read, Show)
 
 data VersionSplits
     = VersionSplits {
@@ -129,15 +97,6 @@ oldClckwrksServerFlags x =
     [ -- According to the happstack-server documentation this needs a trailing slash.
       "--base-uri", "http://" ++ hostname x ++ ":" ++ show (port x) ++ "/"
     , "--http-port", show port]
-
-defaultFlags :: Flags
-defaultFlags =
-    Flags {
-      verbosity = 1
-    , debAction = Usage
-    , dryRun = False
-    , validate = False
-    }
 
 watchAtom :: PackageName -> Text
 watchAtom (PackageName pkgname) =

@@ -8,10 +8,10 @@ module Debian.Debianize
     , module Debian.Debianize.Dependencies
     , module Debian.Debianize.Files
     , module Debian.Debianize.Finalize
-    , module Debian.Debianize.Flags
     , module Debian.Debianize.Generic
     , module Debian.Debianize.Input
     , module Debian.Debianize.Interspersed
+    , module Debian.Debianize.Options
     , module Debian.Debianize.Output
     , module Debian.Debianize.SubstVars
     , module Debian.Debianize.Tests
@@ -28,10 +28,10 @@ import Debian.Debianize.Debianize
 import Debian.Debianize.Dependencies
 import Debian.Debianize.Files
 import Debian.Debianize.Finalize
-import Debian.Debianize.Flags
 import Debian.Debianize.Generic
 import Debian.Debianize.Input
 import Debian.Debianize.Interspersed
+import Debian.Debianize.Options
 import Debian.Debianize.Output
 import Debian.Debianize.SubstVars
 import Debian.Debianize.Tests

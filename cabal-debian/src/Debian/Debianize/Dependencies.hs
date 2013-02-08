@@ -28,11 +28,11 @@ import Data.Text as Text (Text, pack, unlines)
 import Data.Version (Version, showVersion)
 import Debian.Control
 import Debian.Debianize.Atoms (HasAtoms(packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary, missingDependencies,
-                                        versionSplits, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo, depends, conflicts), Atoms)
+                                        versionSplits, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo, depends, conflicts), Atoms, DebType(..))
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile (PackageType(..))
 import Debian.Debianize.Interspersed (Interspersed(leftmost, pairs, foldInverted), foldTriples)
-import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), DebType(Dev, Prof, Doc), VersionSplits(..))
+import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), VersionSplits(..))
 import Debian.Orphans ()
 import qualified Debian.Relation as D
 import Debian.Relation (Relations, Relation, BinPkgName(BinPkgName), PkgName(pkgNameFromString))
