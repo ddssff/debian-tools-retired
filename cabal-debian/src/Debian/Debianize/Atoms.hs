@@ -204,9 +204,7 @@ data DebAtom
     deriving (Eq, Ord, Show, Typeable)
 
 -- | Information about the mapping from cabal package names and
--- versions to debian package names and versions.  (This could be
--- broken up into smaller atoms, many of which would be attached to
--- binary packages.
+-- versions to debian package names and versions.
 newtype Atoms = Atoms (Map DebAtomKey (Set DebAtom)) deriving (Eq, Show)
 
 instance Monoid Atoms where
