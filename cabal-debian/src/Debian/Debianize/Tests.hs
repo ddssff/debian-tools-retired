@@ -223,20 +223,18 @@ test4 :: Test
 test4 =
     TestLabel "test4" $
     TestCase (do old <- inputDebianization "test-data/clckwrks-dot-com/output" defaultAtoms
-                 new <- inputCabalization "test-data/clckwrks-dot-com/input" $ newDebianization' 7 (StandardsVersion 3 9 4 Nothing)
-                 let new' =
-                         modL control (\ y -> y {homepage = Just "http://www.clckwrks.com/"}) $
-                         setL sourceFormat (Just Native3) $
-                         modL missingDependencies (insert (BinPkgName "libghc-clckwrks-theme-clckwrks-doc")) $
-                         setL revision Nothing $
-                         doWebsite (BinPkgName "clckwrks-dot-com-production") (theSite (BinPkgName "clckwrks-dot-com-production")) $
-                         doBackups (BinPkgName "clckwrks-dot-com-backups") "clckwrks-dot-com-backups" $
-                         fixRules $
-                         tight $
-                         setL changelog (getL changelog old) $
-                         new
-                 new'' <- cabalToDebianization "test-data/clckwrks-dot-com/input" new'
-                 assertEqual "test4" [] (diffDebianizations old (copyFirstLogEntry old new'')))
+                 new <- inputCabalization "test-data/clckwrks-dot-com/input" (newDebianization' 7 (StandardsVersion 3 9 4 Nothing)) >>=
+                        cabalToDebianization "test-data/clckwrks-dot-com/input" .
+                          (modL control (\ y -> y {homepage = Just "http://www.clckwrks.com/"}) .
+                           setL sourceFormat (Just Native3) .
+                           modL missingDependencies (insert (BinPkgName "libghc-clckwrks-theme-clckwrks-doc")) .
+                           setL revision Nothing .
+                           doWebsite (BinPkgName "clckwrks-dot-com-production") (theSite (BinPkgName "clckwrks-dot-com-production")) .
+                           doBackups (BinPkgName "clckwrks-dot-com-backups") "clckwrks-dot-com-backups" .
+                           fixRules .
+                           tight .
+                           setL changelog (getL changelog old))
+                 assertEqual "test4" [] (diffDebianizations old (copyFirstLogEntry old new)))
     where
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
@@ -319,7 +317,9 @@ test5 =
     TestLabel "test5" $
     TestCase (do old <- inputDebianization "test-data/creativeprompts/output" defaultAtoms
                  let standards = fromMaybe (error "test5") (standardsVersion (getL control old))
-                 let new = setL sourceFormat (Just Native3) $
+                     level = fromMaybe (error "test5") (getL compat old)
+                 new <- cabalToDebianization "test-data/creativeprompts/input"
+                          (setL sourceFormat (Just Native3) $
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-data") All) $
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-development") All) $
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-production") All) $
@@ -345,9 +345,8 @@ test5 =
                            doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) $
                            doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production")) $
                            setL changelog (getL changelog old) $
-                           (newDebianization' (fromMaybe (error "Missing debian/compat file") $ getL compat old) standards)
-                 new' <- cabalToDebianization "test-data/creativeprompts/input" new
-                 assertEqual "test5" [] (diffDebianizations old (copyFirstLogEntry old new')))
+                           (newDebianization' level standards))
+                 assertEqual "test5" [] (diffDebianizations old (copyFirstLogEntry old new)))
     where
       theSite :: BinPkgName -> Site
       theSite deb =
@@ -406,9 +405,8 @@ test6 :: Test
 test6 =
     TestLabel "test6" $
     TestCase ( do old <- inputDebianization "test-data/artvaluereport2/output" defaultAtoms
-                  let standards = StandardsVersion 3 9 1 Nothing
-                      compat' = 7
-                  let new =  modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) $
+                  new <- cabalToDebianization "test-data/artvaluereport2/input"
+                            (modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) $
                              setL sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) $
                              setL utilsPackageName (Just (BinPkgName "artvaluereport2-server")) $
                              modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-development") All) $
@@ -438,11 +436,9 @@ test6 =
                                    "texlive-latex-recommended", "texlive-latex-extra", "texlive-fonts-recommended", "texlive-fonts-extra"] $
                              doExecutable (BinPkgName "artvaluereport2-server") (InstallFile "artvaluereport2-server" Nothing Nothing "artvaluereport2-server") $
                              setL changelog (getL changelog old) $
-                             (newDebianization' compat' standards)
-                  new' <- cabalToDebianization "test-data/artvaluereport2/input" new
-                  writeDebianization "/tmp" new'
-                  assertEqual "test6" [] (diffDebianizations old (copyFirstLogEntry old new'))
-             )
+                             (newDebianization' 7 (StandardsVersion 3 9 1 Nothing)))
+                  writeDebianization "/tmp" new
+                  assertEqual "test6" [] (diffDebianizations old (copyFirstLogEntry old new)))
     where
       -- hints = dependencyHints (putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $ putExtraDevDep (BinPkgName "markdown") $ Flags.defaultFlags)
       -- A log entry gets added when the Debianization is generated,
@@ -500,7 +496,8 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase ( do old <- inputDebianization "." defaultAtoms
-                  let new = modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
+                  new <- cabalToDebianization "."
+                           (modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
                             setL sourceFormat (Just Native3) $
                             setL utilsPackageName (Just (BinPkgName "cabal-debian")) $
                             modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (anyrel (BinPkgName "apt-file")))) $
@@ -516,30 +513,29 @@ test7 =
                                                       , "  Author: David Fox <dsf@seereason.com>"
                                                       , "  Upstream-Maintainer: David Fox <dsf@seereason.com>" ])) $
                             copyChangelog old $
-                            newDebianization' 7 (StandardsVersion 3 9 3 Nothing)
-                  new' <- cabalToDebianization "." new
-                  assertEqual "test7" [] (diffDebianizations old (copyChangelog old new'))
-             )
+                            newDebianization' 7 (StandardsVersion 3 9 3 Nothing))
+                  assertEqual "test7" [] (diffDebianizations old (copyChangelog old new)))
 
 test8 :: Test
 test8 =
     TestLabel "test8" $
     TestCase ( do old <- inputDebianization "test-data/artvaluereport-data/output" defaultAtoms
                   log <- inputChangeLog "test-data/artvaluereport-data/input/debian"
-                  let new = modL buildDeps (Set.insert (BinPkgName "haskell-hsx-utils")) $
+                  new <- cabalToDebianization "test-data/artvaluereport-data/input"
+                           (modL buildDeps (Set.insert (BinPkgName "haskell-hsx-utils")) $
                             modL control (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) $
                             setL sourceFormat (Just Native3) $
                             setL changelog (Just log) $
-                            (newDebianization' 7 (StandardsVersion 3 9 3 Nothing))
-                  new' <- cabalToDebianization "test-data/artvaluereport-data/input" new
-                  assertEqual "test8" [] (diffDebianizations old (copyChangelog old new'))
+                            (newDebianization' 7 (StandardsVersion 3 9 3 Nothing)))
+                  assertEqual "test8" [] (diffDebianizations old (copyChangelog old new))
              )
 
 test9 :: Test
 test9 =
     TestLabel "test9" $
     TestCase ( do old <- inputDebianization "test-data/alex/output" defaultAtoms
-                  let new = modL buildDeps (Set.insert (BinPkgName "alex")) $
+                  new <- cabalToDebianization "test-data/alex/input"
+                           (modL buildDeps (Set.insert (BinPkgName "alex")) $
                             doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) $
                             setL debVersion (Just (parseDebianVersion ("3.0.2-1~hackage1" :: String))) $
                             setL sourceFormat (Just Native3) $
@@ -560,9 +556,8 @@ test9 =
                                               , "AlexWrapper-posn"
                                               , "AlexWrapper-posn-bytestring"
                                               , "AlexWrapper-strict-bytestring"]) $
-                            newDebianization' 7 (StandardsVersion 3 9 3 Nothing)
-                  new' <- cabalToDebianization "test-data/alex/input" new
-                  assertEqual "test9" [] (diffDebianizations old (copyFirstLogEntry old new')))
+                            newDebianization' 7 (StandardsVersion 3 9 3 Nothing))
+                  assertEqual "test9" [] (diffDebianizations old (copyFirstLogEntry old new)))
 
 data Change k a
     = Created k a
