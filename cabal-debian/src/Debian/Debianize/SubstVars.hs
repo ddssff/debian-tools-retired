@@ -18,8 +18,8 @@ import Data.Maybe
 import qualified Data.Set as Set
 import Data.Text (pack)
 import Debian.Control
-import Debian.Debianize.Atoms (HasAtoms(compiler, verbosity, dryRun), Atoms, packageInfo, compilerVersion, cabalFlagAssignments, DebType)
-import Debian.Debianize.Cabal (getSimplePackageDescription)
+import Debian.Debianize.Atoms (HasAtoms(compiler, dryRun, packageInfo), Atoms, DebType)
+import Debian.Debianize.Cabal (inputCabalization)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps, debNameFromType, filterMissing)
 import Debian.Debianize.Types (PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb))
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps, dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
@@ -46,7 +46,7 @@ substvars :: Atoms
           -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> IO ()
 substvars atoms debType =
-    do atoms' <- getSimplePackageDescription (getL verbosity atoms) (getL compilerVersion atoms) (getL cabalFlagAssignments atoms) "." atoms
+    do atoms' <- inputCabalization "." atoms
        debVersions <- buildDebVersionMap
        atoms'' <- libPaths (fromMaybe (error "substvars") $ getL compiler atoms') debVersions atoms'
        control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"

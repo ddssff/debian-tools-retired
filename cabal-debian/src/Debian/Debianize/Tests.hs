@@ -18,19 +18,19 @@ import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (cabalToDebianization)
 import Debian.Debianize.Atoms as Atoms
-    (HasAtoms(rulesHead, compat, sourceFormat, changelog, sourcePackageName, control, missingDependencies, revision,
-              binaryArchitectures, copyright, debVersion, execMap, buildDeps, buildDepsIndep, utilsPackageName, description),
-     Atoms, depends, conflicts, install, installData)
-import Debian.Debianize.Cabal (getSimplePackageDescription')
-import Debian.Debianize.Combinators (doExecutable, doWebsite, doServer, doBackups, defaultAtoms, tightDependencyFixup)
+    (Atoms, rulesHead, compat, sourceFormat, changelog, sourcePackageName, control, missingDependencies, revision,
+     binaryArchitectures, copyright, debVersion, execMap, buildDeps, buildDepsIndep, utilsPackageName, description,
+     depends, conflicts, install, installData)
+import Debian.Debianize.Cabal (inputCabalization)
+import Debian.Debianize.Combinators (defaultAtoms)
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
+import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization)
 import Debian.Debianize.Output (writeDebianization)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
-import Debian.Debianize.Utility (withCurrentDirectory)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
                       SourceFormat(Native3), Section(..), parseMaintainer)
@@ -146,7 +146,7 @@ test2 =
 test3 :: Test
 test3 =
     TestLabel "test3" $
-    TestCase (do deb <- inputDebianization "test-data/haskell-devscripts"
+    TestCase (do deb <- inputDebianization "test-data/haskell-devscripts" defaultAtoms
                  assertEqual "test3" [] (diffDebianizations testDeb2 deb))
     where
       testDeb2 :: Atoms
@@ -223,8 +223,8 @@ test3 =
 test4 :: Test
 test4 =
     TestLabel "test4" $
-    TestCase (do old <- inputDebianization "test-data/clckwrks-dot-com/output"
-                 new <- getSimplePackageDescription' "test-data/clckwrks-dot-com/input" $ newDebianization' 7 (StandardsVersion 3 9 4 Nothing)
+    TestCase (do old <- inputDebianization "test-data/clckwrks-dot-com/output" defaultAtoms
+                 new <- inputCabalization "test-data/clckwrks-dot-com/input" $ newDebianization' 7 (StandardsVersion 3 9 4 Nothing)
                  let new' =
                          modL control (\ y -> y {homepage = Just "http://www.clckwrks.com/"}) $
                          setL sourceFormat (Just Native3) $
@@ -318,7 +318,7 @@ anyrel b = Rel b Nothing Nothing
 test5 :: Test
 test5 =
     TestLabel "test5" $
-    TestCase (do old <- inputDebianization "test-data/creativeprompts/output"
+    TestCase (do old <- inputDebianization "test-data/creativeprompts/output" defaultAtoms
                  let standards = fromMaybe (error "test5") (standardsVersion (getL control old))
                  let new = setL sourceFormat (Just Native3) $
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-data") All) $
@@ -406,7 +406,7 @@ copyChangelog deb1 deb2 = modL changelog (const (getL changelog deb1)) deb2
 test6 :: Test
 test6 =
     TestLabel "test6" $
-    TestCase ( do old <- inputDebianization "test-data/artvaluereport2/output"
+    TestCase ( do old <- inputDebianization "test-data/artvaluereport2/output" defaultAtoms
                   let standards = StandardsVersion 3 9 1 Nothing
                       compat' = 7
                   let new =  modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) $
@@ -441,7 +441,7 @@ test6 =
                              setL changelog (getL changelog old) $
                              (newDebianization' compat' standards)
                   new' <- cabalToDebianization "test-data/artvaluereport2/input" new
-                  withCurrentDirectory "/tmp" (writeDebianization new')
+                  writeDebianization "/tmp" new'
                   assertEqual "test6" [] (diffDebianizations old (copyFirstLogEntry old new'))
              )
     where
@@ -500,7 +500,7 @@ test6 =
 test7 :: Test
 test7 =
     TestLabel "test7" $
-    TestCase ( do old <- inputDebianization "."
+    TestCase ( do old <- inputDebianization "." defaultAtoms
                   let new = modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
                             setL sourceFormat (Just Native3) $
                             setL utilsPackageName (Just (BinPkgName "cabal-debian")) $
@@ -525,7 +525,7 @@ test7 =
 test8 :: Test
 test8 =
     TestLabel "test8" $
-    TestCase ( do old <- inputDebianization "test-data/artvaluereport-data/output"
+    TestCase ( do old <- inputDebianization "test-data/artvaluereport-data/output" defaultAtoms
                   log <- inputChangeLog "test-data/artvaluereport-data/input/debian"
                   let new = modL buildDeps (Set.insert (BinPkgName "haskell-hsx-utils")) $
                             modL control (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) $
@@ -539,7 +539,7 @@ test8 =
 test9 :: Test
 test9 =
     TestLabel "test9" $
-    TestCase ( do old <- inputDebianization "test-data/alex/output"
+    TestCase ( do old <- inputDebianization "test-data/alex/output" defaultAtoms
                   let new = modL buildDeps (Set.insert (BinPkgName "alex")) $
                             doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) $
                             setL debVersion (Just (parseDebianVersion ("3.0.2-1~hackage1" :: String))) $

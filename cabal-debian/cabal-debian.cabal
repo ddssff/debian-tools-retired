@@ -61,6 +61,7 @@ Library
    Debian.Debianize.Files
    Debian.Debianize.Finalize
    Debian.Debianize.Generic
+   Debian.Debianize.Goodies
    Debian.Debianize.Interspersed
    Debian.Debianize.Input
    Debian.Debianize.Options

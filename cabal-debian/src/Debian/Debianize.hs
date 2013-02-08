@@ -9,6 +9,7 @@ module Debian.Debianize
     , module Debian.Debianize.Files
     , module Debian.Debianize.Finalize
     , module Debian.Debianize.Generic
+    , module Debian.Debianize.Goodies
     , module Debian.Debianize.Input
     , module Debian.Debianize.Interspersed
     , module Debian.Debianize.Options
@@ -23,12 +24,13 @@ module Debian.Debianize
 import Debian.Debianize.Atoms
 import Debian.Debianize.Bundled
 import Debian.Debianize.Cabal
-import Debian.Debianize.Combinators hiding (buildDeps)
+import Debian.Debianize.Combinators
 import Debian.Debianize.Debianize
 import Debian.Debianize.Dependencies
 import Debian.Debianize.Files
 import Debian.Debianize.Finalize
 import Debian.Debianize.Generic
+import Debian.Debianize.Goodies
 import Debian.Debianize.Input
 import Debian.Debianize.Interspersed
 import Debian.Debianize.Options

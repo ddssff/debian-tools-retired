@@ -24,11 +24,11 @@ import Debian.Debianize.Atoms as Atoms
 import Debian.Debianize.Atoms as Atoms (HasAtoms(file, apacheSite, installDir, buildDir,
                                                  dataDir, intermediateFiles,
                                                  logrotateStanza, postInst, installInit))
-import Debian.Debianize.Combinators (describe, buildDeps)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                newBinaryDebDescription, modifyBinaryDeb,
                                                PackageType(Exec, Development, Profiling, Documentation, Utilities))
-import Debian.Debianize.Dependencies (debianName, binaryPackageDeps, binaryPackageConflicts)
+import Debian.Debianize.Dependencies (debianName, binaryPackageDeps, binaryPackageConflicts, putBuildDeps)
+import Debian.Debianize.Goodies (describe)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
 import Debian.Policy (PackageArchitectures(Any, All), Section(..), apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (Relation(Rel), BinPkgName(BinPkgName))
@@ -52,7 +52,7 @@ finalizeDebianization deb0 =
       -- Fixme - makeUtilsPackage does stuff that needs to go through foldAtomsFinalized
       deb' = finalizeAtoms deb0
       deb'' = f deb'
-      deb''' = makeUtilsPackage $ librarySpecs $ buildDeps $ deb''
+      deb''' = makeUtilsPackage $ librarySpecs $ putBuildDeps $ deb''
       deb'''' = finalizeAtoms deb'''
       deb''''' = g deb'''' -- Apply tweaks to the debianization
 

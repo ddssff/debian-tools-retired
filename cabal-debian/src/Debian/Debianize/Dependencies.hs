@@ -5,8 +5,7 @@ module Debian.Debianize.Dependencies
     , selfDependency -- Debian.Debianize.Combinators
     , allBuildDepends
     , debDeps
-    , debianBuildDeps
-    , debianBuildDepsIndep
+    , putBuildDeps
     , dependencies
     , debianName
     , debNameFromType
@@ -18,7 +17,7 @@ module Debian.Debianize.Dependencies
 
 import Data.Char (isSpace, toLower)
 import Data.Function (on)
-import Data.Lens.Lazy (getL)
+import Data.Lens.Lazy (getL, modL)
 import Data.List as List (nub, minimumBy, isSuffixOf, map)
 import Data.Map as Map (Map, lookup, insertWith, empty)
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
@@ -27,10 +26,11 @@ import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, unlines)
 import Data.Version (Version, showVersion)
 import Debian.Control
-import Debian.Debianize.Atoms (HasAtoms(packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary, missingDependencies,
-                                        versionSplits, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap, packageInfo, depends, conflicts), Atoms, DebType(..))
+import Debian.Debianize.Atoms (Atoms, packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary,
+                               missingDependencies, versionSplits, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
+                               packageInfo, depends, conflicts, control, DebType(..))
 import Debian.Debianize.Bundled (ghcBuiltIn)
-import Debian.Debianize.ControlFile (PackageType(..))
+import Debian.Debianize.ControlFile as Debian (PackageType(..), SourceDebDescription(..))
 import Debian.Debianize.Interspersed (Interspersed(leftmost, pairs, foldInverted), foldTriples)
 import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), VersionSplits(..))
 import Debian.Orphans ()
@@ -108,6 +108,10 @@ allBuildDepends atoms buildDepends buildTools pkgconfigDepends extraLibs =
     where
       fixDeps :: [String] -> [D.BinPkgName]
       fixDeps xs = concatMap (\ cab -> maybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] Set.toList (Map.lookup cab (getL extraLibMap atoms))) xs
+
+putBuildDeps :: Atoms -> Atoms
+putBuildDeps deb =
+    modL control (\ y -> y { Debian.buildDepends = debianBuildDeps deb, buildDependsIndep = debianBuildDepsIndep deb }) deb
 
 -- The haskell-cdbs package contains the hlibrary.mk file with
 -- the rules for building haskell packages.

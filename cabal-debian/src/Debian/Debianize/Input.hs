@@ -23,7 +23,6 @@ import Debian.Debianize.Atoms (HasAtoms(rulesHead, compat, sourceFormat, watch, 
                                         postInst, postRm, preInst, preRm),
                                    Atoms, install, installDir, warning, logrotateStanza,
                                    installInit, link)
-import Debian.Debianize.Combinators (defaultAtoms)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')
@@ -36,12 +35,12 @@ import System.Directory (doesFileExist)
 import System.FilePath ((</>), takeExtension, dropExtension)
 import System.IO.Error (catchIOError)
 
-inputDebianization :: FilePath -> IO Atoms
-inputDebianization top =
+inputDebianization :: FilePath -> Atoms -> IO Atoms
+inputDebianization top atoms =
     do (ctl, _) <- inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e))
        -- Different from snd of above?
-       atoms <- inputAtomsFromDirectory debian defaultAtoms `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
-       return $ modL control (const ctl) atoms
+       atoms' <- inputAtomsFromDirectory debian atoms `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
+       return $ modL control (const ctl) atoms'
     where
       debian = top </> "debian"
 
