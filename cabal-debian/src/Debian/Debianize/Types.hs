@@ -4,6 +4,8 @@ module Debian.Debianize.Types
     , Server(..)
     , InstallFile(..)
     , VersionSplits(..)
+    , DebType(..)
+    , DebAction(..)
     ) where
 
 import Data.Map as Map (Map, fromList)
@@ -59,3 +61,8 @@ data VersionSplits
       , oldestPackage :: PackageName
       , splits :: [(Version, PackageName)] -- Assumed to be in version number order
       } deriving (Eq, Ord, Show)
+
+data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq, Ord)
+
+-- | A redundant data type, too lazy to expunge.
+data DebType = Dev | Prof | Doc deriving (Eq, Ord, Read, Show)

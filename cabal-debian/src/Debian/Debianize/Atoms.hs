@@ -2,8 +2,6 @@
 module Debian.Debianize.Atoms
     ( Atoms
     , HasAtoms(..)
-    , DebType(..)
-    , DebAction(..)
     ) where
 
 import Data.Generics (Data, Typeable)
@@ -16,7 +14,7 @@ import Data.Text (Text)
 import Data.Version (Version, showVersion)
 import Debian.Changes (ChangeLog)
 import Debian.Debianize.ControlFile (SourceDebDescription, newSourceDebDescription)
-import Debian.Debianize.Types (PackageInfo(..), Site(..), Server(..), InstallFile(..), VersionSplits(..))
+import Debian.Debianize.Types (PackageInfo(..), Site(..), Server(..), InstallFile(..), VersionSplits(..), DebAction(..))
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, SourceFormat, PackagePriority, Section)
 import Debian.Relation (SrcPkgName, BinPkgName, Relation(..))
@@ -31,52 +29,6 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 -- All the internals of this module is a steaming pile of poo, except
 -- for the stuff that is exported.
-
-insertAtom :: DebAtomKey -> DebAtom -> Atoms -> Atoms
-insertAtom mbin atom (Atoms x) = Atoms (insertWith union mbin (singleton atom) x)
-
-insertAtoms :: Set (DebAtomKey, DebAtom) -> Atoms -> Atoms
-insertAtoms s atoms =
-    case maxView s of
-      Nothing -> atoms
-      Just ((k, a), s') -> insertAtoms s' (insertAtom k a atoms)
-
-foldAtoms :: (DebAtomKey -> DebAtom -> r -> r) -> r -> Atoms -> r
-foldAtoms f r0 (Atoms xs) = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 xs
-
--- | Split atoms out of a HasAtoms instance by predicate.
-partitionAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> (Set (DebAtomKey, DebAtom), Atoms)
-partitionAtoms f deb =
-    foldAtoms g (mempty, Atoms mempty) deb
-    where
-      g k atom (atoms, deb') =
-          case f k atom of
-            True -> (Set.insert (k, atom) atoms, deb')
-            False -> (atoms, insertAtom k atom deb')
-
-deleteAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> Atoms
-deleteAtoms p atoms = snd (partitionAtoms p atoms)
-
--- | Split atoms out of a HasAtoms instance by predicate.
-partitionAtoms' :: (Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> (Set a, Atoms)
-partitionAtoms' f deb =
-    foldAtoms g (mempty, Atoms mempty) deb
-    where
-      g k atom (xs, deb') =
-          case f k atom of
-            Just x -> (Set.insert x xs, deb')
-            Nothing -> (xs, insertAtom k atom deb')
-
--- | Like modifyAtoms, but...
-modifyAtoms' :: (Ord a) =>
-               (DebAtomKey -> DebAtom -> Maybe a)
-            -> (Set a -> Set (DebAtomKey, DebAtom))
-            -> Atoms
-            -> Atoms
-modifyAtoms' f g atoms =
-    insertAtoms (g s) atoms'
-    where
-      (s, atoms') = partitionAtoms' f atoms
 
 data DebAtomKey
     = Source
@@ -226,20 +178,6 @@ data Flags = Flags
     , debAction_ :: DebAction
     -- ^ What to do - Usage, Debianize or Substvar
     } deriving (Eq, Ord, Show)
-
-data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq, Ord)
-
--- | A redundant data type, too lazy to expunge.
-data DebType = Dev | Prof | Doc deriving (Eq, Ord, Read, Show)
-
-defaultFlags :: Flags
-defaultFlags =
-    Flags {
-      verbosity_ = 1
-    , debAction_ = Usage
-    , dryRun_ = False
-    , validate_ = False
-    }
 
 -- | Information about the mapping from cabal package names and
 -- versions to debian package names and versions.
@@ -1032,3 +970,58 @@ instance HasAtoms Atoms where
               where
                 p (Binary _) (DHInstallInit _) = True
                 p _ _ = False
+
+defaultFlags :: Flags
+defaultFlags =
+    Flags {
+      verbosity_ = 1
+    , debAction_ = Usage
+    , dryRun_ = False
+    , validate_ = False
+    }
+
+insertAtom :: DebAtomKey -> DebAtom -> Atoms -> Atoms
+insertAtom mbin atom (Atoms x) = Atoms (insertWith union mbin (singleton atom) x)
+
+insertAtoms :: Set (DebAtomKey, DebAtom) -> Atoms -> Atoms
+insertAtoms s atoms =
+    case maxView s of
+      Nothing -> atoms
+      Just ((k, a), s') -> insertAtoms s' (insertAtom k a atoms)
+
+foldAtoms :: (DebAtomKey -> DebAtom -> r -> r) -> r -> Atoms -> r
+foldAtoms f r0 (Atoms xs) = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 xs
+
+-- | Split atoms out of a HasAtoms instance by predicate.
+partitionAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> (Set (DebAtomKey, DebAtom), Atoms)
+partitionAtoms f deb =
+    foldAtoms g (mempty, Atoms mempty) deb
+    where
+      g k atom (atoms, deb') =
+          case f k atom of
+            True -> (Set.insert (k, atom) atoms, deb')
+            False -> (atoms, insertAtom k atom deb')
+
+deleteAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> Atoms
+deleteAtoms p atoms = snd (partitionAtoms p atoms)
+
+-- | Split atoms out of a HasAtoms instance by predicate.
+partitionAtoms' :: (Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> (Set a, Atoms)
+partitionAtoms' f deb =
+    foldAtoms g (mempty, Atoms mempty) deb
+    where
+      g k atom (xs, deb') =
+          case f k atom of
+            Just x -> (Set.insert x xs, deb')
+            Nothing -> (xs, insertAtom k atom deb')
+
+-- | Like modifyAtoms, but...
+modifyAtoms' :: (Ord a) =>
+               (DebAtomKey -> DebAtom -> Maybe a)
+            -> (Set a -> Set (DebAtomKey, DebAtom))
+            -> Atoms
+            -> Atoms
+modifyAtoms' f g atoms =
+    insertAtoms (g s) atoms'
+    where
+      (s, atoms') = partitionAtoms' f atoms

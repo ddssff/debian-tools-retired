@@ -13,6 +13,10 @@ module Debian.Debianize.Goodies
     , watchAtom
     , oldClckwrksSiteFlags
     , oldClckwrksServerFlags
+    , siteAtoms
+    , serverAtoms
+    , backupAtoms
+    , execAtoms
     ) where
 
 import Data.Lens.Lazy (getL, setL, modL)
@@ -23,16 +27,24 @@ import Data.Monoid (mempty, (<>))
 import Data.Set as Set (insert, union, singleton)
 import Data.Text as Text (Text, pack, unlines, intercalate)
 import Data.Version (Version(Version))
-import Debian.Debianize.Atoms as Atoms (Atoms, rulesFragments, packageDescription, executable, serverInfo, website, backups, depends, epochMap, versionSplits)
+import Debian.Debianize.Atoms as Atoms ()
+import Debian.Debianize.Atoms as Atoms
+    (Atoms, packageDescription, rulesFragments, website, serverInfo, link, backups, executable,
+     install, installTo, installCabalExecTo, file, installDir, logrotateStanza, postInst,
+     installInit, installCabalExec, rulesFragments, packageDescription, executable,
+     serverInfo, website, backups, depends, epochMap, versionSplits)
 import Debian.Debianize.ControlFile as Debian (PackageType(..))
-import Debian.Debianize.Types (InstallFile, Server(..), Site(..), VersionSplits(..))
+import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), VersionSplits(..))
 import Debian.Debianize.Utility (trim)
 import Debian.Orphans ()
+import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel))
 import Distribution.Package (PackageIdentifier(..), PackageName(PackageName))
 import qualified Distribution.PackageDescription as Cabal
 import Distribution.Text (display)
-import Prelude hiding (writeFile, init, unlines, log)
+import Prelude hiding (writeFile, init, unlines, log, map)
+import System.FilePath ((</>))
+import System.Process (showCommandForUser)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 -- | This may not look like a goodie, but it incorporates knowledge
@@ -163,7 +175,7 @@ debianDescriptionBase synopsis' description' author' maintainer' url =
                       list "" ("\n Author: " ++) author' ++
                       list "" ("\n Upstream-Maintainer: " ++) maintainer' ++
                       list "" ("\n Url: " ++) url in
-          "\n " <> (pack . trim . List.intercalate "\n " . map addDot . lines $ text')
+          "\n " <> (pack . trim . List.intercalate "\n " . List.map addDot . lines $ text')
     where
       addDot line = if all (flip elem " \t") line then "." else line
       list :: b -> ([a] -> b) -> [a] -> b
@@ -185,3 +197,180 @@ watchAtom (PackageName pkgname) =
     pack $ "version=3\nopts=\"downloadurlmangle=s|archive/([\\w\\d_-]+)/([\\d\\.]+)/|archive/$1/$2/$1-$2.tar.gz|,\\\nfilenamemangle=s|(.*)/$|" ++ pkgname ++
            "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
            " \\\n    ([\\d\\.]*\\d)/\n"
+
+siteAtoms :: BinPkgName -> Site -> Atoms -> Atoms
+siteAtoms b site =
+    modL installDir (Map.insertWith Set.union b (singleton "/etc/apache2/sites-available")) .
+    modL link (Map.insertWith Set.union b (singleton ("/etc/apache2/sites-available/" ++ domain site, "/etc/apache2/sites-enabled/" ++ domain site))) .
+    modL file (Map.insertWith Set.union b (singleton ("/etc/apache2/sites-available" </> domain site, apacheConfig))) .
+    modL installDir (Map.insertWith Set.union b (singleton (apacheLogDirectory b))) .
+    modL logrotateStanza (Map.insertWith Set.union b (singleton (Text.unlines $
+                                                                 [ pack (apacheAccessLog b) <> " {"
+                                                                 , "  weekly"
+                                                                 , "  rotate 5"
+                                                                 , "  compress"
+                                                                 , "  missingok"
+                                                                 , "}"]))) .
+    modL logrotateStanza (Map.insertWith Set.union b (singleton (Text.unlines $
+                                                                 [ pack (apacheErrorLog b) <> " {"
+                                                                 , "  weekly"
+                                                                 , "  rotate 5"
+                                                                 , "  compress"
+                                                                 , "  missingok"
+                                                                 , "}" ]))) .
+    serverAtoms b (server site) True
+    where
+      -- An apache site configuration file.  This is installed via a line
+      -- in debianFiles.
+      apacheConfig =
+          Text.unlines $
+                   [  "<VirtualHost *:80>"
+                   , "    ServerAdmin " <> pack (serverAdmin site)
+                   , "    ServerName www." <> pack (domain site)
+                   , "    ServerAlias " <> pack (domain site)
+                   , ""
+                   , "    ErrorLog " <> pack (apacheErrorLog b)
+                   , "    CustomLog " <> pack (apacheAccessLog b) <> " combined"
+                   , ""
+                   , "    ProxyRequests Off"
+                   , "    AllowEncodedSlashes NoDecode"
+                   , ""
+                   , "    <Proxy *>"
+                   , "                AddDefaultCharset off"
+                   , "                Order deny,allow"
+                   , "                #Allow from .example.com"
+                   , "                Deny from all"
+                   , "                #Allow from all"
+                   , "    </Proxy>"
+                   , ""
+                   , "    <Proxy http://127.0.0.1:" <> port' <> "/*>"
+                   , "                AddDefaultCharset off"
+                   , "                Order deny,allow"
+                   , "                #Allow from .example.com"
+                   , "                #Deny from all"
+                   , "                Allow from all"
+                   , "    </Proxy>"
+                   , ""
+                   , "    SetEnv proxy-sendcl 1"
+                   , ""
+                   , "    ProxyPass / http://127.0.0.1:" <> port' <> "/ nocanon"
+                   , "    ProxyPassReverse / http://127.0.0.1:" <> port' <> "/"
+                   , "</VirtualHost>" ]
+      port' = pack (show (port (server site)))
+
+serverAtoms :: BinPkgName -> Server -> Bool -> Atoms -> Atoms
+serverAtoms b server isSite =
+    modL postInst (insertWith (error "serverAtoms") b debianPostinst) .
+    modL installInit (Map.insertWith (error "serverAtoms") b debianInit) .
+    serverLogrotate' b .
+    execAtoms b exec
+    where
+      exec = installFile server
+      debianInit =
+          Text.unlines $
+                   [ "#! /bin/sh -e"
+                   , ""
+                   , ". /lib/lsb/init-functions"
+                   , ""
+                   , "case \"$1\" in"
+                   , "  start)"
+                   , "    test -x /usr/bin/" <> pack (destName exec) <> " || exit 0"
+                   , "    log_begin_msg \"Starting " <> pack (destName exec) <> "...\""
+                   , "    mkdir -p " <> pack (databaseDirectory b)
+                   , "    " <> startCommand
+                   , "    log_end_msg $?"
+                   , "    ;;"
+                   , "  stop)"
+                   , "    log_begin_msg \"Stopping " <> pack (destName exec) <> "...\""
+                   , "    " <> stopCommand
+                   , "    log_end_msg $?"
+                   , "    ;;"
+                   , "  *)"
+                   , "    log_success_msg \"Usage: ${0} {start|stop}\""
+                   , "    exit 1"
+                   , "esac"
+                   , ""
+                   , "exit 0" ]
+      startCommand = pack $ showCommandForUser "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
+      stopCommand = pack $ showCommandForUser "start-stop-daemon" (stopOptions ++ commonOptions)
+      commonOptions = ["--pidfile", "/var/run/" ++ destName exec]
+      startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory b, "--exec", "/usr/bin" </> destName exec]
+      stopOptions = ["--stop", "--oknodo"] ++ if retry server /= "" then ["--retry=" ++ retry server ] else []
+      serverOptions = serverFlags server ++ commonServerOptions
+      -- Without these, happstack servers chew up CPU even when idle
+      commonServerOptions = ["+RTS", "-IO", "-RTS"]
+
+      debianPostinst =
+          Text.unlines $
+                   ([ "#!/bin/sh"
+                    , ""
+                    , "case \"$1\" in"
+                    , "  configure)" ] ++
+                    (if isSite
+                     then [ "    # Apache won't start if this directory doesn't exist"
+                          , "    mkdir -p " <> pack (apacheLogDirectory b)
+                          , "    # Restart apache so it sees the new file in /etc/apache2/sites-enabled"
+                          , "    /usr/sbin/a2enmod proxy"
+                          , "    /usr/sbin/a2enmod proxy_http"
+                          , "    service apache2 restart" ]
+                     else []) ++
+                    [ "    service " <> pack (show (pretty b)) <> " start"
+                    , "    ;;"
+                    , "esac"
+                    , ""
+                    , "#DEBHELPER#"
+                    , ""
+                    , "exit 0" ])
+
+-- | A configuration file for the logrotate facility, installed via a line
+-- in debianFiles.
+serverLogrotate' :: BinPkgName -> Atoms -> Atoms
+serverLogrotate' b =
+    modL logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAccessLog b) <> " {"
+                                 , "  weekly"
+                                 , "  rotate 5"
+                                 , "  compress"
+                                 , "  missingok"
+                                 , "}" ]))) .
+    modL logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAppLog b) <> " {"
+                                 , "  weekly"
+                                 , "  rotate 5"
+                                 , "  compress"
+                                 , "  missingok"
+                                 , "}" ])))
+
+backupAtoms :: BinPkgName -> String -> Atoms -> Atoms
+backupAtoms b name =
+    modL postInst (insertWith (error "backupAtoms") b
+                 (Text.unlines $
+                  [ "#!/bin/sh"
+                  , ""
+                  , "case \"$1\" in"
+                  , "  configure)"
+                  , "    " <> pack ("/etc/cron.hourly" </> name) <> " --initialize"
+                  , "    ;;"
+                  , "esac" ])) .
+    execAtoms b (InstallFile { execName = name
+                              , destName = name
+                              , sourceDir = Nothing
+                              , destDir = Just "/etc/cron.hourly" })
+
+execAtoms :: BinPkgName -> InstallFile -> Atoms -> Atoms
+execAtoms b ifile r =
+    modL rulesFragments (Set.insert (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp"))) .
+    fileAtoms b ifile $
+    r
+
+fileAtoms :: BinPkgName -> InstallFile -> Atoms -> Atoms
+fileAtoms b installFile r =
+    fileAtoms' b (sourceDir installFile) (execName installFile) (destDir installFile) (destName installFile) r
+
+fileAtoms' :: BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> Atoms -> Atoms
+fileAtoms' b sourceDir execName destDir destName r =
+    case (sourceDir, execName == destName) of
+      (Nothing, True) -> modL installCabalExec (insertWith Set.union b (singleton (execName, d))) r
+      (Just s, True) -> modL install (insertWith Set.union b (singleton (s </> execName, d))) r
+      (Nothing, False) -> modL installCabalExecTo (insertWith Set.union b (singleton (execName, (d </> destName)))) r
+      (Just s, False) -> modL installTo (insertWith Set.union b (singleton (s </> execName, d </> destName))) r
+    where
+      d = fromMaybe "usr/bin" destDir

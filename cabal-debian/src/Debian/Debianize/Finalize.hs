@@ -22,21 +22,19 @@ import Debian.Debianize.Atoms as Atoms
      Atoms, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
      installData, installCabalExec)
 import Debian.Debianize.Atoms as Atoms (HasAtoms(file, apacheSite, installDir, buildDir,
-                                                 dataDir, intermediateFiles,
-                                                 logrotateStanza, postInst, installInit))
+                                                 dataDir, intermediateFiles))
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                newBinaryDebDescription, modifyBinaryDeb,
                                                PackageType(Exec, Development, Profiling, Documentation, Utilities))
 import Debian.Debianize.Dependencies (debianName, binaryPackageDeps, binaryPackageConflicts, putBuildDeps)
-import Debian.Debianize.Goodies (describe)
-import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
-import Debian.Policy (PackageArchitectures(Any, All), Section(..), apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
+import Debian.Debianize.Goodies (describe, siteAtoms, serverAtoms, backupAtoms, execAtoms)
+import Debian.Debianize.Types (InstallFile(..))
+import Debian.Policy (PackageArchitectures(Any, All), Section(..))
 import Debian.Relation (Relation(Rel), BinPkgName(BinPkgName))
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (init, unlines, writeFile, map)
 import System.FilePath ((</>), (<.>), makeRelative, splitFileName, takeDirectory, takeFileName)
-import System.Process (showCommandForUser)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | Now that we know the build and data directories, we can expand
@@ -293,202 +291,13 @@ expandAtoms old =
                       (getL file old)
 
       expandWebsite :: Atoms -> Atoms
-      expandWebsite new =
-          foldWithKey (\ b x atoms -> siteAtoms b x atoms)
-                      new
-                      (getL website old)
+      expandWebsite new = foldWithKey siteAtoms new (getL website old)
 
       expandServer :: Atoms -> Atoms
-      expandServer new =
-          foldWithKey (\ b x atoms -> serverAtoms b x False atoms)
-                      new
-                      (getL serverInfo old)
+      expandServer new = foldWithKey (\ b x atoms -> serverAtoms b x False atoms) new (getL serverInfo old)
 
       expandBackups :: Atoms -> Atoms
-      expandBackups new =
-          foldWithKey (\ b s atoms -> backupAtoms b s atoms)
-                      new
-                      (getL backups old)
+      expandBackups new = foldWithKey backupAtoms new (getL backups old)
 
       expandExecutable :: Atoms -> Atoms
-      expandExecutable new =
-          foldWithKey (\ b x atoms -> execAtoms b x atoms)
-                      new
-                      (getL executable old)
-
-siteAtoms :: BinPkgName -> Site -> Atoms -> Atoms
-siteAtoms b site =
-    modL installDir (Map.insertWith Set.union b (singleton "/etc/apache2/sites-available")) .
-    modL link (Map.insertWith Set.union b (singleton ("/etc/apache2/sites-available/" ++ domain site, "/etc/apache2/sites-enabled/" ++ domain site))) .
-    modL file (Map.insertWith Set.union b (singleton ("/etc/apache2/sites-available" </> domain site, apacheConfig))) .
-    modL installDir (Map.insertWith Set.union b (singleton (apacheLogDirectory b))) .
-    modL logrotateStanza (Map.insertWith Set.union b (singleton (Text.unlines $
-                                                                 [ pack (apacheAccessLog b) <> " {"
-                                                                 , "  weekly"
-                                                                 , "  rotate 5"
-                                                                 , "  compress"
-                                                                 , "  missingok"
-                                                                 , "}"]))) .
-    modL logrotateStanza (Map.insertWith Set.union b (singleton (Text.unlines $
-                                                                 [ pack (apacheErrorLog b) <> " {"
-                                                                 , "  weekly"
-                                                                 , "  rotate 5"
-                                                                 , "  compress"
-                                                                 , "  missingok"
-                                                                 , "}" ]))) .
-    serverAtoms b (server site) True
-    where
-      -- An apache site configuration file.  This is installed via a line
-      -- in debianFiles.
-      apacheConfig =
-          Text.unlines $
-                   [  "<VirtualHost *:80>"
-                   , "    ServerAdmin " <> pack (serverAdmin site)
-                   , "    ServerName www." <> pack (domain site)
-                   , "    ServerAlias " <> pack (domain site)
-                   , ""
-                   , "    ErrorLog " <> pack (apacheErrorLog b)
-                   , "    CustomLog " <> pack (apacheAccessLog b) <> " combined"
-                   , ""
-                   , "    ProxyRequests Off"
-                   , "    AllowEncodedSlashes NoDecode"
-                   , ""
-                   , "    <Proxy *>"
-                   , "                AddDefaultCharset off"
-                   , "                Order deny,allow"
-                   , "                #Allow from .example.com"
-                   , "                Deny from all"
-                   , "                #Allow from all"
-                   , "    </Proxy>"
-                   , ""
-                   , "    <Proxy http://127.0.0.1:" <> port' <> "/*>"
-                   , "                AddDefaultCharset off"
-                   , "                Order deny,allow"
-                   , "                #Allow from .example.com"
-                   , "                #Deny from all"
-                   , "                Allow from all"
-                   , "    </Proxy>"
-                   , ""
-                   , "    SetEnv proxy-sendcl 1"
-                   , ""
-                   , "    ProxyPass / http://127.0.0.1:" <> port' <> "/ nocanon"
-                   , "    ProxyPassReverse / http://127.0.0.1:" <> port' <> "/"
-                   , "</VirtualHost>" ]
-      port' = pack (show (port (server site)))
-
-serverAtoms :: BinPkgName -> Server -> Bool -> Atoms -> Atoms
-serverAtoms b server isSite =
-    modL postInst (insertWith (error "serverAtoms") b debianPostinst) .
-    modL installInit (Map.insertWith (error "serverAtoms") b debianInit) .
-    serverLogrotate' b .
-    execAtoms b exec
-    where
-      exec = installFile server
-      debianInit =
-          Text.unlines $
-                   [ "#! /bin/sh -e"
-                   , ""
-                   , ". /lib/lsb/init-functions"
-                   , ""
-                   , "case \"$1\" in"
-                   , "  start)"
-                   , "    test -x /usr/bin/" <> pack (destName exec) <> " || exit 0"
-                   , "    log_begin_msg \"Starting " <> pack (destName exec) <> "...\""
-                   , "    mkdir -p " <> pack (databaseDirectory b)
-                   , "    " <> startCommand
-                   , "    log_end_msg $?"
-                   , "    ;;"
-                   , "  stop)"
-                   , "    log_begin_msg \"Stopping " <> pack (destName exec) <> "...\""
-                   , "    " <> stopCommand
-                   , "    log_end_msg $?"
-                   , "    ;;"
-                   , "  *)"
-                   , "    log_success_msg \"Usage: ${0} {start|stop}\""
-                   , "    exit 1"
-                   , "esac"
-                   , ""
-                   , "exit 0" ]
-      startCommand = pack $ showCommandForUser "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
-      stopCommand = pack $ showCommandForUser "start-stop-daemon" (stopOptions ++ commonOptions)
-      commonOptions = ["--pidfile", "/var/run/" ++ destName exec]
-      startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory b, "--exec", "/usr/bin" </> destName exec]
-      stopOptions = ["--stop", "--oknodo"] ++ if retry server /= "" then ["--retry=" ++ retry server ] else []
-      serverOptions = serverFlags server ++ commonServerOptions
-      -- Without these, happstack servers chew up CPU even when idle
-      commonServerOptions = ["+RTS", "-IO", "-RTS"]
-
-      debianPostinst =
-          Text.unlines $
-                   ([ "#!/bin/sh"
-                    , ""
-                    , "case \"$1\" in"
-                    , "  configure)" ] ++
-                    (if isSite
-                     then [ "    # Apache won't start if this directory doesn't exist"
-                          , "    mkdir -p " <> pack (apacheLogDirectory b)
-                          , "    # Restart apache so it sees the new file in /etc/apache2/sites-enabled"
-                          , "    /usr/sbin/a2enmod proxy"
-                          , "    /usr/sbin/a2enmod proxy_http"
-                          , "    service apache2 restart" ]
-                     else []) ++
-                    [ "    service " <> pack (show (pretty b)) <> " start"
-                    , "    ;;"
-                    , "esac"
-                    , ""
-                    , "#DEBHELPER#"
-                    , ""
-                    , "exit 0" ])
-
--- | A configuration file for the logrotate facility, installed via a line
--- in debianFiles.
-serverLogrotate' :: BinPkgName -> Atoms -> Atoms
-serverLogrotate' b =
-    modL logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAccessLog b) <> " {"
-                                 , "  weekly"
-                                 , "  rotate 5"
-                                 , "  compress"
-                                 , "  missingok"
-                                 , "}" ]))) .
-    modL logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAppLog b) <> " {"
-                                 , "  weekly"
-                                 , "  rotate 5"
-                                 , "  compress"
-                                 , "  missingok"
-                                 , "}" ])))
-
-backupAtoms :: BinPkgName -> String -> Atoms -> Atoms
-backupAtoms b name =
-    modL postInst (insertWith (error "backupAtoms") b
-                 (Text.unlines $
-                  [ "#!/bin/sh"
-                  , ""
-                  , "case \"$1\" in"
-                  , "  configure)"
-                  , "    " <> pack ("/etc/cron.hourly" </> name) <> " --initialize"
-                  , "    ;;"
-                  , "esac" ])) .
-    execAtoms b (InstallFile { execName = name
-                              , destName = name
-                              , sourceDir = Nothing
-                              , destDir = Just "/etc/cron.hourly" })
-
-execAtoms :: BinPkgName -> InstallFile -> Atoms -> Atoms
-execAtoms b ifile r =
-    modL rulesFragments (Set.insert (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp"))) .
-    fileAtoms b ifile $
-    r
-
-fileAtoms :: BinPkgName -> InstallFile -> Atoms -> Atoms
-fileAtoms b installFile r =
-    fileAtoms' b (sourceDir installFile) (execName installFile) (destDir installFile) (destName installFile) r
-
-fileAtoms' :: BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> Atoms -> Atoms
-fileAtoms' b sourceDir execName destDir destName r =
-    case (sourceDir, execName == destName) of
-      (Nothing, True) -> modL installCabalExec (insertWith Set.union b (singleton (execName, d))) r
-      (Just s, True) -> modL install (insertWith Set.union b (singleton (s </> execName, d))) r
-      (Nothing, False) -> modL installCabalExecTo (insertWith Set.union b (singleton (execName, (d </> destName)))) r
-      (Just s, False) -> modL installTo (insertWith Set.union b (singleton (s </> execName, d </> destName))) r
-    where
-      d = fromMaybe "usr/bin" destDir
+      expandExecutable new = foldWithKey execAtoms new (getL executable old)
