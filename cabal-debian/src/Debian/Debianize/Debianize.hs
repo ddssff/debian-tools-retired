@@ -17,6 +17,7 @@ module Debian.Debianize.Debianize
     ) where
 
 import Control.Applicative ((<$>))
+import Control.Exception (catch)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Lens.Lazy (getL, setL, modL)
@@ -36,7 +37,7 @@ import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (defaultAtoms, watchAtom)
-import Debian.Debianize.Input (inputDebianization, inputCabalization, inputCopyright, inputMaintainer)
+import Debian.Debianize.Input (inputDebianization, inputCabalization, inputCopyright, inputMaintainer, inputChangeLog)
 import Debian.Debianize.Options (options, compileArgs)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types (DebAction(..))
@@ -128,23 +129,26 @@ debianize top atoms =
 -- computed from the cabal package description.)
 debianization :: FilePath -> Atoms -> IO Atoms
 debianization top atoms =
-    do atoms' <- inputCabalization top atoms
+    do log <- (Just <$> inputChangeLog "debian") `catch` (\ (_ :: IOError) -> return Nothing)
+       atoms' <- inputCabalization top atoms
        date <- getCurrentLocalRFC822Time
        maint <- inputMaintainer atoms' >>= maybe (error "Missing value for --maintainer") return
        level <- getDebhelperCompatLevel
        copyright <- withCurrentDirectory top $ inputCopyright (fromMaybe (error $ "cabalToDebianization: Failed to read cabal file in " ++ show top)
                                                                          (getL packageDescription atoms'))
-       return $ debianization' date copyright maint level atoms'
+       return $ debianization' date copyright maint level log atoms'
 
 debianization' :: String              -- ^ current date
                -> Text                -- ^ copyright
                -> NameAddr            -- ^ maintainer
                -> Int		-- ^ Default standards version
+               -> Maybe ChangeLog
                -> Atoms      -- ^ Debianization specification
                -> Atoms      -- ^ New debianization
-debianization' date copyright' maint level deb =
+debianization' date copyright' maint level log deb =
     finalizeDebianization $
     modL compat (maybe (Just level) Just) $
+    modL changelog (maybe log Just) $
     setL sourcePriority (Just Optional) $
     setL sourceSection (Just (MainSection "haskell")) $
     setL watch (Just (watchAtom (pkgName $ Cabal.package $ pkgDesc)))  $

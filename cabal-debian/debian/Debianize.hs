@@ -11,9 +11,7 @@ import Data.Text as Text (intercalate)
 
 main :: IO ()
 main =
-    do log <- inputChangeLog "debian"
-       old <- inputCabalization "." defaultAtoms
-       new <- cabalToDebianization "."
+    do new <- debianization "."
                (modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
                 setL changelog (Just log) $
                 setL compat (Just 7) $
