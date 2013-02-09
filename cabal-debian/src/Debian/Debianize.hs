@@ -10,6 +10,10 @@
 -- To see what your debianization would produce, or how it differs
 -- from the debianization already present:
 -- 
+-- > % cabal-debian --debianize -n
+-- 
+-- This is equivalent to the library call
+-- 
 -- > % ghc -e 'Debian.Debianize.callDebianize ["-n"]'
 -- 
 -- To actually create the debianization and then build the debs,

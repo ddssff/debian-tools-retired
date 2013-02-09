@@ -109,20 +109,17 @@ runDebianize args =
             (code, out, err) ->
               error ("runDebianize failed with " ++ show code ++ ":\n stdout: " ++ show out ++"\n stderr: " ++ show err)
 
--- | Generate a debianization for the cabal package in the directory
--- @top@ using information from the .cabal file and from the @atoms@
--- value.  This ignores any existing debianization except for the
--- @debian/changelog@ file.  A new changelog entry is generated, and
--- any entries already there that look older than the new one are
--- preserved.
+-- | Generate a debianization, and then either validate, describe, or
+-- write it out dependeing on the command line arguments.
 debianize :: FilePath -> Atoms -> IO ()
 debianize top atoms =
-    if getL validate atoms
-    then inputDebianization top >>= \ old -> either error return (validateDebianization old atoms)
-    else if getL dryRun atoms
+    debianization top atoms >>= \ atoms' ->
+    if getL validate atoms'
+    then inputDebianization top >>= \ old -> either error return (validateDebianization old atoms')
+    else if getL dryRun atoms'
          then inputDebianization top >>= \ old ->
-              putStr . ("Debianization (dry run):\n" ++) $ compareDebianization old atoms
-         else writeDebianization top atoms
+              putStr . ("Debianization (dry run):\n" ++) $ compareDebianization old atoms'
+         else writeDebianization top atoms'
 
 -- | Given an Atoms value, get any additional configuration
 -- information from the environment, read the cabal package

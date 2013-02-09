@@ -90,7 +90,7 @@ autobuilderCabal cache pflags currentDirectory atoms =
     withCurrentDirectory currentDirectory $
     do -- This will be false if the package has no debian/Debianize.hs script
        done <- collectPackageFlags cache pflags >>= Cabal.runDebianize
-       when (not done) (Cabal.cabalToDebianization "." (applyPackageFlags pflags atoms) >>= Cabal.writeDebianization ".")
+       when (not done) (Cabal.debianization "." (applyPackageFlags pflags atoms) >>= Cabal.writeDebianization ".")
 
 applyPackageFlags :: [P.PackageFlag] -> Atoms -> Atoms
 applyPackageFlags flags atoms = foldr applyPackageFlag atoms flags
