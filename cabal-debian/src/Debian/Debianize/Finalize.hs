@@ -16,13 +16,11 @@ import Data.Monoid (mempty, (<>))
 import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, map, union, singleton)
 import Data.Text as Text (pack, unlines, unpack)
 import Debian.Debianize.Atoms as Atoms
-    (HasAtoms(packageDescription, control, binaryArchitectures, rulesFragments, website, serverInfo, link,
-              backups, executable, sourcePriority, sourceSection, binaryPriorities, binarySections, description,
-              install, installTo, installData, installCabalExecTo),
-     Atoms, noProfilingLibrary, noDocumentationLibrary, utilsPackageName, extraDevDeps,
-     installData, installCabalExec)
-import Debian.Debianize.Atoms as Atoms (HasAtoms(file, apacheSite, installDir, buildDir,
-                                                 dataDir, intermediateFiles))
+    (Atoms, packageDescription, control, binaryArchitectures, rulesFragments, website, serverInfo, link,
+     backups, executable, sourcePriority, sourceSection, binaryPriorities, binarySections, description,
+     install, installTo, installData, installCabalExecTo, noProfilingLibrary, noDocumentationLibrary,
+     utilsPackageName, extraDevDeps, installData, installCabalExec, file, apacheSite, installDir, buildDir,
+     dataDir, intermediateFiles)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                newBinaryDebDescription, modifyBinaryDeb,
                                                PackageType(Exec, Development, Profiling, Documentation, Utilities))

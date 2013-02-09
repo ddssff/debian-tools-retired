@@ -12,7 +12,7 @@ import Data.Lens.Lazy (getL, setL)
 import Data.Maybe
 import Data.Set (toList)
 import Data.Text (Text, pack)
-import Debian.Debianize.Atoms as Debian (HasAtoms(packageDescription, compiler, maintainer, verbosity), Atoms, compilerVersion, cabalFlagAssignments)
+import Debian.Debianize.Atoms as Debian (Atoms, packageDescription, compiler, maintainer, verbosity, compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.Utility (readFile', withCurrentDirectory)
 import Debian.Policy (getDebianMaintainer, haskellMaintainer, parseMaintainer)
 import Distribution.License (License(..))
