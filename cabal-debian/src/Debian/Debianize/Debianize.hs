@@ -84,9 +84,11 @@ cabalDebian =
           putStrLn (usageInfo info options)
 
 -- | Compile the given arguments into an Atoms value and run the
--- debianize function.  This is basically equivalent to @cabal-debian --debianize@.
+-- debianize function.  This is basically equivalent to @cabal-debian
+-- --debianize@, except that the command line arguments come from the
+-- function parameter.
 callDebianize :: [String] -> IO ()
-callDebianize args = debianize "." (compileArgs defaultAtoms args)
+callDebianize args = compileEnvironmentArgs defaultAtoms >>= debianize "." . compileArgs args
 
 -- | Put an argument list into the @CABALDEBIAN@ environment variable
 -- and then run the script in debian/Debianize.hs.  If this exists and
@@ -241,11 +243,13 @@ anyrel' :: BinPkgName -> [Relation]
 anyrel' x = [Rel x Nothing Nothing]
 
 compileAllArgs :: Atoms -> IO Atoms
-compileAllArgs atoms0 =
-    compileEnvironmentArgs atoms0 >>= compileCommandlineArgs
-    where
-      compileEnvironmentArgs atoms0 = (compileArgs atoms0 <$> read <$> getEnv "CABALDEBIAN") `catchIOError` const (return atoms0)
-      compileCommandlineArgs atoms0 = compileArgs atoms0 <$> getArgs
+compileAllArgs atoms0 = compileEnvironmentArgs atoms0 >>= compileCommandlineArgs
+
+compileEnvironmentArgs :: Atoms -> IO Atoms
+compileEnvironmentArgs atoms0 = (compileArgs atoms0 <$> read <$> getEnv "CABALDEBIAN") `catchIOError` const (return atoms0)
+
+compileCommandlineArgs :: Atoms -> IO Atoms
+compileCommandlineArgs atoms0 = compileArgs atoms0 <$> getArgs
 
 -- | Insert a value for CABALDEBIAN into the environment that the
 -- withEnvironment* functions above will find and use.  E.g.
