@@ -23,12 +23,12 @@ import Debian.Debianize.Atoms as Atoms
      depends, conflicts, install, installData)
 import Debian.Debianize.Cabal (inputCabalization)
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
+import Debian.Debianize.Debianize (writeDebianization)
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (defaultAtoms, tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization)
-import Debian.Debianize.Output (writeDebianization)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
@@ -145,7 +145,7 @@ test2 =
 test3 :: Test
 test3 =
     TestLabel "test3" $
-    TestCase (do deb <- inputDebianization "test-data/haskell-devscripts" defaultAtoms
+    TestCase (do deb <- inputDebianization "test-data/haskell-devscripts"
                  assertEqual "test3" [] (diffDebianizations testDeb2 deb))
     where
       testDeb2 :: Atoms
@@ -222,7 +222,7 @@ test3 =
 test4 :: Test
 test4 =
     TestLabel "test4" $
-    TestCase (do old <- inputDebianization "test-data/clckwrks-dot-com/output" defaultAtoms
+    TestCase (do old <- inputDebianization "test-data/clckwrks-dot-com/output"
                  new <- inputCabalization "test-data/clckwrks-dot-com/input" (newDebianization' 7 (StandardsVersion 3 9 4 Nothing)) >>=
                         cabalToDebianization "test-data/clckwrks-dot-com/input" .
                           (modL control (\ y -> y {homepage = Just "http://www.clckwrks.com/"}) .
@@ -315,7 +315,7 @@ anyrel b = Rel b Nothing Nothing
 test5 :: Test
 test5 =
     TestLabel "test5" $
-    TestCase (do old <- inputDebianization "test-data/creativeprompts/output" defaultAtoms
+    TestCase (do old <- inputDebianization "test-data/creativeprompts/output"
                  let standards = fromMaybe (error "test5") (standardsVersion (getL control old))
                      level = fromMaybe (error "test5") (getL compat old)
                  new <- cabalToDebianization "test-data/creativeprompts/input"
@@ -404,7 +404,7 @@ copyChangelog deb1 deb2 = modL changelog (const (getL changelog deb1)) deb2
 test6 :: Test
 test6 =
     TestLabel "test6" $
-    TestCase ( do old <- inputDebianization "test-data/artvaluereport2/output" defaultAtoms
+    TestCase ( do old <- inputDebianization "test-data/artvaluereport2/output"
                   new <- cabalToDebianization "test-data/artvaluereport2/input"
                             (modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) $
                              setL sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) $
@@ -495,7 +495,7 @@ test6 =
 test7 :: Test
 test7 =
     TestLabel "test7" $
-    TestCase ( do old <- inputDebianization "." defaultAtoms
+    TestCase ( do old <- inputDebianization "."
                   new <- cabalToDebianization "."
                            (modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
                             setL sourceFormat (Just Native3) $
@@ -519,7 +519,7 @@ test7 =
 test8 :: Test
 test8 =
     TestLabel "test8" $
-    TestCase ( do old <- inputDebianization "test-data/artvaluereport-data/output" defaultAtoms
+    TestCase ( do old <- inputDebianization "test-data/artvaluereport-data/output"
                   log <- inputChangeLog "test-data/artvaluereport-data/input/debian"
                   new <- cabalToDebianization "test-data/artvaluereport-data/input"
                            (modL buildDeps (Set.insert (BinPkgName "haskell-hsx-utils")) $
@@ -533,7 +533,7 @@ test8 =
 test9 :: Test
 test9 =
     TestLabel "test9" $
-    TestCase ( do old <- inputDebianization "test-data/alex/output" defaultAtoms
+    TestCase ( do old <- inputDebianization "test-data/alex/output"
                   new <- cabalToDebianization "test-data/alex/input"
                            (modL buildDeps (Set.insert (BinPkgName "alex")) $
                             doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) $

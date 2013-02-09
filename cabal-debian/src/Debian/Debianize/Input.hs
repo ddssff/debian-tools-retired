@@ -14,13 +14,15 @@ import Data.Char (isSpace)
 import Data.Lens.Lazy (setL, modL)
 import Data.Map as Map (insertWith)
 import Data.Maybe (fromMaybe)
+import Data.Monoid (mempty)
 import Data.Set as Set (fromList, insert, union, singleton)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.Atoms (Atoms, rulesHead, compat, sourceFormat, watch, changelog, control, copyright, intermediateFiles,
-                               postInst, postRm, preInst, preRm, install, installDir, warning, logrotateStanza, installInit, link)
+import Debian.Debianize.Atoms (Atoms, rulesHead, compat, sourceFormat, watch, changelog, control, copyright,
+                               intermediateFiles, postInst, postRm, preInst, preRm, install, installDir, warning,
+                               logrotateStanza, installInit, link)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Utility (getDirectoryContents')
@@ -33,12 +35,12 @@ import System.Directory (doesFileExist)
 import System.FilePath ((</>), takeExtension, dropExtension)
 import System.IO.Error (catchIOError)
 
-inputDebianization :: FilePath -> Atoms -> IO Atoms
-inputDebianization top atoms =
+inputDebianization :: FilePath -> IO Atoms
+inputDebianization top =
     do (ctl, _) <- inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e))
        -- Different from snd of above?
-       atoms' <- inputAtomsFromDirectory debian atoms `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
-       return $ modL control (const ctl) atoms'
+       atoms <- inputAtomsFromDirectory debian mempty `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
+       return $ modL control (const ctl) atoms
     where
       debian = top </> "debian"
 

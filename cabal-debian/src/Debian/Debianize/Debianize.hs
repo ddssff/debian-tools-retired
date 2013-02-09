@@ -10,16 +10,22 @@ module Debian.Debianize.Debianize
     , runDebianize
     , debianize
     , cabalToDebianization
+    , writeDebianization
+    , describeDebianization
+    , compareDebianization
+    , validateDebianization
     ) where
 
 import Control.Applicative ((<$>))
+import Data.Algorithm.Diff.Context (contextDiff)
+import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Lens.Lazy (getL, setL, modL)
 import Data.List as List (unlines, intercalate, nub)
-import Data.Map as Map (lookup)
+import Data.Map as Map (lookup, toList, elems)
 import Data.Maybe
 import Data.Monoid ((<>))
 import Data.Set as Set (toList)
-import Data.Text as Text (Text, unpack)
+import Data.Text as Text (Text, unpack, split)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Atoms (Atoms, packageDescription, compat, watch, control, copyright, changelog, comments,
@@ -28,13 +34,14 @@ import Debian.Debianize.Atoms (Atoms, packageDescription, compat, watch, control
 import Debian.Debianize.Cabal (inputCabalization, inputCopyright, inputMaintainer)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianName)
+import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (defaultAtoms, watchAtom)
+import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Options (options, compileArgs)
-import Debian.Debianize.Output (validateDebianization, compareDebianization, writeDebianization)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types (DebAction(..))
-import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty)
+import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty, replaceFile, zipMaps, indent)
 import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel, StandardsVersion)
 import Debian.Relation (SrcPkgName(..), BinPkgName(BinPkgName), Relation(Rel))
 import Debian.Release (parseReleaseName)
@@ -44,14 +51,25 @@ import Distribution.Package (PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (writeFile, unlines)
 import System.Console.GetOpt (usageInfo)
-import System.Directory (doesFileExist)
+import System.Directory (doesFileExist, Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing)
 import System.Environment (getArgs, getEnv, getProgName)
 import System.Exit (ExitCode(ExitSuccess))
+import System.FilePath ((</>), takeDirectory)
 import System.IO.Error (catchIOError)
 import System.Posix.Env (setEnv)
 import System.Process (readProcessWithExitCode)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
+
+{-
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
+import Debian.Debianize.Files (toFileMap)
+import Debian.Debianize.Goodies (defaultAtoms)
+import Debian.Debianize.Input (inputDebianization)
+import Debian.Debianize.Utility (withCurrentDirectory)
+import System.Directory (Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
+-}
 
 -- | The main function for the cabal-debian executable.
 cabalDebian :: IO ()
@@ -98,9 +116,10 @@ runDebianize args =
 debianize :: FilePath -> Atoms -> IO ()
 debianize top atoms =
     if getL validate atoms
-    then validateDebianization top atoms
+    then inputDebianization top >>= \ old -> either error return (validateDebianization old atoms)
     else if getL dryRun atoms
-         then compareDebianization top atoms >>= putStr . ("Debianization (dry run):\n" ++)
+         then inputDebianization top >>= \ old ->
+              putStr . ("Debianization (dry run):\n" ++) $ compareDebianization old atoms
          else writeDebianization top atoms
 
 -- | Given a Flags record, get any additional configuration
@@ -238,3 +257,52 @@ compileAllArgs atoms0 =
 -- putEnvironmentFlags ["--dry-run", "--validate"] (debianize defaultFlags)
 putEnvironmentArgs :: [String] -> IO ()
 putEnvironmentArgs fs = setEnv "CABALDEBIAN" (show fs) True
+
+-- | Write the files of the debianization @d@ to the directory @top@.
+writeDebianization :: FilePath -> Atoms -> IO ()
+writeDebianization top d =
+    withCurrentDirectory top $
+      mapM_ (\ (path, text) ->
+                 createDirectoryIfMissing True (takeDirectory path) >>
+                 replaceFile path (unpack text))
+            (Map.toList (toFileMap d)) >>
+      getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})
+
+describeDebianization :: Atoms -> String
+describeDebianization atoms =
+    concatMap (\ (path, text) -> path ++ ":\n" ++ indent " > " (unpack text)) (Map.toList (toFileMap atoms))
+
+-- | Compare the existing debianization in @top@ to the generated one
+-- @new@, returning a string describing the differences.
+compareDebianization :: Atoms -> Atoms -> String
+compareDebianization old new =
+    concat . Map.elems $ zipMaps doFile (toFileMap old) (toFileMap new)
+    where
+      doFile :: FilePath -> Maybe Text -> Maybe Text -> Maybe String
+      doFile path (Just _) Nothing = Just (path ++ ": Deleted\n")
+      doFile path Nothing (Just n) = Just (path ++ ": Created\n" ++ indent " | " (unpack n))
+      doFile path (Just o) (Just n) =
+          if o == n
+          then Nothing -- Just (path ++ ": Unchanged\n")
+          else Just (show (prettyDiff ("old" </> path) ("new" </> path) (contextDiff 2 (split (== '\n') o) (split (== '\n') n))))
+      doFile _path Nothing Nothing = error "Internal error in zipMaps"
+
+-- | Don't change anything, just make sure the new debianization
+-- matches the existing debianization in several particulars -
+-- specifically, version number, and source and binary package names.
+validateDebianization :: Atoms -> Atoms -> Either String ()
+validateDebianization old new =
+    case () of
+      _ | oldVersion /= newVersion -> Left ("Version mismatch, expected " ++ show (pretty oldVersion) ++ ", found " ++ show (pretty newVersion))
+        | oldSource /= newSource -> Left ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource))
+        | oldPackages /= newPackages -> Left ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages))
+        | True -> Right ()
+    where
+      oldVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL changelog old))))
+      newVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL changelog new))))
+      oldSource = source . getL control $ old
+      newSource = source . getL control $ new
+      oldPackages = map Debian.package . binaryPackages . getL control $ old
+      newPackages = map Debian.package . binaryPackages . getL control $ new
+      unChangeLog :: ChangeLog -> [ChangeLogEntry]
+      unChangeLog (ChangeLog x) = x
