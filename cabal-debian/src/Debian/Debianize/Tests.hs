@@ -16,19 +16,18 @@ import Data.Monoid (mconcat, (<>), mempty)
 import Data.Set as Set (fromList, union, insert, singleton)
 import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
-import Debian.Debianize.Debianize (cabalToDebianization)
+import Debian.Debianize.Debianize (applyCabalization)
 import Debian.Debianize.Atoms as Atoms
     (Atoms, rulesHead, compat, sourceFormat, changelog, sourcePackageName, control, missingDependencies, revision,
      binaryArchitectures, copyright, debVersion, execMap, buildDeps, buildDepsIndep, utilsPackageName, description,
      depends, conflicts, install, installData)
-import Debian.Debianize.Cabal (inputCabalization)
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Debianize (writeDebianization)
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (defaultAtoms, tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
-import Debian.Debianize.Input (inputChangeLog, inputDebianization)
+import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
@@ -224,7 +223,7 @@ test4 =
     TestLabel "test4" $
     TestCase (do old <- inputDebianization "test-data/clckwrks-dot-com/output"
                  new <- inputCabalization "test-data/clckwrks-dot-com/input" (newDebianization' 7 (StandardsVersion 3 9 4 Nothing)) >>=
-                        cabalToDebianization "test-data/clckwrks-dot-com/input" .
+                        applyCabalization "test-data/clckwrks-dot-com/input" .
                           (modL control (\ y -> y {homepage = Just "http://www.clckwrks.com/"}) .
                            setL sourceFormat (Just Native3) .
                            modL missingDependencies (insert (BinPkgName "libghc-clckwrks-theme-clckwrks-doc")) .
@@ -318,7 +317,7 @@ test5 =
     TestCase (do old <- inputDebianization "test-data/creativeprompts/output"
                  let standards = fromMaybe (error "test5") (standardsVersion (getL control old))
                      level = fromMaybe (error "test5") (getL compat old)
-                 new <- cabalToDebianization "test-data/creativeprompts/input"
+                 new <- applyCabalization "test-data/creativeprompts/input"
                           (setL sourceFormat (Just Native3) $
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-data") All) $
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-development") All) $
@@ -405,7 +404,7 @@ test6 :: Test
 test6 =
     TestLabel "test6" $
     TestCase ( do old <- inputDebianization "test-data/artvaluereport2/output"
-                  new <- cabalToDebianization "test-data/artvaluereport2/input"
+                  new <- applyCabalization "test-data/artvaluereport2/input"
                             (modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) $
                              setL sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) $
                              setL utilsPackageName (Just (BinPkgName "artvaluereport2-server")) $
@@ -496,7 +495,7 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase ( do old <- inputDebianization "."
-                  new <- cabalToDebianization "."
+                  new <- applyCabalization "."
                            (modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
                             setL sourceFormat (Just Native3) $
                             setL utilsPackageName (Just (BinPkgName "cabal-debian")) $
@@ -521,7 +520,7 @@ test8 =
     TestLabel "test8" $
     TestCase ( do old <- inputDebianization "test-data/artvaluereport-data/output"
                   log <- inputChangeLog "test-data/artvaluereport-data/input/debian"
-                  new <- cabalToDebianization "test-data/artvaluereport-data/input"
+                  new <- applyCabalization "test-data/artvaluereport-data/input"
                            (modL buildDeps (Set.insert (BinPkgName "haskell-hsx-utils")) $
                             modL control (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) $
                             setL sourceFormat (Just Native3) $
@@ -534,7 +533,7 @@ test9 :: Test
 test9 =
     TestLabel "test9" $
     TestCase ( do old <- inputDebianization "test-data/alex/output"
-                  new <- cabalToDebianization "test-data/alex/input"
+                  new <- applyCabalization "test-data/alex/input"
                            (modL buildDeps (Set.insert (BinPkgName "alex")) $
                             doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) $
                             setL debVersion (Just (parseDebianVersion ("3.0.2-1~hackage1" :: String))) $

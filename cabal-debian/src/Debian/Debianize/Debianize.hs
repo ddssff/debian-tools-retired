@@ -9,7 +9,7 @@ module Debian.Debianize.Debianize
     , callDebianize
     , runDebianize
     , debianize
-    , cabalToDebianization
+    , applyCabalization
     , writeDebianization
     , describeDebianization
     , compareDebianization
@@ -31,18 +31,17 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Atoms (Atoms, packageDescription, compat, watch, control, copyright, changelog, comments,
                                sourcePriority, sourceSection, debAction, validate, dryRun, debVersion, revision,
                                sourcePackageName, epochMap, extraLibMap)
-import Debian.Debianize.Cabal (inputCabalization, inputCopyright, inputMaintainer)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (defaultAtoms, watchAtom)
-import Debian.Debianize.Input (inputDebianization)
+import Debian.Debianize.Input (inputDebianization, inputCabalization, inputCopyright, inputMaintainer)
 import Debian.Debianize.Options (options, compileArgs)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types (DebAction(..))
 import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty, replaceFile, zipMaps, indent)
-import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel, StandardsVersion)
+import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel)
 import Debian.Relation (SrcPkgName(..), BinPkgName(BinPkgName), Relation(Rel))
 import Debian.Release (parseReleaseName)
 import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
@@ -122,28 +121,20 @@ debianize top atoms =
               putStr . ("Debianization (dry run):\n" ++) $ compareDebianization old atoms
          else writeDebianization top atoms
 
--- | Given a Flags record, get any additional configuration
+-- | Given an Atoms value, get any additional configuration
 -- information from the environment, read the cabal package
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-cabalToDebianization :: FilePath -> Atoms -> IO Atoms
-cabalToDebianization top old =
-    do old' <- inputCabalization top old
-       let pkgDesc = fromMaybe (error "cabalToDebianization: No package description") (getL packageDescription old')
+applyCabalization :: FilePath -> Atoms -> IO Atoms
+applyCabalization top atoms =
+    do atoms' <- inputCabalization top atoms
        date <- getCurrentLocalRFC822Time
-       copyright <- withCurrentDirectory top $ inputCopyright pkgDesc
-       maint <- inputMaintainer old' >>= maybe (error "Missing value for --maintainer") return
+       maint <- inputMaintainer atoms' >>= maybe (error "Missing value for --maintainer") return
        level <- getDebhelperCompatLevel
-       return $ maybe id putStandards (standardsVersion (getL control old')) $
-                debianization date copyright maint level (scrub old')
-    where
-      -- We really don't want to inherit very much information from
-      -- the old debianization, so we should do more here.
-      scrub = modL control (\ y -> y {binaryPackages = []})
-
-putStandards :: StandardsVersion -> Atoms -> Atoms
-putStandards x deb = modL control (\ y -> y {standardsVersion = Just x}) deb
+       copyright <- withCurrentDirectory top $ inputCopyright (fromMaybe (error $ "cabalToDebianization: Failed to read cabal file in " ++ show top)
+                                                                         (getL packageDescription atoms'))
+       return $ debianization date copyright maint level atoms'
 
 debianization :: String              -- ^ current date
               -> Text                -- ^ copyright

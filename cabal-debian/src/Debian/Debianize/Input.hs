@@ -4,36 +4,57 @@
 module Debian.Debianize.Input
     ( inputDebianization
     , inputChangeLog
+    , inputCabalization
+    , inputCopyright
+    , inputMaintainer
     ) where
 
 import Debug.Trace (trace)
 
-import Control.Exception (SomeException, catch)
-import Control.Monad (foldM, filterM)
+import Control.Exception (SomeException, catch, bracket)
+import Control.Monad (when, foldM, filterM)
+import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Char (isSpace)
-import Data.Lens.Lazy (setL, modL)
+import Data.Lens.Lazy (getL, setL, modL)
 import Data.Map as Map (insertWith)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 import Data.Monoid (mempty)
-import Data.Set as Set (fromList, insert, union, singleton)
+import Data.Set as Set (toList, fromList, insert, union, singleton)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.Atoms (Atoms, rulesHead, compat, sourceFormat, watch, changelog, control, copyright,
-                               intermediateFiles, postInst, postRm, preInst, preRm, install, installDir, warning,
-                               logrotateStanza, installInit, link)
+import Debian.Debianize.Atoms as Atoms
+    (Atoms, rulesHead, compat, sourceFormat, watch, changelog, control, copyright,
+     intermediateFiles, postInst, postRm, preInst, preRm, install, installDir, warning,
+     logrotateStanza, installInit, link, packageDescription, compiler, maintainer, verbosity,
+     compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
-import Debian.Debianize.Utility (getDirectoryContents')
+import Debian.Debianize.Utility (getDirectoryContents', readFile', withCurrentDirectory)
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
-                      parseUploaders, readSourceFormat)
+                      parseUploaders, readSourceFormat, getDebianMaintainer, haskellMaintainer)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
+import Distribution.License (License(..))
+import Distribution.Package (Package(packageId))
+import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, license, maintainer))
+import Distribution.PackageDescription.Configuration (finalizePackageDescription)
+import Distribution.PackageDescription.Parse (readPackageDescription)
+import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), Compiler(..))
+import Distribution.Simple.Configure (configCompiler)
+import Distribution.Simple.Program (defaultProgramConfiguration)
+import Distribution.Simple.Utils (defaultPackageDesc, die, setupMessage)
+import Distribution.System (Platform(..), buildOS, buildArch)
+import Distribution.Verbosity (Verbosity, intToVerbosity)
 import Prelude hiding (readFile, lines, words, break, null, log, sum)
+import System.Cmd (system)
 import System.Directory (doesFileExist)
+import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeExtension, dropExtension)
+import System.Posix.Files (setFileCreationMask)
 import System.IO.Error (catchIOError)
+import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 inputDebianization :: FilePath -> IO Atoms
 inputDebianization top =
@@ -216,3 +237,79 @@ readInstall p line atoms =
 
 readDir :: BinPkgName -> Text -> Atoms -> Atoms
 readDir p line atoms = modL installDir (insertWith union p (singleton (unpack line))) atoms
+
+inputCabalization :: FilePath -> Atoms -> IO Atoms
+inputCabalization top atoms =
+    withCurrentDirectory top $ do
+      descPath <- defaultPackageDesc vb
+      genPkgDesc <- readPackageDescription vb descPath
+      (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
+      let compiler'' = case getL compilerVersion atoms of
+                         (Just ver) -> compiler' {compilerId = CompilerId GHC ver}
+                         _ -> compiler'
+      case finalizePackageDescription (toList (getL cabalFlagAssignments atoms)) (const True) (Platform buildArch buildOS) (compilerId compiler'') [] genPkgDesc of
+        Left e -> error $ "Failed to load cabal package description: " ++ show e
+        Right (pkgDesc, _) -> do
+          liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
+          return $ setL compiler (Just compiler'') $
+                   setL packageDescription (Just pkgDesc) $ atoms
+    where
+      vb = intToVerbosity' (getL verbosity atoms)
+
+-- | Run the package's configuration script.
+autoreconf :: Verbosity -> PackageDescription -> IO ()
+autoreconf verbose pkgDesc = do
+    ac <- doesFileExist "configure.ac"
+    when ac $ do
+        c <- doesFileExist "configure"
+        when (not c) $ do
+            setupMessage verbose "Running autoreconf" (packageId pkgDesc)
+            ret <- system "autoreconf"
+            case ret of
+              ExitSuccess -> return ()
+              ExitFailure n -> die ("autoreconf failed with status " ++ show n)
+
+-- | Try to read the license file specified in the cabal package,
+-- otherwise return a text representation of the License field.
+inputCopyright :: PackageDescription -> IO Text
+inputCopyright pkgDesc = readFile' (licenseFile pkgDesc) `catchIOError` handle
+    where handle _e =
+              do -- here <- getCurrentDirectory
+                 -- hPutStrLn stderr ("Error reading " ++ licenseFile pkgDesc ++ " from " ++ here ++ ": " ++ show _e)
+                 return . pack . showLicense . license $ pkgDesc
+
+-- | Convert from license to RPM-friendly (now Debian-friendly?)
+-- description.  The strings are taken from TagsCheck.py in the
+-- rpmlint distribution.
+showLicense :: License -> String
+showLicense (Apache _) = "Apache"
+showLicense (GPL _) = "GPL"
+showLicense (LGPL _) = "LGPL"
+showLicense BSD3 = "BSD"
+showLicense BSD4 = "BSD-like"
+showLicense PublicDomain = "Public Domain"
+showLicense AllRightsReserved = "Proprietary"
+showLicense OtherLicense = "Non-distributable"
+showLicense MIT = "MIT"
+showLicense (UnknownLicense _) = "Unknown"
+
+-- | Try to compute the debian maintainer from the maintainer field of the
+-- cabal package, or from the value returned by getDebianMaintainer.
+inputMaintainer :: Atoms -> IO (Maybe NameAddr)
+inputMaintainer atoms =
+    debianPackageMaintainer >>= maybe cabalPackageMaintainer (return . Just) >>=
+                                maybe getDebianMaintainer (return . Just) >>=
+                                maybe lastResortMaintainer (return . Just)
+    where
+      debianPackageMaintainer :: IO (Maybe NameAddr)
+      debianPackageMaintainer = return (getL Atoms.maintainer atoms)
+      cabalPackageMaintainer :: IO (Maybe NameAddr)
+      cabalPackageMaintainer = return $ case fmap Cabal.maintainer (getL packageDescription atoms) of
+                                          Nothing -> Nothing
+                                          Just "" -> Nothing
+                                          Just x -> either (const Nothing) Just (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x))
+      lastResortMaintainer :: IO (Maybe NameAddr)
+      lastResortMaintainer = return (Just haskellMaintainer)
+
+intToVerbosity' :: Int -> Verbosity
+intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))

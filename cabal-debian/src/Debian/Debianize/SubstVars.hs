@@ -19,8 +19,8 @@ import qualified Data.Set as Set
 import Data.Text (pack)
 import Debian.Control
 import Debian.Debianize.Atoms (Atoms, compiler, dryRun, packageInfo)
-import Debian.Debianize.Cabal (inputCabalization)
 import Debian.Debianize.Dependencies (cabalDependencies, debDeps, debNameFromType, filterMissing)
+import Debian.Debianize.Input (inputCabalization)
 import Debian.Debianize.Types (PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType)
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps, dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
 import qualified Debian.Relation as D
