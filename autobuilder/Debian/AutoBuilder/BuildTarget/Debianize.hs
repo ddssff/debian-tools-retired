@@ -96,15 +96,15 @@ applyPackageFlags :: [P.PackageFlag] -> Atoms -> Atoms
 applyPackageFlags flags atoms = foldr applyPackageFlag atoms flags
 
 applyPackageFlag :: P.PackageFlag -> Atoms -> Atoms
-applyPackageFlag x@(P.Maintainer _) atoms = compileArgs atoms (asCabalFlags x)
-applyPackageFlag x@(P.ExtraDep _) atoms = compileArgs atoms (asCabalFlags x)
-applyPackageFlag x@(P.ExtraDevDep _) atoms = compileArgs atoms (asCabalFlags x)
-applyPackageFlag x@(P.MapDep _ _) atoms = compileArgs atoms (asCabalFlags x)
-applyPackageFlag x@(P.DebVersion _) atoms = compileArgs atoms (asCabalFlags x)
-applyPackageFlag x@(P.Revision _) atoms = compileArgs atoms (asCabalFlags x)
-applyPackageFlag x@(P.Epoch _ _) atoms = compileArgs atoms (asCabalFlags x)
-applyPackageFlag x@P.NoDoc atoms = compileArgs atoms (asCabalFlags x)
-applyPackageFlag (P.CabalDebian ss) atoms = compileArgs atoms ss
+applyPackageFlag x@(P.Maintainer _) atoms = compileArgs (asCabalFlags x) atoms
+applyPackageFlag x@(P.ExtraDep _) atoms = compileArgs (asCabalFlags x) atoms
+applyPackageFlag x@(P.ExtraDevDep _) atoms = compileArgs (asCabalFlags x) atoms
+applyPackageFlag x@(P.MapDep _ _) atoms = compileArgs (asCabalFlags x) atoms
+applyPackageFlag x@(P.DebVersion _) atoms = compileArgs (asCabalFlags x) atoms
+applyPackageFlag x@(P.Revision _) atoms = compileArgs (asCabalFlags x) atoms
+applyPackageFlag x@(P.Epoch _ _) atoms = compileArgs (asCabalFlags x) atoms
+applyPackageFlag x@P.NoDoc atoms = compileArgs (asCabalFlags x) atoms
+applyPackageFlag (P.CabalDebian ss) atoms = compileArgs ss atoms
 applyPackageFlag (P.ModifyAtoms f) atoms = f atoms
 applyPackageFlag (P.RelaxDep _) x = x
 applyPackageFlag (P.UDeb _) x = x
