@@ -33,7 +33,11 @@ main =
                                          , "  Author: David Fox <dsf@seereason.com>"
                                          , "  Upstream-Maintainer: David Fox <dsf@seereason.com>" ])) $
                 defaultAtoms)
-       inputDebianization "." defaultAtoms >>= \ old -> putStr (compareDebianization old (copyFirstLogEntry old new))
+       inputDebianization "." defaultAtoms >>= \ old -> case compareDebianization old (copyFirstLogEntry old new) of
+                                                          "" -> return ()
+                                                          s -> error $ "Debianization mismatch:\n" ++ s
+       -- This would overwrite the existing debianization rather than
+       -- just make sure it matches:
        -- writeDebianization "." new
 
 -- | This copies the first log entry of deb1 into deb2.  Because the
