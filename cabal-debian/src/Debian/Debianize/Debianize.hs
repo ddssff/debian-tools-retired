@@ -31,7 +31,7 @@ import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (defaultAtoms, watchAtom)
 import Debian.Debianize.Options (options, compileArgs)
-import Debian.Debianize.Output (validateDebianization, describeDebianization, writeDebianization)
+import Debian.Debianize.Output (validateDebianization, compareDebianization, writeDebianization)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types (DebAction(..))
 import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty, maybeL)
@@ -65,17 +65,18 @@ cabalDebian =
           let info = "Usage: " ++ progName ++ " [FLAGS]\n"
           putStrLn (usageInfo info options)
 
--- | Run the debianize function with arguments pulled out of the
--- @CABALDEBIAN@ environment variable, with the build directory set to
--- match what dpkg-buildpackage will use later when it uses the
--- resulting debianization.
+-- | Compile the given arguments into an Atoms value and run the
+-- debianize function.  This is basically equivalent to @cabal-debian --debianize@.
 callDebianize :: [String] -> IO ()
 callDebianize args = debianize "." (compileArgs defaultAtoms args)
 
--- | Try to run the custom script in debian/Debianize.hs to create the
--- debianization.  This can first put some extra arguments into the
--- @CABALDEBIAN@ environment variable.  Often this is used to set the
--- dryRun option by passing @["-n"]@.
+-- | Put an argument list into the @CABALDEBIAN@ environment variable
+-- and then run the script in debian/Debianize.hs.  If this exists and
+-- succeeds the return value is True, it may be assumed that a
+-- debianization was created in the debian subdirectory of the current
+-- directory.  This is used to create customized debianizations that
+-- are to sophisticated for the command line argument interface
+-- available to the cabal-debian executable.
 runDebianize :: [String] -> IO Bool
 runDebianize args =
     doesFileExist "debian/Debianize.hs" >>= \ exists ->
@@ -87,20 +88,19 @@ runDebianize args =
             (ExitSuccess, _, _) -> return True
             (code, out, err) ->
               error ("runDebianize failed with " ++ show code ++ ":\n stdout: " ++ show out ++"\n stderr: " ++ show err)
-    where
 
--- | Generate a debianization for the cabal package in a directory
--- using information from the .cabal file and from the options in
--- Flags.  This ignores any existing debianization except for the
--- debian/changelog file.  A new entry changelog is generated, and any
--- entries already there that look older than the new one are
+-- | Generate a debianization for the cabal package in the directory
+-- @top@ using information from the .cabal file and from the @atoms@
+-- value.  This ignores any existing debianization except for the
+-- @debian/changelog@ file.  A new changelog entry is generated, and
+-- any entries already there that look older than the new one are
 -- preserved.
 debianize :: FilePath -> Atoms -> IO ()
 debianize top atoms =
     if getL validate atoms
     then validateDebianization top atoms
     else if getL dryRun atoms
-         then describeDebianization top atoms >>= putStr . ("Debianization (dry run):\n" ++)
+         then compareDebianization top atoms >>= putStr . ("Debianization (dry run):\n" ++)
          else writeDebianization top atoms
 
 -- | Given a Flags record, get any additional configuration

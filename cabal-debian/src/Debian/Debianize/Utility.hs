@@ -1,3 +1,5 @@
+-- | Functions used by but not related to cabal-debian, these could
+-- conceivably be moved into more general libraries.
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 module Debian.Debianize.Utility
@@ -22,13 +24,14 @@ module Debian.Debianize.Utility
     , zipMaps
     , foldEmpty
     , maybeL
+    , indent
     ) where
 
 import Control.Exception as E (catch, try, bracket, IOException)
 import Control.Monad (when)
 import Control.Monad.Reader (ReaderT, ask)
 import Data.Char (isSpace)
-import Data.List as List (isSuffixOf, intercalate, map)
+import Data.List as List (isSuffixOf, intercalate, map, lines)
 import Data.Lens.Lazy (Lens, modL)
 import Data.Map as Map (Map, foldWithKey, empty, fromList, findWithDefault, insert, map, lookup)
 import Data.Maybe (catMaybes, mapMaybe)
@@ -223,3 +226,6 @@ foldEmpty _ f l = f l
 -- | If the current value of getL x is Nothing, replace it with f.
 maybeL :: Lens a (Maybe b) -> Maybe b -> a -> a
 maybeL lens mb x = modL lens (maybe mb Just) x
+
+indent :: [Char] -> String -> String
+indent prefix text = unlines (List.map (prefix ++) (List.lines text))

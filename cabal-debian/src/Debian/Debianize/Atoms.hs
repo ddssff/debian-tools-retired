@@ -13,10 +13,10 @@ import Data.Set as Set (Set, maxView, empty, union, singleton, fold, insert)
 import Data.Text (Text)
 import Data.Version (Version, showVersion)
 import Debian.Changes (ChangeLog)
-import Debian.Debianize.ControlFile (SourceDebDescription, newSourceDebDescription)
+import Debian.Debianize.ControlFile (SourceDebDescription(standardsVersion), newSourceDebDescription)
 import Debian.Debianize.Types (PackageInfo(..), Site(..), Server(..), InstallFile(..), VersionSplits(..), DebAction(..))
 import Debian.Orphans ()
-import Debian.Policy (PackageArchitectures, SourceFormat, PackagePriority, Section)
+import Debian.Policy (PackageArchitectures, SourceFormat, PackagePriority, Section, StandardsVersion)
 import Debian.Relation (SrcPkgName, BinPkgName, Relation(..))
 import Debian.Version (DebianVersion)
 import Distribution.License (License)
@@ -191,77 +191,95 @@ instance Monoid Atoms where
 
 class (Monoid atoms, Show atoms {- Show instance for debugging only -}) => HasAtoms atoms where
 
-    -- Modes of operation
-    flags :: Lens atoms Flags
-    verbosity :: Lens atoms Int
-    dryRun :: Lens atoms Bool
-    validate :: Lens atoms Bool
-    debAction :: Lens atoms DebAction
-    compilerVersion :: Lens atoms (Maybe Version)
-    warning :: Lens atoms (Set Text)
+    -- * Modes of operation
+    verbosity :: Lens atoms Int -- ^ Set how much progress messages get generated.
+    dryRun :: Lens atoms Bool -- ^ Don't write anything, just output a description of what would have happened
+    validate :: Lens atoms Bool -- ^ Make sure the version number and package names of the generated debianization match the
+                                -- existing one.
+    debAction :: Lens atoms DebAction -- ^ Debianize, SubstVars, or Usage.  I'm no longer sure what SubstVars does, but someone
+                                      -- may still be using it.
+    flags :: Lens atoms Flags -- ^ Obsolete record containing verbosity, dryRun, validate, and debAction.
+    warning :: Lens atoms (Set Text) -- ^ Unused
 
-    -- Cabal info
-    packageDescription :: Lens atoms (Maybe PackageDescription)
-    buildDir :: Lens atoms (Maybe FilePath)
-    dataDir :: Lens atoms (Maybe FilePath)
-    compiler :: Lens atoms (Maybe Compiler)
-    extraLibMap :: Lens atoms (Map String (Set BinPkgName))
-    execMap :: Lens atoms (Map String BinPkgName)
-    cabalFlagAssignments :: Lens atoms (Set (FlagName, Bool))
+    -- * Cabal info
+    compilerVersion :: Lens atoms (Maybe Version) -- ^ Set the compiler version, this is used when loading the cabal file to
+                                                  -- create the PackageDescription value.
+    packageDescription :: Lens atoms (Maybe PackageDescription) -- ^ The information loaded from the cabal file.
+    buildDir :: Lens atoms (Maybe FilePath) -- ^ The build directory.  This can be set by an argument to the @Setup@ script.
+                                            -- When @Setup@ is run manually it is just @dist@, when it is run by
+                                            -- @dpkg-buildpackage@ the compiler name is appended, so it is typically
+                                            -- @dist-ghc@.  Cabal-debian needs the correct value of buildDir to find
+                                            -- the build results.
+    dataDir :: Lens atoms (Maybe FilePath) -- ^ The data directory for the package, generated from the packageDescription
+    compiler :: Lens atoms (Maybe Compiler) -- ^ The Compiler value returned when the cabal file was loaded.
+    extraLibMap :: Lens atoms (Map String (Set BinPkgName)) -- ^ Map from cabal Extra-Lib names to debian binary package names.
+    execMap :: Lens atoms (Map String BinPkgName) -- ^ Map from cabal Build-Tool names to debian binary package names
+    cabalFlagAssignments :: Lens atoms (Set (FlagName, Bool)) -- ^ Cabal flag assignments to use when loading the cabal file.
 
     -- Global debian info
-    versionSplits :: Lens atoms [VersionSplits]
-    epochMap :: Lens atoms (Map PackageName Int)
+    versionSplits :: Lens atoms [VersionSplits] -- ^ Map from cabal version number ranges to debian package names.  This is a
+                                                -- result of the fact that only one version of a debian package can be
+                                                -- installed at a given time, while multiple versions of a cabal packages can.
+    epochMap :: Lens atoms (Map PackageName Int) -- ^ Map of Debian epoch numbers assigned to cabal packages.
 
     -- High level information about the debianization
-    apacheSite :: Lens atoms (Map BinPkgName (String, FilePath, Text))
-    description :: Lens atoms (Map BinPkgName Text)
-    executable :: Lens atoms (Map BinPkgName InstallFile)
-    serverInfo :: Lens atoms (Map BinPkgName Server)
-    website :: Lens atoms (Map BinPkgName Site)
-    backups :: Lens atoms (Map BinPkgName String)
+    description :: Lens atoms (Map BinPkgName Text) -- ^ Map of binary deb descriptions.
+    executable :: Lens atoms (Map BinPkgName InstallFile) -- ^ Create a package to hold a cabal executable
+    serverInfo :: Lens atoms (Map BinPkgName Server) -- ^ Create a package for an operating service using the given executable
+    website :: Lens atoms (Map BinPkgName Site) -- ^ Create a package for a website using the given executable as the server
+    backups :: Lens atoms (Map BinPkgName String) -- ^ Generate a backups package using the given cabal executable
+    apacheSite :: Lens atoms (Map BinPkgName (String, FilePath, Text)) -- ^ Create an apache configuration file with the given
+                                                                       -- (domain, logdir, filetext).  This is called when expanding
+                                                                       -- the result of the website lens above.
 
     -- Lower level hints about the debianization
-    missingDependencies :: Lens atoms (Set BinPkgName)
-    utilsPackageName :: Lens atoms (Maybe BinPkgName)
-    sourcePackageName :: Lens atoms (Maybe SrcPkgName)
-    revision :: Lens atoms (Maybe String)
-    debVersion :: Lens atoms (Maybe DebianVersion)
-    maintainer :: Lens atoms (Maybe NameAddr)
-    packageInfo :: Lens atoms (Map PackageName PackageInfo)
-    omitLTDeps :: Lens atoms Bool
-    noProfilingLibrary :: Lens atoms Bool
-    noDocumentationLibrary :: Lens atoms Bool
-    copyright :: Lens atoms (Maybe (Either License Text))
-    sourceArchitecture :: Lens atoms (Maybe PackageArchitectures)
-    binaryArchitectures :: Lens atoms (Map BinPkgName PackageArchitectures)
-    sourcePriority :: Lens atoms (Maybe PackagePriority)
-    binaryPriorities :: Lens atoms (Map BinPkgName PackagePriority)
-    sourceSection :: Lens atoms (Maybe Section)
-    binarySections :: Lens atoms (Map BinPkgName Section)
+    missingDependencies :: Lens atoms (Set BinPkgName) -- ^ List if packages that should be omitted from any
+                                                       -- dependency list - e.g. a profiling package missing due
+                                                       -- to use of noProfilingPackage lens elsewhere.
+    utilsPackageName :: Lens atoms (Maybe BinPkgName) -- ^ Override the package name used to hold left over data files and executables
+    sourcePackageName :: Lens atoms (Maybe SrcPkgName) -- ^ Override the debian source package name constructed from the cabal name
+    revision :: Lens atoms (Maybe String) -- ^ Revision string used in constructing the debian verison number from the cabal version
+    debVersion :: Lens atoms (Maybe DebianVersion) -- ^ Exact debian version number, overrides the version generated from the cabal version
+    maintainer :: Lens atoms (Maybe NameAddr) -- ^ Maintainer field
+    packageInfo :: Lens atoms (Map PackageName PackageInfo) -- ^ No longer sure what the purpose of this lens is.
+    omitLTDeps :: Lens atoms Bool -- ^ Set this to filter any less-than dependencies out of the generated debian
+                                  -- dependencies.  (Not sure if this is implemented.)
+    noProfilingLibrary :: Lens atoms Bool -- ^ Set this to omit the prof library deb.
+    noDocumentationLibrary :: Lens atoms Bool -- ^ Set this to omit the doc library deb.
+    copyright :: Lens atoms (Maybe (Either License Text)) -- ^ The copyright information
+    sourceArchitecture :: Lens atoms (Maybe PackageArchitectures) -- ^ The source package architecture - Any, All, or some list of specific architectures.
+    binaryArchitectures :: Lens atoms (Map BinPkgName PackageArchitectures) -- ^ Map of the binary package architectures
+    sourcePriority :: Lens atoms (Maybe PackagePriority) -- ^ The source package priority
+    binaryPriorities :: Lens atoms (Map BinPkgName PackagePriority) -- ^ Map of the binary package priorities
+    sourceSection :: Lens atoms (Maybe Section) -- ^ The source package's section assignment
+    binarySections :: Lens atoms (Map BinPkgName Section) -- ^ Map of the binary deb section assignments
 
     -- Debian dependency info
     buildDeps :: Lens atoms (Set BinPkgName) -- ^ Build dependencies
     buildDepsIndep :: Lens atoms (Set BinPkgName) -- ^ Architecture independent
-    extraDevDeps :: Lens atoms (Set BinPkgName) -- ^ Extra install dependencies for the devel library
-    depends :: Lens atoms (Map BinPkgName (Set Relation)) -- ^ Install dependencies
+    depends :: Lens atoms (Map BinPkgName (Set Relation)) -- ^ Map of extra install dependencies for the package's binary debs.
     -- This should be [[Relation]] for full generality, or Set (Set Relation)
-    conflicts :: Lens atoms (Map BinPkgName (Set Relation)) -- ^ Install conflicts
+    conflicts :: Lens atoms (Map BinPkgName (Set Relation)) -- ^ Map of extra install conflicts for the package's binary debs.
     -- We should support all the other dependency fields - provides, replaces, etc.
+    extraDevDeps :: Lens atoms (Set BinPkgName) -- ^ Extra install dependencies for the devel library.  Redundant
+                                                -- with depends, but kept for backwards compatibility.  Also, I
+                                                -- think maybe this is or was needed because it can be set before
+                                                -- the exact name of the library package is known.
 
     -- Debianization files and file fragments
     rulesHead :: Lens atoms (Maybe Text) -- ^ The beginning of the rules file
     rulesFragments :: Lens atoms (Set Text) -- ^ Additional fragments of the rules file
-    postInst :: Lens atoms (Map BinPkgName Text)
-    postRm :: Lens atoms (Map BinPkgName Text)
-    preInst :: Lens atoms (Map BinPkgName Text)
-    preRm :: Lens atoms (Map BinPkgName Text)
-    compat :: Lens atoms (Maybe Int)
-    sourceFormat :: Lens atoms (Maybe SourceFormat)
-    watch :: Lens atoms (Maybe Text)
-    changelog :: Lens atoms (Maybe ChangeLog)
+    postInst :: Lens atoms (Map BinPkgName Text) -- ^ Map of @debian/postinst@ scripts
+    postRm :: Lens atoms (Map BinPkgName Text) -- ^ Map of @debian/postrm@ scripts
+    preInst :: Lens atoms (Map BinPkgName Text) -- ^ Map of @debian/preinst@ scripts
+    preRm :: Lens atoms (Map BinPkgName Text) -- ^ Map of @debian/prerm@ scripts
+    compat :: Lens atoms (Maybe Int) -- ^ The @debian/compat@ file, contains the minimum compatible version of the @debhelper@ package
+    sourceFormat :: Lens atoms (Maybe SourceFormat) -- ^ The @debian/source/format@ file.
+    watch :: Lens atoms (Maybe Text) -- ^ the @debian/watch@ file
+    changelog :: Lens atoms (Maybe ChangeLog) -- ^ the @debian/changelog@ file
     comments :: Lens atoms (Maybe [[Text]]) -- ^ Comment entries for the latest changelog entry (DebLogComments [[Text]])
-    control :: Lens atoms SourceDebDescription
+    control :: Lens atoms SourceDebDescription -- ^ The @debian/control@ file.
+    standards :: Lens atoms (Maybe StandardsVersion) -- ^ The @Standards-Version@ field of the @debian/control@ file
     logrotateStanza :: Lens atoms (Map BinPkgName (Set Text))
     link :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath)))
     install :: Lens atoms (Map BinPkgName (Set (FilePath, FilePath))) -- ^ Install files into directories
@@ -433,6 +451,7 @@ instance HasAtoms Atoms where
               where
                 f Source (DebControl y) = Just y
                 f _ _ = Nothing
+    standards = lens (\ a -> standardsVersion (getL control a)) (\ b a -> modL control (\ x -> x {standardsVersion = b}) a)
 
     compilerVersion = lens g s
         where

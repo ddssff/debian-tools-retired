@@ -1,3 +1,35 @@
+-- | QUICK START: You can either run the cabal-debian executable, or
+-- for more power and flexibility you can construct a
+-- 'Debian.Debianize.Atoms' value and pass it to the
+-- 'Debian.Debianize.debianize' function.  The
+-- 'Debian.Debianize.callDebianize' function retrieves extra arguments
+-- from the @CABALDEBIAN@ environment variable and calls
+-- 'Debian.Debianize.debianize' with the build directory set as it
+-- would be when the packages is built by @dpkg-buildpackage@.
+-- 
+-- To see what your debianization would produce, or how it differs
+-- from the debianization already present:
+-- 
+-- > % ghc -e 'Debian.Debianize.callDebianize ["-n"]'
+-- 
+-- To actually create the debianization and then build the debs,
+-- 
+-- > % ghc -e 'Debian.Debianize.callDebianize []'
+-- > % sudo dpkg-buildpackage
+-- 
+-- At this point you may need to modify Cabal.defaultFlags to achieve
+-- specific packaging goals.  Create a module for this in debian/Debianize.hs:
+-- 
+-- > import Distribution.Debian (Flags(..), defaultFlags)
+-- > main = debianize (defaultFlags { extraDevDeps = "haskell-hsx-utils" : extraDevDeps defaultFlags})
+-- 
+-- Then to test it,
+-- 
+-- > % CABALDEBIAN='["-n"]' runhaskell debian/Debianize.hs
+-- 
+-- and to run it
+-- 
+-- > % runhaskell debian/Debianize.hs
 module Debian.Debianize
     ( module Debian.Debianize.Atoms
     , module Debian.Debianize.Bundled

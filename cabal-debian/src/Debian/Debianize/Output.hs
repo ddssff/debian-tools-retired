@@ -5,9 +5,10 @@
 {-# OPTIONS -Wall -fno-warn-name-shadowing -fno-warn-orphans #-}
 
 module Debian.Debianize.Output
-    ( validateDebianization
+    ( writeDebianization
     , describeDebianization
-    , writeDebianization
+    , compareDebianization
+    , validateDebianization
     ) where
 
 import Control.Applicative ((<$>))
@@ -23,39 +24,44 @@ import Debian.Debianize.ControlFile as Debian (SourceDebDescription(source, bina
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Goodies (defaultAtoms)
 import Debian.Debianize.Input (inputDebianization)
-import Debian.Debianize.Utility (withCurrentDirectory, replaceFile, zipMaps)
+import Debian.Debianize.Utility (withCurrentDirectory, replaceFile, zipMaps, indent)
 import System.Directory (Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing)
 import System.FilePath ((</>), takeDirectory)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-{-
-outputDebianization :: FilePath -> Atoms -> IO ()
-outputDebianization top new =
-    do log <- (Just <$> inputChangeLog "debian/changelog") `catchIOError` (\ _ -> return Nothing)
-       old'' <- (Just <$> inputDebianization top defaultAtoms) `catch` (\ (_ :: ErrorCall) -> return Nothing)
-       let old = Just (def log old'')
+-- | Write the files of the debianization @d@ to the directory @top@.
+writeDebianization :: FilePath -> Atoms -> IO ()
+writeDebianization top d =
+    withCurrentDirectory top $
+      mapM_ (\ (path, text) ->
+                 createDirectoryIfMissing True (takeDirectory path) >>
+                 replaceFile path (unpack text))
+            (toList (toFileMap d)) >>
+      getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})
 
-       -- It is imperitive that during the time that dpkg-buildpackage
-       -- runs the version number in the changelog and the source and
-       -- package names in the control file do not change, or the
-       -- build will fail.  To ensure this set the validate flag.
-       -- This means you probably need to run debianize before
-       -- starting dpkg-buildpackage.  However, it is still good to be
-       -- able to put the debianize parameters in the Setup file,
-       -- rather than storing them apart from the package in the
-       -- autobuilder configuration.
-       case old of
-         Just old' | getL validate new -> validateDebianization old' new
-         _ | getL validate new -> error "No existing debianization to validate"
-         Just old' | getL dryRun new -> putStr ("Debianization (dry run):\n" ++ describeDebianization old' new)
-         _ | getL dryRun new -> putStr (describeDebianization defaultAtoms new)
-         _ -> writeDebianization top new
+describeDebianization :: Atoms -> String
+describeDebianization atoms =
+    concatMap (\ (path, text) -> path ++ ":\n" ++ indent " > " (unpack text)) (toList (toFileMap atoms))
+
+-- | Compare the existing debianization in @top@ to the generated one
+-- @new@, returning a string describing the differences.
+compareDebianization :: FilePath -> Atoms -> IO String
+compareDebianization top new =
+    do oldFiles <- toFileMap <$> inputDebianization top defaultAtoms
+       let newFiles = toFileMap new
+       return $ concat . Map.elems $ zipMaps doFile oldFiles newFiles
     where
-      def log old = fromMaybe ((setL changelog log) defaultAtoms) old
--}
+      doFile :: FilePath -> Maybe Text -> Maybe Text -> Maybe String
+      doFile path (Just _) Nothing = Just (path ++ ": Deleted\n")
+      doFile path Nothing (Just n) = Just (path ++ ": Created\n" ++ indent " | " (unpack n))
+      doFile path (Just o) (Just n) =
+          if o == n
+          then Just (path ++ ": Unchanged\n")
+          else Just (show (prettyDiff ("old" </> path) ("new" </> path) (contextDiff 2 (split (== '\n') o) (split (== '\n') n))))
+      doFile _path Nothing Nothing = error "Internal error in zipMaps"
 
--- | Don't change anything, just make sure the existing debianization
--- matches the new debianization in several particulars -
+-- | Don't change anything, just make sure the new debianization
+-- matches the existing debianization in several particulars -
 -- specifically, version number, and source and binary package names.
 validateDebianization :: FilePath -> Atoms -> IO ()
 validateDebianization top new =
@@ -74,30 +80,3 @@ validateDebianization top new =
     where
       unChangeLog :: ChangeLog -> [ChangeLogEntry]
       unChangeLog (ChangeLog x) = x
-
-describeDebianization :: FilePath -> Atoms -> IO String
-describeDebianization top new =
-    do oldFiles <- toFileMap <$> inputDebianization top defaultAtoms
-       let newFiles = toFileMap new
-       return $ concat . Map.elems $ zipMaps doFile oldFiles newFiles
-    where
-      doFile :: FilePath -> Maybe Text -> Maybe Text -> Maybe String
-      doFile path (Just _) Nothing = Just (path ++ ": Deleted\n")
-      doFile path Nothing (Just n) = Just (path ++ ": Created\n" ++ indent " | " (unpack n))
-      doFile path (Just o) (Just n) =
-          if o == n
-          then Just (path ++ ": Unchanged\n")
-          else Just (show (prettyDiff ("old" </> path) ("new" </> path) (contextDiff 2 (split (== '\n') o) (split (== '\n') n))))
-      doFile _path Nothing Nothing = error "Internal error in zipMaps"
-
-writeDebianization :: FilePath -> Atoms -> IO ()
-writeDebianization top d =
-    withCurrentDirectory top $
-      mapM_ (\ (path, text) ->
-                 createDirectoryIfMissing True (takeDirectory path) >>
-                 replaceFile path (unpack text))
-            (toList (toFileMap d)) >>
-      getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})
-
-indent :: [Char] -> String -> String
-indent prefix text = unlines (map (prefix ++) (lines text))
