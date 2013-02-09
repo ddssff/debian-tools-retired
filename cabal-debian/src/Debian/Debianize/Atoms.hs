@@ -482,7 +482,7 @@ instance HasAtoms Atoms where
               where
                 from Source NoDocumentationLibrary _ = True
                 from _ _ x = x
-          s x atoms = (if x then insertAtom Source NoProfilingLibrary else id) (deleteAtoms p atoms)
+          s x atoms = (if x then insertAtom Source NoDocumentationLibrary else id) (deleteAtoms p atoms)
               where
                 p Source NoDocumentationLibrary = True
                 p _ _ = False

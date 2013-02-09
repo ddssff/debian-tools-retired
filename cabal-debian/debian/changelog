@@ -1,3 +1,10 @@
+haskell-cabal-debian (3.0.3) unstable; urgency=low
+
+  * Due to a typo, the noDocumentationLibrary lens was turning off
+    profiling rather than documentation.
+
+ -- David Fox <dsf@seereason.com>  Fri, 08 Feb 2013 17:14:09 -0800
+
 haskell-cabal-debian (3.0.2) unstable; urgency=low
 
   * Fix argument and exception handling in cabal-debian
