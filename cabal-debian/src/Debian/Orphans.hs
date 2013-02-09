@@ -5,6 +5,7 @@ module Debian.Orphans where
 import Data.Function (on)
 import Data.Generics (Data, Typeable)
 import Data.List (isPrefixOf)
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text, unpack)
 import Data.Version (Version(..), showVersion)
@@ -140,8 +141,12 @@ deriving instance Data NameAddr
 deriving instance Typeable NameAddr
 deriving instance Read NameAddr
 
+-- This Pretty instance gives a string used to create a valid
+-- changelog entry, it *must* have a name followed by an email address
+-- in angle brackets.
 instance Pretty NameAddr where
-    pretty x = text (maybe (nameAddr_addr x) (\ n -> n ++ " <" ++ nameAddr_addr x ++ ">") (nameAddr_name x))
+    pretty x = text (fromMaybe (nameAddr_addr x) (nameAddr_name x) ++ " <" ++ nameAddr_addr x ++ ">")
+    -- pretty x = text (maybe (nameAddr_addr x) (\ n -> n ++ " <" ++ nameAddr_addr x ++ ">") (nameAddr_name x))
 
 deriving instance Show (Field' String)
 
