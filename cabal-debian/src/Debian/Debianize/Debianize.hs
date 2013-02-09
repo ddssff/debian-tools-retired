@@ -9,7 +9,7 @@ module Debian.Debianize.Debianize
     , callDebianize
     , runDebianize
     , debianize
-    , applyCabalization
+    , debianization
     , writeDebianization
     , describeDebianization
     , compareDebianization
@@ -126,23 +126,23 @@ debianize top atoms =
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-applyCabalization :: FilePath -> Atoms -> IO Atoms
-applyCabalization top atoms =
+debianization :: FilePath -> Atoms -> IO Atoms
+debianization top atoms =
     do atoms' <- inputCabalization top atoms
        date <- getCurrentLocalRFC822Time
        maint <- inputMaintainer atoms' >>= maybe (error "Missing value for --maintainer") return
        level <- getDebhelperCompatLevel
        copyright <- withCurrentDirectory top $ inputCopyright (fromMaybe (error $ "cabalToDebianization: Failed to read cabal file in " ++ show top)
                                                                          (getL packageDescription atoms'))
-       return $ debianization date copyright maint level atoms'
+       return $ debianization' date copyright maint level atoms'
 
-debianization :: String              -- ^ current date
-              -> Text                -- ^ copyright
-              -> NameAddr            -- ^ maintainer
-              -> Int		-- ^ Default standards version
-              -> Atoms      -- ^ Debianization specification
-              -> Atoms      -- ^ New debianization
-debianization date copyright' maint level deb =
+debianization' :: String              -- ^ current date
+               -> Text                -- ^ copyright
+               -> NameAddr            -- ^ maintainer
+               -> Int		-- ^ Default standards version
+               -> Atoms      -- ^ Debianization specification
+               -> Atoms      -- ^ New debianization
+debianization' date copyright' maint level deb =
     finalizeDebianization $
     modL compat (maybe (Just level) Just) $
     setL sourcePriority (Just Optional) $
