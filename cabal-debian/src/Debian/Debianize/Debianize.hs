@@ -16,7 +16,7 @@ module Debian.Debianize.Debianize
     , validateDebianization
     ) where
 
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<*>), pure)
 import Control.Exception (catch)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
@@ -246,10 +246,10 @@ compileAllArgs :: Atoms -> IO Atoms
 compileAllArgs atoms0 = compileEnvironmentArgs atoms0 >>= compileCommandlineArgs
 
 compileEnvironmentArgs :: Atoms -> IO Atoms
-compileEnvironmentArgs atoms0 = (compileArgs atoms0 <$> read <$> getEnv "CABALDEBIAN") `catchIOError` const (return atoms0)
+compileEnvironmentArgs atoms0 = (compileArgs <$> (read <$> getEnv "CABALDEBIAN") <*> pure atoms0) `catchIOError` const (return atoms0)
 
 compileCommandlineArgs :: Atoms -> IO Atoms
-compileCommandlineArgs atoms0 = compileArgs atoms0 <$> getArgs
+compileCommandlineArgs atoms0 = compileArgs <$> getArgs <*> pure atoms0
 
 -- | Insert a value for CABALDEBIAN into the environment that the
 -- withEnvironment* functions above will find and use.  E.g.

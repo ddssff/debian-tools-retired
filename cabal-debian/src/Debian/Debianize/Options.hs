@@ -23,8 +23,8 @@ import System.FilePath ((</>), splitFileName)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.Regex.TDFA ((=~))
 
-compileArgs :: Atoms -> [String] -> Atoms
-compileArgs atoms args =
+compileArgs :: [String] -> Atoms -> Atoms
+compileArgs args atoms =
     case getOpt' RequireOrder options args of
       (os, [], [], []) -> foldl (flip ($)) atoms os
       (_, non, unk, errs) -> error ("Errors: " ++ show errs ++
