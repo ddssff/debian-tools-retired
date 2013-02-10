@@ -1,1 +1,2 @@
-debian/cabalInstall/7e4b5d8641f6fae99e9ae9b2d8893bc7/my.appraisalreportonline.com /etc/apache2/sites-available/
+dist-ghc/logrotate/artvaluereport2-production etc/logrotate.d
+dist-ghc/apachesite/my.appraisalreportonline.com etc/apache2/sites-available

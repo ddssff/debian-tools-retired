@@ -1,9 +1,28 @@
-haskell-artvaluereport2 (1.9.27) precise-seereason-private; urgency=low
+haskell-artvaluereport2 (1.9.29-0+seereason1~precise1) precise-seereason-private; urgency=low
 
-  * Add report copying.
+  * Add a package for the appraisalscope executable.
   * Darcs revision: Darcs "ssh://upload@src.seereason.com/srv/darcs/artvaluereport2"
 
- -- SeeReason Autobuilder <autobuilder@seereason.org>  Fri, 18 Jan 2013 08:46:29 -0800
+ -- SeeReason Autobuilder <autobuilder@seereason.org>  Fri, 01 Feb 2013 12:43:10 -0800
+haskell-artvaluereport2 (1.9.29) unstable; urgency=low
+
+  * Add a package for the appraisalscope executable.
+
+ -- David Fox <dsf@seereason.com>  Fri, 01 Feb 2013 12:34:49 -0800
+
+haskell-artvaluereport2 (1.9.28) unstable; urgency=low
+
+  * Fix the formatting of the new creation date column in the report list
+    and pave the way for converting the old EpochMilli into UTC time.
+
+ -- Clifford Beshers <beshers@seereason.com>  Tue, 29 Jan 2013 18:51:00 -0800
+
+haskell-artvaluereport2 (1.9.27) unstable; urgency=low
+
+  * Report deletion. Reports now in map with key uuid.
+
+ -- Clifford Beshers <beshers@seereason.com>  Mon, 28 Jan 2013 00:05:49 -0800
+
 haskell-artvaluereport2 (1.9.26) unstable; urgency=low
 
   * Add report copying.

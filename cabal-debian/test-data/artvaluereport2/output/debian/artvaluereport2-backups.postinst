@@ -1,7 +1,0 @@
-#!/bin/sh
-
-case "$1" in
-  configure)
-    /etc/cron.hourly/artvaluereport2-backups --initialize
-    ;;
-esac
