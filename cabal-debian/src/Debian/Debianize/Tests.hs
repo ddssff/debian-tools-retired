@@ -18,11 +18,11 @@ import qualified Data.Text as T
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (debianization)
 import Debian.Debianize.Atoms as Atoms
-    (Atoms, rulesHead, compat, sourceFormat, changelog, sourcePackageName, control, missingDependencies, revision,
-     binaryArchitectures, copyright, debVersion, execMap, buildDeps, buildDepsIndep, utilsPackageName, description,
-     depends, conflicts, install, installData)
+    (Atoms, rulesHead, compat, sourceFormat, changelog, control, missingDependencies, revision,
+     binaryArchitectures, copyright, debVersion, execMap, buildDeps, utilsPackageName, description,
+     depends, conflicts, installData {-, sourcePackageName, install, buildDepsIndep-})
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
-import Debian.Debianize.Debianize (writeDebianization)
+-- import Debian.Debianize.Debianize (writeDebianization)
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
@@ -539,7 +539,7 @@ test9 =
                             setL debVersion (Just (parseDebianVersion ("3.0.2-1~hackage1" :: String))) $
                             setL sourceFormat (Just Native3) $
                             modL control (\ y -> y {homepage = Just "http://www.haskell.org/alex/"}) $
-                            (\ atoms -> foldr (\ name atoms -> modL installData (Map.insertWith union (BinPkgName "alex") (singleton (name, name))) atoms)
+                            (\ atoms -> foldr (\ name atoms' -> modL installData (Map.insertWith union (BinPkgName "alex") (singleton (name, name))) atoms')
                                               atoms
                                               [ "AlexTemplate"
                                               , "AlexTemplate-debug"

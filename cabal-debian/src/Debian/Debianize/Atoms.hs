@@ -470,7 +470,7 @@ executable = lens g s
     where
       g atoms = foldAtoms from Map.empty atoms
           where
-            from (Binary b) (DHExecutable f) x = Map.insertWith (error "executable") b f x
+            from (Binary b) (DHExecutable f) x = Map.insertWith (\ a b -> error $ "executable: " ++ show (a, b)) b f x
             from _ _ x = x
       s x atoms = Map.foldWithKey (\ b y atoms'-> insertAtom (Binary b) (DHExecutable y) atoms') (deleteAtoms p atoms) x
           where

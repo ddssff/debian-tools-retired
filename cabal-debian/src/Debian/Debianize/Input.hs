@@ -152,7 +152,7 @@ parseBinaryDebDescription (Paragraph fields) =
 -- | Look for a field and apply a function to its value
 findMap :: String -> (String -> a) -> [Field] -> a
 findMap field f fields =
-    fromMaybe (error $ "Missing field: " ++ field) (foldr findMap' Nothing fields)
+    fromMaybe (error $ "Missing " ++ show field ++ " field in " ++ show fields) (foldr findMap' Nothing fields)
     where
       findMap' (Field (fld, val)) x = if fld == field then Just (f val) else x
       findMap' _ x = x

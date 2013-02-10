@@ -103,15 +103,15 @@ tightDependencyFixup pairs p deb =
 
 -- | Add a debian binary package to the debianization containing a cabal executable file.
 doExecutable :: BinPkgName -> InstallFile -> Atoms -> Atoms
-doExecutable bin x deb = modL executable (Map.insertWith (error "executable") bin x) deb
+doExecutable bin x deb = modL executable (Map.insertWith (\ a b -> error $ "doExecutable: " ++ show (a, b)) bin x) deb
 
 -- | Add a debian binary package to the debianization containing a cabal executable file set up to be a server.
 doServer :: BinPkgName -> Server -> Atoms -> Atoms
-doServer bin x deb = modL serverInfo (Map.insertWith (error "serverInfo") bin x) deb
+doServer bin x deb = modL serverInfo (Map.insertWith (\ a b -> error $ "doServer: " ++ show (a, b)) bin x) deb
 
 -- | Add a debian binary package to the debianization containing a cabal executable file set up to be a web site.
 doWebsite :: BinPkgName -> Site -> Atoms -> Atoms
-doWebsite bin x deb = modL website (Map.insertWith (error "website") bin x) deb
+doWebsite bin x deb = modL website (Map.insertWith (\ a b -> error $ "doWebsite: " ++ show (a, b)) bin x) deb
 
 -- | Add a debian binary package to the debianization containing a cabal executable file set up to be a backup script.
 doBackups :: BinPkgName -> String -> Atoms -> Atoms
