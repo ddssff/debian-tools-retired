@@ -42,7 +42,7 @@ Library
       Build-Depends: debian >= 3.70
       Hs-Source-Dirs: ., ../debian-repo
   else
-    Build-Depends: debian-repo >= 5.39, debian >= 3.70
+    Build-Depends: debian-repo >= 5.40.1, debian >= 3.70
 
   if flag(local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src

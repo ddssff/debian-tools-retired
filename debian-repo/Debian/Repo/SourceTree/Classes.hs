@@ -75,7 +75,7 @@ findChanges tree =
 addLogEntry :: DebianSourceTreeC t => ChangeLogEntry -> t -> IO ()
 addLogEntry entry debtree =
 -- readFile changelogPath >>= replaceFile changelogPath . ((show (pretty entry)) ++)
-  withFile changelogPath ReadMode (\ handle -> hGetContents handle >>= replaceFile changelogPath . ((show (pretty entry) ++ "\n") ++))
+  withFile changelogPath ReadMode (\ handle -> hGetContents handle >>= replaceFile changelogPath . ((show (pretty entry) ++ "\n\n") ++))
     where
       changelogPath = (debdir debtree) ++ "/debian/changelog"
 

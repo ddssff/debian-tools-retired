@@ -1,3 +1,10 @@
+haskell-debian-repo (5.40.1) unstable; urgency=low
+
+  * Fix Debian.Repo.SourceTree.addLogEntry, it needs to have a blank line
+    after the log entry it adds.
+
+ -- David Fox <dsf@seereason.com>  Sun, 10 Feb 2013 08:37:41 -0800
+
 haskell-debian-repo (5.40) unstable; urgency=low
 
   * Fix the formatting of new log entries - a newline was missing after
