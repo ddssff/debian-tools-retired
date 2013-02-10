@@ -88,6 +88,7 @@ Architecture: any
 Depends: ${shlibs:Depends}
          , ${haskell:Depends}
          , ${misc:Depends}
+         , debian-policy
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
@@ -152,6 +153,7 @@ Depends: ${shlibs:Depends}
          , ${haskell:Depends}
 	 , ${misc:Depends}
 	 , apt-file
+         , debian-policy
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}, haskell-debian-utils (<< 3.59)

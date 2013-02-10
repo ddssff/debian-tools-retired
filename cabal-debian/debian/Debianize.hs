@@ -17,10 +17,11 @@ main =
                 setL compat (Just 7) $
                 setL standards (Just (StandardsVersion 3 9 3 Nothing)) $
                 setL sourceFormat (Just Native3) $
+                modL extraDevDeps (Set.insert (BinPkgName "debian-policy")) atoms $
                 setL utilsPackageName (Just (BinPkgName "cabal-debian")) $
                 modL depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "apt-file") Nothing Nothing))) $
-                modL conflicts (Map.insertWith union (BinPkgName "cabal-debian")
-                                      (singleton (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing))) $
+                modL depends (Map.insertWith union (BinPkgName "debian-policy") (singleton (Rel (BinPkgName "apt-file") Nothing Nothing))) $
+                modL conflicts (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing))) $
                 modL description (Map.insertWith (error "test7") (BinPkgName "cabal-debian")
                                         (Text.intercalate "\n"
                                          [ "Create a debianization for a cabal package"
