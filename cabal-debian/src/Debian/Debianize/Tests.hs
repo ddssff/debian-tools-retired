@@ -506,6 +506,8 @@ test7 =
                             setL sourceFormat (Just Native3) $
                             setL utilsPackageName (Just (BinPkgName "cabal-debian")) $
                             modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (anyrel (BinPkgName "apt-file")))) $
+                            modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (anyrel (BinPkgName "debian-policy")))) $
+                            modL Atoms.depends (Map.insertWith union (BinPkgName "libghc-cabal-debian-dev") (singleton (anyrel (BinPkgName "debian-policy")))) $
                             modL Atoms.conflicts (Map.insertWith union (BinPkgName "cabal-debian")
                                     (singleton (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing))) $
                             modL Atoms.description (Map.insertWith (error "test7") (BinPkgName "cabal-debian")
