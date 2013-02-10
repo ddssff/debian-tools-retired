@@ -1,5 +1,5 @@
-Name:           ArtValueReport2
-Version:        1.9.27
+Name:           ArtValueReport
+Version:        1.9.29
 License:        AllRightsReserved
 Copyright:      (c) 2008-2011, SeeReason Partners LLC
 Author:         David Fox <dsf@seereason.com>, Clifford Beshers <beshers@seereason.com>
@@ -9,18 +9,6 @@ Synopsis:       Haskell modules for fine art appraisal applications
 Description:    Haskell modules for fine art appraisal applications
 Cabal-version:  >= 1.2.3.0
 build-type:     Custom
-Data-files:     Udon.js
-                flexbox.css
-                DataTables-1.8.2
-                html5sortable
-                jGFeed
-                searchMag.png
-                Clouds.jpg
-                tweaks.css
-                verticalTabs.css
-                blueprint
-                jquery.blockUI
-                jquery.tinyscrollbar
 
 flag local-artvaluereport-data
   Description: Build with local copy of the artvaluereport-data library
@@ -79,6 +67,7 @@ Executable artvaluereport2-server
         lifted-base,
         mtl,
         network >= 2.4,
+        old-locale,
         old-time,
         parsec,
         pretty,
@@ -120,6 +109,13 @@ Executable artvaluereport2-backups
 
 executable lookatareport
   Main-Is: Tools/LookAtAReport.hs
+  -- Hs-Source-Dirs: ., ../artvaluereport-data_1
+  -- GHC-Options: -Wall -optP-include -optPdist/build/autogen/cabal_macros.h
+  GHC-Options: -Wall
+  Build-Depends: binary, cereal, debian, HaTeX, html-entities, pandoc, pureMD5, RJson, xhtml
+
+executable appraisalscope
+  Main-Is: Tools/AppraisalScope.hs
   -- Hs-Source-Dirs: ., ../artvaluereport-data_1
   -- GHC-Options: -Wall -optP-include -optPdist/build/autogen/cabal_macros.h
   GHC-Options: -Wall

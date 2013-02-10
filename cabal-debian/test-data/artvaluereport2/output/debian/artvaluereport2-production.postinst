@@ -11,3 +11,7 @@ case "$1" in
     service artvaluereport2-production start
     ;;
 esac
+
+#DEBHELPER#
+
+exit 0

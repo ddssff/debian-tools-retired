@@ -1,9 +1,3 @@
-haskell-artvaluereport2 (1.9.29-0+seereason1~precise1) precise-seereason-private; urgency=low
-
-  * Add a package for the appraisalscope executable.
-  * Darcs revision: Darcs "ssh://upload@src.seereason.com/srv/darcs/artvaluereport2"
-
- -- SeeReason Autobuilder <autobuilder@seereason.org>  Fri, 01 Feb 2013 12:43:10 -0800
 haskell-artvaluereport2 (1.9.29) unstable; urgency=low
 
   * Add a package for the appraisalscope executable.

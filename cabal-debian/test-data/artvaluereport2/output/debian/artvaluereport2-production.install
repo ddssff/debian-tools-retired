@@ -1,2 +1,14 @@
-dist-ghc/logrotate/artvaluereport2-production etc/logrotate.d
-dist-ghc/apachesite/my.appraisalreportonline.com etc/apache2/sites-available
+Clouds.jpg usr/share/ArtValueReport-1.9.29/.
+DataTables-1.8.2 usr/share/ArtValueReport-1.9.29/.
+Udon.js usr/share/ArtValueReport-1.9.29/.
+blueprint usr/share/ArtValueReport-1.9.29/.
+debian/cabalInstall/7e4b5d8641f6fae99e9ae9b2d8893bc7/my.appraisalreportonline.com /etc/apache2/sites-available/
+flexbox.css usr/share/ArtValueReport-1.9.29/.
+html5sortable usr/share/ArtValueReport-1.9.29/.
+jGFeed usr/share/ArtValueReport-1.9.29/.
+jquery.blockUI usr/share/ArtValueReport-1.9.29/.
+jquery.tinyscrollbar usr/share/ArtValueReport-1.9.29/.
+searchMag.png usr/share/ArtValueReport-1.9.29/.
+theme/ArtValueReport_SunsetSpectrum.ico usr/share/ArtValueReport-1.9.29/.
+tweaks.css usr/share/ArtValueReport-1.9.29/.
+verticalTabs.css usr/share/ArtValueReport-1.9.29/.

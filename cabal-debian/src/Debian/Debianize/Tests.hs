@@ -37,7 +37,9 @@ import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Version (buildDebianVersion, parseDebianVersion)
 import Distribution.License (License(BSD3))
 import Prelude hiding (log)
+import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>))
+import System.Process (readProcessWithExitCode)
 import Test.HUnit
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..))
 import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
@@ -403,6 +405,9 @@ copyChangelog deb1 deb2 = modL changelog (const (getL changelog deb1)) deb2
 test6 :: Test
 test6 =
     TestLabel "test6" $
+    TestCase (do result <- readProcessWithExitCode "runhaskell" ["-isrc", "test-data/artvaluereport2/input/debian/Debianize.hs"] ""
+                 assertEqual "test6" (ExitSuccess, "", "") result)
+{-
     TestCase ( do old <- inputDebianization "test-data/artvaluereport2/output"
                   new <- debianization "test-data/artvaluereport2/input"
                             (modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) $
@@ -490,6 +495,7 @@ test6 =
             "artvaluereport2-staging"     -> 9031
             "artvaluereport2-development" -> 9032
             _ -> error $ "Unexpected package name: " ++ deb
+-}
 
 test7 :: Test
 test7 =
