@@ -109,6 +109,7 @@ Architecture: any
 Depends: ${shlibs:Depends}
          , ${haskell:Depends}
          , ${misc:Depends}
+         , debian-policy
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
@@ -130,6 +131,7 @@ Section: doc
 Depends: ${shlibs:Depends}
          , ${haskell:Depends}
          , ${misc:Depends}
+         , debian-policy
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}

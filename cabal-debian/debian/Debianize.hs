@@ -1,26 +1,28 @@
 {-# LANGUAGE OverloadedStrings #-}
-import Debian.Debianize
 import Data.Lens.Lazy
-import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), VersionReq(SLT))
-import Debian.Version (parseDebianVersion)
 import Data.Map as Map (insertWith)
 import Data.Maybe (fromMaybe)
 import Data.Set as Set (insert, union, singleton)
 import Data.Text as Text (intercalate)
+import Debian.Debianize as Atoms
+import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
+import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), VersionReq(SLT))
+import Debian.Version (parseDebianVersion)
+import Prelude hiding (log)
 
 main :: IO ()
 main =
-    do new <- debianization "."
+    do log <- inputChangeLog "debian"
+       new <- debianization "."
                (modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
                 setL changelog (Just log) $
                 setL compat (Just 7) $
                 setL standards (Just (StandardsVersion 3 9 3 Nothing)) $
                 setL sourceFormat (Just Native3) $
-                modL extraDevDeps (Set.insert (BinPkgName "debian-policy")) atoms $
+                modL extraDevDeps (Set.insert (BinPkgName "debian-policy")) $
                 setL utilsPackageName (Just (BinPkgName "cabal-debian")) $
                 modL depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "apt-file") Nothing Nothing))) $
-                modL depends (Map.insertWith union (BinPkgName "debian-policy") (singleton (Rel (BinPkgName "apt-file") Nothing Nothing))) $
+                modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "debian-policy") Nothing Nothing))) $
                 modL conflicts (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing))) $
                 modL description (Map.insertWith (error "test7") (BinPkgName "cabal-debian")
                                         (Text.intercalate "\n"
@@ -32,9 +34,11 @@ main =
                                          , "  Author: David Fox <dsf@seereason.com>"
                                          , "  Upstream-Maintainer: David Fox <dsf@seereason.com>" ])) $
                 defaultAtoms)
-       inputDebianization "." defaultAtoms >>= \ old -> case compareDebianization old (copyFirstLogEntry old new) of
-                                                          "" -> return ()
-                                                          s -> error $ "Debianization mismatch:\n" ++ s
+       old <- inputDebianization "."
+       case compareDebianization old (copyFirstLogEntry old new) of
+         "" -> return ()
+         s -> error $ "Debianization mismatch:\n" ++ s
+
        -- This would overwrite the existing debianization rather than
        -- just make sure it matches:
        -- writeDebianization "." new
