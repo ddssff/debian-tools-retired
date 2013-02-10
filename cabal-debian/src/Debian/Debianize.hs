@@ -1,5 +1,6 @@
--- | QUICK START: You can either run the cabal-debian executable, or
--- for more power and flexibility you can construct a
+-- | QUICK START: You can either run the @cabal-debian --debianize@, or
+-- for more power and flexibility you can put a @Debianize.hs@ script in
+-- the package's @debian@ subdirectory.
 -- 'Debian.Debianize.Atoms' value and pass it to the
 -- 'Debian.Debianize.debianize' function.  The
 -- 'Debian.Debianize.callDebianize' function retrieves extra arguments
@@ -24,14 +25,24 @@
 -- At this point you may need to modify Cabal.defaultFlags to achieve
 -- specific packaging goals.  Create a module for this in debian/Debianize.hs:
 -- 
--- > import Distribution.Debian (Flags(..), defaultFlags)
--- > main = debianize (defaultFlags { extraDevDeps = "haskell-hsx-utils" : extraDevDeps defaultFlags})
+-- > import Data.Lens.Lazy
+-- > import Data.Map as Map (insertWith)
+-- > import Data.Set as Set (union, singleton)
+-- > import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel))
+-- > import Debian.Debianize (defaultAtoms, depends, debianization, writeDebianization)
+-- > main = debianization "." defaultAtoms >>=
+-- >        return . modL depends (insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "debian-policy") Nothing Nothing))) >>=
+-- >        writeDebianization "."
 -- 
 -- Then to test it,
 -- 
 -- > % CABALDEBIAN='["-n"]' runhaskell debian/Debianize.hs
 -- 
--- and to run it
+-- or equivalently
+-- 
+-- > % ghc -e 'Debian.Debianize.runDebianize ["-n"]'
+-- 
+-- and to run it for real:
 -- 
 -- > % runhaskell debian/Debianize.hs
 module Debian.Debianize

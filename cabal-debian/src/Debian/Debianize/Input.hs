@@ -11,7 +11,7 @@ module Debian.Debianize.Input
 
 import Debug.Trace (trace)
 
-import Control.Exception (SomeException, catch, bracket)
+import Control.Exception (bracket)
 import Control.Monad (when, foldM, filterM)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Char (isSpace)
@@ -58,9 +58,8 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 inputDebianization :: FilePath -> IO Atoms
 inputDebianization top =
-    do (ctl, _) <- inputSourceDebDescription debian `catchIOError` (\ e -> error ("Failure parsing SourceDebDescription: " ++ show e))
-       -- Different from snd of above?
-       atoms <- inputAtomsFromDirectory debian mempty `catch` (\ (e :: SomeException) -> error ("Failure parsing atoms: " ++ show e))
+    do (ctl, _) <- inputSourceDebDescription debian
+       atoms <- inputAtomsFromDirectory debian mempty
        return $ modL control (const ctl) atoms
     where
       debian = top </> "debian"

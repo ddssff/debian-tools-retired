@@ -8,6 +8,7 @@ module Debian.Debianize.Debianize
     ( cabalDebian
     , callDebianize
     , runDebianize
+    , runDebianize'
     , debianize
     , debianization
     , writeDebianization
@@ -17,7 +18,7 @@ module Debian.Debianize.Debianize
     ) where
 
 import Control.Applicative ((<$>), (<*>), pure)
-import Control.Exception (catch)
+import Control.Exception (catch, throw)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Lens.Lazy (getL, setL, modL)
@@ -61,34 +62,35 @@ import System.Process (readProcessWithExitCode)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
-{-
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(source, binaryPackages), BinaryDebDescription(package))
-import Debian.Debianize.Files (toFileMap)
-import Debian.Debianize.Goodies (defaultAtoms)
-import Debian.Debianize.Input (inputDebianization)
-import Debian.Debianize.Utility (withCurrentDirectory)
-import System.Directory (Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
--}
-
 -- | The main function for the cabal-debian executable.
 cabalDebian :: IO ()
 cabalDebian =
-    compileAllArgs defaultAtoms >>= \ atoms ->
+    compileEnvironmentArgs defaultAtoms >>=
+    compileCommandlineArgs >>= \ atoms ->
       case getL debAction atoms of
         SubstVar debType -> substvars atoms debType
-        Debianize ->  debianize "." atoms
+        Debianize -> debianize "." atoms
         Usage -> do
           progName <- getProgName
           let info = "Usage: " ++ progName ++ " [FLAGS]\n"
           putStrLn (usageInfo info options)
+
+compileEnvironmentArgs :: Atoms -> IO Atoms
+compileEnvironmentArgs atoms0 =
+    (compileArgs <$> (read <$> getEnv "CABALDEBIAN") <*> pure atoms0) `catchIOError` const (return atoms0)
+
+compileCommandlineArgs :: Atoms -> IO Atoms
+compileCommandlineArgs atoms0 = compileArgs <$> getArgs <*> pure atoms0
 
 -- | Compile the given arguments into an Atoms value and run the
 -- debianize function.  This is basically equivalent to @cabal-debian
 -- --debianize@, except that the command line arguments come from the
 -- function parameter.
 callDebianize :: [String] -> IO ()
-callDebianize args = compileEnvironmentArgs defaultAtoms >>= debianize "." . compileArgs args
+callDebianize args =
+    compileEnvironmentArgs defaultAtoms >>=
+    return . compileArgs args >>=
+    debianize "."
 
 -- | Put an argument list into the @CABALDEBIAN@ environment variable
 -- and then run the script in debian/Debianize.hs.  If this exists and
@@ -109,16 +111,25 @@ runDebianize args =
             (code, out, err) ->
               error ("runDebianize failed with " ++ show code ++ ":\n stdout: " ++ show out ++"\n stderr: " ++ show err)
 
--- | Generate a debianization, and then either validate, describe, or
--- write it out dependeing on the command line arguments.
+-- | Insert a value for CABALDEBIAN into the environment that the
+-- withEnvironment* functions above will find and use.  E.g.
+-- putEnvironmentFlags ["--dry-run", "--validate"] (debianize defaultFlags)
+putEnvironmentArgs :: [String] -> IO ()
+putEnvironmentArgs fs = setEnv "CABALDEBIAN" (show fs) True
+
+-- | Call runDebianize with the given working directory.
+runDebianize' :: FilePath -> [String] -> IO Bool
+runDebianize' top args = withCurrentDirectory top $ runDebianize args
+
+-- | Depending on the options in @atoms@, either validate, describe,
+-- or write the generated debianization.
 debianize :: FilePath -> Atoms -> IO ()
 debianize top atoms =
     debianization top atoms >>= \ atoms' ->
     if getL validate atoms'
-    then inputDebianization top >>= \ old -> either error return (validateDebianization old atoms')
+    then inputDebianization top >>= \ old -> return (validateDebianization old atoms')
     else if getL dryRun atoms'
-         then inputDebianization top >>= \ old ->
-              putStr . ("Debianization (dry run):\n" ++) $ compareDebianization old atoms'
+         then inputDebianization top >>= \ old -> putStr ("Debianization (dry run):\n" ++ compareDebianization old atoms')
          else writeDebianization top atoms'
 
 -- | Given an Atoms value, get any additional configuration
@@ -239,21 +250,6 @@ addExtraLibDependencies deb =
 anyrel' :: BinPkgName -> [Relation]
 anyrel' x = [Rel x Nothing Nothing]
 
-compileAllArgs :: Atoms -> IO Atoms
-compileAllArgs atoms0 = compileEnvironmentArgs atoms0 >>= compileCommandlineArgs
-
-compileEnvironmentArgs :: Atoms -> IO Atoms
-compileEnvironmentArgs atoms0 = (compileArgs <$> (read <$> getEnv "CABALDEBIAN") <*> pure atoms0) `catchIOError` const (return atoms0)
-
-compileCommandlineArgs :: Atoms -> IO Atoms
-compileCommandlineArgs atoms0 = compileArgs <$> getArgs <*> pure atoms0
-
--- | Insert a value for CABALDEBIAN into the environment that the
--- withEnvironment* functions above will find and use.  E.g.
--- putEnvironmentFlags ["--dry-run", "--validate"] (debianize defaultFlags)
-putEnvironmentArgs :: [String] -> IO ()
-putEnvironmentArgs fs = setEnv "CABALDEBIAN" (show fs) True
-
 -- | Write the files of the debianization @d@ to the directory @top@.
 writeDebianization :: FilePath -> Atoms -> IO ()
 writeDebianization top d =
@@ -286,13 +282,13 @@ compareDebianization old new =
 -- | Don't change anything, just make sure the new debianization
 -- matches the existing debianization in several particulars -
 -- specifically, version number, and source and binary package names.
-validateDebianization :: Atoms -> Atoms -> Either String ()
+validateDebianization :: Atoms -> Atoms -> ()
 validateDebianization old new =
     case () of
-      _ | oldVersion /= newVersion -> Left ("Version mismatch, expected " ++ show (pretty oldVersion) ++ ", found " ++ show (pretty newVersion))
-        | oldSource /= newSource -> Left ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource))
-        | oldPackages /= newPackages -> Left ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages))
-        | True -> Right ()
+      _ | oldVersion /= newVersion -> throw (userError ("Version mismatch, expected " ++ show (pretty oldVersion) ++ ", found " ++ show (pretty newVersion)))
+        | oldSource /= newSource -> throw (userError ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource)))
+        | oldPackages /= newPackages -> throw (userError ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages)))
+        | True -> ()
     where
       oldVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL changelog old))))
       newVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL changelog new))))
