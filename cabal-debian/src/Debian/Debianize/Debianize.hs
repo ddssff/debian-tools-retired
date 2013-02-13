@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, OverloadedStrings, ScopedTypeVariables, StandaloneDeriving, TupleSections, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, ScopedTypeVariables, StandaloneDeriving, TupleSections, TypeSynonymInstances, CPP #-}
 {-# OPTIONS -Wall -fno-warn-name-shadowing -fno-warn-orphans #-}
 
 -- | Generate a package Debianization from Cabal data and command line
@@ -50,7 +50,11 @@ import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Distribution.Package (PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
+#if __GLASGOW_HASKELL__ < 706
+import Prelude hiding (writeFile, unlines, catch)
+#else
 import Prelude hiding (writeFile, unlines)
+#endif
 import System.Console.GetOpt (usageInfo)
 import System.Directory (doesFileExist, Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing)
 import System.Environment (getArgs, getEnv, getProgName)
