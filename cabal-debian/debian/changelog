@@ -1,3 +1,9 @@
+haskell-cabal-debian (3.0.5) unstable; urgency=low
+
+  * Compatibility with ghc-7.4
+
+ -- David Fox <dsf@seereason.com>  Wed, 13 Feb 2013 10:48:19 -0800
+
 haskell-cabal-debian (3.0.4) unstable; urgency=low
 
   * Add dependency on debian-policy, so we can compute the latest
