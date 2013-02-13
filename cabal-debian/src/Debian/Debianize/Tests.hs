@@ -20,7 +20,7 @@ import Debian.Debianize.Debianize (debianization)
 import Debian.Debianize.Atoms as Atoms
     (Atoms, rulesHead, compat, sourceFormat, changelog, control, missingDependencies, revision,
      binaryArchitectures, copyright, debVersion, execMap, buildDeps, utilsPackageName, description,
-     depends, conflicts, installData {-, sourcePackageName, install, buildDepsIndep-})
+     depends, installData {-, sourcePackageName, install, buildDepsIndep-})
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 -- import Debian.Debianize.Debianize (writeDebianization)
 import Debian.Debianize.Dependencies (getRulesHead)
@@ -407,121 +407,12 @@ test6 =
     TestLabel "test6" $
     TestCase (do result <- readProcessWithExitCode "runhaskell" ["-isrc", "test-data/artvaluereport2/input/debian/Debianize.hs"] ""
                  assertEqual "test6" (ExitSuccess, "", "") result)
-{-
-    TestCase ( do old <- inputDebianization "test-data/artvaluereport2/output"
-                  new <- debianization "test-data/artvaluereport2/input"
-                            (modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) $
-                             setL sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) $
-                             setL utilsPackageName (Just (BinPkgName "artvaluereport2-server")) $
-                             modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-development") All) $
-                             modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-production") All) $
-                             modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-staging") All) $
-                             modL buildDepsIndep (Set.insert (BinPkgName "libjs-jcrop")) $
-                             modL buildDepsIndep (Set.insert (BinPkgName "libjs-jquery")) $
-                             modL buildDepsIndep (Set.insert (BinPkgName "libjs-jquery-u")) $
-
-                             modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-development") (singleton (anyrel (BinPkgName "artvaluereport2-server")))) $
-                             modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-production") (singleton (anyrel (BinPkgName "artvaluereport2-server")))) $
-                             modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-production") (singleton (anyrel (BinPkgName "apache2")))) $
-                             modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-staging") (singleton (anyrel (BinPkgName "artvaluereport2-server")))) $
-                             -- This should go into the "real" data directory.  And maybe a different icon for each server?
-                             modL install (Map.insertWith union (BinPkgName "artvaluereport2-server") (singleton ("theme/ArtValueReport_SunsetSpectrum.ico", "usr/share/artvaluereport2-data"))) $
-                             modL Atoms.description (Map.insertWith (error "test6") (BinPkgName "artvaluereport2-backups")
-                                                    (T.intercalate "\n"
-                                                     [ "backup program for the appraisalreportonline.com site"
-                                                     , "  Install this somewhere other than where the server is running get"
-                                                     , "  automated backups of the database." ])) $
-                             doBackups (BinPkgName "artvaluereport2-backups") "artvaluereport2-backups" $
-                             doWebsite (BinPkgName "artvaluereport2-production") (theSite (BinPkgName "artvaluereport2-production")) $
-                             doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging")) $
-                             doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development")) $
-                             flip (foldr (\ s deb -> modL Atoms.depends (Map.insertWith union (BinPkgName "artvaluereport2-server") (singleton (anyrel (BinPkgName s)))) deb))
-                                  ["libjs-jquery", "libjs-jquery-ui", "libjs-jcrop", "libjpeg-progs", "netpbm",
-                                   "texlive-latex-recommended", "texlive-latex-extra", "texlive-fonts-recommended", "texlive-fonts-extra"] $
-                             doExecutable (BinPkgName "artvaluereport2-server") (InstallFile "artvaluereport2-server" Nothing Nothing "artvaluereport2-server") $
-                             setL changelog (getL changelog old) $
-                             (newDebianization' 7 (StandardsVersion 3 9 1 Nothing)))
-                  writeDebianization "/tmp" new
-                  assertEqual "test6" [] (diffDebianizations old (copyFirstLogEntry old new)))
-    where
-      -- hints = dependencyHints (putExecMap "trhsx" (BinPkgName "haskell-hsx-utils") $ putExtraDevDep (BinPkgName "markdown") $ Flags.defaultFlags)
-      -- A log entry gets added when the Debianization is generated,
-      -- it won't match so drop it for the comparison.
-      -- dropFirstLogEntry (deb@(Debianization {changelog = ChangeLog (_ : tl)})) = deb {changelog = ChangeLog tl}
-      theSite :: BinPkgName -> Site
-      theSite deb =
-          Site { domain = hostname'
-               , serverAdmin = "logic@seereason.com"
-               , server = theServer deb }
-      theServer :: BinPkgName -> Server
-      theServer deb =
-          Server { hostname =
-                       case deb of
-                         BinPkgName "artvaluereport2-production" -> hostname'
-                         _ -> hostname'
-                 , port = portNum deb
-                 , headerMessage = "Generated by artvaluereport2/Setup.hs"
-                 , retry = "60"
-                 , serverFlags =
-                    ([ "--http-port", show (portNum deb)
-                     , "--base-uri", case deb of
-                                       BinPkgName "artvaluereport2-production" -> "http://" ++ hostname' ++ "/"
-                                       _ -> "http://seereason.com:" ++ show (portNum deb) ++ "/"
-                     , "--top", databaseDirectory deb
-                     , "--logs", "/var/log/" ++ show (pretty deb)
-                     , "--log-mode", case deb of
-                                       BinPkgName "artvaluereport2-production" -> "Production"
-                                       _ -> "Development"
-                     , "--static", "/usr/share/artvaluereport2-data"
-                     , "--no-validate" ] ++
-                     (case deb of
-                        BinPkgName "artvaluereport2-production" -> [{-"--enable-analytics"-}]
-                        _ -> []) {- ++
-                     [ "--jquery-path", "/usr/share/javascript/jquery/"
-                     , "--jqueryui-path", "/usr/share/javascript/jquery-ui/"
-                     , "--jstree-path", jstreePath
-                     , "--json2-path",json2Path ] -})
-                 , installFile =
-                     InstallFile { execName   = "artvaluereport2-server"
-                                 , destName   = show (pretty deb)
-                                 , sourceDir  = Nothing
-                                 , destDir    = Nothing }
-                 }
-      hostname' = "my.appraisalreportonline.com"
-      portNum :: BinPkgName -> Int
-      portNum (BinPkgName deb) =
-          case deb of
-            "artvaluereport2-production"  -> 9027
-            "artvaluereport2-staging"     -> 9031
-            "artvaluereport2-development" -> 9032
-            _ -> error $ "Unexpected package name: " ++ deb
--}
 
 test7 :: Test
 test7 =
     TestLabel "test7" $
-    TestCase ( do old <- inputDebianization "."
-                  new <- debianization "."
-                           (modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
-                            setL sourceFormat (Just Native3) $
-                            setL utilsPackageName (Just (BinPkgName "cabal-debian")) $
-                            modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (anyrel (BinPkgName "apt-file")))) $
-                            modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (anyrel (BinPkgName "debian-policy")))) $
-                            modL Atoms.depends (Map.insertWith union (BinPkgName "libghc-cabal-debian-dev") (singleton (anyrel (BinPkgName "debian-policy")))) $
-                            modL Atoms.conflicts (Map.insertWith union (BinPkgName "cabal-debian")
-                                    (singleton (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing))) $
-                            modL Atoms.description (Map.insertWith (error "test7") (BinPkgName "cabal-debian")
-                                                    (T.intercalate "\n"
-                                                      [ "Create a debianization for a cabal package"
-                                                      , " Tool for creating debianizations of Haskell packages based on the .cabal"
-                                                      , " file.  If apt-file is installed it will use it to discover what is the"
-                                                      , " debian package name of a C library."
-                                                      , " ."
-                                                      , "  Author: David Fox <dsf@seereason.com>"
-                                                      , "  Upstream-Maintainer: David Fox <dsf@seereason.com>" ])) $
-                            copyChangelog old $
-                            newDebianization' 7 (StandardsVersion 3 9 3 Nothing))
-                  assertEqual "test7" [] (diffDebianizations old (copyChangelog old new)))
+    TestCase (do new <- readProcessWithExitCode "runhaskell" ["-isrc", "debian/Debianize.hs"] ""
+                 assertEqual "test7" (ExitSuccess, "", "Ignored: ./debian/cabal-debian.1\nIgnored: ./debian/cabal-debian.manpages\n") new)
 
 test8 :: Test
 test8 =
