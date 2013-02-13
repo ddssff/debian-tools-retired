@@ -201,7 +201,7 @@ aptFile pkg =
        return $ case ret of
                   (ExitSuccess, out, _) ->
                       case takeWhile (not . isSpace) out of
-                        "" -> error $ "Unable to locate a package containing " ++ pkg ++ ", try using --exec-map " ++ pkg ++ "=<debname> or Map.insert " ++ show pkg ++ " (BinPkgName \"<debname>\") (execMap flags)"
+                        "" -> error $ "Unable to locate a package containing " ++ pkg ++ ", try using --exec-map " ++ pkg ++ "=<debname> or modL execMap (Map.insert (PackageName " ++ show pkg ++ ") (BinPkgName \"<debname>\")"
                         s -> [D.BinPkgName s]
                   _ -> []
 
