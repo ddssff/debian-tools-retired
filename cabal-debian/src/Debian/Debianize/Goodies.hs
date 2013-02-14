@@ -314,8 +314,9 @@ serverAtoms b server isSite =
                           , "    /usr/sbin/a2enmod proxy_http"
                           , "    service apache2 restart" ]
                      else []) ++
-                    [ "    service " <> pack (show (pretty b)) <> " start"
-                    , "    ;;"
+                    [ -- This gets done by the #DEBHELPER# code below.
+                      {- "    service " <> pack (show (pretty b)) <> " start", -}
+                      "    ;;"
                     , "esac"
                     , ""
                     , "#DEBHELPER#"
