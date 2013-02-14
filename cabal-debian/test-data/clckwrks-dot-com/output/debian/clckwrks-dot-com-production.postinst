@@ -8,7 +8,6 @@ case "$1" in
     /usr/sbin/a2enmod proxy
     /usr/sbin/a2enmod proxy_http
     service apache2 restart
-    service clckwrks-dot-com-production start
     ;;
 esac
 

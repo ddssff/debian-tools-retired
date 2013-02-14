@@ -2,7 +2,6 @@
 
 case "$1" in
   configure)
-    service artvaluereport2-staging start
     ;;
 esac
 
