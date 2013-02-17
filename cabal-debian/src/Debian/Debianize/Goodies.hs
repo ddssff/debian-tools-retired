@@ -76,7 +76,7 @@ knownVersionSplits =
 -- knownVersionSplits.
 knownEpochMappings :: Map PackageName Int
 knownEpochMappings =
-    Map.fromList [(PackageName "HaXml", 1)]
+    Map.fromList [(PackageName "HaXml", 1), (PackageName "HTTP", 1)]
 
 -- | Create equals dependencies.  For each pair (A, B), use dpkg-query
 -- to find out B's version number, version B.  Then write a rule into
