@@ -9,6 +9,9 @@ Homepage:       http://src.seereason.com/cabal-debian
 Build-Type:     Simple
 Synopsis:       Create a debianization for a cabal package
 Cabal-Version: >= 1.8
+Extra-Source-Files:
+  debian/changelog,
+  debian/Debianize.hs
 Description:
  Tool for creating debianizations of Haskell packages based on the .cabal
  file.  If apt-file is installed it will use it to discover what is the
