@@ -44,8 +44,17 @@ import qualified Distribution.PackageDescription as Cabal
 import Distribution.Text (display)
 import Prelude hiding (writeFile, init, unlines, log, map)
 import System.FilePath ((</>))
-import System.Process (showCommandForUser)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
+
+showCommand cmd args =
+    unwords (map translate (cmd : args))
+
+translate :: String -> String
+translate str =
+    '"' : foldr escape "\"" str
+    where
+      escape '"' = showString "\\\""
+      escape c = showChar c
 
 -- | This may not look like a goodie, but it incorporates knowledge
 -- about the debian repository - what the epoch number of HaXml is,
@@ -292,8 +301,8 @@ serverAtoms b server isSite =
                    , "esac"
                    , ""
                    , "exit 0" ]
-      startCommand = pack $ showCommandForUser "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
-      stopCommand = pack $ showCommandForUser "start-stop-daemon" (stopOptions ++ commonOptions)
+      startCommand = pack $ showCommand "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
+      stopCommand = pack $ showCommand "start-stop-daemon" (stopOptions ++ commonOptions)
       commonOptions = ["--pidfile", "/var/run/" ++ destName exec]
       startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory b, "--exec", "/usr/bin" </> destName exec]
       stopOptions = ["--stop", "--oknodo"] ++ if retry server /= "" then ["--retry=" ++ retry server ] else []

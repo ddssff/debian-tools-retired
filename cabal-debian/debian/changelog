@@ -2,6 +2,9 @@ haskell-cabal-debian (3.0.7) unstable; urgency=low
 
   * Fix to copyright/license code
   * have the init script load /etc/default/packagename if available
+  * Add an alternative function to showCommandForUser (called showCommand)
+    that uses double quotes instead of single quotes so you can reference
+    shell variables.
 
  -- David Fox <dsf@seereason.com>  Wed, 20 Feb 2013 09:29:11 -0800
 
