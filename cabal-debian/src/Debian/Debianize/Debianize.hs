@@ -153,20 +153,20 @@ debianization top atoms =
        return $ debianization' date copyright maint level log atoms'
 
 debianization' :: String              -- ^ current date
-               -> Text                -- ^ copyright
+               -> Maybe Text          -- ^ copyright
                -> NameAddr            -- ^ maintainer
-               -> Int		-- ^ Default standards version
+               -> Int		      -- ^ Default standards version
                -> Maybe ChangeLog
-               -> Atoms      -- ^ Debianization specification
-               -> Atoms      -- ^ New debianization
-debianization' date copyright' maint level log deb =
+               -> Atoms               -- ^ Debianization specification
+               -> Atoms               -- ^ New debianization
+debianization' date copy maint level log deb =
     finalizeDebianization $
     modL compat (maybe (Just level) Just) $
     modL changelog (maybe log Just) $
     setL sourcePriority (Just Optional) $
     setL sourceSection (Just (MainSection "haskell")) $
     setL watch (Just (watchAtom (pkgName $ Cabal.package $ pkgDesc)))  $
-    setL copyright (Just (Right copyright')) $
+    modL copyright (maybe (finalizeCopyright copy) Just) $
     versionInfo maint date $
     addExtraLibDependencies $
     -- Do we want to replace the atoms in the old deb, or add these?
@@ -176,6 +176,8 @@ debianization' date copyright' maint level log deb =
     deb
     where
       pkgDesc = fromMaybe (error "debianization") $ getL packageDescription deb
+      finalizeCopyright (Just x) = Just (Right x)
+      finalizeCopyright Nothing = Just (Left (Cabal.license pkgDesc))
 
 -- | Set the debianization's version info - everything that goes into
 -- the new changelog entry, source package name, exact debian version,

@@ -11,6 +11,7 @@ module Debian.Debianize.Input
 
 import Debug.Trace (trace)
 
+import Control.Applicative ((<$>))
 import Control.Exception (bracket)
 import Control.Monad (when, foldM, filterM)
 import Control.Monad.Trans (MonadIO, liftIO)
@@ -36,9 +37,9 @@ import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer, haskellMaintainer)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
-import Distribution.License (License(..))
+--import Distribution.License (License(..))
 import Distribution.Package (Package(packageId))
-import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, license, maintainer))
+import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer))
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), Compiler(..))
@@ -270,9 +271,10 @@ autoreconf verbose pkgDesc = do
 
 -- | Try to read the license file specified in the cabal package,
 -- otherwise return a text representation of the License field.
-inputCopyright :: PackageDescription -> IO Text
-inputCopyright pkgDesc = readFile' (licenseFile pkgDesc) `catchIOError` handle
-    where handle _e =
+inputCopyright :: PackageDescription -> IO (Maybe Text)
+inputCopyright pkgDesc = (Just <$> readFile' (licenseFile pkgDesc)) `catchIOError` (\ _ -> return Nothing)
+{-
+    where handle _e = return Nothing
               do -- here <- getCurrentDirectory
                  -- hPutStrLn stderr ("Error reading " ++ licenseFile pkgDesc ++ " from " ++ here ++ ": " ++ show _e)
                  return . pack . showLicense . license $ pkgDesc
@@ -291,6 +293,7 @@ showLicense AllRightsReserved = "Proprietary"
 showLicense OtherLicense = "Non-distributable"
 showLicense MIT = "MIT"
 showLicense (UnknownLicense _) = "Unknown"
+-}
 
 -- | Try to compute the debian maintainer from the maintainer field of the
 -- cabal package, or from the value returned by getDebianMaintainer.
