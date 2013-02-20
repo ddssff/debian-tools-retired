@@ -42,23 +42,17 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- debianization in other ways, so be careful not to do this twice,
 -- this function is not idempotent.  (Exported for use in unit tests.)
 finalizeDebianization  :: Atoms -> Atoms
-finalizeDebianization deb0 =
-    deb'''''
+finalizeDebianization atoms =
+    g $ finalizeAtoms $ makeUtilsPackage $ librarySpecs $ putBuildDeps $ f $ finalizeAtoms $ atoms
     where
-      -- Fixme - makeUtilsPackage does stuff that needs to go through foldAtomsFinalized
-      deb' = finalizeAtoms deb0
-      deb'' = f deb'
-      deb''' = makeUtilsPackage $ librarySpecs $ putBuildDeps $ deb''
-      deb'''' = finalizeAtoms deb'''
-      deb''''' = g deb'''' -- Apply tweaks to the debianization
 
-      -- Create the binary packages
+      -- Create the binary packages for the web sites, servers, backup packges, and other executables
       f :: Atoms -> Atoms
       f atoms = (\ atoms' -> Map.foldWithKey (\ b _ atoms'' -> cabalExecBinaryPackage b atoms'') atoms' (getL website atoms)) .
                 (\ atoms' -> Map.foldWithKey (\ b _ atoms'' -> cabalExecBinaryPackage b atoms'') atoms' (getL serverInfo atoms)) .
                 (\ atoms' -> Map.foldWithKey (\ b _ atoms'' -> modL binaryArchitectures (Map.insertWith (flip const) b Any) . cabalExecBinaryPackage b $ atoms'') atoms' (getL backups atoms)) .
                 (\ atoms' -> Map.foldWithKey (\ b _ atoms'' -> cabalExecBinaryPackage b atoms'') atoms' (getL executable atoms)) $ atoms
-      -- Apply the hints in the atoms to the debianization
+      -- Turn atoms related to priority, section, and description into debianization elements
       g :: Atoms -> Atoms
       g atoms = (\ atoms' -> maybe atoms' (\ x -> modL control (\ y -> y {priority = Just x}) atoms') (getL sourcePriority atoms)) .
                 (\ atoms' -> maybe atoms' (\ x -> modL control (\ y -> y {section = Just x}) atoms') (getL sourceSection atoms)) .
