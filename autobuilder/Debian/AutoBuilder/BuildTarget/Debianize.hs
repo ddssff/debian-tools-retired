@@ -27,6 +27,7 @@ import Distribution.PackageDescription (GenericPackageDescription(..), PackageDe
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Prelude hiding (catch)
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
+import System.Environment (withArgs)
 import System.FilePath ((</>), takeFileName)
 import System.Process.Progress (verbosity)
 
@@ -90,7 +91,7 @@ autobuilderCabal cache pflags currentDirectory =
     withCurrentDirectory currentDirectory $
     do -- This will be false if the package has no debian/Debianize.hs script
        done <- collectPackageFlags cache pflags >>= Cabal.runDebianize
-       when (not done) (Cabal.debianization (Top ".") (return . applyPackageFlags pflags) >>= Cabal.writeDebianization (Top "."))
+       when (not done) (withArgs [] (Cabal.debianization (Top ".") (return . applyPackageFlags pflags) >>= Cabal.writeDebianization (Top ".")))
 
 applyPackageFlags :: [P.PackageFlag] -> Atoms -> Atoms
 applyPackageFlags flags atoms = foldr applyPackageFlag atoms flags
