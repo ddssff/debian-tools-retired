@@ -48,7 +48,7 @@ Library
     Hs-Source-Dirs: ., ../cabal-debian/src
     Build-Depends: hsemail, text, syb
   else
-    Build-Depends: cabal-debian >= 3.0
+    Build-Depends: cabal-debian >= 3.1
 
   Build-Depends:
         ansi-wl-pprint

@@ -16,7 +16,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
-import Debian.Debianize (Atoms, compileArgs)
+import Debian.Debianize (Atoms, compileArgs, Top(Top))
 import qualified Debian.Debianize as Cabal
 import Debian.Relation (BinPkgName(unBinPkgName))
 import Debian.Repo (sub)
@@ -90,7 +90,7 @@ autobuilderCabal cache pflags currentDirectory atoms =
     withCurrentDirectory currentDirectory $
     do -- This will be false if the package has no debian/Debianize.hs script
        done <- collectPackageFlags cache pflags >>= Cabal.runDebianize
-       when (not done) (Cabal.debianization "." (applyPackageFlags pflags atoms) >>= Cabal.writeDebianization ".")
+       when (not done) (Cabal.debianization (Top ".") (applyPackageFlags pflags atoms) >>= Cabal.writeDebianization (Top "."))
 
 applyPackageFlags :: [P.PackageFlag] -> Atoms -> Atoms
 applyPackageFlags flags atoms = foldr applyPackageFlag atoms flags
