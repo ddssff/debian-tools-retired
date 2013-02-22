@@ -5,7 +5,7 @@ module Debian.Debianize.Input
     ( inputDebianization
     , inputChangeLog
     , inputCabalization
-    , inputCopyright
+    , inputLicenseFile
     , inputMaintainer
     ) where
 
@@ -38,7 +38,6 @@ import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer, haskellMaintainer)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
---import Distribution.License (License(..))
 import Distribution.Package (Package(packageId))
 import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer))
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
@@ -270,29 +269,8 @@ autoreconf verbose pkgDesc = do
 
 -- | Try to read the license file specified in the cabal package,
 -- otherwise return a text representation of the License field.
-inputCopyright :: PackageDescription -> IO (Maybe Text)
-inputCopyright pkgDesc = (Just <$> readFile' (licenseFile pkgDesc)) `catchIOError` (\ _ -> return Nothing)
-{-
-    where handle _e = return Nothing
-              do -- here <- getCurrentDirectory
-                 -- hPutStrLn stderr ("Error reading " ++ licenseFile pkgDesc ++ " from " ++ here ++ ": " ++ show _e)
-                 return . pack . showLicense . license $ pkgDesc
-
--- | Convert from license to RPM-friendly (now Debian-friendly?)
--- description.  The strings are taken from TagsCheck.py in the
--- rpmlint distribution.
-showLicense :: License -> String
-showLicense (Apache _) = "Apache"
-showLicense (GPL _) = "GPL"
-showLicense (LGPL _) = "LGPL"
-showLicense BSD3 = "BSD"
-showLicense BSD4 = "BSD-like"
-showLicense PublicDomain = "Public Domain"
-showLicense AllRightsReserved = "Proprietary"
-showLicense OtherLicense = "Non-distributable"
-showLicense MIT = "MIT"
-showLicense (UnknownLicense _) = "Unknown"
--}
+inputLicenseFile :: PackageDescription -> IO (Maybe Text)
+inputLicenseFile pkgDesc = (Just <$> readFile' (licenseFile pkgDesc)) `catchIOError` (\ _ -> return Nothing)
 
 -- | Try to compute the debian maintainer from the maintainer field of the
 -- cabal package, or from the value returned by getDebianMaintainer.
