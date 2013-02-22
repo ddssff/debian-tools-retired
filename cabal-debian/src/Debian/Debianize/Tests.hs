@@ -58,11 +58,10 @@ newDebianization (log@(ChangeLog (entry : _))) level standards =
     defaultAtoms
 newDebianization _ _ _ = error "Invalid changelog"
 
-newDebianization' :: Int -> StandardsVersion -> Atoms
-newDebianization' level standards =
-    setL compat (Just level) $
-    modL control (\ x -> x { standardsVersion = Just standards }) $
-    defaultAtoms
+newDebianization' :: Int -> StandardsVersion -> Atoms -> Atoms
+newDebianization' level standards atoms =
+    setL compat (Just level) .
+    modL control (\ x -> x { standardsVersion = Just standards }) $ atoms
 
 tests :: Test
 tests = TestLabel "Debianization Tests" (TestList [test1, test2, test3, test4, test5, test6, test7, test8, test9])
@@ -224,19 +223,23 @@ test4 :: Test
 test4 =
     TestLabel "test4" $
     TestCase (do old <- inputDebianization (Top "test-data/clckwrks-dot-com/output")
-                 new <- inputCabalization (Top "test-data/clckwrks-dot-com/input") (newDebianization' 7 (StandardsVersion 3 9 4 Nothing)) >>=
-                        debianization (Top "test-data/clckwrks-dot-com/input") .
-                          (modL control (\ y -> y {homepage = Just "http://www.clckwrks.com/"}) .
-                           setL sourceFormat (Just Native3) .
-                           modL missingDependencies (insert (BinPkgName "libghc-clckwrks-theme-clckwrks-doc")) .
-                           setL revision Nothing .
-                           doWebsite (BinPkgName "clckwrks-dot-com-production") (theSite (BinPkgName "clckwrks-dot-com-production")) .
-                           doBackups (BinPkgName "clckwrks-dot-com-backups") "clckwrks-dot-com-backups" .
-                           fixRules .
-                           tight .
-                           setL changelog (getL changelog old))
+                 new <- debianization (Top "test-data/clckwrks-dot-com/input") (customize old)
                  assertEqual "test4" [] (diffDebianizations old (copyFirstLogEntry old new)))
     where
+      customize :: Atoms -> Atoms -> IO Atoms
+      customize old atoms =
+          inputCabalization (Top "test-data/clckwrks-dot-com/input") atoms >>=
+          return .
+          newDebianization' 7 (StandardsVersion 3 9 4 Nothing) .
+          modL control (\ y -> y {homepage = Just "http://www.clckwrks.com/"}) .
+          setL sourceFormat (Just Native3) .
+          modL missingDependencies (insert (BinPkgName "libghc-clckwrks-theme-clckwrks-doc")) .
+          setL revision Nothing .
+          doWebsite (BinPkgName "clckwrks-dot-com-production") (theSite (BinPkgName "clckwrks-dot-com-production")) .
+          doBackups (BinPkgName "clckwrks-dot-com-backups") "clckwrks-dot-com-backups" .
+          fixRules .
+          tight .
+          setL changelog (getL changelog old)
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
       serverNames = map BinPkgName ["clckwrks-dot-com-production"] -- , "clckwrks-dot-com-staging", "clckwrks-dot-com-development"]
@@ -320,32 +323,33 @@ test5 =
                  let standards = fromMaybe (error "test5") (standardsVersion (getL control old))
                      level = fromMaybe (error "test5") (getL compat old)
                  new <- debianization (Top "test-data/creativeprompts/input")
-                          (setL sourceFormat (Just Native3) $
-                           modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-data") All) $
-                           modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-development") All) $
-                           modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-production") All) $
-                           setL utilsPackageName (Just (BinPkgName "creativeprompts-data")) $
+                          (return .
+                           setL sourceFormat (Just Native3) .
+                           modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-data") All) .
+                           modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-development") All) .
+                           modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-production") All) .
+                           setL utilsPackageName (Just (BinPkgName "creativeprompts-data")) .
                            modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-data")
                                                     (T.intercalate "\n" [ "creativeprompts.com data files"
-                                                               , "  Static data files for creativeprompts.com"])) $
+                                                               , "  Static data files for creativeprompts.com"])) .
                            modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-production")
                                                     (T.intercalate "\n" [ "Configuration for running the creativeprompts.com server"
                                                                , "  Production version of the blog server, runs on port"
-                                                               , "  9021 with HTML validation turned off." ])) $
+                                                               , "  9021 with HTML validation turned off." ])) .
                            modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-development")
                                                     (T.intercalate "\n" [ "Configuration for running the creativeprompts.com server"
                                                                , "  Testing version of the blog server, runs on port"
-                                                               , "  8000 with HTML validation turned on." ])) $
+                                                               , "  8000 with HTML validation turned on." ])) .
                            modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-backups")
                                                     (T.intercalate "\n" [ "backup program for creativeprompts.com"
                                                                , "  Install this somewhere other than creativeprompts.com to run automated"
-                                                               , "  backups of the database."])) $
-                           modL Atoms.depends (Map.insertWith union (BinPkgName "creativeprompts-server") (singleton (anyrel (BinPkgName "markdown")))) $
-                           modL execMap (Map.insertWith (error "Conflict in execMap") "trhsx" (BinPkgName "haskell-hsx-utils")) $
-                           doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" $
-                           doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) $
-                           doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production")) $
-                           setL changelog (getL changelog old) $
+                                                               , "  backups of the database."])) .
+                           modL Atoms.depends (Map.insertWith union (BinPkgName "creativeprompts-server") (singleton (anyrel (BinPkgName "markdown")))) .
+                           modL execMap (Map.insertWith (error "Conflict in execMap") "trhsx" (BinPkgName "haskell-hsx-utils")) .
+                           doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" .
+                           doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) .
+                           doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production")) .
+                           setL changelog (getL changelog old) .
                            (newDebianization' level standards))
                  assertEqual "test5" [] (diffDebianizations old (copyFirstLogEntry old new)))
     where
@@ -420,10 +424,11 @@ test8 =
     TestCase ( do old <- inputDebianization (Top "test-data/artvaluereport-data/output")
                   log <- inputChangeLog (Top "test-data/artvaluereport-data/input")
                   new <- debianization (Top "test-data/artvaluereport-data/input")
-                           (modL buildDeps (Set.insert (BinPkgName "haskell-hsx-utils")) $
-                            modL control (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) $
-                            setL sourceFormat (Just Native3) $
-                            setL changelog (Just log) $
+                           (return .
+                            modL buildDeps (Set.insert (BinPkgName "haskell-hsx-utils")) .
+                            modL control (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) .
+                            setL sourceFormat (Just Native3) .
+                            setL changelog (Just log) .
                             (newDebianization' 7 (StandardsVersion 3 9 3 Nothing)))
                   assertEqual "test8" [] (diffDebianizations old (copyChangelog old new))
              )
@@ -433,11 +438,12 @@ test9 =
     TestLabel "test9" $
     TestCase ( do old <- inputDebianization (Top "test-data/alex/output")
                   new <- debianization (Top "test-data/alex/input")
-                           (modL buildDeps (Set.insert (BinPkgName "alex")) $
-                            doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) $
-                            setL debVersion (Just (parseDebianVersion ("3.0.2-1~hackage1" :: String))) $
-                            setL sourceFormat (Just Native3) $
-                            modL control (\ y -> y {homepage = Just "http://www.haskell.org/alex/"}) $
+                           (return .
+                            modL buildDeps (Set.insert (BinPkgName "alex")) .
+                            doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) .
+                            setL debVersion (Just (parseDebianVersion ("3.0.2-1~hackage1" :: String))) .
+                            setL sourceFormat (Just Native3) .
+                            modL control (\ y -> y {homepage = Just "http://www.haskell.org/alex/"}) .
                             (\ atoms -> foldr (\ name atoms' -> modL installData (Map.insertWith union (BinPkgName "alex") (singleton (name, name))) atoms')
                                               atoms
                                               [ "AlexTemplate"
@@ -453,7 +459,7 @@ test9 =
                                               , "AlexWrapper-monadUserState-bytestring"
                                               , "AlexWrapper-posn"
                                               , "AlexWrapper-posn-bytestring"
-                                              , "AlexWrapper-strict-bytestring"]) $
+                                              , "AlexWrapper-strict-bytestring"]) .
                             newDebianization' 7 (StandardsVersion 3 9 3 Nothing))
                   assertEqual "test9" [] (diffDebianizations old (copyFirstLogEntry old new)))
 

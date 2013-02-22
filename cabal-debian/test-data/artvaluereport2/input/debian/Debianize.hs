@@ -21,36 +21,36 @@ main :: IO ()
 main =
     do log <- inputChangeLog (Top "test-data/artvaluereport2/input")
        new <- debianization (Top "test-data/artvaluereport2/input")
-              (modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) $
-               setL compat (Just 7) $
-               modL control (\ x -> x {standardsVersion = Just (StandardsVersion 3 9 1 Nothing)}) $
-               setL sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) $
-               -- setL utilsPackageName (Just (BinPkgName "artvaluereport2-server")) $
-               modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-development") All) $
-               modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-production") All) $
-               modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-staging") All) $
-               modL buildDepsIndep (Set.insert (BinPkgName "libjs-jcrop")) $
-               modL buildDepsIndep (Set.insert (BinPkgName "libjs-jquery")) $
-               modL buildDepsIndep (Set.insert (BinPkgName "libjs-jquery-ui")) $
-               modL description (Map.insert (BinPkgName "appraisalscope") "Offline manipulation of appraisal database") $
-               addServerDeps $
-               addServerData $
-               addDep (BinPkgName "artvaluereport2-production") (BinPkgName "apache2") $
+              (return .
+               modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) .
+               setL compat (Just 7) .
+               modL control (\ x -> x {standardsVersion = Just (StandardsVersion 3 9 1 Nothing)}) .
+               setL sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) .
+               -- setL utilsPackageName (Just (BinPkgName "artvaluereport2-server")) .
+               modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-development") All) .
+               modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-production") All) .
+               modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-staging") All) .
+               modL buildDepsIndep (Set.insert (BinPkgName "libjs-jcrop")) .
+               modL buildDepsIndep (Set.insert (BinPkgName "libjs-jquery")) .
+               modL buildDepsIndep (Set.insert (BinPkgName "libjs-jquery-ui")) .
+               modL description (Map.insert (BinPkgName "appraisalscope") "Offline manipulation of appraisal database") .
+               addServerDeps .
+               addServerData .
+               addDep (BinPkgName "artvaluereport2-production") (BinPkgName "apache2") .
                -- This should go into the "real" data directory.  And maybe a different icon for each server?
-               -- modL install (Map.insertWith union (BinPkgName "artvaluereport2-server") (singleton ("theme/ArtValueReport_SunsetSpectrum.ico", "usr/share/artvaluereport2-data"))) $
+               -- modL install (Map.insertWith union (BinPkgName "artvaluereport2-server") (singleton ("theme/ArtValueReport_SunsetSpectrum.ico", "usr/share/artvaluereport2-data"))) .
                modL Atoms.description (Map.insertWith (error "test6") (BinPkgName "artvaluereport2-backups")
                                        (Text.intercalate "\n"
                                         [ "backup program for the appraisalreportonline.com site"
                                         , "  Install this somewhere other than where the server is running get"
-                                        , "  automated backups of the database." ])) $
-               doBackups (BinPkgName "artvaluereport2-backups") "artvaluereport2-backups" $
-               doWebsite (BinPkgName "artvaluereport2-production") (theSite (BinPkgName "artvaluereport2-production")) $
-               doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging")) $
-               doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development")) $
-               doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"}) $
-               modL installCabalExec (Map.insertWith Set.union (BinPkgName "appraisalscope") (singleton ("lookatareport", "usr/bin"))) $
-               setL changelog (Just log) $
-               defaultAtoms)
+                                        , "  automated backups of the database." ])) .
+               doBackups (BinPkgName "artvaluereport2-backups") "artvaluereport2-backups" .
+               doWebsite (BinPkgName "artvaluereport2-production") (theSite (BinPkgName "artvaluereport2-production")) .
+               doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging")) .
+               doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development")) .
+               doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"}) .
+               modL installCabalExec (Map.insertWith Set.union (BinPkgName "appraisalscope") (singleton ("lookatareport", "usr/bin"))) .
+               setL changelog (Just log))
        old <- inputDebianization (Top "test-data/artvaluereport2/output")
        -- The newest log entry gets modified when the Debianization is
        -- generated, it won't match so drop it for the comparison.

@@ -1,6 +1,8 @@
 haskell-cabal-debian (3.1) unstable; urgency=low
 
   * Create a Top type to represent the top directory of a debianization
+  * Change the signature of Debian.Debianize.debianization so it notices
+    command line arguments and environment arguments.
 
  -- David Fox <dsf@seereason.com>  Fri, 22 Feb 2013 13:28:30 -0800
 

@@ -57,7 +57,7 @@ import Prelude hiding (writeFile, unlines)
 #endif
 import System.Console.GetOpt (usageInfo)
 import System.Directory (doesFileExist, Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing)
-import System.Environment (getArgs, getEnv, getProgName)
+import System.Environment (getArgs, getEnv, getProgName, withArgs)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>), takeDirectory)
 import System.IO.Error (catchIOError)
@@ -73,7 +73,7 @@ cabalDebian =
     compileCommandlineArgs >>= \ atoms ->
       case getL debAction atoms of
         SubstVar debType -> substvars atoms debType
-        Debianize -> debianize (Top ".") atoms
+        Debianize -> debianize (Top ".") return
         Usage -> do
           progName <- getProgName
           let info = "Usage: " ++ progName ++ " [FLAGS]\n"
@@ -92,9 +92,7 @@ compileCommandlineArgs atoms0 = compileArgs <$> getArgs <*> pure atoms0
 -- function parameter.
 callDebianize :: [String] -> IO ()
 callDebianize args =
-    compileEnvironmentArgs defaultAtoms >>=
-    return . compileArgs args >>=
-    debianize (Top ".")
+    withArgs args (debianize (Top ".") return)
 
 -- | Put an argument list into the @CABALDEBIAN@ environment variable
 -- and then run the script in debian/Debianize.hs.  If this exists and
@@ -127,30 +125,33 @@ runDebianize' top args = withCurrentDirectory (unTop top) $ runDebianize args
 
 -- | Depending on the options in @atoms@, either validate, describe,
 -- or write the generated debianization.
-debianize :: Top -> Atoms -> IO ()
-debianize top atoms =
-    debianization top atoms >>= \ atoms' ->
-    if getL validate atoms'
-    then inputDebianization top >>= \ old -> return (validateDebianization old atoms')
-    else if getL dryRun atoms'
-         then inputDebianization top >>= \ old -> putStr ("Debianization (dry run):\n" ++ compareDebianization old atoms')
-         else writeDebianization top atoms'
+debianize :: Top -> (Atoms -> IO Atoms) -> IO ()
+debianize top customize =
+    debianization top customize >>= \ atoms ->
+    if getL validate atoms
+    then inputDebianization top >>= \ old -> return (validateDebianization old atoms)
+    else if getL dryRun atoms
+         then inputDebianization top >>= \ old -> putStr ("Debianization (dry run):\n" ++ compareDebianization old atoms)
+         else writeDebianization top atoms
 
 -- | Given an Atoms value, get any additional configuration
 -- information from the environment, read the cabal package
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-debianization :: Top -> Atoms -> IO Atoms
-debianization top atoms =
-    do log <- (Just <$> inputChangeLog top) `catch` (\ (_ :: IOError) -> return Nothing)
-       atoms' <- inputCabalization top atoms
+debianization :: Top -> (Atoms -> IO Atoms) -> IO Atoms
+debianization top customize =
+    do atoms <- compileEnvironmentArgs defaultAtoms >>=
+                compileCommandlineArgs >>=
+                customize >>=
+                inputCabalization top
+       log <- (Just <$> inputChangeLog top) `catch` (\ (_ :: IOError) -> return Nothing)
        date <- getCurrentLocalRFC822Time
-       maint <- inputMaintainer atoms' >>= maybe (error "Missing value for --maintainer") return
+       maint <- inputMaintainer atoms >>= maybe (error "Missing value for --maintainer") return
        level <- getDebhelperCompatLevel
        copyright <- withCurrentDirectory (unTop top) $ inputLicenseFile (fromMaybe (error $ "cabalToDebianization: Failed to read cabal file in " ++ unTop top)
-                                                                         (getL packageDescription atoms'))
-       return $ debianization' date copyright maint level log atoms'
+                                                                         (getL packageDescription atoms))
+       return $ debianization' date copyright maint level log atoms
 
 debianization' :: String              -- ^ current date
                -> Maybe Text          -- ^ copyright

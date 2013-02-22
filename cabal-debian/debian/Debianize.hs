@@ -14,17 +14,18 @@ main :: IO ()
 main =
     do log <- inputChangeLog (Top ".")
        new <- debianization (Top ".")
-               (modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
-                setL changelog (Just log) $
-                setL compat (Just 7) $
-                setL standards (Just (StandardsVersion 3 9 3 Nothing)) $
-                setL sourceFormat (Just Native3) $
-                -- modL extraDevDeps (Set.insert (BinPkgName "debian-policy")) $
-                setL utilsPackageName (Just (BinPkgName "cabal-debian")) $
-                modL depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "apt-file") Nothing Nothing))) $
-                modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "debian-policy") Nothing Nothing))) $
-                modL Atoms.depends (Map.insertWith union (BinPkgName "libghc-cabal-debian-dev") (singleton (Rel (BinPkgName "debian-policy") Nothing Nothing))) $
-                modL conflicts (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing))) $
+               (return .
+                modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) .
+                setL changelog (Just log) .
+                setL compat (Just 7) .
+                setL standards (Just (StandardsVersion 3 9 3 Nothing)) .
+                setL sourceFormat (Just Native3) .
+                -- modL extraDevDeps (Set.insert (BinPkgName "debian-policy")) .
+                setL utilsPackageName (Just (BinPkgName "cabal-debian")) .
+                modL depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "apt-file") Nothing Nothing))) .
+                modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "debian-policy") Nothing Nothing))) .
+                modL Atoms.depends (Map.insertWith union (BinPkgName "libghc-cabal-debian-dev") (singleton (Rel (BinPkgName "debian-policy") Nothing Nothing))) .
+                modL conflicts (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing))) .
                 modL description (Map.insertWith (error "test7") (BinPkgName "cabal-debian")
                                         (Text.intercalate "\n"
                                          [ "Create a debianization for a cabal package"
@@ -33,8 +34,7 @@ main =
                                          , " debian package name of a C library."
                                          , " ."
                                          , "  Author: David Fox <dsf@seereason.com>"
-                                         , "  Upstream-Maintainer: David Fox <dsf@seereason.com>" ])) $
-                defaultAtoms)
+                                         , "  Upstream-Maintainer: David Fox <dsf@seereason.com>" ])))
        old <- inputDebianization (Top ".")
        case compareDebianization old (copyFirstLogEntry old new) of
          "" -> return ()
