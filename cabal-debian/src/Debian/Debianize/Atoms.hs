@@ -1011,6 +1011,8 @@ control = lens g s
 -- | The @Standards-Version@ field of the @debian/control@ file
 standards :: Lens Atoms (Maybe StandardsVersion)
 standards = lens (\ a -> standardsVersion (getL control a)) (\ b a -> modL control (\ x -> x {standardsVersion = b}) a)
+
+-- | Add a stanza to the binary package's logrotate script.
 logrotateStanza :: Lens Atoms (Map BinPkgName (Set Text))
 logrotateStanza = lens g s
     where
@@ -1022,6 +1024,8 @@ logrotateStanza = lens g s
           where
             p (Binary _) (DHLogrotateStanza _) = True
             p _ _ = False
+
+-- | Add entries to a binary deb's debian/foo.links file.
 link :: Lens Atoms (Map BinPkgName (Set (FilePath, FilePath)))
 link = lens g s
     where
@@ -1034,7 +1038,8 @@ link = lens g s
             p (Binary _) (DHLink _ _) = True
             p _ _ = False
 
--- | Install files into directories
+-- | Install files into directories by adding entries to the binary
+-- deb's debian/foo.install file.
 install :: Lens Atoms (Map BinPkgName (Set (FilePath, FilePath)))
 install = lens g s
     where
@@ -1047,7 +1052,7 @@ install = lens g s
             p (Binary _) (DHInstall _ _) = True
             p _ _ = False
 
--- | Rename and install files
+-- | Rename and install files.  This is done by adding rules to debian/rules.
 installTo :: Lens Atoms (Map BinPkgName (Set (FilePath, FilePath)))
 installTo = lens g s
     where
@@ -1060,7 +1065,9 @@ installTo = lens g s
             p (Binary _) (DHInstallTo _ _) = True
             p _ _ = False
 
--- | Install files into the package data directory
+-- | Install files into the a binary deb's data directory,
+-- /usr/share/packagename-version.  This expands to either an install
+-- or an installTo.
 installData :: Lens Atoms (Map BinPkgName (Set (FilePath, FilePath)))
 installData = lens g s
     where
@@ -1073,7 +1080,9 @@ installData = lens g s
             p (Binary _) (DHInstallData _ _) = True
             p _ _ = False
 
--- | Create a file in the deb with the given text
+-- | Create a file in the binary deb with the given text.  This is done by
+-- writing the file into the cabalInstall directory and adding an entry
+-- to the binary deb's .install file.
 file :: Lens Atoms (Map BinPkgName (Set (FilePath, Text)))
 file = lens g s
     where
@@ -1086,7 +1095,7 @@ file = lens g s
             p (Binary _) (DHFile _ _) = True
             p _ _ = False
 
--- | Install a cabal executable
+-- | Install a cabal executable into a binary deb.
 installCabalExec :: Lens Atoms (Map BinPkgName (Set (String, FilePath)))
 installCabalExec = lens g s
     where
