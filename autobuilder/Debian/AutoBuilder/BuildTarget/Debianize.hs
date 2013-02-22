@@ -48,7 +48,7 @@ prepare cache package' target =
                 let version = pkgVersion . package . packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderCabal cache (P.flags package') dir Cabal.defaultAtoms
+                liftIO $ autobuilderCabal cache (P.flags package') dir
                 return $ T.Download { T.package = package'
                                     , T.getTop = dir
                                     , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
@@ -85,12 +85,12 @@ collectPackageFlags cache pflags =
     where
       ver = P.ghcVersion (P.params cache)
 
-autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> Cabal.Atoms -> IO ()
-autobuilderCabal cache pflags currentDirectory atoms =
+autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
+autobuilderCabal cache pflags currentDirectory =
     withCurrentDirectory currentDirectory $
     do -- This will be false if the package has no debian/Debianize.hs script
        done <- collectPackageFlags cache pflags >>= Cabal.runDebianize
-       when (not done) (Cabal.debianization (Top ".") (applyPackageFlags pflags atoms) >>= Cabal.writeDebianization (Top "."))
+       when (not done) (Cabal.debianization (Top ".") (return . applyPackageFlags pflags) >>= Cabal.writeDebianization (Top "."))
 
 applyPackageFlags :: [P.PackageFlag] -> Atoms -> Atoms
 applyPackageFlags flags atoms = foldr applyPackageFlag atoms flags
