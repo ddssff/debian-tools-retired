@@ -46,6 +46,7 @@ import Prelude hiding (writeFile, init, unlines, log, map)
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
+showCommand :: String -> [String] -> String
 showCommand cmd args =
     unwords (map translate (cmd : args))
 

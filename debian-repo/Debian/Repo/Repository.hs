@@ -10,8 +10,9 @@ module Debian.Repo.Repository
     ) where
 
 import Control.Applicative.Error ( Failing(Success, Failure) )
+import Control.Arrow (second)
 import Control.Exception ( ErrorCall(..), toException )
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Char8 as B (concat, ByteString, unpack)
 import Data.List ( sortBy, groupBy, intercalate, isSuffixOf )
@@ -90,7 +91,7 @@ prepareRepository uri =
                -- _ -> return . Repository . UnverifiedRepo $ uri
 
 {-# NOINLINE verifyRepository #-}
-verifyRepository :: MonadApt m => Repository -> m Repository
+verifyRepository :: MonadIO m => Repository -> m Repository
 verifyRepository (UnverifiedRepo uri) =
     do --tio (vHPutStrBl IO.stderr 0 $ "Verifying repository " ++ show uri ++ "...")
        -- Use unsafeInterleaveIO to avoid querying the repository
@@ -183,14 +184,6 @@ verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ sh
                False -> error $ "Unable to reach " ++ uriToString' uri ++ ", consider using --ssh-export"
                True -> return ()
              mkdir
-      uriDest uri =
-          let auth = maybe (error "Internal error 8") id (uriAuthority uri) in
-          let port =
-                  case uriPort auth of
-                    (':' : number) -> Just (read number)
-                    "" -> Nothing
-                    x -> error $ "Internal error 9: invalid port " ++ x in
-          (uriUserInfo auth ++ uriRegName auth, port)
       mkdir :: MonadApt m => m ()
       mkdir =
           case uriAuthority uri of
@@ -203,6 +196,17 @@ verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ sh
                    case result of
                      ExitSuccess -> return ()
                      _ -> fail $ showCommandForUser cmd args ++ " -> " ++ show result
+
+uriDest :: URI -> ([Char], Maybe Int)
+uriDest uri =
+    (uriUserInfo auth ++ uriRegName auth, port)
+    where
+      auth = maybe (error "Internal error 8") id (uriAuthority uri)
+      port =
+          case uriPort auth of
+            (':' : number) -> Just (read number)
+            "" -> Nothing
+            x -> error $ "Internal error 9: invalid port " ++ x
 
 -- | Upload all the packages in a local repository to a the incoming
 -- directory of a remote repository (using dupload.)
@@ -263,6 +267,7 @@ uploadRemote repo uri =
       dupload' (Failure x) = return (Failure x)
       dupload' (Success c) = liftIO (dupload uri (outsidePath root) (Debian.Repo.Changes.path c))
 
+validRevision' :: Failing ChangesFile -> IO (Failing ChangesFile)
 validRevision' (Failure x) = return (Failure x)
 validRevision' (Success c) = validRevision c
     where
@@ -318,10 +323,8 @@ showPkgVersion :: PkgVersion -> String
 showPkgVersion v = show (prettyPkgVersion v)
 
 readPkgVersion :: String -> PkgVersion
-readPkgVersion s = case mapSnd (parseDebianVersion . (drop 1)) (span (/= '=') s) of
+readPkgVersion s = case second (parseDebianVersion . (drop 1)) (span (/= '=') s) of
                      (n, v) -> PkgVersion { getName = BinPkgName n, getVersion = v }
-
-mapSnd f (a, b) = (a, f b)
 
 {-
 accept :: (a -> Bool) -> (a -> (a, String)) -> ([a], [(a, String)]) -> ([a], [(a, String)])

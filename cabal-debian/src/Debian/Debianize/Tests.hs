@@ -412,7 +412,7 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase (do new <- readProcessWithExitCode "runhaskell" ["-isrc", "debian/Debianize.hs"] ""
-                 assertEqual "test7" (ExitSuccess, "", "Ignored: ./debian/cabal-debian.1\nIgnored: ./debian/cabal-debian.manpages\n") new)
+                 assertEqual "test7" (ExitSuccess, "", "Ignored: ./debian/cabal-debian.manpages\nIgnored: ./debian/cabal-debian.1\n") new)
 
 test8 :: Test
 test8 =
