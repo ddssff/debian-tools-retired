@@ -1,3 +1,9 @@
+haskell-cabal-debian (3.1) unstable; urgency=low
+
+  * Create a Top type to represent the top directory of a debianization
+
+ -- David Fox <dsf@seereason.com>  Fri, 22 Feb 2013 13:28:30 -0800
+
 haskell-cabal-debian (3.0.7) unstable; urgency=low
 
   * Fix to copyright/license code
