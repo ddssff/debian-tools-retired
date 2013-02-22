@@ -12,8 +12,8 @@ import Prelude hiding (log)
 
 main :: IO ()
 main =
-    do log <- inputChangeLog "debian"
-       new <- debianization "."
+    do log <- inputChangeLog (Top ".")
+       new <- debianization (Top ".")
                (modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) $
                 setL changelog (Just log) $
                 setL compat (Just 7) $
@@ -35,7 +35,7 @@ main =
                                          , "  Author: David Fox <dsf@seereason.com>"
                                          , "  Upstream-Maintainer: David Fox <dsf@seereason.com>" ])) $
                 defaultAtoms)
-       old <- inputDebianization "."
+       old <- inputDebianization (Top ".")
        case compareDebianization old (copyFirstLogEntry old new) of
          "" -> return ()
          s -> error $ "Debianization mismatch:\n" ++ s

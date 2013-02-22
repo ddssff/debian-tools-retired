@@ -28,7 +28,7 @@ import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (defaultAtoms, tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
-import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), Top(Top))
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
                       SourceFormat(Native3), Section(..), parseMaintainer)
@@ -146,7 +146,7 @@ test2 =
 test3 :: Test
 test3 =
     TestLabel "test3" $
-    TestCase (do deb <- inputDebianization "test-data/haskell-devscripts"
+    TestCase (do deb <- inputDebianization (Top "test-data/haskell-devscripts")
                  assertEqual "test3" [] (diffDebianizations testDeb2 deb))
     where
       testDeb2 :: Atoms
@@ -223,9 +223,9 @@ test3 =
 test4 :: Test
 test4 =
     TestLabel "test4" $
-    TestCase (do old <- inputDebianization "test-data/clckwrks-dot-com/output"
-                 new <- inputCabalization "test-data/clckwrks-dot-com/input" (newDebianization' 7 (StandardsVersion 3 9 4 Nothing)) >>=
-                        debianization "test-data/clckwrks-dot-com/input" .
+    TestCase (do old <- inputDebianization (Top "test-data/clckwrks-dot-com/output")
+                 new <- inputCabalization (Top "test-data/clckwrks-dot-com/input") (newDebianization' 7 (StandardsVersion 3 9 4 Nothing)) >>=
+                        debianization (Top "test-data/clckwrks-dot-com/input") .
                           (modL control (\ y -> y {homepage = Just "http://www.clckwrks.com/"}) .
                            setL sourceFormat (Just Native3) .
                            modL missingDependencies (insert (BinPkgName "libghc-clckwrks-theme-clckwrks-doc")) .
@@ -316,10 +316,10 @@ anyrel b = Rel b Nothing Nothing
 test5 :: Test
 test5 =
     TestLabel "test5" $
-    TestCase (do old <- inputDebianization "test-data/creativeprompts/output"
+    TestCase (do old <- inputDebianization (Top "test-data/creativeprompts/output")
                  let standards = fromMaybe (error "test5") (standardsVersion (getL control old))
                      level = fromMaybe (error "test5") (getL compat old)
-                 new <- debianization "test-data/creativeprompts/input"
+                 new <- debianization (Top "test-data/creativeprompts/input")
                           (setL sourceFormat (Just Native3) $
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-data") All) $
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-development") All) $
@@ -417,9 +417,9 @@ test7 =
 test8 :: Test
 test8 =
     TestLabel "test8" $
-    TestCase ( do old <- inputDebianization "test-data/artvaluereport-data/output"
-                  log <- inputChangeLog "test-data/artvaluereport-data/input/debian"
-                  new <- debianization "test-data/artvaluereport-data/input"
+    TestCase ( do old <- inputDebianization (Top "test-data/artvaluereport-data/output")
+                  log <- inputChangeLog (Top "test-data/artvaluereport-data/input")
+                  new <- debianization (Top "test-data/artvaluereport-data/input")
                            (modL buildDeps (Set.insert (BinPkgName "haskell-hsx-utils")) $
                             modL control (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) $
                             setL sourceFormat (Just Native3) $
@@ -431,8 +431,8 @@ test8 =
 test9 :: Test
 test9 =
     TestLabel "test9" $
-    TestCase ( do old <- inputDebianization "test-data/alex/output"
-                  new <- debianization "test-data/alex/input"
+    TestCase ( do old <- inputDebianization (Top "test-data/alex/output")
+                  new <- debianization (Top "test-data/alex/input")
                            (modL buildDeps (Set.insert (BinPkgName "alex")) $
                             doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) $
                             setL debVersion (Just (parseDebianVersion ("3.0.2-1~hackage1" :: String))) $

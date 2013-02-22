@@ -32,6 +32,7 @@ import Debian.Debianize.Atoms as Atoms
      compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
+import Debian.Debianize.Types (Top(Top, unTop))
 import Debian.Debianize.Utility (getDirectoryContents', readFile', withCurrentDirectory)
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
@@ -57,17 +58,15 @@ import System.Posix.Files (setFileCreationMask)
 import System.IO.Error (catchIOError)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
-inputDebianization :: FilePath -> IO Atoms
+inputDebianization :: Top -> IO Atoms
 inputDebianization top =
-    do (ctl, _) <- inputSourceDebDescription debian
-       atoms <- inputAtomsFromDirectory debian mempty
+    do (ctl, _) <- inputSourceDebDescription top
+       atoms <- inputAtomsFromDirectory top mempty
        return $ modL control (const ctl) atoms
-    where
-      debian = top </> "debian"
 
-inputSourceDebDescription :: FilePath -> IO (SourceDebDescription, [Field])
-inputSourceDebDescription debian =
-    do paras <- parseControlFromFile (debian </> "control") >>= either (error . show) (return . unControl)
+inputSourceDebDescription :: Top -> IO (SourceDebDescription, [Field])
+inputSourceDebDescription top =
+    do paras <- parseControlFromFile (unTop top </> "debian/control") >>= either (error . show) (return . unControl)
        case paras of
          [] -> error "Missing source paragraph"
          [_] -> error "Missing binary paragraph"
@@ -173,19 +172,19 @@ yes "yes" = True
 yes "no" = False
 yes x = error $ "Expecting yes or no: " ++ x
 
-inputChangeLog :: FilePath -> IO ChangeLog
-inputChangeLog debian = readFile (debian </> "changelog") >>= return . parseChangeLog . unpack  -- `catch` handleDoesNotExist :: IO ChangeLog
+inputChangeLog :: Top -> IO ChangeLog
+inputChangeLog (Top top) = readFile (top </> "debian/changelog") >>= return . parseChangeLog . unpack
 
-inputAtomsFromDirectory :: FilePath -> Atoms -> IO Atoms -- .install files, .init files, etc.
-inputAtomsFromDirectory debian xs =
-    findFiles xs >>= doFiles (debian </> "cabalInstall")
+inputAtomsFromDirectory :: Top -> Atoms -> IO Atoms -- .install files, .init files, etc.
+inputAtomsFromDirectory top xs =
+    findFiles xs >>= doFiles (unTop top </> "debian/cabalInstall")
     where
       findFiles :: Atoms -> IO Atoms
       findFiles xs' =
-          getDirectoryContents' debian >>=
+          getDirectoryContents' (unTop top </> "debian") >>=
           return . (++ ["source/format"]) >>=
-          filterM (doesFileExist . (debian </>)) >>=
-          foldM (\ xs'' name -> inputAtoms debian name xs'') xs'
+          filterM (doesFileExist . ((unTop top </> "debian") </>)) >>=
+          foldM (\ xs'' name -> inputAtoms (unTop top </> "debian") name xs'') xs'
       doFiles :: FilePath -> Atoms -> IO Atoms
       doFiles tmp xs' =
           do sums <- getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
@@ -238,9 +237,9 @@ readInstall p line atoms =
 readDir :: BinPkgName -> Text -> Atoms -> Atoms
 readDir p line atoms = modL installDir (insertWith union p (singleton (unpack line))) atoms
 
-inputCabalization :: FilePath -> Atoms -> IO Atoms
+inputCabalization :: Top -> Atoms -> IO Atoms
 inputCabalization top atoms =
-    withCurrentDirectory top $ do
+    withCurrentDirectory (unTop top) $ do
       descPath <- defaultPackageDesc vb
       genPkgDesc <- readPackageDescription vb descPath
       (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb

@@ -2,6 +2,7 @@
 import Debian.Debianize
 import Data.Lens.Lazy
 import Debian.Debianize.Atoms as Atoms (depends, description)
+import Debian.Debianize.Types (Top(Top))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(..), Relation(Rel), VersionReq(SLT))
 import Debian.Version (parseDebianVersion)
@@ -18,8 +19,8 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
 -- copyFirstLogEntry.
 main :: IO ()
 main =
-    do log <- inputChangeLog "test-data/artvaluereport2/input/debian"
-       new <- debianization "test-data/artvaluereport2/input"
+    do log <- inputChangeLog (Top "test-data/artvaluereport2/input")
+       new <- debianization (Top "test-data/artvaluereport2/input")
               (modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) $
                setL compat (Just 7) $
                modL control (\ x -> x {standardsVersion = Just (StandardsVersion 3 9 1 Nothing)}) $
@@ -50,7 +51,7 @@ main =
                modL installCabalExec (Map.insertWith Set.union (BinPkgName "appraisalscope") (singleton ("lookatareport", "usr/bin"))) $
                setL changelog (Just log) $
                defaultAtoms)
-       old <- inputDebianization "test-data/artvaluereport2/output"
+       old <- inputDebianization (Top "test-data/artvaluereport2/output")
        -- The newest log entry gets modified when the Debianization is
        -- generated, it won't match so drop it for the comparison.
        putStr $ compareDebianization old (copyFirstLogEntry old new)

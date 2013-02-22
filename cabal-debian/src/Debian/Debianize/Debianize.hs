@@ -41,7 +41,7 @@ import Debian.Debianize.Goodies (defaultAtoms, watchAtom)
 import Debian.Debianize.Input (inputDebianization, inputCabalization, inputCopyright, inputMaintainer, inputChangeLog)
 import Debian.Debianize.Options (options, compileArgs)
 import Debian.Debianize.SubstVars (substvars)
-import Debian.Debianize.Types (DebAction(..))
+import Debian.Debianize.Types (DebAction(..), Top(Top, unTop))
 import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty, replaceFile, zipMaps, indent)
 import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel)
 import Debian.Relation (SrcPkgName(..), BinPkgName(BinPkgName), Relation(Rel))
@@ -73,7 +73,7 @@ cabalDebian =
     compileCommandlineArgs >>= \ atoms ->
       case getL debAction atoms of
         SubstVar debType -> substvars atoms debType
-        Debianize -> debianize "." atoms
+        Debianize -> debianize (Top ".") atoms
         Usage -> do
           progName <- getProgName
           let info = "Usage: " ++ progName ++ " [FLAGS]\n"
@@ -94,7 +94,7 @@ callDebianize :: [String] -> IO ()
 callDebianize args =
     compileEnvironmentArgs defaultAtoms >>=
     return . compileArgs args >>=
-    debianize "."
+    debianize (Top ".")
 
 -- | Put an argument list into the @CABALDEBIAN@ environment variable
 -- and then run the script in debian/Debianize.hs.  If this exists and
@@ -122,12 +122,12 @@ putEnvironmentArgs :: [String] -> IO ()
 putEnvironmentArgs fs = setEnv "CABALDEBIAN" (show fs) True
 
 -- | Call runDebianize with the given working directory.
-runDebianize' :: FilePath -> [String] -> IO Bool
-runDebianize' top args = withCurrentDirectory top $ runDebianize args
+runDebianize' :: Top -> [String] -> IO Bool
+runDebianize' top args = withCurrentDirectory (unTop top) $ runDebianize args
 
 -- | Depending on the options in @atoms@, either validate, describe,
 -- or write the generated debianization.
-debianize :: FilePath -> Atoms -> IO ()
+debianize :: Top -> Atoms -> IO ()
 debianize top atoms =
     debianization top atoms >>= \ atoms' ->
     if getL validate atoms'
@@ -141,14 +141,14 @@ debianize top atoms =
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-debianization :: FilePath -> Atoms -> IO Atoms
+debianization :: Top -> Atoms -> IO Atoms
 debianization top atoms =
-    do log <- (Just <$> inputChangeLog "debian") `catch` (\ (_ :: IOError) -> return Nothing)
+    do log <- (Just <$> inputChangeLog top) `catch` (\ (_ :: IOError) -> return Nothing)
        atoms' <- inputCabalization top atoms
        date <- getCurrentLocalRFC822Time
        maint <- inputMaintainer atoms' >>= maybe (error "Missing value for --maintainer") return
        level <- getDebhelperCompatLevel
-       copyright <- withCurrentDirectory top $ inputCopyright (fromMaybe (error $ "cabalToDebianization: Failed to read cabal file in " ++ show top)
+       copyright <- withCurrentDirectory (unTop top) $ inputLicenseFile (fromMaybe (error $ "cabalToDebianization: Failed to read cabal file in " ++ unTop top)
                                                                          (getL packageDescription atoms'))
        return $ debianization' date copyright maint level log atoms'
 
@@ -257,9 +257,9 @@ anyrel' :: BinPkgName -> [Relation]
 anyrel' x = [Rel x Nothing Nothing]
 
 -- | Write the files of the debianization @d@ to the directory @top@.
-writeDebianization :: FilePath -> Atoms -> IO ()
+writeDebianization :: Top -> Atoms -> IO ()
 writeDebianization top d =
-    withCurrentDirectory top $
+    withCurrentDirectory (unTop top) $
       mapM_ (\ (path, text) ->
                  createDirectoryIfMissing True (takeDirectory path) >>
                  replaceFile path (unpack text))
