@@ -142,7 +142,7 @@ controlFile src =
             depField "Build-Depends-Indep" (buildDependsIndep src) ++
             depField "Build-Conflicts" (buildConflicts src) ++
             depField "Build-Conflicts-Indep" (buildConflictsIndep src) ++
-            [Field ("Standards-Version", " " <> show (pretty (standardsVersion src)))] ++
+            mField "Standards-Version" (standardsVersion src) ++
             mField "Homepage" (homepage src) ++
             List.map vcsField (Set.toList (vcsFields src)) ++
             List.map xField (Set.toList (xFields src))) :

@@ -277,7 +277,8 @@ verbosity = lens (\ a -> verbosity_ (getL flags a)) (\ b a -> modL flags (\ x ->
 dryRun :: Lens Atoms Bool
 dryRun = lens (\ a -> dryRun_ (getL flags a)) (\ b a -> modL flags (\ x -> x {dryRun_ = b}) a)
 
--- | Make sure the version number and package names of the generated debianization match the
+-- | Make sure the version number and package names of the supplied
+-- and generated debianizations match.
 validate :: Lens Atoms Bool
 validate = lens (\ a -> validate_ (getL flags a)) (\ b a -> modL flags (\ x -> x {validate_ = b}) a)
 
