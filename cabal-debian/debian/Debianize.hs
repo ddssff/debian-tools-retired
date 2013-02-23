@@ -13,10 +13,17 @@ import Prelude hiding (log)
 main :: IO ()
 main =
     do log <- inputChangeLog (Top ".")
-       new <- debianization (Top ".")
-               (return .
-                modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) .
-                setL changelog (Just log) .
+       new <- debianization (Top ".") (return . customize . setL changelog (Just log))
+       old <- inputDebianization (Top ".")
+       case compareDebianization old (copyFirstLogEntry old new) of
+         "" -> return ()
+         s -> error $ "Debianization mismatch:\n" ++ s
+       -- This would overwrite the existing debianization rather than
+       -- just make sure it matches:
+       -- writeDebianization "." new
+    where
+      customize =
+               (modL control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"}) .
                 setL compat (Just 7) .
                 setL standards (Just (StandardsVersion 3 9 3 Nothing)) .
                 setL sourceFormat (Just Native3) .
@@ -35,14 +42,6 @@ main =
                                          , " ."
                                          , "  Author: David Fox <dsf@seereason.com>"
                                          , "  Upstream-Maintainer: David Fox <dsf@seereason.com>" ])))
-       old <- inputDebianization (Top ".")
-       case compareDebianization old (copyFirstLogEntry old new) of
-         "" -> return ()
-         s -> error $ "Debianization mismatch:\n" ++ s
-
-       -- This would overwrite the existing debianization rather than
-       -- just make sure it matches:
-       -- writeDebianization "." new
 
 -- | This copies the first log entry of deb1 into deb2.  Because the
 -- debianization process updates that log entry, we need to undo that
