@@ -3,6 +3,7 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Debian.Debianize.Input
     ( inputDebianization
+    , inputDebianizationFile
     , inputChangeLog
     , inputCabalization
     , inputLicenseFile
@@ -11,7 +12,6 @@ module Debian.Debianize.Input
 
 import Debug.Trace (trace)
 
-import Control.Applicative ((<$>))
 import Control.Exception (bracket)
 import Control.Monad (when, foldM, filterM)
 import Control.Monad.Trans (MonadIO, liftIO)
@@ -33,7 +33,7 @@ import Debian.Debianize.Atoms as Atoms
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Types (Top(Top, unTop))
-import Debian.Debianize.Utility (getDirectoryContents', readFile', withCurrentDirectory)
+import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe)
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer, haskellMaintainer)
@@ -62,6 +62,11 @@ inputDebianization top =
     do (ctl, _) <- inputSourceDebDescription top
        atoms <- inputAtomsFromDirectory top mempty
        return $ modL control (const ctl) atoms
+
+-- | Try to input a file and if successful add it to the debianization.
+inputDebianizationFile :: Top -> FilePath -> Atoms -> IO Atoms
+inputDebianizationFile (Top top) path atoms =
+    readFileMaybe (top </> path) >>= return . maybe atoms (\ text -> modL intermediateFiles (insert (path, text)) atoms)
 
 inputSourceDebDescription :: Top -> IO (SourceDebDescription, [Field])
 inputSourceDebDescription top =
@@ -270,7 +275,7 @@ autoreconf verbose pkgDesc = do
 -- | Try to read the license file specified in the cabal package,
 -- otherwise return a text representation of the License field.
 inputLicenseFile :: PackageDescription -> IO (Maybe Text)
-inputLicenseFile pkgDesc = (Just <$> readFile' (licenseFile pkgDesc)) `catchIOError` (\ _ -> return Nothing)
+inputLicenseFile pkgDesc = readFileMaybe (licenseFile pkgDesc)
 
 -- | Try to compute the debian maintainer from the maintainer field of the
 -- cabal package, or from the value returned by getDebianMaintainer.

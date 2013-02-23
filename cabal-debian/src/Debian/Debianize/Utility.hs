@@ -16,6 +16,7 @@ module Debian.Debianize.Utility
     , cond
     , debOfFile
     , readFile'
+    , readFileMaybe
     , showDeps
     , showDeps'
     , withCurrentDirectory
@@ -27,6 +28,7 @@ module Debian.Debianize.Utility
     , indent
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Exception as E (catch, try, bracket, IOException)
 import Control.Monad (when)
 import Control.Monad.Reader (ReaderT, ask)
@@ -48,7 +50,7 @@ import System.Directory (doesFileExist, doesDirectoryExist, removeFile, renameFi
 import System.Exit(ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>), dropExtension)
 import System.IO (IOMode (ReadMode), withFile, openFile, hSetBinaryMode)
-import System.IO.Error (isDoesNotExistError)
+import System.IO.Error (isDoesNotExistError, catchIOError)
 import System.Process (readProcessWithExitCode, showCommandForUser)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
@@ -151,6 +153,9 @@ readFile' path =
     do file <- openFile path ReadMode
        hSetBinaryMode file True
        hGetContents file
+
+readFileMaybe :: FilePath -> IO (Maybe Text)
+readFileMaybe path = (Just <$> readFile' path) `catchIOError` (\ _ -> return Nothing)
 
 -- Would like to call pretty instead of D.prettyRelations, but the
 -- Pretty instance for [a] doesn't work for us.
