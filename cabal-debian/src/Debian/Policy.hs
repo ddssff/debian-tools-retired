@@ -38,15 +38,16 @@ import Control.Monad (mplus)
 import Data.Char (toLower, isSpace)
 import Data.List (groupBy, intercalate)
 import Data.Generics (Data, Typeable)
-import Data.Text (Text, pack, unpack, strip)
+import Data.Maybe (mapMaybe)
 import Data.Monoid ((<>))
+import Data.Text (Text, pack, unpack, strip)
 import Debian.Relation (BinPkgName)
 import Debian.Version (DebianVersion, parseDebianVersion, version)
 import System.Environment (getEnvironment)
 import System.FilePath ((</>))
 import System.Process (readProcess)
 import Text.Parsec (parse)
-import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr, address)
+import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..), address)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), text)
 
 databaseDirectory :: BinPkgName -> String
@@ -215,14 +216,25 @@ getDebianMaintainer =
 
 haskellMaintainer :: NameAddr
 haskellMaintainer =
-    either error id (parseMaintainer "Debian Haskell Group <pkg-haskell-maintainers@lists.alioth.debian.org>")
+    NameAddr { nameAddr_name = Just "Debian Haskell Group"
+             , nameAddr_addr = "pkg-haskell-maintainers@lists.alioth.debian.org"}
 
 parseUploaders :: String -> Either String [NameAddr]
 parseUploaders x =
-    either (Left . show) Right (parse address "" ("Names: " ++ map fixWhite x ++ ";"))
+    either (Left . show) fixNameAddrs (parse address "" ("Names: " ++ map fixWhite x ++ ";"))
     -- either (\ e -> error ("Failure parsing uploader list: " ++ show x ++ " -> " ++ show e)) id $ 
     where
       fixWhite c = if isSpace c then ' ' else c
+      -- We absoletely need a name.
+      fixNameAddrs :: [NameAddr] -> Either String [NameAddr]
+      fixNameAddrs xs = case mapMaybe fixNameAddr xs of
+                          [] -> Left ("No valid debian maintainers in " ++ show x)
+                          xs' -> Right xs'
+      fixNameAddr :: NameAddr -> Maybe NameAddr
+      fixNameAddr x =
+          case nameAddr_name x of
+            Nothing -> Nothing
+            _ -> Just x
 
 parseMaintainer :: String -> Either String NameAddr
 parseMaintainer x =

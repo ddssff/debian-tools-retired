@@ -83,7 +83,7 @@ parseSourceDebDescription (Paragraph fields) binaryParagraphs =
       fields' = map stripField fields
       src = (newSourceDebDescription' findSource findMaint) {binaryPackages = bins}
       findSource = findMap "Source" SrcPkgName fields'
-      findMaint = findMap "Maintainer" (either error id . parseMaintainer) fields'
+      findMaint = findMap "Maintainer" (\ m -> either (\ e -> error $ "Failed to parse maintainer field " ++ show m ++ ": " ++ show e) id . parseMaintainer $ m) fields'
       -- findStandards = findMap "Standards-Version" parseStandardsVersion fields'
 
       (bins, _extra) = unzip $ map parseBinaryDebDescription binaryParagraphs
@@ -192,7 +192,7 @@ inputAtomsFromDirectory top xs =
       doFiles :: FilePath -> Atoms -> IO Atoms
       doFiles tmp xs' =
           do sums <- getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
-             paths <- mapM (\ sum -> getDirectoryContents' (tmp </> sum) >>= return . map (sum </>)) sums >>= return . concat
+             paths <- mapM (\ sum -> getDirectoryContents' (tmp </> sum) >>= return . map (sum </>)) sums >>= return . filter ((/= '~') . last) . concat
              files <- mapM (readFile . (tmp </>)) paths
              foldM (\ xs'' (path, file) -> return $ modL intermediateFiles (Set.insert ("debian/cabalInstall" </> path, file)) xs'') xs' (zip paths files)
 
@@ -283,7 +283,7 @@ inputMaintainer :: Atoms -> IO (Maybe NameAddr)
 inputMaintainer atoms =
     debianPackageMaintainer >>= maybe cabalPackageMaintainer (return . Just) >>=
                                 maybe getDebianMaintainer (return . Just) >>=
-                                maybe lastResortMaintainer (return . Just)
+                                return . maybe (Just haskellMaintainer) Just
     where
       debianPackageMaintainer :: IO (Maybe NameAddr)
       debianPackageMaintainer = return (getL Atoms.maintainer atoms)
@@ -292,8 +292,6 @@ inputMaintainer atoms =
                                           Nothing -> Nothing
                                           Just "" -> Nothing
                                           Just x -> either (const Nothing) Just (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x))
-      lastResortMaintainer :: IO (Maybe NameAddr)
-      lastResortMaintainer = return (Just haskellMaintainer)
 
 intToVerbosity' :: Int -> Verbosity
 intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
