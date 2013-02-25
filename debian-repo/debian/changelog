@@ -1,3 +1,10 @@
+haskell-debian-repo (5.40.2) unstable; urgency=low
+
+  * Copy the Extra.SSH module from Extra package to here, and improve its
+    error message.
+
+ -- David Fox <dsf@seereason.com>  Mon, 25 Feb 2013 10:27:20 -0800
+
 haskell-debian-repo (5.40.1) unstable; urgency=low
 
   * Fix Debian.Repo.SourceTree.addLogEntry, it needs to have a blank line

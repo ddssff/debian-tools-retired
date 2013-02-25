@@ -181,8 +181,8 @@ verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ sh
       verify =
           do result <- liftIO $ uncurry sshVerify (uriDest uri)
              case result of
-               False -> error $ "Unable to reach " ++ uriToString' uri ++ ", consider using --ssh-export"
-               True -> return ()
+               Right () -> return ()
+               Left s -> error $ "Unable to reach " ++ uriToString' uri ++ ": " ++ s
              mkdir
       mkdir :: MonadApt m => m ()
       mkdir =
