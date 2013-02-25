@@ -281,7 +281,7 @@ serverAtoms b server isSite =
                    [ "#! /bin/sh -e"
                    , ""
                    , ". /lib/lsb/init-functions"
-                   , ". /etc/default/" <> pack (destName exec) <> " || true"
+                   , "test -f /etc/default/" <> pack (destName exec) <> " && source /etc/default/" <> pack (destName exec)
                    , ""
                    , "case \"$1\" in"
                    , "  start)"
