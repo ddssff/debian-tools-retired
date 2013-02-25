@@ -7,7 +7,7 @@ module Debian.AutoBuilder.Types.ParamRec
 
 import Control.Arrow (first)
 import qualified Data.Set as Set
-import Debian.AutoBuilder.Types.Packages (Packages)
+import Debian.AutoBuilder.Types.Packages (Packages, TargetName)
 import Debian.Release ( Arch, ReleaseName )
 import Debian.Repo.Cache ( SourcesChangedAction )
 import Debian.Version ( DebianVersion, prettyDebianVersion )
@@ -79,10 +79,10 @@ data ParamRec =
     -- that no releases have been added or removed from the
     --,  repositories listed.  This is usually safe and saves some
     -- time querying each remote repository before using it.
-    , forceBuild :: [String]
+    , forceBuild :: [TargetName]
       -- ^,  Build the named source package(s) whether or not they seem
     -- to need it.
-    , buildTrumped :: [String]
+    , buildTrumped :: [TargetName]
     -- ^ Build the named source package(s) whether or not they seem
     -- to be older than the version already in the repository.
     , doSSHExport :: Bool
@@ -94,7 +94,7 @@ data ParamRec =
 
     -- THINGS THAT ARE OCCASIONALLY USEFUL
 
-    , goals :: [String]
+    , goals :: [TargetName]
     -- ^ Specify a source package which we want to build, and stop
     -- once all goals are built.  If not given all targets are
     -- considered goals.
@@ -141,7 +141,7 @@ data ParamRec =
     -- can lead to attempts to upload packages that are already
     -- present in the repository, or packages that are trumped by
     -- versions already uploaded to the release.
-    , discard :: Set.Set String
+    , discard :: Set.Set TargetName
     -- ^ When any of these targets become ready to build, fail them.
     -- This is to save time on targets we know will fail.
     , testWithPrivate :: Bool
@@ -263,7 +263,7 @@ data Strictness
 data TargetSpec
      = TargetSpec
        { allTargets :: Bool
-       , targetNames :: Set.Set String }
+       , targetNames :: Set.Set TargetName }
      deriving Show
 
 -- |Output a (somewhat) readable representation of the parameter set.

@@ -26,7 +26,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as R
-import Debian.AutoBuilder.Types.Packages (foldPackages)
+import Debian.AutoBuilder.Types.Packages (foldPackages, TargetName)
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Changes (logVersion, ChangeLogEntry(..))
 import Debian.Control (Control, Control'(Control), fieldValue,  Paragraph'(Paragraph), Field'(Comment), parseControlFromFile)
@@ -119,7 +119,7 @@ data Target
 instance Eq Target where
     a == b = debianSourcePackageName a == debianSourcePackageName b
 
-targetName :: Target -> String
+targetName :: Target -> TargetName
 targetName = T.handle . download . tgt
 
 -- |Prepare a target for building in the given environment.  At this

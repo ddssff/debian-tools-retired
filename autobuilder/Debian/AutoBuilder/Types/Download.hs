@@ -9,7 +9,7 @@ module Debian.AutoBuilder.Types.Download
 import Data.Time (NominalDiffTime)
 import qualified Data.ByteString.Lazy as L
 import Data.Version (Version)
-import Debian.AutoBuilder.Types.Packages (Packages, PackageFlag, RetrieveMethod(..))
+import Debian.AutoBuilder.Types.Packages (Packages, PackageFlag, RetrieveMethod(..), TargetName)
 import qualified Debian.AutoBuilder.Types.Packages as P
 import System.Process.Read.Chunks (Output)
 
@@ -35,7 +35,7 @@ data Download
       }
 
 -- | The name used to identify the package in the target list.
-handle :: Download -> String
+handle :: Download -> TargetName
 handle = P.name . package
 -- | The method used to retrieve this target.
 method :: Download -> RetrieveMethod

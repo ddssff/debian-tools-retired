@@ -17,8 +17,9 @@ import Control.Monad.State(MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import qualified Data.Map as Map
-import Data.List(intercalate)
+import Data.List as List (intercalate, null)
 import Data.Maybe(catMaybes, fromMaybe)
+import Data.Set as Set (Set, member, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildTarget (retrieve)
 import Debian.AutoBuilder.Env (cleanEnv, dependEnv, buildEnv)
@@ -52,7 +53,7 @@ import Debian.URI(URIAuth(uriUserInfo, uriRegName), URI(uriScheme, uriPath, uriA
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
-import Prelude hiding (catch)
+import Prelude hiding (catch, null)
 import System.Directory(createDirectoryIfMissing, doesDirectoryExist)
 import System.Posix.Files(removeLink)
 import System.Exit(ExitCode(..), exitWith)
@@ -94,18 +95,34 @@ main paramSets = do
 -- can be several which are run sequentially.  Stop on first failure.
 doParameterSet :: MonadApt m => [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
 doParameterSet results params =
-    if any isFailure results
-    then return results
-    else
-        noisier (P.verbosity params)
-          (do top <- liftIO $ P.computeTopDir params
-              withLock (top ++ "/lockfile")
-                (runTopT top (quieter 2 (P.buildCache params) >>= runParameterSet)))
-          `catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
-        (\ result -> return (result : results))
+    case () of
+      _ | not (Set.null badForceBuild) ->
+            error $ "Invalid forceBuild target name(s): " ++ intercalate ", " (map P.unTargetName (toList badForceBuild))
+        | not (Set.null badBuildTrumped) ->
+            error $ "Invalid buildTrumped target name(s): " ++ intercalate ", " (map P.unTargetName (toList badBuildTrumped))
+        | not (Set.null badGoals) ->
+            error $ "Invalid goal target name(s): " ++ intercalate ", " (map P.unTargetName (toList badGoals))
+        | not (Set.null badDiscards) ->
+            error $ "Invalid discard target name(s): " ++ intercalate ", " (map P.unTargetName (toList badDiscards))
+        | any isFailure results ->
+            return results
+      _ ->
+          noisier (P.verbosity params)
+            (do top <- liftIO $ P.computeTopDir params
+                withLock (top ++ "/lockfile") (runTopT top (quieter 2 (P.buildCache params) >>= runParameterSet)))
+            `catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
+          (\ result -> return (result : results))
     where
+      badForceBuild = difference (fromList (P.forceBuild params)) allTargetNames
+      badBuildTrumped = difference (fromList (P.buildTrumped params)) allTargetNames
+      badGoals = difference (fromList (P.goals params)) allTargetNames
+      badDiscards = difference (P.discard params) allTargetNames
+      -- Set of bogus target names in the forceBuild list
+      badTargetNames names = difference names allTargetNames
       isFailure (Failure _) = True
       isFailure _ = False
+      allTargetNames :: Set P.TargetName
+      allTargetNames = P.foldPackages (\ name _ _ result -> insert name result) (P.packages params) empty
 
 prepareDependOS :: MonadDeb m => P.ParamRec -> NamedSliceList -> LocalRepository -> m OSImage
 prepareDependOS params buildRelease localRepo =
@@ -163,7 +180,7 @@ runParameterSet cache =
       -- Build an apt-get environment which we can use to retrieve all the package lists
       poolOS <-prepareAptEnv top (P.ifSourcesChanged params) poolSources
       (failures, targets) <- retrieveTargetList dependOS >>= return . partitionEithers
-      when (not $ null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
+      when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
       buildResult <- buildTargets cache dependOS globalBuildDeps localRepo poolOS targets
       -- If all targets succeed they may be uploaded to a remote repo
       result <- (upload buildResult >>= liftIO . newDist) `catch` (\ (e :: SomeException) -> return (Failure [show e]))
@@ -252,7 +269,7 @@ runParameterSet cache =
                 Just uri -> qPutStrLn "Uploading from local repository to remote" >> liftIO (uploadRemote repo uri)
           | True = return []
       upload (_, failed) =
-          do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map targetName failed))
+          do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (P.unTargetName . targetName) failed))
              qPutStrLn msg
              case P.doUpload params of
                True -> qPutStrLn "Skipping upload."
@@ -318,7 +335,7 @@ doReport =
           patched (P.spec p) ++ pinned (P.flags p)
           where
             patched :: P.RetrieveMethod -> [String]
-            patched (P.Patch _ _) = [P.name p ++ " is patched"]
+            patched (P.Patch _ _) = [P.unTargetName (P.name p) ++ " is patched"]
             patched (P.Cd _ x) = patched x
             patched (P.DataFiles x y _) = patched x ++ patched y
             patched (P.DebDir x y) = patched x ++ patched y
@@ -330,5 +347,5 @@ doReport =
             patched _ = []
             pinned :: [P.PackageFlag] -> [String]
             pinned [] = []
-            pinned (P.CabalPin v : more) = [P.name p ++ " is pinned at version " ++ v] ++ pinned more
+            pinned (P.CabalPin v : more) = [P.unTargetName (P.name p) ++ " is pinned at version " ++ v] ++ pinned more
             pinned (_ : more) = pinned more

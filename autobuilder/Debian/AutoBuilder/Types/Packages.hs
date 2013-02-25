@@ -3,6 +3,7 @@
 -- or more packages.
 module Debian.AutoBuilder.Types.Packages
     ( Packages(..)
+    , TargetName(..)
     , foldPackages
     , packageCount
     , RetrieveMethod(..)
@@ -13,13 +14,19 @@ module Debian.AutoBuilder.Types.Packages
 import Data.ByteString (ByteString)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.Set (Set, empty, union)
+import Data.String (IsString(fromString))
 import Debian.Relation (BinPkgName)
 import qualified Debian.Debianize as CD
+
+newtype TargetName = TargetName {unTargetName :: String} deriving (Eq, Ord, Show)
+
+instance IsString TargetName where
+    fromString = TargetName
 
 data Packages
     = NoPackage
     | Package
-      { name :: String
+      { name :: TargetName
       -- ^ This name is only used as a reference for choosing packages
       -- to build, it is neither Debian nor Cabal package name.
       , spec :: RetrieveMethod
@@ -30,7 +37,7 @@ data Packages
       -- the package.
       }
     | Packages
-      { group :: Set String
+      { group :: Set TargetName
       , list :: [Packages]
       }
     -- deriving (Show, Eq, Ord)
@@ -55,7 +62,7 @@ instance Monoid Packages where
         Packages { group = union (group x) (group y)
                  , list = list x ++ list y }
 
-foldPackages :: (String -> RetrieveMethod -> [PackageFlag] -> r -> r) -> Packages -> r -> r
+foldPackages :: (TargetName -> RetrieveMethod -> [PackageFlag] -> r -> r) -> Packages -> r -> r
 foldPackages _ NoPackage r = r
 foldPackages f x@(Package {}) r = f (name x) (spec x) (flags x) r
 foldPackages f x@(Packages {}) r = foldr (foldPackages f) r (list x)

@@ -183,7 +183,7 @@ buildLoop cache globalBuildDeps localRepo poolOS cleanOS' targets =
           loop cleanOS' unbuilt failed
       loop2 cleanOS' unbuilt failed ((target, blocked, _) : ready') =
           do ePutStrLn (printf "[%2d of %2d] TARGET: %s - %s"
-                        (length targets - (Set.size unbuilt + length ready')) (length targets) (targetName target) (show (T.method (download (tgt target)))))
+                        (length targets - (Set.size unbuilt + length ready')) (length targets) (P.unTargetName (targetName target)) (show (T.method (download (tgt target)))))
              -- Build one target.
              result <- if Set.member (targetName target) (P.discard (P.params cache))
                        then return (Failure ["--discard option set"])
@@ -192,8 +192,8 @@ buildLoop cache globalBuildDeps localRepo poolOS cleanOS' targets =
                      -- added to failed.
                      (\ errs ->
                           do ePutStrLn ("Package build failed:\n " ++ intercalate "\n " errs ++ "\n" ++
-                                        "Discarding " ++ targetName target ++ " and its dependencies:\n  " ++
-                                        concat (intersperse "\n  " (map targetName blocked)))
+                                        "Discarding " ++ P.unTargetName (targetName target) ++ " and its dependencies:\n  " ++
+                                        concat (intersperse "\n  " (map (P.unTargetName . targetName) blocked)))
                              let -- Remove the dependencies of the failed packages from unbuilt
                                  unbuilt' = Set.difference unbuilt (Set.fromList blocked)
                                  -- Add the target and its dependencies to failed
@@ -236,7 +236,7 @@ makeTable triples =
       goalsLine = []
       readyLines = map readyLine triples
       readyLine (ready, blocked, _other) =
-          [" Ready:", targetName ready, "Blocking " ++ show (length blocked) ++ ": [" ++ intercalate ", " (map targetName blocked) ++ "]"]
+          [" Ready:", P.unTargetName (targetName ready), "Blocking " ++ show (length blocked) ++ ": [" ++ intercalate ", " (map (P.unTargetName . targetName) blocked) ++ "]"]
 
 -- |Compute the list of targets that are ready to build from the build
 -- dependency relations.  The return value is a list of target lists,
@@ -301,7 +301,7 @@ cycleMessage cache arcs =
     where
       arcTuple (pkg, dep) =
           let rels = targetRelaxed (relaxDepends cache (tgt pkg)) pkg in
-          [(show (intersect (binaryNames pkg dep) (binaryNamesOfRelations rels))), targetName dep, " -> ", targetName pkg]
+          [(show (intersect (binaryNames pkg dep) (binaryNamesOfRelations rels))), P.unTargetName (targetName dep), " -> ", P.unTargetName (targetName pkg)]
       relaxLine :: (BinPkgName, SrcPkgName) -> String
       relaxLine (bin, src) = "Relax-Depends: " ++ unBinPkgName bin ++ " " ++ unSrcPkgName src
       pairs :: (Target, Target) -> [(BinPkgName, SrcPkgName)]
@@ -318,7 +318,7 @@ showTargets :: P.Packages -> String
 showTargets targets =
     unlines (heading :
              map (const '-') heading :
-             map concat (columns (reverse (snd (P.foldPackages (\ name spec _flags (count, rows) -> (count + 1, [printf "%4d. " count, name, " ", show spec] : rows)) targets (1 :: Int, []))))))
+             map concat (columns (reverse (snd (P.foldPackages (\ name spec _flags (count, rows) -> (count + 1, [printf "%4d. " count, P.unTargetName name, " ", show spec] : rows)) targets (1 :: Int, []))))))
     where
       heading = show (P.packageCount targets) ++ " Targets:"
 

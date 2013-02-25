@@ -1,3 +1,9 @@
+autobuilder (6.50) unstable; urgency=low
+
+  * Detect bogus target names in the command line parameters.
+
+ -- David Fox <dsf@seereason.com>  Mon, 25 Feb 2013 09:05:36 -0800
+
 autobuilder (6.49) unstable; urgency=low
 
   * Changes for cabal-debian 3.0.
