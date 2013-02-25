@@ -61,6 +61,7 @@ Library
         Debian.Repo.Sync,
         Debian.Repo.Types,
         Debian.VersionPolicy,
+        Extra.SSH,
         Text.Format,
         Tmp.File
 
