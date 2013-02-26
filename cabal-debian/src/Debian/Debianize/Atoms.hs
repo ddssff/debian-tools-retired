@@ -176,8 +176,8 @@ data DebAtom
     | DebVersionSplits [VersionSplits]		  -- ^ Instances where the debian package name is different (for
                                                   -- some range of version numbers) from the default constructed
                                                   -- by mkPkgName.
-    | BuildDep BinPkgName			  -- ^ Add a build dependency (FIXME: should be a Rel, or an OrRelation, not a BinPkgName)
-    | BuildDepIndep BinPkgName			  -- ^ Add an arch independent build dependency
+    | BuildDep Relation				  -- ^ Add a build dependency
+    | BuildDepIndep Relation			  -- ^ Add an arch independent build dependency
     | MissingDependency BinPkgName		  -- ^ Lets cabal-debian know that a package it might expect to exist
                                                   -- actually does not, so omit all uses in resulting debianization.
     | ExtraLibMapping String BinPkgName		  -- ^ Map a cabal Extra-Library name to a debian binary package name,
@@ -224,7 +224,7 @@ data DebAtom
     | DHBackups String                            -- ^ Configure the executable to do incremental backups
     | Depends Relation				  -- ^ Says that the debian package should have this relation in Depends
     | Conflicts Relation			  -- ^ Says that the debian package should have this relation in Conflicts
-    | DevDepends BinPkgName			  -- ^ Limited version of Depends, put a dependency on the dev library package.  The only
+    | DevDepends Relation			  -- ^ Limited version of Depends, put a dependency on the dev library package.  The only
                                                   -- reason to use this is because we don't yet know the name of the dev library package.
     deriving (Eq, Ord, Show, Typeable)
 
@@ -772,8 +772,10 @@ binarySections = lens g s
 
 -- * Debian dependency info
 
--- | Build dependencies
-buildDeps :: Lens Atoms (Set BinPkgName)
+-- | Build dependencies.  FIXME: This should be a Set (Set Relation)
+-- so we can build or relations, right now we just assume that each
+-- Relation is a singleton set.
+buildDeps :: Lens Atoms (Set Relation)
 buildDeps = lens g s
     where
       g atoms = foldAtoms from Set.empty atoms
@@ -786,7 +788,7 @@ buildDeps = lens g s
             p _ _ = False
 
 -- | Architecture independent
-buildDepsIndep :: Lens Atoms (Set BinPkgName)
+buildDepsIndep :: Lens Atoms (Set Relation)
 buildDepsIndep = lens g s
     where
       g atoms = foldAtoms from Set.empty atoms
@@ -830,7 +832,7 @@ conflicts = lens g s
 -- with depends, but kept for backwards compatibility.  Also, I
 -- think maybe this is or was needed because it can be set before
 -- the exact name of the library package is known.
-extraDevDeps :: Lens Atoms (Set BinPkgName)
+extraDevDeps :: Lens Atoms (Set Relation)
 extraDevDeps = lens g s
     where
       g atoms = foldAtoms from Set.empty atoms

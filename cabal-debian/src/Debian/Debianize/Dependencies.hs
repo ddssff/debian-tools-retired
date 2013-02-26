@@ -122,7 +122,7 @@ debianBuildDeps deb =
            [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
            anyrel "cdbs",
            anyrel "ghc"] ++
-            (map anyrel' (Set.toList (getL buildDeps deb))) ++
+            (map (: []) (Set.toList (getL buildDeps deb))) ++
             (if getL noProfilingLibrary deb then [] else [anyrel "ghc-prof"]) ++
             cabalDeps (getL packageDescription deb)
     where
@@ -141,7 +141,7 @@ debianBuildDepsIndep deb =
     if getL noDocumentationLibrary deb
     then []
     else nub $ [anyrel "ghc-doc"] ++
-               (map anyrel' (Set.toList (getL buildDepsIndep deb))) ++
+               (map (: []) (Set.toList (getL buildDepsIndep deb))) ++
                cabalDeps (getL packageDescription deb)
     where
       cabalDeps Nothing = []

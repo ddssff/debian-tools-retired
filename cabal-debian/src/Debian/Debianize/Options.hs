@@ -61,11 +61,11 @@ options =
              "Set given flags in Cabal conditionals",
       Option "" ["maintainer"] (ReqArg (\ maint x -> setL maintainer (either (error ("Invalid maintainer string: " ++ show maint)) Just (parseMaintainer maint)) x) "Maintainer Name <email addr>")
              "Override the Maintainer name and email in $DEBEMAIL/$EMAIL/$DEBFULLNAME/$FULLNAME",
-      Option "" ["build-dep"] (ReqArg (\ name atoms -> modL buildDeps (Set.insert (BinPkgName name)) atoms) "Debian binary package name")
+      Option "" ["build-dep"] (ReqArg (\ name atoms -> modL buildDeps (Set.insert (Rel (BinPkgName name) Nothing Nothing)) atoms) "Debian binary package name")
              "Specify a package to add to the build dependency list for this source package, e.g. '--build-dep libglib2.0-dev'.",
-      Option "" ["build-dep-indep"] (ReqArg (\ name atoms -> modL buildDepsIndep (Set.insert (BinPkgName name)) atoms) "Debian binary package name")
+      Option "" ["build-dep-indep"] (ReqArg (\ name atoms -> modL buildDepsIndep (Set.insert (Rel (BinPkgName name) Nothing Nothing)) atoms) "Debian binary package name")
              "Specify a package to add to the architecture independent build dependency list for this source package, e.g. '--build-dep-indep perl'.",
-      Option "" ["dev-dep"] (ReqArg (\ name atoms -> modL extraDevDeps (Set.insert (BinPkgName name)) atoms) "Debian binary package name")
+      Option "" ["dev-dep"] (ReqArg (\ name atoms -> modL extraDevDeps (Set.insert (Rel (BinPkgName name) Nothing Nothing)) atoms) "Debian binary package name")
              "Specify a package to add to the Depends: list of the -dev package, e.g. '--dev-dep libncurses5-dev'.  It might be good if this implied --build-dep.",
       Option "" ["depends"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL depends (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
              "Generalized --dev-dep - specify pairs A:B of debian binary package names, each A gets a Depends: B",

@@ -425,7 +425,7 @@ test8 =
                   log <- inputChangeLog (Top "test-data/artvaluereport-data/input")
                   new <- debianization (Top "test-data/artvaluereport-data/input")
                            (return .
-                            modL buildDeps (Set.insert (BinPkgName "haskell-hsx-utils")) .
+                            modL buildDeps (Set.insert (Rel (BinPkgName "haskell-hsx-utils") Nothing Nothing)) .
                             modL control (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) .
                             setL sourceFormat (Just Native3) .
                             setL changelog (Just log) .
@@ -439,7 +439,7 @@ test9 =
     TestCase ( do old <- inputDebianization (Top "test-data/alex/output")
                   new <- debianization (Top "test-data/alex/input")
                            (return .
-                            modL buildDeps (Set.insert (BinPkgName "alex")) .
+                            modL buildDeps (Set.insert (Rel (BinPkgName "alex") Nothing Nothing)) .
                             doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) .
                             setL debVersion (Just (parseDebianVersion ("3.0.2-1~hackage1" :: String))) .
                             setL sourceFormat (Just Native3) .

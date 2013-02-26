@@ -80,7 +80,7 @@ binaryPackageRelations :: BinPkgName -> PackageType -> Atoms -> PackageRelations
 binaryPackageRelations b typ deb =
     PackageRelations
     { Debian.depends = [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                       (if typ == Development then List.map anyrel' (toList (getL extraDevDeps deb)) else []) ++
+                       (if typ == Development then List.map (: []) (toList (getL extraDevDeps deb)) else []) ++
                        binaryPackageDeps b deb
     , recommends = [anyrel "${haskell:Recommends}"]
     , suggests = [anyrel "${haskell:Suggests}"]
