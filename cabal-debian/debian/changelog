@@ -1,3 +1,12 @@
+haskell-cabal-debian (3.2) unstable; urgency=low
+
+  * Strip executables when installing (well, at least some.  There
+    may be more work to do here.)
+  * Change the build dependency type from BinPkgName to Relation, so we
+    can specify version dependencies (though as yet not or relations.)
+
+ -- David Fox <dsf@seereason.com>  Tue, 26 Feb 2013 07:17:30 -0800
+
 haskell-cabal-debian (3.1.1) unstable; urgency=low
 
   * Fix the code in the init file that checks for and sources a
