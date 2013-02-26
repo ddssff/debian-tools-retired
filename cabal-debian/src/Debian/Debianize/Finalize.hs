@@ -235,7 +235,7 @@ expandAtoms old =
                            Set.fold (\ (n, d) atoms' ->
                                          modL rulesFragments (Set.insert (Text.unlines
                                                                           [ pack ("binary-fixup" </> show (pretty b)) <> "::"
-                                                                          , "\tinstall -Dp " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty b) </> makeRelative "/" d) ])) atoms')
+                                                                          , "\tinstall -Dps " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty b) </> makeRelative "/" d) ])) atoms')
                                     atoms
                                     pairs)
                       new
