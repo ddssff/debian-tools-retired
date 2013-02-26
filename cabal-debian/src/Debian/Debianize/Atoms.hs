@@ -471,7 +471,7 @@ executable = lens g s
     where
       g atoms = foldAtoms from Map.empty atoms
           where
-            from (Binary b) (DHExecutable f) x = Map.insertWith (\ a b -> error $ "executable: " ++ show (a, b)) b f x
+            from (Binary b) (DHExecutable f) x = Map.insertWith (\ k a -> error $ "executable: " ++ show (k, a)) b f x
             from _ _ x = x
       s x atoms = Map.foldWithKey (\ b y atoms'-> insertAtom (Binary b) (DHExecutable y) atoms') (deleteAtoms p atoms) x
           where
@@ -484,7 +484,7 @@ serverInfo = lens g s
     where
       g atoms = foldAtoms from Map.empty atoms
           where
-            from (Binary b) (DHServer s) x = Map.insertWith (error "server") b s x
+            from (Binary b) (DHServer s') x = Map.insertWith (error "server") b s' x
             from _ _ x = x
       s x atoms = Map.foldWithKey (\ b y atoms'-> insertAtom (Binary b) (DHServer y) atoms') (deleteAtoms p atoms) x
           where
@@ -497,7 +497,7 @@ website = lens g s
     where
       g atoms = foldAtoms from Map.empty atoms
           where
-            from (Binary b) (DHWebsite s) x = Map.insertWith (error "website") b s x
+            from (Binary b) (DHWebsite s') x = Map.insertWith (error "website") b s' x
             from _ _ x = x
       s x atoms = Map.foldWithKey (\ b y atoms'-> insertAtom (Binary b) (DHWebsite y) atoms') (deleteAtoms p atoms) x
           where
@@ -510,7 +510,7 @@ backups = lens g s
     where
       g atoms = foldAtoms from Map.empty atoms
           where
-            from (Binary b) (DHBackups s) x = Map.insertWith (error "backups") b s x
+            from (Binary b) (DHBackups s') x = Map.insertWith (error "backups") b s' x
             from _ _ x = x
       s x atoms = Map.foldWithKey (\ b y atoms'-> insertAtom (Binary b) (DHBackups y) atoms') (deleteAtoms p atoms) x
           where
@@ -738,7 +738,7 @@ binaryPriorities = lens g s
           where
             from (Binary b) (DHPriority p) x = Map.insertWith (error "priorities") b p x
             from _ _ x = x
-      s x atoms = Map.foldWithKey (\ b p atoms'-> insertAtom (Binary b) (DHPriority p) atoms') (deleteAtoms p atoms) x
+      s x atoms = Map.foldWithKey (\ b p' atoms'-> insertAtom (Binary b) (DHPriority p') atoms') (deleteAtoms p atoms) x
           where
             p (Binary _) (DHPriority _) = True
             p _ _ = False
@@ -765,7 +765,7 @@ binarySections = lens g s
           where
             from (Binary b) (DHSection p) x = Map.insertWith (error "sections") b p x
             from _ _ x = x
-      s x atoms = Map.foldWithKey (\ b p atoms'-> insertAtom (Binary b) (DHSection p) atoms') (deleteAtoms p atoms) x
+      s x atoms = Map.foldWithKey (\ b p' atoms'-> insertAtom (Binary b) (DHSection p') atoms') (deleteAtoms p atoms) x
           where
             p (Binary _) (DHSection _) = True
             p _ _ = False
@@ -780,7 +780,7 @@ buildDeps = lens g s
     where
       g atoms = foldAtoms from Set.empty atoms
           where
-            from Source (BuildDep d) x = Set.insert d x
+            from Source (BuildDep r) x = Set.insert r x
             from _ _ x = x
       s x atoms = Set.fold (\ d atoms' -> insertAtom Source (BuildDep d) atoms') (deleteAtoms p atoms) x
           where
@@ -793,9 +793,9 @@ buildDepsIndep = lens g s
     where
       g atoms = foldAtoms from Set.empty atoms
           where
-            from Source (BuildDepIndep d) x = Set.insert d x
+            from Source (BuildDepIndep r) x = Set.insert r x
             from _ _ x = x
-      s x atoms = Set.fold (\ d atoms' -> insertAtom Source (BuildDepIndep d) atoms') (deleteAtoms p atoms) x
+      s r atoms = Set.fold (\ d atoms' -> insertAtom Source (BuildDepIndep d) atoms') (deleteAtoms p atoms) r
           where
             p Source (BuildDepIndep _) = True
             p _ _ = False

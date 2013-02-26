@@ -31,7 +31,7 @@ import Debian.Policy (PackageArchitectures(Any, All), Section(..))
 import Debian.Relation (Relation(Rel), BinPkgName(BinPkgName))
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
-import Prelude hiding (init, unlines, writeFile, map)
+import Prelude hiding (init, unlines, writeFile, map, log)
 import System.FilePath ((</>), (<.>), makeRelative, splitFileName, takeDirectory, takeFileName)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
@@ -42,8 +42,8 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- debianization in other ways, so be careful not to do this twice,
 -- this function is not idempotent.  (Exported for use in unit tests.)
 finalizeDebianization  :: Atoms -> Atoms
-finalizeDebianization atoms =
-    g $ finalizeAtoms $ makeUtilsPackage $ librarySpecs $ putBuildDeps $ f $ finalizeAtoms $ atoms
+finalizeDebianization atoms0 =
+    g $ finalizeAtoms $ makeUtilsPackage $ librarySpecs $ putBuildDeps $ f $ finalizeAtoms $ atoms0
     where
 
       -- Create the binary packages for the web sites, servers, backup packges, and other executables

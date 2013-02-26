@@ -45,7 +45,7 @@ installs deb =
 
 dirs :: Atoms -> [(FilePath, Text)]
 dirs deb =
-    map (\ (path, dirs) -> (path, pack (List.unlines (Set.toList dirs)))) $ Map.toList $ mapKeys pathf $ getL installDir deb
+    map (\ (path, dirs') -> (path, pack (List.unlines (Set.toList dirs')))) $ Map.toList $ mapKeys pathf $ getL installDir deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".dirs"
 

@@ -269,13 +269,13 @@ siteAtoms b site =
       port' = pack (show (port (server site)))
 
 serverAtoms :: BinPkgName -> Server -> Bool -> Atoms -> Atoms
-serverAtoms b server isSite =
+serverAtoms b server' isSite =
     modL postInst (insertWith (error "serverAtoms") b debianPostinst) .
     modL installInit (Map.insertWith (error "serverAtoms") b debianInit) .
     serverLogrotate' b .
     execAtoms b exec
     where
-      exec = installFile server
+      exec = installFile server'
       debianInit =
           Text.unlines $
                    [ "#! /bin/sh -e"
@@ -306,8 +306,8 @@ serverAtoms b server isSite =
       stopCommand = pack $ showCommand "start-stop-daemon" (stopOptions ++ commonOptions)
       commonOptions = ["--pidfile", "/var/run/" ++ destName exec]
       startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory b, "--exec", "/usr/bin" </> destName exec]
-      stopOptions = ["--stop", "--oknodo"] ++ if retry server /= "" then ["--retry=" ++ retry server ] else []
-      serverOptions = serverFlags server ++ commonServerOptions
+      stopOptions = ["--stop", "--oknodo"] ++ if retry server' /= "" then ["--retry=" ++ retry server' ] else []
+      serverOptions = serverFlags server' ++ commonServerOptions
       -- Without these, happstack servers chew up CPU even when idle
       commonServerOptions = ["+RTS", "-IO", "-RTS"]
 
@@ -374,15 +374,15 @@ execAtoms b ifile r =
     r
 
 fileAtoms :: BinPkgName -> InstallFile -> Atoms -> Atoms
-fileAtoms b installFile r =
-    fileAtoms' b (sourceDir installFile) (execName installFile) (destDir installFile) (destName installFile) r
+fileAtoms b installFile' r =
+    fileAtoms' b (sourceDir installFile') (execName installFile') (destDir installFile') (destName installFile') r
 
 fileAtoms' :: BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> Atoms -> Atoms
-fileAtoms' b sourceDir execName destDir destName r =
-    case (sourceDir, execName == destName) of
-      (Nothing, True) -> modL installCabalExec (insertWith Set.union b (singleton (execName, d))) r
-      (Just s, True) -> modL install (insertWith Set.union b (singleton (s </> execName, d))) r
-      (Nothing, False) -> modL installCabalExecTo (insertWith Set.union b (singleton (execName, (d </> destName)))) r
-      (Just s, False) -> modL installTo (insertWith Set.union b (singleton (s </> execName, d </> destName))) r
+fileAtoms' b sourceDir' execName' destDir' destName' r =
+    case (sourceDir', execName' == destName') of
+      (Nothing, True) -> modL installCabalExec (insertWith Set.union b (singleton (execName', d))) r
+      (Just s, True) -> modL install (insertWith Set.union b (singleton (s </> execName', d))) r
+      (Nothing, False) -> modL installCabalExecTo (insertWith Set.union b (singleton (execName', (d </> destName')))) r
+      (Just s, False) -> modL installTo (insertWith Set.union b (singleton (s </> execName', d </> destName'))) r
     where
-      d = fromMaybe "usr/bin" destDir
+      d = fromMaybe "usr/bin" destDir'
