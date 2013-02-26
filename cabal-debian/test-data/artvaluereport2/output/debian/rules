@@ -11,10 +11,10 @@ build/artvaluereport2-development:: build-ghc-stamp
 build/artvaluereport2-backups:: build-ghc-stamp
 build/appraisalscope:: build-ghc-stamp
 binary-fixup/artvaluereport2-staging::
-	install -Dp dist-ghc/build/artvaluereport2-server/artvaluereport2-server debian/artvaluereport2-staging/usr/bin/artvaluereport2-staging
+	install -Dps dist-ghc/build/artvaluereport2-server/artvaluereport2-server debian/artvaluereport2-staging/usr/bin/artvaluereport2-staging
 
 binary-fixup/artvaluereport2-production::
-	install -Dp dist-ghc/build/artvaluereport2-server/artvaluereport2-server debian/artvaluereport2-production/usr/bin/artvaluereport2-production
+	install -Dps dist-ghc/build/artvaluereport2-server/artvaluereport2-server debian/artvaluereport2-production/usr/bin/artvaluereport2-production
 
 binary-fixup/artvaluereport2-development::
-	install -Dp dist-ghc/build/artvaluereport2-server/artvaluereport2-server debian/artvaluereport2-development/usr/bin/artvaluereport2-development
+	install -Dps dist-ghc/build/artvaluereport2-server/artvaluereport2-server debian/artvaluereport2-development/usr/bin/artvaluereport2-development

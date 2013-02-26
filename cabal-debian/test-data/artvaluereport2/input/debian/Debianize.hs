@@ -30,9 +30,9 @@ main =
                modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-development") All) .
                modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-production") All) .
                modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-staging") All) .
-               modL buildDepsIndep (Set.insert (BinPkgName "libjs-jcrop")) .
-               modL buildDepsIndep (Set.insert (BinPkgName "libjs-jquery")) .
-               modL buildDepsIndep (Set.insert (BinPkgName "libjs-jquery-ui")) .
+               modL buildDepsIndep (Set.insert (Rel (BinPkgName "libjs-jcrop") Nothing Nothing)) .
+               modL buildDepsIndep (Set.insert (Rel (BinPkgName "libjs-jquery") Nothing Nothing)) .
+               modL buildDepsIndep (Set.insert (Rel (BinPkgName "libjs-jquery-ui") (Just (SLT (parseDebianVersion ("1.10" :: String)))) Nothing)) .
                modL description (Map.insert (BinPkgName "appraisalscope") "Offline manipulation of appraisal database") .
                addServerDeps .
                addServerData .

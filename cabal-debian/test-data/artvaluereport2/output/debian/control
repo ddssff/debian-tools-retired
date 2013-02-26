@@ -160,7 +160,7 @@ Build-Depends: debhelper (>= 7.0)
 Build-Depends-Indep: ghc-doc
                      , libjs-jcrop
                      , libjs-jquery
-                     , libjs-jquery-ui
+                     , libjs-jquery-ui (<< 1.10)
                      , libghc-extra-doc (>= 1.35)
                      , libghc-hjscript-doc
                      , libghc-hatex-doc

@@ -1,7 +1,7 @@
 #! /bin/sh -e
 
 . /lib/lsb/init-functions
-. /etc/default/creativeprompts-production || true
+test -f /etc/default/creativeprompts-production && . /etc/default/creativeprompts-production
 
 case "$1" in
   start)

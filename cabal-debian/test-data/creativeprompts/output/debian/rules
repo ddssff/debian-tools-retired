@@ -11,7 +11,7 @@ build/creativeprompts-data:: build-ghc-stamp
 
 build/creativeprompts-backups:: build-ghc-stamp
 binary-fixup/creativeprompts-production::
-	install -Dp dist-ghc/build/creativeprompts-server/creativeprompts-server debian/creativeprompts-production/usr/bin/creativeprompts-production
+	install -Dps dist-ghc/build/creativeprompts-server/creativeprompts-server debian/creativeprompts-production/usr/bin/creativeprompts-production
 
 binary-fixup/creativeprompts-development::
-	install -Dp dist-ghc/build/creativeprompts-server/creativeprompts-server debian/creativeprompts-development/usr/bin/creativeprompts-development
+	install -Dps dist-ghc/build/creativeprompts-server/creativeprompts-server debian/creativeprompts-development/usr/bin/creativeprompts-development
