@@ -302,14 +302,11 @@ serverAtoms b server' isSite =
                    , "esac"
                    , ""
                    , "exit 0" ]
-      startCommand = pack $ showCommand "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverOptions)
+      startCommand = pack $ showCommand "start-stop-daemon" (startOptions ++ commonOptions ++ ["--"] ++ serverFlags server')
       stopCommand = pack $ showCommand "start-stop-daemon" (stopOptions ++ commonOptions)
       commonOptions = ["--pidfile", "/var/run/" ++ destName exec]
       startOptions = ["--start", "-b", "--make-pidfile", "-d", databaseDirectory b, "--exec", "/usr/bin" </> destName exec]
       stopOptions = ["--stop", "--oknodo"] ++ if retry server' /= "" then ["--retry=" ++ retry server' ] else []
-      serverOptions = serverFlags server' ++ commonServerOptions
-      -- Without these, happstack servers chew up CPU even when idle
-      commonServerOptions = ["+RTS", "-IO", "-RTS"]
 
       debianPostinst =
           Text.unlines $

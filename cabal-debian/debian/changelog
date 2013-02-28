@@ -1,3 +1,11 @@
+haskell-cabal-debian (3.2.1) unstable; urgency=low
+
+  * Do not add the options +RTS -IO -RTS to the server options, this
+    is a security risk.  Instead, server executables should built with
+    -with-rtsopts=-IO.
+
+ -- David Fox <dsf@seereason.com>  Thu, 28 Feb 2013 09:02:39 -0800
+
 haskell-cabal-debian (3.2) unstable; urgency=low
 
   * Strip executables when installing (well, at least some.  There
