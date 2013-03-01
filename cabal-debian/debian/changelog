@@ -1,3 +1,9 @@
+haskell-cabal-debian (3.2.2) unstable; urgency=low
+
+  * Remove unused Debian.Debianize.Generic and Triplets modules.
+
+ -- David Fox <dsf@seereason.com>  Fri, 01 Mar 2013 11:14:33 -0800
+
 haskell-cabal-debian (3.2.1) unstable; urgency=low
 
   * Do not add the options +RTS -IO -RTS to the server options, this

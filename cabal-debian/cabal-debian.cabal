@@ -1,5 +1,5 @@
 Name:           cabal-debian
-Version:        3.2.1
+Version:        3.2.2
 License:        BSD3
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>
@@ -60,7 +60,6 @@ Library
    Debian.Debianize.Dependencies
    Debian.Debianize.Files
    Debian.Debianize.Finalize
-   Debian.Debianize.Generic
    Debian.Debianize.Goodies
    Debian.Debianize.Interspersed
    Debian.Debianize.Input
@@ -72,7 +71,6 @@ Library
    Debian.Orphans
    Debian.Policy
    Distribution.Version.Invert
-   Triplets
 
 Executable cabal-debian
  Main-is: src/CabalDebian.hs

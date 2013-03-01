@@ -53,7 +53,6 @@ module Debian.Debianize
     , module Debian.Debianize.Dependencies
     , module Debian.Debianize.Files
     , module Debian.Debianize.Finalize
-    , module Debian.Debianize.Generic
     , module Debian.Debianize.Goodies
     , module Debian.Debianize.Input
     , module Debian.Debianize.Interspersed
@@ -71,7 +70,6 @@ import Debian.Debianize.Debianize
 import Debian.Debianize.Dependencies
 import Debian.Debianize.Files
 import Debian.Debianize.Finalize
-import Debian.Debianize.Generic
 import Debian.Debianize.Goodies
 import Debian.Debianize.Input
 import Debian.Debianize.Interspersed
