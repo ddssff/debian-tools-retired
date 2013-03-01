@@ -87,6 +87,14 @@ import Text.Regex(matchRegex, mkRegex)
 instance Ord Target where
     compare = compare `on` debianSourcePackageName
 
+instance Monad Failing where
+  return = Success
+  m >>= f =
+      case m of
+        (Failure errs) -> (Failure errs)
+        (Success a) -> f a
+  fail errMsg = Failure [errMsg]
+
 decode :: L.ByteString -> String
 decode = UTF8.toString . B.concat . L.toChunks
 
