@@ -10,6 +10,9 @@ module Debian.Policy
     , serverLogDirectory
     , serverAppLog
     , serverAccessLog
+    , errorLogBaseName
+    , appLogBaseName
+    , accessLogBaseName
     -- * Installed packages
     , debianPackageVersion
     , getDebhelperCompatLevel
@@ -57,19 +60,28 @@ apacheLogDirectory :: BinPkgName -> String
 apacheLogDirectory x =  "/var/log/apache2/" ++ show (pretty x)
 
 apacheErrorLog :: BinPkgName -> String
-apacheErrorLog x = apacheLogDirectory x </> "error.log"
+apacheErrorLog x = apacheLogDirectory x </> errorLogBaseName
 
 apacheAccessLog :: BinPkgName -> String
-apacheAccessLog x = apacheLogDirectory x </> "access.log"
+apacheAccessLog x = apacheLogDirectory x </> accessLogBaseName
 
 serverLogDirectory :: BinPkgName -> String
 serverLogDirectory x = "/var/log/" ++ show (pretty x)
 
 serverAppLog :: BinPkgName -> String
-serverAppLog x = serverLogDirectory x </> "app.log"
+serverAppLog x = serverLogDirectory x </> appLogBaseName
 
 serverAccessLog :: BinPkgName -> String
-serverAccessLog x = serverLogDirectory x </> "access.log"
+serverAccessLog x = serverLogDirectory x </> accessLogBaseName
+
+appLogBaseName :: String
+appLogBaseName = "app.log"
+
+errorLogBaseName :: String
+errorLogBaseName = "error.log"
+
+accessLogBaseName :: String
+accessLogBaseName = "access.log"
 
 debianPackageVersion :: String -> IO DebianVersion
 debianPackageVersion name =
