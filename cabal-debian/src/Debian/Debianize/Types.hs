@@ -56,11 +56,14 @@ data InstallFile
       , destName :: String  -- ^ name to give installed executable
       } deriving (Read, Show, Eq, Ord)
 
+-- | Describes a mapping from cabal package name and version to debian
+-- package names.  For example, versions of the cabal QuickCheck
+-- package less than 2 are mapped to "quickcheck1", while version 2 or
+-- greater is mapped to "quickcheck2".
 data VersionSplits
     = VersionSplits {
-        packageName :: PackageName
-      , oldestPackage :: PackageName
-      , splits :: [(Version, PackageName)] -- Assumed to be in version number order
+        oldestPackage :: String
+      , splits :: [(Version, String)] -- Assumed to be in version number order
       } deriving (Eq, Ord, Show)
 
 data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq, Ord)

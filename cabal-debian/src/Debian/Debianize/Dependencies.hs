@@ -19,7 +19,7 @@ import Data.Char (isSpace, toLower)
 import Data.Function (on)
 import Data.Lens.Lazy (getL, modL)
 import Data.List as List (nub, minimumBy, isSuffixOf, map)
-import Data.Map as Map (Map, lookup, insertWith, empty)
+import Data.Map as Map (Map, lookup)
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Set as Set
@@ -27,7 +27,7 @@ import Data.Text as Text (Text, pack, unlines)
 import Data.Version (Version, showVersion)
 import Debian.Control
 import Debian.Debianize.Atoms (Atoms, packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary,
-                               missingDependencies, versionSplits, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
+                               missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
                                packageInfo, depends, conflicts, control)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile as Debian (PackageType(..), SourceDebDescription(..))
@@ -224,11 +224,11 @@ dependencies atoms typ name cabalRange =
       -- we may need to distribute any "and" dependencies implied
       -- by a version range over these "or" dependences.
       alts :: [(BinPkgName, VersionRange)]
-      alts = case Map.lookup name (packageSplits (getL versionSplits atoms)) of
+      alts = case Map.lookup name (getL debianNameMap atoms) of
                -- If there are no splits for this package just return the single dependency for the package
                Nothing -> [(mkPkgName name typ, cabalRange')]
                -- If there are splits create a list of (debian package name, VersionRange) pairs
-               Just splits' -> map (\ (n, r) -> (mkPkgName n typ, r)) (packageRangesFromVersionSplits splits')
+               Just splits' -> map (\ (n, r) -> (mkPkgName' n typ, r)) (packageRangesFromVersionSplits splits')
 
       convert :: (BinPkgName, VersionRange) -> Maybe (Rels Relation)
       convert (dname, range) =
@@ -247,7 +247,7 @@ dependencies atoms typ name cabalRange =
                  (\ x y -> And [x, y])
                  id
                  range'''
-          where 
+          where
             -- Choose the simpler of the two
             range''' = canon (simpler range' range'')
             -- Unrestrict the range for versions that we know don't exist for this debian package
@@ -306,14 +306,12 @@ canonical (Or rels) = And . map Or $ sequence $ map (concat . map unOr . unAnd .
 -- is >= v.
 debianName :: (PkgName name) => Atoms -> PackageType -> PackageIdentifier -> name
 debianName atoms typ pkgDesc =
-    (\ pname -> mkPkgName pname typ) $
-    case filter (\ x -> pname == packageName x) (getL versionSplits atoms) of
-      [] -> pname
-      [splits] ->
-          foldTriples' (\ ltName v geName debName ->
-                           if pname /= packageName splits
-                           then debName
-                           else let split = parseDebianVersion (showVersion v) in
+    case Map.lookup pname (getL debianNameMap atoms) of
+      Nothing -> mkPkgName pname typ
+      Just splits ->
+          (\ s -> mkPkgName' s typ) $
+          foldTriples' (\ ltName v geName _ ->
+                           let split = parseDebianVersion (showVersion v) in
                                 case version of
                                   Nothing -> geName
                                   Just (D.SLT v') | v' <= split -> ltName
@@ -323,14 +321,13 @@ debianName atoms typ pkgDesc =
                                   Just (D.GRE v') | v' < split -> ltName
                                   Just (D.SGR v') | v' < split -> ltName
                                   _ -> geName)
-                       pname
+                       undefined
                        splits
-      _ -> error $ "Multiple splits for cabal package " ++ string
     where
-      foldTriples' :: (PackageName -> Version -> PackageName -> PackageName -> PackageName) -> PackageName -> VersionSplits -> PackageName
+      foldTriples' :: (String -> Version -> String -> String -> String) -> String -> VersionSplits -> String
       foldTriples' = foldTriples
       -- def = mkPkgName pname typ
-      pname@(PackageName string) = pkgName pkgDesc
+      pname@(PackageName _) = pkgName pkgDesc
       version = (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion pkgDesc)))))
 
 -- | Given a control file and a DebType, look for the binary deb with
@@ -349,7 +346,10 @@ debNameFromType control debType =
 -- correspondence between the PackageType value and the name type, so
 -- it can return nonsense like (SrcPkgName "libghc-debian-dev").
 mkPkgName :: PkgName name => PackageName -> PackageType -> name
-mkPkgName (PackageName name) typ =
+mkPkgName pkg typ = mkPkgName' (debianBaseName pkg) typ
+
+mkPkgName' :: PkgName name => String -> PackageType -> name
+mkPkgName' base typ =
     pkgNameFromString $
              case typ of
                 Documentation -> "libghc-" ++ base ++ "-doc"
@@ -359,29 +359,22 @@ mkPkgName (PackageName name) typ =
                 Exec -> base
                 Source' -> "haskell-" ++ base ++ ""
                 Cabal -> base
+
+debianBaseName :: PackageName -> String
+debianBaseName (PackageName name) =
+    map (fixChar . toLower) name
     where
-      base = map (fixChar . toLower) name
       -- Underscore is prohibited in debian package names.
       fixChar :: Char -> Char
       fixChar '_' = '-'
       fixChar c = toLower c
 
-instance Interspersed VersionSplits PackageName Version where
+instance Interspersed VersionSplits String Version where
     leftmost (VersionSplits {splits = []}) = error "Empty Interspersed instance"
     leftmost (VersionSplits {oldestPackage = p}) = p
     pairs (VersionSplits {splits = xs}) = xs
 
-packageSplits :: [VersionSplits] -> Map PackageName VersionSplits
-packageSplits splits =
-    foldr (\ splits' mp -> Map.insertWith multipleSplitsError (packageName splits') splits' mp)
-          Map.empty
-          splits
-    where
-      multipleSplitsError :: VersionSplits -> a -> b
-      multipleSplitsError (VersionSplits {packageName = PackageName p}) _s2 =
-          error ("Multiple splits for package " ++ show p)
-
-packageRangesFromVersionSplits :: VersionSplits -> [(PackageName, VersionRange)]
+packageRangesFromVersionSplits :: VersionSplits -> [(String, VersionRange)]
 packageRangesFromVersionSplits splits =
     foldInverted (\ older dname newer more ->
                       (dname, intersectVersionRanges (maybe anyVersion orLaterVersion older) (maybe anyVersion earlierVersion newer)) : more)

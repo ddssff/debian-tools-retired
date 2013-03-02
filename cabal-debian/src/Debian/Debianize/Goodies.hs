@@ -32,7 +32,7 @@ import Debian.Debianize.Atoms as Atoms
     (Atoms, packageDescription, rulesFragments, website, serverInfo, link, backups, executable,
      install, installTo, installCabalExecTo, file, installDir, logrotateStanza, postInst,
      installInit, installCabalExec, rulesFragments, packageDescription, executable,
-     serverInfo, website, backups, depends, epochMap, versionSplits)
+     serverInfo, website, backups, depends, epochMap, debianNameMap)
 import Debian.Debianize.ControlFile as Debian (PackageType(..))
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), VersionSplits(..))
 import Debian.Debianize.Utility (trim)
@@ -63,24 +63,19 @@ translate str =
 defaultAtoms :: Atoms
 defaultAtoms =
     setL epochMap knownEpochMappings $
-    setL versionSplits knownVersionSplits $
+    setL debianNameMap knownVersionSplits $
     mempty
 
 -- | These are the instances of debian names changing that I know
 -- about.  I know they really shouldn't be hard coded.  Send a patch.
 -- Note that this inherits the lack of type safety of the mkPkgName
 -- function.
-knownVersionSplits :: [VersionSplits]
+knownVersionSplits :: Map PackageName VersionSplits
 knownVersionSplits =
-    [ VersionSplits {
-        packageName = PackageName "parsec"
-      , oldestPackage = PackageName "parsec2"
-      , splits = [(Version [3] [], PackageName "parsec3")] }
-    , VersionSplits {
-        packageName = PackageName "QuickCheck"
-      , oldestPackage = PackageName "quickcheck1"
-      , splits = [(Version [2] [], PackageName "quickcheck2")] }
-    ]
+    Map.fromList
+    [ (PackageName "parsec", VersionSplits {oldestPackage = "parsec2", splits = [(Version [3] [], "parsec3")]})
+    , (PackageName "QuickCheck", VersionSplits {oldestPackage = "quickcheck1", splits = [(Version [2] [], "quickcheck2")]})
+    , (PackageName "gtk2hs-buildtools", VersionSplits {oldestPackage = "gtk2hs-buildtools", splits = []}) ]
 
 -- | We should always call this, just as we should always apply
 -- knownVersionSplits.

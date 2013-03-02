@@ -18,7 +18,7 @@ module Debian.Debianize.Atoms
     , execMap
     , cabalFlagAssignments
     -- * Global debian info
-    , versionSplits
+    , debianNameMap
     , epochMap
     -- * High level information about the debianization
     , description
@@ -171,7 +171,8 @@ data DebAtom
                                                   -- version 0.3.0.0-1build3, we need to specify
                                                   -- debVersion="0.3.0.0-1build3" or the version we produce will
                                                   -- look older than the one already available upstream.
-    | DebianNameMap [VersionSplits]		  -- ^ Mapping from cabal package name and version to debian source
+    | DebianNameMap (Map PackageName VersionSplits)
+						  -- ^ Mapping from cabal package name and version to debian source
                                                   -- package name.  This allows different ranges of cabal versions to
                                                   -- map to different debian source package names.
     | SourcePackageName SrcPkgName                -- ^ Name to give to the debian source package.  If not supplied
@@ -429,13 +430,13 @@ cabalFlagAssignments = lens g s
 -- | Map from cabal version number ranges to debian package names.  This is a
 -- result of the fact that only one version of a debian package can be
 -- installed at a given time, while multiple versions of a cabal packages can.
-versionSplits :: Lens Atoms [VersionSplits]
-versionSplits = lens g s
+debianNameMap :: Lens Atoms (Map PackageName VersionSplits)
+debianNameMap = lens g s
     where
-      g atoms = foldAtoms from [] atoms
+      g atoms = foldAtoms from mempty atoms
           where
-            from Source (DebianNameMap xs') xs = xs ++ xs'
-            from _ _ xs = xs
+            from Source (DebianNameMap mp) _ = mp
+            from _ _ mp = mp
       s x atoms = insertAtom Source (DebianNameMap x) (deleteAtoms p atoms)
           where
             p Source (DebianNameMap _) = True
