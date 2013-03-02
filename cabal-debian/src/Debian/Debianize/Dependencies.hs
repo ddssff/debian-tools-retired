@@ -8,6 +8,7 @@ module Debian.Debianize.Dependencies
     , putBuildDeps
     , dependencies
     , debianName
+    , debianName'
     , debNameFromType
     , getRulesHead
     , filterMissing
@@ -300,13 +301,16 @@ canonical (Rel rel) = And [Or [Rel rel]]
 canonical (And rels) = And $ concatMap (unAnd . canonical) rels
 canonical (Or rels) = And . map Or $ sequence $ map (concat . map unOr . unAnd . canonical) $ rels
 
+debianName :: (PkgName name) => Atoms -> PackageType -> PackageIdentifier -> name
+debianName atoms typ pkgDesc = debianName' (Map.lookup (pkgName pkgDesc) (getL debianNameMap atoms)) typ pkgDesc
+
 -- | Function that applies the mapping from cabal names to debian
 -- names based on version numbers.  If a version split happens at v,
 -- this will return the ltName if < v, and the geName if the relation
 -- is >= v.
-debianName :: (PkgName name) => Atoms -> PackageType -> PackageIdentifier -> name
-debianName atoms typ pkgDesc =
-    case Map.lookup pname (getL debianNameMap atoms) of
+debianName' :: (PkgName name) => Maybe VersionSplits -> PackageType -> PackageIdentifier -> name
+debianName' msplits typ pkgDesc =
+    case msplits of
       Nothing -> mkPkgName pname typ
       Just splits ->
           (\ s -> mkPkgName' s typ) $

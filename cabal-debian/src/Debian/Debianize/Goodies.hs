@@ -75,6 +75,7 @@ knownVersionSplits =
     Map.fromList
     [ (PackageName "parsec", VersionSplits {oldestPackage = "parsec2", splits = [(Version [3] [], "parsec3")]})
     , (PackageName "QuickCheck", VersionSplits {oldestPackage = "quickcheck1", splits = [(Version [2] [], "quickcheck2")]})
+    -- This just gives a special case cabal to debian name mapping.
     , (PackageName "gtk2hs-buildtools", VersionSplits {oldestPackage = "gtk2hs-buildtools", splits = []}) ]
 
 -- | We should always call this, just as we should always apply
