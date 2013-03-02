@@ -150,8 +150,6 @@ data DebAtom
     | DebChangeLog ChangeLog			  -- ^ The changelog, first entry contains the source package name and version
     | DebLogComments [[Text]]			  -- ^ Each element is a comment to be added to the changelog, where the
                                                   -- element's text elements are the lines of the comment.
-    | SourcePackageName SrcPkgName                -- ^ Name to give to debian source package.  If not supplied name is constructed
-                                                  -- from the cabal package name.
     | DHMaintainer NameAddr			  -- ^ Value for the maintainer field in the control file.  Note that
                                                   -- the cabal maintainer field can have multiple addresses, but debian
                                                   -- only one.  If this is not explicitly set, it is obtained from the
@@ -173,9 +171,13 @@ data DebAtom
                                                   -- version 0.3.0.0-1build3, we need to specify
                                                   -- debVersion="0.3.0.0-1build3" or the version we produce will
                                                   -- look older than the one already available upstream.
-    | DebVersionSplits [VersionSplits]		  -- ^ Instances where the debian package name is different (for
-                                                  -- some range of version numbers) from the default constructed
-                                                  -- by mkPkgName.
+    | DebianNameMap [VersionSplits]		  -- ^ Mapping from cabal package name and version to debian source
+                                                  -- package name.  This allows different ranges of cabal versions to
+                                                  -- map to different debian source package names.
+    | SourcePackageName SrcPkgName                -- ^ Name to give to the debian source package.  If not supplied
+                                                  -- the name is constructed from the cabal package name.  Note that
+                                                  -- DebianNameMap could encode this information if we already knew
+                                                  -- the cabal package name, but we can't assume that.
     | BuildDep Relation				  -- ^ Add a build dependency
     | BuildDepIndep Relation			  -- ^ Add an arch independent build dependency
     | MissingDependency BinPkgName		  -- ^ Lets cabal-debian know that a package it might expect to exist
@@ -432,11 +434,11 @@ versionSplits = lens g s
     where
       g atoms = foldAtoms from [] atoms
           where
-            from Source (DebVersionSplits xs') xs = xs ++ xs'
+            from Source (DebianNameMap xs') xs = xs ++ xs'
             from _ _ xs = xs
-      s x atoms = insertAtom Source (DebVersionSplits x) (deleteAtoms p atoms)
+      s x atoms = insertAtom Source (DebianNameMap x) (deleteAtoms p atoms)
           where
-            p Source (DebVersionSplits _) = True
+            p Source (DebianNameMap _) = True
             p _ _ = False
 
 -- | Map of Debian epoch numbers assigned to cabal packages.
