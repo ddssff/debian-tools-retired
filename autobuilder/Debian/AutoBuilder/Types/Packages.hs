@@ -47,7 +47,7 @@ data Packages
     | Packages
       { group :: Set TargetName
       , list :: [Packages]
-      }
+      } deriving (Show)
     -- deriving (Show, Eq, Ord)
 
 instance Eq Packages where
@@ -55,9 +55,6 @@ instance Eq Packages where
     (Packages {group = g1, list = l1}) == (Packages {group = g2, list = l2}) = g1 == g2 && l1 == l2
     NoPackage == NoPackage = True
     _ == _ = False
-
-instance Show Packages where
-    show _ = "<Packages>"
 
 instance Monoid Packages where
     mempty = NoPackage
@@ -162,6 +159,7 @@ data PackageFlag
     -- ^ When doing a darcs get pass this string to darcs via the --tag flag.
     | GitBranch String
     -- ^ When doing a 'git clone' pass this string to darcs via the --branch flag.
+    deriving (Show)
 
 relaxInfo :: [PackageFlag] -> [String]
 relaxInfo flags =
