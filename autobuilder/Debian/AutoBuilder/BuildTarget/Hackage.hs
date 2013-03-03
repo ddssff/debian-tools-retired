@@ -9,7 +9,7 @@ import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Compression.GZip as Z
 import Control.Exception (SomeException, throw)
 import Control.Monad (when)
-import Control.Monad.CatchIO (catch)
+import Control.Monad.CatchIO as IO (catch)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.List (isPrefixOf, isSuffixOf, intercalate, nub, sort)
@@ -21,7 +21,6 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo hiding (getVersion)
-import Prelude hiding (catch)
 import System.Exit
 import System.Directory (doesFileExist, createDirectoryIfMissing, removeFile)
 import System.FilePath ((</>))
@@ -120,7 +119,7 @@ downloadCached server name version =
          True -> (liftIO (B.readFile path) >>=
                   return . validate >>=
                   maybe (download' server name version) return)
-                   `catch` (\ (e :: SomeException) ->
+                   `IO.catch` (\ (e :: SomeException) ->
                                      let msg = "Failure reading " ++ path ++ ": " ++ show e in
                                      liftIO (hPutStrLn stderr msg >>
                                              hPutStrLn stderr ("Removing " ++ path) >>

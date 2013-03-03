@@ -15,7 +15,7 @@ import Control.Arrow (second)
 import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
 import Control.Exception (SomeException, try, throw, evaluate, AsyncException(UserInterrupt), fromException, toException)
-import Control.Monad.CatchIO (catch)
+import Control.Monad.CatchIO as IO (catch)
 import Control.Monad.RWS(MonadIO, liftIO, when)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
@@ -69,7 +69,6 @@ import Debian.VersionPolicy(parseTag, setTag)
 import Extra.Files(replaceFile)
 import "Extra" Extra.List(dropPrefix)
 import Extra.Misc(columns)
-import Prelude hiding (catch)
 import System.Directory (doesFileExist, doesDirectoryExist, removeDirectory, createDirectoryIfMissing)
 import System.Exit(ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.FilePath ((</>))
@@ -195,7 +194,7 @@ buildLoop cache globalBuildDeps localRepo poolOS cleanOS' targets =
              -- Build one target.
              result <- if Set.member (targetName target) (P.discard (P.params cache))
                        then return (Failure ["--discard option set"])
-                       else (Success <$> buildTarget cache cleanOS' globalBuildDeps localRepo poolOS target) `catch` handleBuildException
+                       else (Success <$> buildTarget cache cleanOS' globalBuildDeps localRepo poolOS target) `IO.catch` handleBuildException
              failing -- On failure the target and its dependencies get
                      -- added to failed.
                      (\ errs ->
@@ -865,7 +864,7 @@ setRevisionInfo fingerprint changes {- @(Changes dir name version arch fields fi
 -- | Run a checksum command on a file, return the resulting checksum as text.
 doChecksum :: String -> (String -> String) -> FilePath -> IO (Failing String)
 doChecksum cmd f path =
-    doChecksum' `catch` (\ (e :: IOError) -> return (Failure ["Error running " ++ cmd'' ++ ": " ++ show e]))
+    doChecksum' `IO.catch` (\ (e :: IOError) -> return (Failure ["Error running " ++ cmd'' ++ ": " ++ show e]))
     where
       doChecksum' =
           do result <- readProcessWithExitCode cmd' [path] ""

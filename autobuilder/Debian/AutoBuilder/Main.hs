@@ -12,14 +12,14 @@ import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..), maybeRead)
 import Control.Exception(SomeException, try, AsyncException(UserInterrupt), fromException, toException)
 import Control.Monad(foldM, when, unless)
-import Control.Monad.CatchIO (catch, throw)
+import Control.Monad.CatchIO as IO (catch, throw)
 import Control.Monad.State(MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import qualified Data.Map as Map
 import Data.List as List (intercalate, null)
 import Data.Maybe(catMaybes, fromMaybe)
-import Data.Set as Set (Set, member, insert, empty, fromList, toList, null, difference)
+import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildTarget (retrieve)
 import Debian.AutoBuilder.Env (cleanEnv, dependEnv, buildEnv)
@@ -53,7 +53,7 @@ import Debian.URI(URIAuth(uriUserInfo, uriRegName), URI(uriScheme, uriPath, uriA
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
-import Prelude hiding (catch, null)
+import Prelude hiding (null)
 import System.Directory(createDirectoryIfMissing, doesDirectoryExist)
 import System.Posix.Files(removeLink)
 import System.Exit(ExitCode(..), exitWith)
@@ -110,7 +110,7 @@ doParameterSet results params =
           noisier (P.verbosity params)
             (do top <- liftIO $ P.computeTopDir params
                 withLock (top ++ "/lockfile") (runTopT top (quieter 2 (P.buildCache params) >>= runParameterSet)))
-            `catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
+            `IO.catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
           (\ result -> return (result : results))
     where
       badForceBuild = difference (fromList (P.forceBuild params)) allTargetNames
@@ -118,7 +118,7 @@ doParameterSet results params =
       badGoals = difference (fromList (P.goals params)) allTargetNames
       badDiscards = difference (P.discard params) allTargetNames
       -- Set of bogus target names in the forceBuild list
-      badTargetNames names = difference names allTargetNames
+      -- badTargetNames names = difference names allTargetNames
       isFailure (Failure _) = True
       isFailure _ = False
       allTargetNames :: Set P.TargetName
@@ -183,7 +183,7 @@ runParameterSet cache =
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
       buildResult <- buildTargets cache dependOS globalBuildDeps localRepo poolOS targets
       -- If all targets succeed they may be uploaded to a remote repo
-      result <- (upload buildResult >>= liftIO . newDist) `catch` (\ (e :: SomeException) -> return (Failure [show e]))
+      result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))
       updateRepoCache
       return result
     where
@@ -250,7 +250,7 @@ runParameterSet cache =
              when (P.report params) (ePutStrLn . doReport $ allTargets)
              qPutStrLn "Retrieving all source code:\n"
              countTasks' (map (\ (target :: P.Packages) ->
-                                   (show (P.spec target), (Right <$> retrieve buildOS cache target) `catch` handleRetrieveException target))
+                                   (show (P.spec target), (Right <$> retrieve buildOS cache target) `IO.catch` handleRetrieveException target))
                               (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
           where
             allTargets = P.packages (C.params cache)
@@ -299,13 +299,13 @@ runParameterSet cache =
              live <- getApt >>= return . getRepoMap
              repoCache <- liftIO $ loadCache path
              let merged = show . map (\ (uri, x) -> (show uri, x)) . Map.toList $ Map.union live repoCache
-             liftIO (removeLink path `catch` (\e -> unless (isDoesNotExistError e) (ioError e))) >> liftIO (writeFile path merged)
+             liftIO (removeLink path `IO.catch` (\e -> unless (isDoesNotExistError e) (ioError e))) >> liftIO (writeFile path merged)
              return ()
           where
             isRemote (uri, _) = uriScheme uri /= "file:"
             loadCache :: FilePath -> IO (Map.Map URI (Maybe Repository))
             loadCache path =
-                do pairs <- readFile path `catch` (\ (_ :: SomeException) -> return "[]") >>= 
+                do pairs <- readFile path `IO.catch` (\ (_ :: SomeException) -> return "[]") >>= 
                             return . fromMaybe [] . maybeRead :: IO [(String, Maybe Repository)]
                    let (pairs' :: [(URI, Maybe Repository)]) =
                            catMaybes (map (\ (s, x) -> case parseURI s of
