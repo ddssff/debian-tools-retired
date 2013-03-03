@@ -9,9 +9,17 @@ module Debian.AutoBuilder.Types.Packages
     , RetrieveMethod(..)
     , PackageFlag(..)
     , relaxInfo
+    , hackage
+    , method
+    , darcs
+    , apt
+    , debianize
+    , flag
+    , patch
     ) where
 
 import Data.ByteString (ByteString)
+import Data.Char (toLower)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.Set (Set, empty, union)
 import Data.String (IsString(fromString))
@@ -160,3 +168,59 @@ relaxInfo flags =
     foldr f [] flags
     where f (RelaxDep s) ss = s : ss
           f _ ss = ss
+
+-- Combinators for the Packages type
+
+hackage :: String -> Packages
+hackage s =
+    Package { name = fromString (targetNameFromCabal s)
+            , spec = Hackage s
+            , flags = [] }
+
+method :: String -> RetrieveMethod -> Packages
+method s m =
+    Package { name = fromString s
+            , spec = m
+            , flags = [] }
+
+git :: String -> String -> Packages
+git s path =
+    Package { name = fromString s
+            , spec = Git path
+            , flags = [] }
+
+apt :: String -> TargetName -> Packages
+apt dist name =
+          Package
+               { name = name
+               , spec = Apt dist (unTargetName name)
+               , flags = [] }
+
+darcs :: String -> String -> Packages
+darcs s path =
+    Package { name = fromString s
+            , spec = Darcs path
+            , flags = [] }
+
+debianize :: Packages -> Packages
+debianize p = p { spec = Debianize (spec p) }
+
+-- | Add a flag to every package in p
+flag :: Packages -> PackageFlag -> Packages
+flag p@(Package {}) f = p {flags = f : flags p}
+flag p@(Packages {}) f = p {list = map (`flag` f) (list p)}
+flag NoPackage _ = NoPackage
+
+patch :: Packages -> ByteString -> Packages
+patch package@(Package {}) s = package {spec = Patch (spec package) s}
+patch p@(Packages {}) s = p {list = map (`patch` s) (list p)}
+patch NoPackage _ = NoPackage
+
+-- | The target name returned is only used by the autobuilder command
+-- line interface to choose targets.  They look a lot like debian
+-- source package names for historical reasons.
+targetNameFromCabal "QuickCheck" = "haskell-quickcheck2"
+targetNameFromCabal "parsec" = "haskell-parsec3"
+targetNameFromCabal "gtk2hs-buildtools" = "gtk2hs-buildtools"
+targetNameFromCabal "MissingH" = "haskell-missingh"
+targetNameFromCabal s = "haskell-" ++ map toLower s
