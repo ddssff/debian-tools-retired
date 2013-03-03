@@ -26,7 +26,7 @@ class Interspersed t around between | t -> around, t -> between where
     pairs :: t -> [(between, around)]
 
     foldTriples :: (around -> between -> around -> r -> r) -> r -> t -> r
-    foldTriples f r0 x = snd $ foldl (\ (b1, r) (c, b2) -> (b2, f b1 c b2 r)) (leftmost x, r0) (pairs x)
+    foldTriples f r0 x = snd $ foldl (\ (b1, r) (c, b2) -> (b1, f b1 c b2 r)) (leftmost x, r0) (pairs x)
 
     -- Treat the b's as the centers and the c's as the things to their
     -- left and right.  Use Maybe to make up for the missing c's at the

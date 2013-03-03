@@ -1,3 +1,9 @@
+haskell-cabal-debian (3.2.4) unstable; urgency=low
+
+  * Fix long standing bug in Debian.Debianize.Interspersed.foldTriples.
+
+ -- David Fox <dsf@seereason.com>  Sun, 03 Mar 2013 09:45:14 -0800
+
 haskell-cabal-debian (3.2.3) unstable; urgency=low
 
   * Clean up mapping from cabal names to debian names.

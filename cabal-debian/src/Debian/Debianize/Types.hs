@@ -5,11 +5,12 @@ module Debian.Debianize.Types
     , Server(..)
     , InstallFile(..)
     , VersionSplits(..)
+    , insertSplit
     , DebType(..)
     , DebAction(..)
     ) where
 
-import Data.Version (Version)
+import Data.Version (Version(Version))
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName)
 import Debian.Version (DebianVersion)
@@ -63,8 +64,32 @@ data InstallFile
 data VersionSplits
     = VersionSplits {
         oldestPackage :: String
-      , splits :: [(Version, String)] -- Assumed to be in version number order
+      -- ^ The name given to versions older than the oldest split.
+      , splits :: [(Version, String)]
+      -- ^ Each pair is The version where the split occurs, and the
+      -- name to use for versions greater than or equal to that
+      -- version.  This list assumed to be in (must be kept in)
+      -- ascending version number order.
       } deriving (Eq, Ord, Show)
+
+-- | Split the version range and give the older packages a new name.
+insertSplit :: String -> Version -> VersionSplits -> VersionSplits
+insertSplit base ver@(Version ns _) sp@(VersionSplits {}) =
+    case splits sp of
+      -- This is the oldest split, change oldestPackage and insert a new head pair
+      (ver', name') : _ | ver' > ver -> sp {oldestPackage = newname, splits = (ver, oldestPackage sp) : splits sp}
+      [] -> sp {oldestPackage = newname, splits = [(ver, oldestPackage sp)]}
+      -- Not the oldest split, insert it in its proper place.
+      _ -> sp {splits = reverse (insert (reverse (splits sp)))}
+    where
+      -- Insert our new split into the reversed list
+      insert ((ver', name') : more) =
+          if ver' < ver
+          then (ver, name') : (ver', newname) : more
+          else (ver', name') : insert more
+      -- ver' is older, change oldestPackage
+      insert [] = [(ver, oldestPackage sp)]
+      newname = base ++ "-" ++ (show (last ns - 1))
 
 data DebAction = Usage | Debianize | SubstVar DebType deriving (Read, Show, Eq, Ord)
 
