@@ -325,7 +325,7 @@ debianName' msplits typ pkgDesc =
                                   Just (D.GRE v') | v' < split -> ltName
                                   Just (D.SGR v') | v' < split -> ltName
                                   _ -> geName)
-                       undefined
+                       (oldestPackage splits)
                        splits
     where
       foldTriples' :: (String -> Version -> String -> String -> String) -> String -> VersionSplits -> String
