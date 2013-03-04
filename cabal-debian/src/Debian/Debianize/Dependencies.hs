@@ -25,15 +25,15 @@ import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, unlines)
-import Data.Version (Version, showVersion)
+import Data.Version (showVersion)
 import Debian.Control
 import Debian.Debianize.Atoms (Atoms, packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary,
                                missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
                                packageInfo, depends, conflicts, control)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile as Debian (PackageType(..), SourceDebDescription(..))
-import Debian.Debianize.Interspersed (Interspersed(leftmost, pairs, foldInverted), foldTriples)
-import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), VersionSplits(..), DebType(..))
+import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), DebType(..))
+import Debian.Debianize.Types.VersionSplits (VersionSplits, doSplits, packageRangesFromVersionSplits)
 import Debian.Orphans ()
 import qualified Debian.Relation as D
 import Debian.Relation (Relations, Relation, BinPkgName(BinPkgName), PkgName(pkgNameFromString))
@@ -312,24 +312,8 @@ debianName' :: (PkgName name) => Maybe VersionSplits -> PackageType -> PackageId
 debianName' msplits typ pkgDesc =
     case msplits of
       Nothing -> mkPkgName pname typ
-      Just splits ->
-          (\ s -> mkPkgName' s typ) $
-          foldTriples' (\ ltName v geName _ ->
-                           let split = parseDebianVersion (showVersion v) in
-                                case version of
-                                  Nothing -> geName
-                                  Just (D.SLT v') | v' <= split -> ltName
-                                  -- Otherwise use ltName only when the split is below v'
-                                  Just (D.EEQ v') | v' < split -> ltName
-                                  Just (D.LTE v') | v' < split -> ltName
-                                  Just (D.GRE v') | v' < split -> ltName
-                                  Just (D.SGR v') | v' < split -> ltName
-                                  _ -> geName)
-                       (oldestPackage splits)
-                       splits
+      Just splits -> (\ s -> mkPkgName' s typ) $ doSplits splits version
     where
-      foldTriples' :: (String -> Version -> String -> String -> String) -> String -> VersionSplits -> String
-      foldTriples' = foldTriples
       -- def = mkPkgName pname typ
       pname@(PackageName _) = pkgName pkgDesc
       version = (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion pkgDesc)))))
@@ -372,18 +356,6 @@ debianBaseName (PackageName name) =
       fixChar :: Char -> Char
       fixChar '_' = '-'
       fixChar c = toLower c
-
-instance Interspersed VersionSplits String Version where
-    leftmost (VersionSplits {splits = []}) = error "Empty Interspersed instance"
-    leftmost (VersionSplits {oldestPackage = p}) = p
-    pairs (VersionSplits {splits = xs}) = xs
-
-packageRangesFromVersionSplits :: VersionSplits -> [(String, VersionRange)]
-packageRangesFromVersionSplits splits =
-    foldInverted (\ older dname newer more ->
-                      (dname, intersectVersionRanges (maybe anyVersion orLaterVersion older) (maybe anyVersion earlierVersion newer)) : more)
-                 []
-                 splits
 
 {-
 -- | Generate the head of the debian/rules file.

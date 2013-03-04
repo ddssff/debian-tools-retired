@@ -37,7 +37,7 @@ import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryD
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
-import Debian.Debianize.Goodies (defaultAtoms, watchAtom)
+import Debian.Debianize.Goodies (watchAtom)
 import Debian.Debianize.Input (inputDebianization, inputCabalization, inputLicenseFile, inputMaintainer, inputChangeLog)
 import Debian.Debianize.Options (options, compileArgs)
 import Debian.Debianize.SubstVars (substvars)
@@ -67,13 +67,13 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 -- | The main function for the cabal-debian executable.
-cabalDebian :: IO ()
-cabalDebian =
+cabalDebian :: Atoms -> IO ()
+cabalDebian defaultAtoms =
     compileEnvironmentArgs defaultAtoms >>=
     compileCommandlineArgs >>= \ atoms ->
       case getL debAction atoms of
         SubstVar debType -> substvars atoms debType
-        Debianize -> debianize (Top ".") return
+        Debianize -> debianize (Top ".") return defaultAtoms
         Usage -> do
           progName <- getProgName
           let info = "Usage: " ++ progName ++ " [FLAGS]\n"
@@ -90,9 +90,9 @@ compileCommandlineArgs atoms0 = compileArgs <$> getArgs <*> pure atoms0
 -- debianize function.  This is basically equivalent to @cabal-debian
 -- --debianize@, except that the command line arguments come from the
 -- function parameter.
-callDebianize :: [String] -> IO ()
-callDebianize args =
-    withArgs args (debianize (Top ".") return)
+callDebianize :: [String] -> Atoms -> IO ()
+callDebianize args defaultAtoms =
+    withArgs args (debianize (Top ".") return defaultAtoms)
 
 -- | Put an argument list into the @CABALDEBIAN@ environment variable
 -- and then run the script in debian/Debianize.hs.  If this exists and
@@ -127,9 +127,9 @@ runDebianize' top args = withCurrentDirectory (unTop top) $ runDebianize args
 
 -- | Depending on the options in @atoms@, either validate, describe,
 -- or write the generated debianization.
-debianize :: Top -> (Atoms -> IO Atoms) -> IO ()
-debianize top customize =
-    debianization top customize >>= \ atoms ->
+debianize :: Top -> (Atoms -> IO Atoms) -> Atoms -> IO ()
+debianize top customize defaultAtoms =
+    debianization top customize defaultAtoms >>= \ atoms ->
     if getL validate atoms
     then inputDebianization top >>= \ old -> return (validateDebianization old atoms)
     else if getL dryRun atoms
@@ -141,8 +141,8 @@ debianize top customize =
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-debianization :: Top -> (Atoms -> IO Atoms) -> IO Atoms
-debianization top customize =
+debianization :: Top -> (Atoms -> IO Atoms) -> Atoms -> IO Atoms
+debianization top customize defaultAtoms =
     do atoms <- compileEnvironmentArgs defaultAtoms >>=
                 compileCommandlineArgs >>=
                 customize >>=

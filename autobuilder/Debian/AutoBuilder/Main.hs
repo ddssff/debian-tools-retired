@@ -32,6 +32,7 @@ import Debian.AutoBuilder.Types.Download (Download)
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
+import Debian.Debianize (Atoms)
 import Debian.Release (parseSection', releaseName')
 import Debian.Sources (SliceName(..))
 import Debian.Repo.AptImage(prepareAptEnv)
@@ -67,11 +68,11 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | Called from the configuration script, this processes a list of
 -- parameter sets.
-main :: [P.ParamRec] -> IO ()
-main [] = error "No parameter sets"
-main paramSets = do
+main :: Atoms -> [P.ParamRec] -> IO ()
+main _ [] = error "No parameter sets"
+main defaultAtoms paramSets = do
   -- Do parameter sets until there is a failure.
-  results <- runAptT (foldM doParameterSet [] paramSets)
+  results <- runAptT (foldM (doParameterSet defaultAtoms) [] paramSets)
   IO.hFlush IO.stdout
   IO.hFlush IO.stderr
   -- The result of processing a set of parameters is either an
@@ -93,8 +94,8 @@ main paramSets = do
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: MonadApt m => [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
-doParameterSet results params =
+doParameterSet :: MonadApt m => Atoms -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
+doParameterSet defaultAtoms results params =
     case () of
       _ | not (Set.null badForceBuild) ->
             error $ "Invalid forceBuild target name(s): " ++ intercalate ", " (map P.unTargetName (toList badForceBuild))
@@ -109,7 +110,7 @@ doParameterSet results params =
       _ ->
           noisier (P.verbosity params)
             (do top <- liftIO $ P.computeTopDir params
-                withLock (top ++ "/lockfile") (runTopT top (quieter 2 (P.buildCache params) >>= runParameterSet)))
+                withLock (top ++ "/lockfile") (runTopT top (quieter 2 (P.buildCache params) >>= runParameterSet defaultAtoms)))
             `IO.catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
           (\ result -> return (result : results))
     where
@@ -149,8 +150,8 @@ prepareDependOS params buildRelease localRepo =
                   (P.excludePackages params)
                   (P.components params)
 
-runParameterSet :: MonadDeb m => C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
-runParameterSet cache =
+runParameterSet :: MonadDeb m => Atoms -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
+runParameterSet defaultAtoms cache =
     do
       top <- askTop
       liftIO doRequiredVersion
@@ -250,7 +251,7 @@ runParameterSet cache =
              when (P.report params) (ePutStrLn . doReport $ allTargets)
              qPutStrLn "Retrieving all source code:\n"
              countTasks' (map (\ (target :: P.Packages) ->
-                                   (show (P.spec target), (Right <$> retrieve buildOS cache target) `IO.catch` handleRetrieveException target))
+                                   (show (P.spec target), (Right <$> retrieve defaultAtoms buildOS cache target) `IO.catch` handleRetrieveException target))
                               (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
           where
             allTargets = P.packages (C.params cache)

@@ -2,8 +2,7 @@
 -- are instead included as part of the library.
 {-# LANGUAGE OverloadedStrings #-}
 module Debian.Debianize.Goodies
-    ( defaultAtoms
-    , tightDependencyFixup
+    ( tightDependencyFixup
     , doServer
     , doWebsite
     , doBackups
@@ -34,7 +33,8 @@ import Debian.Debianize.Atoms as Atoms
      installInit, installCabalExec, rulesFragments, packageDescription, executable,
      serverInfo, website, backups, depends, epochMap, debianNameMap)
 import Debian.Debianize.ControlFile as Debian (PackageType(..))
-import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), VersionSplits(..))
+import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.Types.VersionSplits (VersionSplits)
 import Debian.Debianize.Utility (trim)
 import Debian.Orphans ()
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
@@ -56,33 +56,6 @@ translate str =
     where
       escape '"' = showString "\\\""
       escape c = showChar c
-
--- | This may not look like a goodie, but it incorporates knowledge
--- about the debian repository - what the epoch number of HaXml is,
--- the fact that the debian package name of parsec changed, etc.
-defaultAtoms :: Atoms
-defaultAtoms =
-    setL epochMap knownEpochMappings $
-    setL debianNameMap knownVersionSplits $
-    mempty
-
--- | These are the instances of debian names changing that I know
--- about.  I know they really shouldn't be hard coded.  Send a patch.
--- Note that this inherits the lack of type safety of the mkPkgName
--- function.
-knownVersionSplits :: Map PackageName VersionSplits
-knownVersionSplits =
-    Map.fromList
-    [ (PackageName "parsec", VersionSplits {oldestPackage = "parsec2", splits = [(Version [3] [], "parsec3")]})
-    , (PackageName "QuickCheck", VersionSplits {oldestPackage = "quickcheck1", splits = [(Version [2] [], "quickcheck2")]})
-    -- This just gives a special case cabal to debian name mapping.
-    , (PackageName "gtk2hs-buildtools", VersionSplits {oldestPackage = "gtk2hs-buildtools", splits = []}) ]
-
--- | We should always call this, just as we should always apply
--- knownVersionSplits.
-knownEpochMappings :: Map PackageName Int
-knownEpochMappings =
-    Map.fromList [(PackageName "HaXml", 1), (PackageName "HTTP", 1)]
 
 -- | Create equals dependencies.  For each pair (A, B), use dpkg-query
 -- to find out B's version number, version B.  Then write a rule into

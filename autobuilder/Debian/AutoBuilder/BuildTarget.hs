@@ -30,6 +30,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as C
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
+import Debian.Debianize (Atoms)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo (OSImage, rootPath, rootDir, findSourceTree, copySourceTree, SourceTree(dir'), topdir)
 import System.Directory (createDirectoryIfMissing)
@@ -38,15 +39,15 @@ import System.Process (proc)
 import System.Process.Progress (runProcessF, qPutStrLn, quieter)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
-retrieve :: MonadDeb m => OSImage -> C.CacheRec -> P.Packages -> m Download
-retrieve buildOS cache target =
+retrieve :: MonadDeb m => Atoms -> OSImage -> C.CacheRec -> P.Packages -> m Download
+retrieve defaultAtoms buildOS cache target =
     (\ x -> qPutStrLn (" " ++ show (P.spec target)) >> x) $
      case P.spec target of
       P.Apt dist package -> Apt.prepare cache target dist (SrcPkgName package)
       P.Bzr string -> Bzr.prepare cache target string
 
       P.Cd dir spec' ->
-          retrieve buildOS cache (target {P.spec = spec'}) >>= \ target' ->
+          retrieve defaultAtoms buildOS cache (target {P.spec = spec'}) >>= \ target' ->
           return $ Download { T.package = target
                             , T.getTop = getTop target' </> dir
                             , T.logText = logText target' ++ " (in subdirectory " ++ dir ++ ")"
@@ -59,20 +60,20 @@ retrieve buildOS cache target =
       P.Darcs uri -> Darcs.prepare cache target uri
 
       P.DataFiles base files loc ->
-          do base' <- retrieve buildOS cache (target {P.spec = base})
-             files' <- retrieve buildOS cache (target {P.spec = files})
+          do base' <- retrieve defaultAtoms buildOS cache (target {P.spec = base})
+             files' <- retrieve defaultAtoms buildOS cache (target {P.spec = files})
              baseTree <- liftIO (findSourceTree (T.getTop base') :: IO SourceTree)
              filesTree <- liftIO (findSourceTree (T.getTop files') :: IO SourceTree)
              _ <- liftIO $ copySourceTree filesTree (dir' baseTree </> loc)
              return base'
 
       P.DebDir upstream debian ->
-          do upstream' <- retrieve buildOS cache (target {P.spec = upstream})
-             debian' <- retrieve buildOS cache (target {P.spec = debian})
+          do upstream' <- retrieve defaultAtoms buildOS cache (target {P.spec = upstream})
+             debian' <- retrieve defaultAtoms buildOS cache (target {P.spec = debian})
              DebDir.prepare target upstream' debian'
       P.Debianize package ->
-          retrieve buildOS cache (target {P.spec = package}) >>=
-          Debianize.prepare cache target
+          retrieve defaultAtoms buildOS cache (target {P.spec = package}) >>=
+          Debianize.prepare defaultAtoms cache target
 
       -- Dir is a simple instance of BuildTarget representing building the
       -- debian source in a local directory.  This type of target is used
@@ -94,11 +95,11 @@ retrieve buildOS cache target =
       P.Hackage package -> Hackage.prepare cache target package
       P.Hg string -> Hg.prepare cache target string
       P.Patch base patch ->
-          retrieve buildOS cache (target {P.spec = base}) >>=
+          retrieve defaultAtoms buildOS cache (target {P.spec = base}) >>=
           Patch.prepare target buildOS patch
 
       P.Proc spec' ->
-          retrieve buildOS cache (target {P.spec = spec'}) >>= \ base ->
+          retrieve defaultAtoms buildOS cache (target {P.spec = spec'}) >>= \ base ->
           return $ T.Download {
                        T.package = target
                      , T.getTop = T.getTop base
@@ -109,15 +110,15 @@ retrieve buildOS cache target =
                      , T.buildWrapper = withProc buildOS
                      }
       P.Quilt base patches ->
-          do base' <- retrieve buildOS cache (target {P.spec = base})
-             patches' <- retrieve buildOS cache (target {P.spec = patches})
+          do base' <- retrieve defaultAtoms buildOS cache (target {P.spec = base})
+             patches' <- retrieve defaultAtoms buildOS cache (target {P.spec = patches})
              Quilt.prepare target base' patches'
       P.SourceDeb spec' ->
-          retrieve buildOS cache (target {P.spec = spec'}) >>=
+          retrieve defaultAtoms buildOS cache (target {P.spec = spec'}) >>=
           SourceDeb.prepare cache target
       P.Svn uri -> Svn.prepare cache target uri
       P.Tla string -> Tla.prepare cache target string
-      P.Twice base -> retrieve buildOS cache (target {P.spec = base}) >>=
+      P.Twice base -> retrieve defaultAtoms buildOS cache (target {P.spec = base}) >>=
                       Twice.prepare target
       P.Uri uri sum -> Uri.prepare cache target uri sum
 

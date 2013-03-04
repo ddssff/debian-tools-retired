@@ -15,20 +15,21 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (mconcat, (<>), mempty)
 import Data.Set as Set (fromList, union, insert, singleton)
 import qualified Data.Text as T
+import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (debianization)
 import Debian.Debianize.Atoms as Atoms
     (Atoms, rulesHead, compat, sourceFormat, changelog, control, missingDependencies, revision,
      binaryArchitectures, copyright, debVersion, execMap, buildDeps, utilsPackageName, description,
-     depends, installData {-, sourcePackageName, install, buildDepsIndep-})
+     depends, installData, epochMap {-, sourcePackageName, install, buildDepsIndep-})
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
--- import Debian.Debianize.Debianize (writeDebianization)
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
-import Debian.Debianize.Goodies (defaultAtoms, tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
+import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), Top(Top))
+import Debian.Debianize.VersionSplits (mapCabal, splitCabal)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
                       SourceFormat(Native3), Section(..), parseMaintainer)
@@ -36,6 +37,7 @@ import Debian.Relation (Relation(..), VersionReq(..), SrcPkgName(..), BinPkgName
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Version (buildDebianVersion, parseDebianVersion)
 import Distribution.License (License(BSD3))
+import Distribution.Package (PackageName(PackageName))
 import Prelude hiding (log)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>))
@@ -43,6 +45,17 @@ import System.Process (readProcessWithExitCode)
 import Test.HUnit
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..))
 import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
+
+-- | A suitable defaultAtoms value for the debian repository.
+defaultAtoms :: Atoms
+defaultAtoms =
+    setL epochMap (Map.fromList [(PackageName "HaXml", 1), (PackageName "HTTP", 1)]) .
+    splitCabal (PackageName "parsec") "parsec2" (Version [3] []) .
+    mapCabal (PackageName "parsec") "parsec3" .
+    splitCabal (PackageName "QuickCheck") "quickcheck1" (Version [2] []) .
+    mapCabal (PackageName "QuickCheck") "quickcheck2" .
+    mapCabal (PackageName "gtk2hs-buildtools") "gtk2hs-buildtools" $
+    mempty
 
 -- | Create a Debianization based on a changelog entry and a license
 -- value.  Uses the currently installed versions of debhelper and
@@ -223,7 +236,7 @@ test4 :: Test
 test4 =
     TestLabel "test4" $
     TestCase (do old <- inputDebianization (Top "test-data/clckwrks-dot-com/output")
-                 new <- debianization (Top "test-data/clckwrks-dot-com/input") (customize old)
+                 new <- debianization (Top "test-data/clckwrks-dot-com/input") (customize old) defaultAtoms
                  assertEqual "test4" [] (diffDebianizations old (copyFirstLogEntry old new)))
     where
       customize :: Atoms -> Atoms -> IO Atoms
@@ -351,6 +364,7 @@ test5 =
                            doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production")) .
                            setL changelog (getL changelog old) .
                            (newDebianization' level standards))
+                          defaultAtoms
                  assertEqual "test5" [] (diffDebianizations old (copyFirstLogEntry old new)))
     where
       theSite :: BinPkgName -> Site
@@ -430,6 +444,7 @@ test8 =
                             setL sourceFormat (Just Native3) .
                             setL changelog (Just log) .
                             (newDebianization' 7 (StandardsVersion 3 9 3 Nothing)))
+                           defaultAtoms
                   assertEqual "test8" [] (diffDebianizations old (copyChangelog old new))
              )
 
@@ -461,6 +476,7 @@ test9 =
                                               , "AlexWrapper-posn-bytestring"
                                               , "AlexWrapper-strict-bytestring"]) .
                             newDebianization' 7 (StandardsVersion 3 9 3 Nothing))
+                           defaultAtoms
                   assertEqual "test9" [] (diffDebianizations old (copyFirstLogEntry old new)))
 
 data Change k a

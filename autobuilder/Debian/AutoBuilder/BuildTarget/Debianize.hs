@@ -35,8 +35,8 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: MonadDeb m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
-prepare cache package' target =
+prepare :: MonadDeb m => Atoms -> P.CacheRec -> P.Packages -> T.Download -> m T.Download
+prepare defaultAtoms cache package' target =
     do dir <- sub ("debianize" </> takeFileName (T.getTop target))
        liftIO $ createDirectoryIfMissing True dir
        _ <- rsync [] (T.getTop target) dir
@@ -48,7 +48,7 @@ prepare cache package' target =
                 let version = pkgVersion . package . packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderCabal cache (P.flags package') dir
+                liftIO $ autobuilderCabal cache (P.flags package') dir defaultAtoms
                 return $ T.Download { T.package = package'
                                     , T.getTop = dir
                                     , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
@@ -85,12 +85,12 @@ collectPackageFlags cache pflags =
     where
       ver = P.ghcVersion (P.params cache)
 
-autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
-autobuilderCabal cache pflags debianizeDirectory =
+autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> Atoms -> IO ()
+autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do -- This will be false if the package has no debian/Debianize.hs script
        done <- collectPackageFlags cache pflags >>= Cabal.runDebianize
-       when (not done) (withArgs [] (Cabal.debianization (Top ".") (return . applyPackageFlags pflags) >>= Cabal.writeDebianization (Top ".")))
+       when (not done) (withArgs [] (Cabal.debianization (Top ".") (return . applyPackageFlags pflags) defaultAtoms >>= Cabal.writeDebianization (Top ".")))
 
 applyPackageFlags :: [P.PackageFlag] -> Atoms -> Atoms
 applyPackageFlags flags atoms = foldr applyPackageFlag atoms flags
