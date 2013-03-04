@@ -103,11 +103,13 @@ callDebianize args =
 -- available to the cabal-debian executable.
 runDebianize :: [String] -> IO Bool
 runDebianize args =
+    getEnv "HOME" >>= \ home ->
     doesFileExist "debian/Debianize.hs" >>= \ exists ->
     case exists of
       False -> return False
       True ->
-          putEnvironmentArgs args >> readProcessWithExitCode "runhaskell" ("debian/Debianize.hs" : args) "" >>= \ result ->
+          let autobuilderd = "-i.:" ++ home </> ".autobuilder.d" in
+          putEnvironmentArgs args >> readProcessWithExitCode "runhaskell" ([autobuilderd, "debian/Debianize.hs"] ++ args) "" >>= \ result ->
           case result of
             (ExitSuccess, _, _) -> return True
             (code, out, err) ->
