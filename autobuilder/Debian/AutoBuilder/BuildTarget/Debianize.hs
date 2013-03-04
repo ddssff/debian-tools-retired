@@ -86,8 +86,8 @@ collectPackageFlags cache pflags =
       ver = P.ghcVersion (P.params cache)
 
 autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> IO ()
-autobuilderCabal cache pflags currentDirectory =
-    withCurrentDirectory currentDirectory $
+autobuilderCabal cache pflags debianizeDirectory =
+    withCurrentDirectory debianizeDirectory $
     do -- This will be false if the package has no debian/Debianize.hs script
        done <- collectPackageFlags cache pflags >>= Cabal.runDebianize
        when (not done) (withArgs [] (Cabal.debianization (Top ".") (return . applyPackageFlags pflags) >>= Cabal.writeDebianization (Top ".")))
