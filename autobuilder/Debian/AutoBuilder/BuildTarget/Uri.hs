@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE CPP, ScopedTypeVariables, TypeFamilies #-}
 -- |A 'uri:' target is an URI that returns a tarball, with an optional
 -- md5sum if we want to ensure against the tarball changing unexpectedly.
 module Debian.AutoBuilder.BuildTarget.Uri
@@ -24,7 +24,9 @@ import qualified Debian.Repo as R
 import Debian.Repo.Monads.Top (sub)
 import Debian.URI
 import Magic
+#if __GLASGOW_HASKELL__ < 706
 import Prelude hiding (catch)
+#endif
 import System.FilePath (splitFileName, (</>))
 import System.Directory
 import System.Process (shell)

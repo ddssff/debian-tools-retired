@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.DebDir
     ( documentation
     , prepare
@@ -13,7 +13,9 @@ import Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)
 import Debian.Version (version)
+#if __GLASGOW_HASKELL__ < 706
 import Prelude hiding (catch)
+#endif
 import Debian.Repo
 import System.Directory
 import System.FilePath ((</>))
