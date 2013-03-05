@@ -21,7 +21,6 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
-import qualified Debian.AutoBuilder.Types.RetrieveMethodOld as O
 import Debian.Changes (logVersion)
 import Debian.Control (lookupP, unControl, stripWS)
 import qualified Debian.Control.String as S
@@ -54,31 +53,7 @@ data Fingerprint
     | NoFingerprint
 
 readMethod :: String -> Maybe P.RetrieveMethod
-readMethod s =
-    case maybeRead s :: Maybe P.RetrieveMethod of
-      Just method -> Just method
-      -- when this code is taken out it will trigger a rebuild of all
-      -- packages that haven't been rebuild since 5 Mar 2012.
-      Nothing -> case maybeRead s :: Maybe O.RetrieveMethod of
-                   Nothing -> Nothing
-                   Just method -> Just (convert method)
-    where
-      convert (O.Apt a b _) = P.Apt a b
-      convert (O.Bzr a) = P.Bzr a
-      convert (O.Cd a b) = P.Cd a (convert b)
-      convert (O.Darcs a _) = P.Darcs a
-      convert (O.DebDir a b) = P.DebDir (convert a) (convert b)
-      convert (O.Debianize a _) = P.Debianize (P.Hackage a)
-      convert (O.Dir a) = P.Dir a
-      convert (O.Hackage a _) = P.Hackage a
-      convert (O.Hg a) = P.Hg a
-      convert (O.Proc a) = P.Proc (convert a)
-      convert (O.Quilt a b) = P.Quilt (convert a) (convert b)
-      convert (O.SourceDeb a) = P.SourceDeb (convert a)
-      convert (O.Svn a) = P.Svn a
-      convert (O.Tla a) = P.Tla a
-      convert (O.Twice a) = P.Twice (convert a)
-      convert (O.Uri a b) = P.Uri a b
+readMethod s = maybeRead s
 
 packageFingerprint :: Maybe SourcePackage -> Fingerprint
 packageFingerprint Nothing = NoFingerprint

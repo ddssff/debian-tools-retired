@@ -120,6 +120,5 @@ Library
     Debian.AutoBuilder.Types.Fingerprint
     Debian.AutoBuilder.Types.Packages,
     Debian.AutoBuilder.Types.ParamRec
-    Debian.AutoBuilder.Types.RetrieveMethodOld,
     Debian.AutoBuilder.Version
     Paths_AutoBuilder

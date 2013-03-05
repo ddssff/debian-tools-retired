@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
+{-# OPTIONS -fwarn-unused-imports #-}
 module Debian.AutoBuilder.Types.Download
     ( Download(..)
     , handle
