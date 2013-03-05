@@ -1,3 +1,10 @@
+haskell-cabal-debian (3.2.5) unstable; urgency=low
+
+  * Add move the VersionSplits type into a module, and fix the code that
+    splits the mapping of cabal to debian names over a version range.
+
+ -- David Fox <dsf@seereason.com>  Tue, 05 Mar 2013 05:17:03 -0800
+
 haskell-cabal-debian (3.2.4) unstable; urgency=low
 
   * Fix long standing bug in Debian.Debianize.Interspersed.foldTriples.

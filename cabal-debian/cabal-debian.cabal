@@ -1,5 +1,5 @@
 Name:           cabal-debian
-Version:        3.2.4
+Version:        3.2.5
 License:        BSD3
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>
@@ -67,7 +67,9 @@ Library
    Debian.Debianize.SubstVars
    Debian.Debianize.Tests
    Debian.Debianize.Types
+   Debian.Debianize.Types.VersionSplits
    Debian.Debianize.Utility
+   Debian.Debianize.VersionSplits
    Debian.Orphans
    Debian.Policy
    Distribution.Version.Invert
