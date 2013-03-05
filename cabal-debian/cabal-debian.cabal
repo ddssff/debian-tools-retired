@@ -81,7 +81,8 @@ Executable cabal-debian
    base,
    Cabal,
    cabal-debian,
-   containers
+   containers,
+   data-lens
 
 Executable cabal-debian-tests
  Main-Is: src/Tests.hs
