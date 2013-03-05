@@ -79,6 +79,7 @@ Executable cabal-debian
  ghc-options: -threaded -Wall -O2
  Build-Depends:
    base,
+   Cabal,
    cabal-debian,
    containers
 
