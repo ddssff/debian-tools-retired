@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
 -- | The Packages type specifies how to obtain the source code for one
 -- or more packages.
 module Debian.AutoBuilder.Types.Packages
@@ -16,16 +16,39 @@ module Debian.AutoBuilder.Types.Packages
     , debianize
     , flag
     , patch
+    , rename
+    , bzr
+    , datafiles
+    , debdir
+    , dir
+    , git
+    , hg
+    , proc
+    , quilt
+    , sourceDeb
+    , svn
+    , tla
+    , twice
+    , uri
+    , findSource
     ) where
 
+import Debug.Trace as D
+
+import Control.Exception (SomeException, try)
 import Data.ByteString (ByteString)
 import Data.Char (toLower)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.Set (Set, empty, union)
 import Data.String (IsString(fromString))
-import Debian.Relation (BinPkgName)
 import qualified Debian.Debianize as CD
+import Debian.Relation (BinPkgName)
+import Debian.Repo (DebianSourceTree, findDebianSourceTrees)
+import System.FilePath ((</>))
 
+-- | A type for the target name of a Packages record, used to
+-- reference packages or groups of packages.  This is usually
+-- been very much like the debian source package name.
 newtype TargetName = TargetName {unTargetName :: String} deriving (Eq, Ord, Show)
 
 instance IsString TargetName where
@@ -169,39 +192,11 @@ relaxInfo flags =
 
 -- Combinators for the Packages type
 
-hackage :: String -> Packages
-hackage s =
-    Package { name = fromString (targetNameFromCabal s)
-            , spec = Hackage s
-            , flags = [] }
-
 method :: String -> RetrieveMethod -> Packages
 method s m =
     Package { name = fromString s
             , spec = m
             , flags = [] }
-
-git :: String -> String -> Packages
-git s path =
-    Package { name = fromString s
-            , spec = Git path
-            , flags = [] }
-
-apt :: String -> TargetName -> Packages
-apt dist name =
-          Package
-               { name = name
-               , spec = Apt dist (unTargetName name)
-               , flags = [] }
-
-darcs :: String -> String -> Packages
-darcs s path =
-    Package { name = fromString s
-            , spec = Darcs path
-            , flags = [] }
-
-debianize :: Packages -> Packages
-debianize p = p { spec = Debianize (spec p) }
 
 -- | Add a flag to every package in p
 flag :: Packages -> PackageFlag -> Packages
@@ -214,6 +209,73 @@ patch package@(Package {}) s = package {spec = Patch (spec package) s}
 patch p@(Packages {}) s = p {list = map (`patch` s) (list p)}
 patch NoPackage _ = NoPackage
 
+rename :: Packages -> TargetName -> Packages
+rename p s = p {name = s}
+
+apt :: String -> TargetName -> Packages
+apt dist name =
+          Package
+               { name = name
+               , spec = Apt dist (unTargetName name)
+               , flags = [] }
+
+bzr :: String -> String -> Packages
+bzr name path = method name (Bzr path)
+
+darcs :: String -> String -> Packages
+darcs s path =
+    Package { name = fromString s
+            , spec = Darcs path
+            , flags = [] }
+
+datafiles :: String -> RetrieveMethod -> RetrieveMethod -> FilePath -> Packages
+datafiles name cabal files dest = method name (DataFiles cabal files dest)
+
+debianize :: Packages -> Packages
+debianize p = p { spec = Debianize (spec p) }
+
+-- debdir :: String -> RetrieveMethod -> RetrieveMethod -> Packages
+-- debdir name method1 method2 = method name (DebDir method1 method1)
+
+debdir :: RetrieveMethod -> Packages -> Packages
+debdir debian p = p {spec = DebDir debian (spec p)}
+
+dir :: String -> FilePath -> Packages
+dir name path = method name (Dir path)
+
+git :: String -> String -> Packages
+git name path = method name (Git path)
+
+hackage :: String -> Packages
+hackage s =
+    Package { name = fromString (targetNameFromCabal s)
+            , spec = Hackage s
+            , flags = [] }
+
+hg :: String -> String -> Packages
+hg name path = method name (Hg path)
+
+proc :: Packages -> Packages
+proc p = p {spec = Proc (spec p)}
+
+quilt :: RetrieveMethod -> Packages -> Packages
+quilt patchdir p = p {spec = Quilt (spec p) patchdir}
+
+sourceDeb :: String -> Packages -> Packages
+sourceDeb name p = method name (SourceDeb (spec p))
+
+svn :: String -> String -> Packages
+svn name path = method name (Svn path)
+
+tla :: String -> String -> Packages
+tla name path = method name (Tla path)
+
+twice :: Packages -> Packages
+twice p = p {spec = Twice (spec p)}
+
+uri :: String -> String -> String -> Packages
+uri name tarball checksum = method name (Uri tarball checksum)
+
 -- | The target name returned is only used by the autobuilder command
 -- line interface to choose targets.  They look a lot like debian
 -- source package names for historical reasons.
@@ -222,3 +284,15 @@ targetNameFromCabal "parsec" = "haskell-parsec3"
 targetNameFromCabal "gtk2hs-buildtools" = "gtk2hs-buildtools"
 targetNameFromCabal "MissingH" = "haskell-missingh"
 targetNameFromCabal s = "haskell-" ++ map toLower s
+
+-- | For the Apt target, the real source tree is in a subdirctory.
+findSource :: RetrieveMethod -> FilePath -> IO FilePath
+findSource (Patch (Apt _dist _name) _) copyDir =
+  try (findDebianSourceTrees copyDir) >>=
+  return . either (\ (e :: SomeException) -> D.trace (" -> " ++ show e) copyDir)
+           (\ (ts :: [(FilePath, DebianSourceTree)]) ->
+             case ts of
+               [(subdir, _)] -> D.trace (" -> " ++ show (copyDir </> subdir)) (copyDir </> subdir)
+               [] -> error "findSource: Internal error"
+               _ -> error $ "Multiple debian source trees in " ++ copyDir ++ ": " ++ show (map fst ts))
+findSource _ copyDir = return copyDir
