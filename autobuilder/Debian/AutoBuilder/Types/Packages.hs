@@ -15,6 +15,7 @@ module Debian.AutoBuilder.Types.Packages
     , apt
     , debianize
     , flag
+    , mflag
     , patch
     , rename
     , bzr
@@ -30,6 +31,7 @@ module Debian.AutoBuilder.Types.Packages
     , tla
     , twice
     , uri
+    , cd
     , findSource
     ) where
 
@@ -204,6 +206,10 @@ flag p@(Package {}) f = p {flags = f : flags p}
 flag p@(Packages {}) f = p {list = map (`flag` f) (list p)}
 flag NoPackage _ = NoPackage
 
+mflag :: Packages -> Maybe PackageFlag -> Packages
+mflag p Nothing = p
+mflag p (Just f) = flag p f
+
 patch :: Packages -> ByteString -> Packages
 patch package@(Package {}) s = package {spec = Patch (spec package) s}
 patch p@(Packages {}) s = p {list = map (`patch` s) (list p)}
@@ -211,6 +217,9 @@ patch NoPackage _ = NoPackage
 
 rename :: Packages -> TargetName -> Packages
 rename p s = p {name = s}
+
+cd :: Packages -> FilePath -> Packages
+cd p path = p {spec = Cd path (spec p)}
 
 apt :: String -> TargetName -> Packages
 apt dist name =
@@ -237,8 +246,8 @@ debianize p = p { spec = Debianize (spec p) }
 -- debdir :: String -> RetrieveMethod -> RetrieveMethod -> Packages
 -- debdir name method1 method2 = method name (DebDir method1 method1)
 
-debdir :: RetrieveMethod -> Packages -> Packages
-debdir debian p = p {spec = DebDir debian (spec p)}
+debdir :: Packages -> RetrieveMethod -> Packages
+debdir p debian = p {spec = DebDir debian (spec p)}
 
 dir :: String -> FilePath -> Packages
 dir name path = method name (Dir path)
