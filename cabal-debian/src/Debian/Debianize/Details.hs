@@ -42,4 +42,4 @@ seereasonDefaultAtoms =
     splitCabal (PackageName "case-insensitive") "case-insensitive-0" (Version [1] []) .
     mapCabal (PackageName "case-insensitive") "case-insensitive" $
 
-    debianAtoms
+    debianDefaultAtoms
