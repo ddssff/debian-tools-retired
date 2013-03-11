@@ -1,3 +1,10 @@
+haskell-cabal-debian (3.3) unstable; urgency=low
+
+  * Add Debian.Debianize.Details, with default Atoms values for Debian and
+    SeeReason.
+
+ -- David Fox <dsf@seereason.com>  Mon, 11 Mar 2013 11:44:10 -0700
+
 haskell-cabal-debian (3.2.5) unstable; urgency=low
 
   * Add move the VersionSplits type into a module, and fix the code that
