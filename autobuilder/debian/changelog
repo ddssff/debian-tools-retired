@@ -1,3 +1,9 @@
+autobuilder (6.52) unstable; urgency=low
+
+  * Move code from autobuilder-config to here.
+
+ -- David Fox <dsf@seereason.com>  Mon, 11 Mar 2013 08:54:10 -0700
+
 autobuilder (6.51) unstable; urgency=low
 
   * Add Packages combinators to Debian.Autobuilder.Types.Packages.
