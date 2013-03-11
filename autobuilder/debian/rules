@@ -12,7 +12,6 @@ include /usr/share/cdbs/1/class/hlibrary.mk
 
 binary-fixup/autobuilder::
 	install -m 755 -D autobuilder debian/autobuilder/usr/bin/autobuilder
-	install -m 644 -D Example/autobuilder.hs debian/autobuilder/usr/lib/autobuilder/autobuilder.hs
 
 clean::
 	rm -f *.o *.hi */*.o */*.hi
