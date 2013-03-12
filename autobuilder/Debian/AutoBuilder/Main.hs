@@ -55,6 +55,7 @@ import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
 import Prelude hiding (null)
+import System.Environment (getArgs, getEnv)
 import System.Directory(createDirectoryIfMissing, doesDirectoryExist)
 import System.Posix.Files(removeLink)
 import System.Exit(ExitCode(..), exitWith)
@@ -66,11 +67,24 @@ import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
+main :: Atoms -> (FilePath -> String -> P.ParamRec) -> (FilePath -> P.ParamRec -> P.Packages) -> IO ()
+main atoms defParams myKnownTargets =
+    do IO.hPutStrLn IO.stderr "Autobuilder starting..."
+       args <- getArgs
+       home <- getEnv "HOME"
+       let recs = P.getParams args (defParams home)
+       case any P.doHelp recs of
+         True -> IO.hPutStr IO.stderr (P.usage "Usage: ")
+         False ->
+             main' atoms (map (\ params -> let knownTargets = myKnownTargets home params in
+                                           params {P.packages = P.buildTargets params knownTargets}) recs)
+                  `catch` (\ (e :: SomeException) -> IO.hPutStrLn IO.stderr ("Exception: " ++ show e) >> throw e)
+
 -- | Called from the configuration script, this processes a list of
 -- parameter sets.
-main :: Atoms -> [P.ParamRec] -> IO ()
-main _ [] = error "No parameter sets"
-main defaultAtoms paramSets = do
+main' :: Atoms -> [P.ParamRec] -> IO ()
+main' _ [] = error "No parameter sets"
+main' defaultAtoms paramSets = do
   -- Do parameter sets until there is a failure.
   results <- runAptT (foldM (doParameterSet defaultAtoms) [] paramSets)
   IO.hFlush IO.stdout

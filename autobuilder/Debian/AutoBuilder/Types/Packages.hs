@@ -5,6 +5,7 @@ module Debian.AutoBuilder.Types.Packages
     ( Packages(..)
     , TargetName(..)
     , foldPackages
+    , filterPackages
     , packageCount
     , RetrieveMethod(..)
     , PackageFlag(..)
@@ -96,6 +97,15 @@ foldPackages :: (TargetName -> RetrieveMethod -> [PackageFlag] -> r -> r) -> Pac
 foldPackages _ NoPackage r = r
 foldPackages f x@(Package {}) r = f (name x) (spec x) (flags x) r
 foldPackages f x@(Packages {}) r = foldr (foldPackages f) r (list x)
+
+filterPackages :: (Packages -> Bool) -> Packages -> Packages
+filterPackages p xs =
+    foldPackages (\ pname spec flags xs' ->
+                      if p (Package pname spec flags)
+                      then mappend (Package pname spec flags) xs'
+                      else xs')
+                 NoPackage
+                 xs
 
 packageCount :: Packages -> Int
 packageCount ps = foldPackages (\ _ _ _ n -> n + 1) ps 0

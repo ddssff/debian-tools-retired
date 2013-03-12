@@ -3,16 +3,21 @@ module Debian.AutoBuilder.Types.ParamRec
     , Strictness(..)
     , TargetSpec(..)
     , prettyPrint
-    , optSpecs
+    , getParams
+    , usage
+    , buildTargets
     ) where
 
 import Control.Arrow (first)
-import qualified Data.Set as Set
-import Debian.AutoBuilder.Types.Packages (Packages(NoPackage), TargetName(TargetName))
+import Data.List as List (map)
+import Data.Map as Map (Map, insertWith, elems, empty)
+import Data.Set as Set (Set, insert, empty, fold, member)
+import Debian.AutoBuilder.Types.Packages (Packages(Packages, Package, NoPackage, name, list, group), TargetName(TargetName))
 import Debian.Release ( Arch(Binary), ReleaseName(ReleaseName) )
 import Debian.Repo.Cache ( SourcesChangedAction(SourcesChangedError) )
 import Debian.Version ( DebianVersion, parseDebianVersion, prettyDebianVersion )
 import Debian.URI ( URI )
+import Prelude hiding (map)
 import System.Console.GetOpt
 
 -- |An instance of 'ParamClass' contains the configuration parameters
@@ -323,7 +328,10 @@ prettyPrint x =
             --, "baseRelease sources=\n" ++ show (lookup (sliceName (baseRelease x)) (sources x))
             ]
 
--- |Each option is defined as a function transforming the parameter record.
+-- |A Left String value indicates that beginning of a new autobuilder
+-- run for the named release.  Following that are Right (ParamRec ->
+-- ParamRec) values which transform the parameter record that
+-- describes that autobuilder run.
 optSpecs :: [OptDescr (Either String (ParamRec -> ParamRec))]
 optSpecs =
     [ Option ['v'] ["verbose"] (NoArg (Right (\ p -> p {verbosity = verbosity p + 1})))
@@ -400,3 +408,136 @@ optSpecs =
                    [] -> error $ "Package not found: " ++ s
                    xs -> error $ "Multiple packages found: " ++ show (map sourcePackageName xs)
 -}
+
+-- |given a list of strings as they would be returned from getArgs,
+-- build the list of ParamRec which defines the build.
+-- 
+-- Example: getParams ["lucid-seereason" "--all-targets"] >>= return . map buildRelease
+--            -> [ReleaseName {relName = "lucid-seereason"}]
+getParams :: [String] -> (String -> ParamRec) -> [ParamRec]
+getParams args params =
+    doParams (getOpt' (ReturnInOrder Left) optSpecs args)
+    where
+      -- Turn the parameter information into a list of parameter records
+      -- containing all the info needed during runtime.  Each return record
+      -- represents a separate autobuilder run.
+      doParams :: ([Either String (ParamRec -> ParamRec)], -- The list of functions to apply to the default record
+                   [String],               -- non-options
+                   [String],               -- unrecognized options
+                   [String])               -- error messages
+               -> [ParamRec]
+      doParams (fns, [], [], []) =
+          reverse $ f [] fns
+          where
+            f recs [] = recs
+            f recs (Left rel : xs) = f (params rel : recs) xs
+            f (rec : more) (Right fn : xs) = f (fn rec : more) xs
+            f _ _ = error "First argument must be a release name"
+      doParams (_, _, badopts, errs) =
+          error (usage ("Bad options: " ++ show badopts ++ ", errors: " ++ show errs))
+
+-- Intermediate type used while formatting the usage info.
+data DescrLine
+    = Opt { long :: String, short :: String }
+    | Text String
+
+-- |Modified version of System.Console.GetOpt.usageInfo, avoids printing
+-- such wide lines.
+usage :: String		-- header
+          -> String		-- nicely formatted decription of options
+usage header =
+    unlines (header:table)
+    where table = map fmtLine xs
+          fmtLine (Text s) = "    " ++ s
+          fmtLine (Opt {long = ls, short = ss}) =
+              "  " ++
+              flushLeft lsl ls ++ "  " ++
+              flushLeft ssl ss
+          xs = legend ++ concatMap fmtOpt optSpecs
+          ssl = foldl max 0 (map ss xs)
+          lsl = foldl max 0 (map ls xs)
+          -- The length of a short option
+          ss opt@(Opt _ _) = length (short opt)
+          ss _ = 0
+          -- The length of a long option
+          ls opt@(Opt _ _) = length (long opt)
+          ls _ = 0
+          flushLeft n x = take n (x ++ repeat ' ')
+          legend = [Opt {long = "Long option", short = "Short option"},
+                    Opt {long = "-----------", short = "------------"}]
+
+fmtOpt :: OptDescr a -> [DescrLine]
+fmtOpt paramDescr@(Option sos los ad descr) =
+   let ds = [Text ""] ++ map Text (lines descr) ++ [Text ""]
+       ss = map (fmtShort ad) sos
+       ls = map (fmtLong  ad) los in
+   let n = max (length ls) (length ss) in
+   let ss' = ss ++ replicate (n - length ss) ""
+       ls' = ls ++ replicate (n - length ls) "" in
+       -- ps' = ps ++ replicate (n - length ps) "" in
+   map (\ (l, s) -> Opt {long = l, short = s}) (zip ls' ss') ++ ds
+
+fmtShort :: ArgDescr a -> Char -> String
+fmtShort (NoArg  _   ) so = "-" ++ [so]
+fmtShort (ReqArg _ ad) so = "-" ++ [so] ++ " " ++ ad
+fmtShort (OptArg _ ad) so = "-" ++ [so] ++ "[" ++ ad ++ "]"
+
+fmtLong :: ArgDescr a -> String -> String
+fmtLong (NoArg  _   ) lo = "--" ++ lo
+fmtLong (ReqArg _ ad) lo = "--" ++ lo ++ "=" ++ ad
+fmtLong (OptArg _ ad) lo = "--" ++ lo ++ "[=" ++ ad ++ "]"
+
+fmtParam :: ArgDescr a -> String -> String
+fmtParam (NoArg  _   ) po = po ++ ": Yes"
+fmtParam (ReqArg _ ad) po = po ++ ": " ++ ad
+fmtParam (OptArg _ ad) po = po ++ ": " ++ ad
+
+buildTargets :: ParamRec -> Packages -> Packages
+buildTargets params knownTargets =
+          Packages { group = Set.empty
+                   , list = Map.elems $ if allTargets (targets params)
+                                        then collectAll knownTargets Map.empty
+                                        else Set.fold collectName Map.empty (targetNames (targets params) :: Set TargetName) }
+          where
+            collectName :: TargetName -> Map.Map TargetName Packages -> Map.Map TargetName Packages
+            collectName n collected =
+              case findByName n knownTargets of
+                [] -> error $ "Unknown target name: " ++ show n
+                ps -> foldr (\ p collected' -> 
+                              case p of
+                                (Package {}) -> Map.insertWith check (name p) p collected'
+                                _ -> error $ "Internal error: " ++ show p) collected ps
+            findByName n known =
+              case known of
+                NoPackage -> []
+                ps@(Packages {}) ->
+                  if Set.member n (group ps)
+                  then concatMap findAll (list ps)
+                  else concatMap (findByName n) (list ps)
+                p@(Package {}) ->
+                  if name p == n
+                  then [p]
+                  else []
+            findAll known =
+              case known of
+                NoPackage -> []
+                ps@(Packages {}) -> concatMap findAll (list ps)
+                p@(Package {}) -> [p]
+{-
+            collectByName known n collected =
+                case known of
+                  NoPackage -> collected
+                  p@(Package {}) -> if name p == n then Map.insertWith check n p collected else collected
+                  ps@(Packages {}) ->
+                      if Set.member n (group ps)
+                      then foldr collectAll collected (packages ps)
+                      else foldr (collect' n) collected (packages ps)
+            collect' n known collected = collectByName known n collected
+-}
+            collectAll :: Packages -> Map.Map TargetName Packages -> Map.Map TargetName Packages
+            collectAll p collected =
+                case p of
+                  NoPackage -> collected
+                  Package {} -> Map.insertWith check (name p) p collected
+                  Packages {} -> foldr collectAll collected (list p)
+            check old new = if old /= new then error ("Multiple packages with same name: " ++ show old ++ ", " ++ show new) else old
