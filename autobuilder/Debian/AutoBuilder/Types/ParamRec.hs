@@ -251,7 +251,9 @@ data ParamRec =
     -- , emailTo :: [String]
     -- -- ^ Who should get emails of autobuilder progress messages.
     , packages :: Packages
-    -- ^ The set of known package build specifications.
+    -- ^ The set of package that need to be built.
+    , knownPackages :: Packages
+    -- ^ The set of all known packages
   }
 
 data Strictness

@@ -67,37 +67,31 @@ import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-main :: Atoms -> (FilePath -> String -> P.ParamRec) -> (FilePath -> P.ParamRec -> P.Packages) -> IO ()
-main atoms defParams myKnownTargets =
+main :: Atoms -> (FilePath -> String -> P.ParamRec) -> IO ()
+main atoms myParams =
     do IO.hPutStrLn IO.stderr "Autobuilder starting..."
        args <- getArgs
        home <- getEnv "HOME"
-       let recs = P.getParams args (defParams home)
+       -- Compute all the ParamRecs implied by the command line
+       -- argument, using myParams to create each default ParamRec
+       -- value.
+       let recs = P.getParams args (myParams home)
        case any P.doHelp recs of
          True -> IO.hPutStr IO.stderr (P.usage "Usage: ")
          False ->
-             main' atoms (map (\ params -> let knownTargets = myKnownTargets home params in
-                                           params {P.packages = P.buildTargets params knownTargets}) recs)
-                  `catch` (\ (e :: SomeException) -> IO.hPutStrLn IO.stderr ("Exception: " ++ show e) >> throw e)
-
--- | Called from the configuration script, this processes a list of
--- parameter sets.
-main' :: Atoms -> [P.ParamRec] -> IO ()
-main' _ [] = error "No parameter sets"
-main' defaultAtoms paramSets = do
-  -- Do parameter sets until there is a failure.
-  results <- runAptT (foldM (doParameterSet defaultAtoms) [] paramSets)
-  IO.hFlush IO.stdout
-  IO.hFlush IO.stderr
-  -- The result of processing a set of parameters is either an
-  -- exception or a completion code.  Here we print a summary and
-  -- exit with a suitable result code.
-  -- ePutStrLn (intercalate "\n  " (map (\ (num, result) -> "Parameter set " ++ show num ++ ": " ++ showResult result) (zip [(1 :: Int)..] results)))
-  case partitionFailing results of
-    ([], _) -> return ()
-    _ ->
-        ePutStrLn (intercalate "\n  " (map (\ (num, result) -> "Parameter set " ++ show num ++ ": " ++ showResult result) (zip [(1 :: Int)..] results))) >>
-        exitWith (ExitFailure 1)
+             do let paramSets = map (\ params -> params {P.packages = P.buildTargets params (P.knownPackages params)}) recs
+                results <- runAptT (foldM (doParameterSet atoms) [] paramSets) `catch` handle
+                IO.hFlush IO.stdout
+                IO.hFlush IO.stderr
+                -- The result of processing a set of parameters is either an
+                -- exception or a completion code.  Here we print a summary and
+                -- exit with a suitable result code.
+                -- ePutStrLn (intercalate "\n  " (map (\ (num, result) -> "Parameter set " ++ show num ++ ": " ++ showResult result) (zip [(1 :: Int)..] results)))
+                case partitionFailing results of
+                  ([], _) -> return ()
+                  _ ->
+                      ePutStrLn (intercalate "\n  " (map (\ (num, result) -> "Parameter set " ++ show num ++ ": " ++ showResult result) (zip [(1 :: Int)..] results))) >>
+                      exitWith (ExitFailure 1)
     where showResult (Failure ss) = intercalate "\n  " ("Failure:" : ss)
           showResult (Success _) = "Ok"
           partitionFailing :: [Failing a] -> ([[String]], [a])
@@ -105,6 +99,7 @@ main' defaultAtoms paramSets = do
               where p result [] = result
                     p (fs, ss) (Failure f : more) = p (f : fs, ss) more
                     p (fs, ss) (Success s : more) = p (fs, s : ss) more
+          handle (e :: SomeException) = IO.hPutStrLn IO.stderr ("Exception: " ++ show e) >> throw e
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
