@@ -250,7 +250,7 @@ data ParamRec =
     --  * 'SourcesChangedRemove' - discard and rebuild the environment
     -- , emailTo :: [String]
     -- -- ^ Who should get emails of autobuilder progress messages.
-    , packages :: Packages
+    , buildPackages :: Packages
     -- ^ The set of package that need to be built.
     , knownPackages :: Packages
     -- ^ The set of all known packages

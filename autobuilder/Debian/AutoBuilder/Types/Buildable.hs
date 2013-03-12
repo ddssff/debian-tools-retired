@@ -99,7 +99,7 @@ asBuildable download =
 relaxDepends :: C.CacheRec -> Buildable -> G.OldRelaxInfo
 relaxDepends cache@(C.CacheRec {C.params = p}) tgt =
     G.RelaxInfo $ map (\ target -> (BinPkgName target, Nothing)) (globalRelaxInfo (C.params cache)) ++
-                  foldPackages (\ _ _spec flags xs -> xs ++ map (\ binPkg -> (BinPkgName binPkg, Just (srcPkgName tgt))) (P.relaxInfo flags)) (R.packages p) []
+                  foldPackages (\ _ _spec flags xs -> xs ++ map (\ binPkg -> (BinPkgName binPkg, Just (srcPkgName tgt))) (P.relaxInfo flags)) (R.buildPackages p) []
 
 _makeRelaxInfo :: G.OldRelaxInfo -> G.RelaxInfo
 _makeRelaxInfo (G.RelaxInfo xs) srcPkgName binPkgName =

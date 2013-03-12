@@ -79,7 +79,7 @@ main atoms myParams =
        case any P.doHelp recs of
          True -> IO.hPutStr IO.stderr (P.usage "Usage: ")
          False ->
-             do let paramSets = map (\ params -> params {P.packages = P.buildTargets params (P.knownPackages params)}) recs
+             do let paramSets = map (\ params -> params {P.buildPackages = P.buildTargets params (P.knownPackages params)}) recs
                 results <- runAptT (foldM (doParameterSet atoms) [] paramSets) `catch` handle
                 IO.hFlush IO.stdout
                 IO.hFlush IO.stderr
@@ -132,7 +132,7 @@ doParameterSet defaultAtoms results params =
       isFailure (Failure _) = True
       isFailure _ = False
       allTargetNames :: Set P.TargetName
-      allTargetNames = P.foldPackages (\ name _ _ result -> insert name result) (P.packages params) empty
+      allTargetNames = P.foldPackages (\ name _ _ result -> insert name result) (P.buildPackages params) empty
 
 prepareDependOS :: MonadDeb m => P.ParamRec -> NamedSliceList -> LocalRepository -> m OSImage
 prepareDependOS params buildRelease localRepo =
@@ -263,7 +263,7 @@ runParameterSet defaultAtoms cache =
                                    (show (P.spec target), (Right <$> retrieve defaultAtoms buildOS cache target) `IO.catch` handleRetrieveException target))
                               (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
           where
-            allTargets = P.packages (C.params cache)
+            allTargets = P.buildPackages (C.params cache)
             handleRetrieveException :: MonadDeb m => P.Packages -> SomeException -> m (Either String Download)
             handleRetrieveException target e =
                 case (fromException (toException e) :: Maybe AsyncException) of
