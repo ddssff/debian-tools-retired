@@ -43,7 +43,7 @@ makePackage name = VersionSplits {oldestPackage = name, splits = []}
 -- | Split the version range and give the older packages a new name.
 insertSplit :: Version -> String -> VersionSplits -> VersionSplits
 insertSplit ver@(Version ns _) ltname sp@(VersionSplits {}) =
-    (\ x -> trace ("insertSplit " ++ show (ltname, ver, sp) ++ " -> " ++ show x) x) $
+    -- (\ x -> trace ("insertSplit " ++ show (ltname, ver, sp) ++ " -> " ++ show x) x) $
     case splits sp of
       -- This is the oldest split, change oldestPackage and insert a new head pair
       (ver', name') : _ | ver' > ver -> sp {oldestPackage = ltname, splits = (ver, oldestPackage sp) : splits sp}
