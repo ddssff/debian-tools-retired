@@ -512,7 +512,7 @@ autobuilder (5.18) unstable; urgency=low
 autobuilder (5.17) unstable; urgency=low
 
   * Add a --build-trumped <package> option, so we can build the older
-    version of ghc6 required to build the latest one.    
+    version of ghc6 required to build the latest one.
 
  -- David Fox <dsf@seereason.com>  Fri, 21 May 2010 06:29:24 -0700
 
@@ -1220,7 +1220,7 @@ autobuilder (2.27) unstable; urgency=low
   * Updated SVN backend to support password protected repositories (untested)
   * Added -fasm flag to speed up compilation
   * Updated libghc6-unixutils-prof depends to 1.7
-  * Added some LANGUAGE pragmas 
+  * Added some LANGUAGE pragmas
 
  -- Jeremy Shaw <jeremy.shaw@linspire.com>  Mon, 23 Jul 2007 11:40:56 -0700
 
@@ -1348,7 +1348,7 @@ autobuilder (2.16) unstable; urgency=low
     no epoch or release.
   * Honor the section names listed in the .changes file.
   * Add a function to set up the ssh keys to contact the upload host.
-  
+
  -- David Fox <david.fox@linspire.com>  Mon, 11 Jun 2007 11:41:40 -0700
 
 autobuilder (2.15) unstable; urgency=low
@@ -1428,7 +1428,7 @@ autobuilder (2.9.2) unstable; urgency=low
   * Fix problem when we need an arch only build of a dependency triggered
     build.
   * Fix problem where some files were left behind in incoming.
-  
+
  -- David Fox <david.fox@linspire.com>  Fri, 23 Mar 2007 14:47:22 -0700
 
 autobuilder (2.9.1) unstable; urgency=low
@@ -1526,7 +1526,7 @@ autobuilder (2.7) unstable; urgency=low
 autobuilder (2.6) unstable; urgency=low
 
   * Add the Omit-Targets directive, which is used to disable targets
-    which are temporarily broken.   
+    which are temporarily broken.
 
  -- David Fox <david.fox@linspire.com>  Thu,  1 Mar 2007 05:22:57 -0800
 
@@ -1564,7 +1564,7 @@ autobuilder (2.1) unstable; urgency=low
  -- David Fox <david.fox@linspire.com>  Tue, 15 Aug 2006 06:02:26 -0700
 
 autobuilder (2.0) unstable; urgency=low
-  
+
   * Initial release of version 2
-  
+
  -- David Fox <david.fox@linspire.com>  Mon, 14 Aug 2006 11:45:38 -0700
