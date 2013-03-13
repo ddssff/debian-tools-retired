@@ -1,3 +1,9 @@
+autobuilder (6.53) unstable; urgency=low
+
+  * Add debianization script and use the debianization it produces.
+
+ -- David Fox <dsf@seereason.com>  Wed, 13 Mar 2013 09:49:26 -0700
+
 autobuilder (6.52) unstable; urgency=low
 
   * Move code from autobuilder-config to here.
