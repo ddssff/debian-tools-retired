@@ -109,7 +109,7 @@ toFileMap atoms =
        ("debian/changelog", pack (show (pretty (fromMaybe (error "Missing debian/changelog") (getL changelog atoms))))),
        ("debian/rules", rules atoms),
        ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom") $ getL compat atoms) <> "\n")),
-       ("debian/copyright", either (\ x -> pack (show (pretty x))) id (fromMaybe (error "No DebCopyright atom") $ getL copyright atoms))] ++
+       ("debian/copyright", either (\ x -> pack (show (pretty x))) id (fromMaybe (error ("No DebCopyright atom: " ++ show atoms)) $ getL copyright atoms))] ++
       sourceFormatFiles atoms ++
       watchFile atoms ++
       installs atoms ++

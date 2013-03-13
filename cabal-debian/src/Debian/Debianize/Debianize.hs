@@ -48,6 +48,7 @@ import Debian.Relation (SrcPkgName(..), BinPkgName(BinPkgName), Relation(Rel))
 import Debian.Release (parseReleaseName)
 import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
 import Debian.Time (getCurrentLocalRFC822Time)
+import Distribution.License (License(AllRightsReserved))
 import Distribution.Package (PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
 #if __GLASGOW_HASKELL__ < 706
@@ -133,8 +134,10 @@ debianize top customize defaultAtoms =
     if getL validate atoms
     then inputDebianization top >>= \ old -> return (validateDebianization old atoms)
     else if getL dryRun atoms
-         then inputDebianization top >>= \ old -> putStr ("Debianization (dry run):\n" ++ compareDebianization old atoms)
+         then inputDebianization top >>= \ old -> putStr ("Debianization (dry run):\n" ++ compareDebianization (ensureCopyright old) atoms)
          else writeDebianization top atoms
+    where
+      ensureCopyright = modL copyright (maybe (Just (Left AllRightsReserved)) Just)
 
 -- | Given an Atoms value, get any additional configuration
 -- information from the environment, read the cabal package
