@@ -1,3 +1,10 @@
+haskell-cabal-debian (3.3.1) unstable; urgency=low
+
+  * Don't fail during dry run if the existing debianization has no
+    copyright file.
+
+ -- David Fox <dsf@seereason.com>  Wed, 13 Mar 2013 10:00:25 -0700
+
 haskell-cabal-debian (3.3) unstable; urgency=low
 
   * Add Debian.Debianize.Details, with default Atoms values for Debian and
