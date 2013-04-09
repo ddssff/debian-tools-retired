@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
+{-# LANGUAGE BangPatterns, PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
 {-# OPTIONS -Wall -fwarn-unused-imports -fno-warn-name-shadowing -fno-warn-orphans #-}
 -- |A Target represents a particular set of source code and the
 -- methods to retrieve and update it.
@@ -152,7 +152,7 @@ partitionFailing xs =
 -- and then the function to process the incoming queue is called.
 buildTargets :: (MonadApt m, MonadTop m, AptCache t) => P.CacheRec -> OSImage -> Relations -> LocalRepository -> t -> [Buildable] -> m (LocalRepository, [Target])
 buildTargets _ _ _ localRepo _ [] = return (localRepo, [])
-buildTargets cache dependOS globalBuildDeps localRepo poolOS targetSpecs =
+buildTargets cache dependOS globalBuildDeps localRepo poolOS !targetSpecs =
     do
       qPutStrLn "\nAssembling source trees:\n"
       targets <- prepareTargets cache dependOS globalBuildDeps targetSpecs
@@ -166,7 +166,7 @@ buildTargets cache dependOS globalBuildDeps localRepo poolOS targetSpecs =
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
 buildLoop :: (MonadApt m, MonadTop m, AptCache t) => P.CacheRec -> Relations -> LocalRepository -> t -> OSImage -> [Target] -> m [Target]
-buildLoop cache globalBuildDeps localRepo poolOS cleanOS' targets =
+buildLoop cache globalBuildDeps localRepo poolOS cleanOS' !targets =
     Set.toList <$> loop cleanOS' (Set.fromList targets) Set.empty
     where
       -- This loop computes the ready targets and builds one.
@@ -342,7 +342,7 @@ buildTarget ::
     t ->
     Target ->
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
-buildTarget cache cleanOS globalBuildDeps repo poolOS target =
+buildTarget cache cleanOS globalBuildDeps repo poolOS !target =
     do
       _cleanOS' <- liftIO (quieter 2 $ syncPool cleanOS)
       -- Get the control file from the clean source and compute the
@@ -387,7 +387,7 @@ buildTarget cache cleanOS globalBuildDeps repo poolOS target =
 -- | Build a package and upload it to the local repository.
 buildPackage :: (MonadApt m, MonadTop m) =>
                 P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> ChangeLogEntry -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
-buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog target status repo =
+buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog !target status repo =
     checkDryRun >>
     buildEnv (P.buildRelease (P.params cache)) >>= return . Debian.Repo.chrootEnv cleanOS >>= \ buildOS ->
     liftIO (prepareBuildImage cache cleanOS newFingerprint buildOS target) >>=
