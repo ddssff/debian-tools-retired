@@ -336,7 +336,9 @@ prettyPrint x =
 -- describes that autobuilder run.
 optSpecs :: [OptDescr (Either String (ParamRec -> ParamRec))]
 optSpecs =
-    [ Option ['v'] ["verbose"] (NoArg (Right (\ p -> p {verbosity = verbosity p + 1})))
+    [ Option [] ["top"] (ReqArg (\ s -> Right (\ p -> p {topDirParam = Just s})) "PATH")
+      "Set the top directory, normally ${HOME}/.autobuilder"
+    , Option ['v'] ["verbose"] (NoArg (Right (\ p -> p {verbosity = verbosity p + 1})))
       "Increase progress reporting.  Can be used multiple times."
     , Option ['q'] ["quiet"] (NoArg (Right (\ p -> p {verbosity = verbosity p - 1})))
       "Decrease progress reporting. Can be used multiple times."
