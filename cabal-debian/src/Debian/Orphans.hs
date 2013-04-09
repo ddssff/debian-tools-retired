@@ -13,7 +13,7 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Control (Field'(..))
 import Debian.Relation (Relation(..), VersionReq(..), ArchitectureReq(..),
                         BinPkgName(..), SrcPkgName(..))
-import Debian.Version (DebianVersion, prettyDebianVersion, parseDebianVersion)
+import Debian.Version (DebianVersion)
 import Distribution.Compiler (CompilerId(..), CompilerFlavor(..))
 import Distribution.License (License(..))
 import Distribution.PackageDescription (PackageDescription(package), Executable(..))
@@ -75,17 +75,6 @@ deriving instance Show ChangeLog
 deriving instance Show ChangeLogEntry
 deriving instance Show Relation
 deriving instance Show VersionReq
-
-instance Show DebianVersion where
-    show v = "(Debian.Version.parseDebianVersion (" ++ show (show (prettyDebianVersion v)) ++ " :: String))"
-
-instance Read DebianVersion where
-    readsPrec _ s =
-        case dropPrefix "Debian.Version.parseDebianVersion " s of
-          Just s' -> case reads s' :: [(String, String)] of
-                       []-> []
-                       (v, s'') : _ -> [(parseDebianVersion v, s'')]
-          Nothing -> []
 
 dropPrefix :: String -> String -> Maybe String
 dropPrefix p s = if isPrefixOf p s then Just (drop (length p) s) else Nothing

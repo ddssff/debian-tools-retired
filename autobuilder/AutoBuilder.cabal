@@ -41,10 +41,10 @@ Library
     if flag(local-debian)
       Hs-Source-Dirs: ., ../../haskell-debian, ../debian-repo
     else
-      Build-Depends: debian >= 3.70
+      Build-Depends: debian >= 3.70.1
       Hs-Source-Dirs: ., ../debian-repo
   else
-    Build-Depends: debian-repo >= 5.40.1, debian >= 3.70
+    Build-Depends: debian-repo >= 5.40.1, debian >= 3.70.1
 
   if flag(local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src
