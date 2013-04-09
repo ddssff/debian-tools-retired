@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances, PackageImports, ScopedTypeVariables, TypeFamilies #-}
 {-# OPTIONS -Wall #-}
 -- |AutoBuilder - application to build Debian packages in a clean
 -- environment.  In the following list, each module's dependencies
@@ -12,7 +12,7 @@ import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..), maybeRead)
 import Control.Exception(SomeException, try, AsyncException(UserInterrupt), fromException, toException)
 import Control.Monad(foldM, when, unless)
-import Control.Monad.CatchIO as IO (catch, throw)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
 import Control.Monad.State(MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)

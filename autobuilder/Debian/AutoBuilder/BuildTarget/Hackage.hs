@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE PackageImports, ScopedTypeVariables, TypeFamilies #-}
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-type-defaults -fno-warn-missing-signatures #-}
 module Debian.AutoBuilder.BuildTarget.Hackage
     ( prepare
@@ -9,7 +9,7 @@ import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Compression.GZip as Z
 import Control.Exception (SomeException, throw)
 import Control.Monad (when)
-import Control.Monad.CatchIO as IO (catch)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.List (isPrefixOf, isSuffixOf, intercalate, nub, sort)

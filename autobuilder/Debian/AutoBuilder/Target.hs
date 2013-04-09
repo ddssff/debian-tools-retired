@@ -15,7 +15,7 @@ import Control.Arrow (second)
 import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
 import Control.Exception (SomeException, try, throw, evaluate, AsyncException(UserInterrupt), fromException, toException)
-import Control.Monad.CatchIO as IO (catch)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
 import Control.Monad.RWS(MonadIO, liftIO, when)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L

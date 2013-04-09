@@ -33,7 +33,7 @@ module Debian.Repo.Monads.Apt
     ) where
 
 import Control.Exception as E (Exception, tryJust)
-import Control.Monad.CatchIO (MonadCatchIO)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.State (get, put)
 import qualified Debian.Control.ByteString as B ( Paragraph, Control'(Control), ControlFunctions(parseControlFromHandle) )

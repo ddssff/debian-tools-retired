@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing #-}
 -- |The intent is that this target debianize any cabal target, but currently
 -- it combines debianization with the hackage target.
@@ -8,7 +8,7 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     ) where
 
 import Control.Monad (when)
-import Control.Monad.CatchIO (MonadCatchIO, bracket)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (isSuffixOf)
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
