@@ -1,3 +1,10 @@
+autobuilder (6.53.1) unstable; urgency=low
+
+  * Use some new Show instances
+  * Renamed some constructors in Debian.AutoBuilder.Types.Packages
+
+ -- David Fox <dsf@seereason.com>  Wed, 10 Apr 2013 12:32:35 -0700
+
 autobuilder (6.53) unstable; urgency=low
 
   * Add debianization script and use the debianization it produces.

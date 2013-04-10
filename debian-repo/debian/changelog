@@ -1,3 +1,9 @@
+haskell-debian-repo (5.40.3) unstable; urgency=low
+
+  * Add Show instance for PkgVersion.
+
+ -- David Fox <dsf@seereason.com>  Wed, 10 Apr 2013 12:31:57 -0700
+
 haskell-debian-repo (5.40.2) unstable; urgency=low
 
   * Copy the Extra.SSH module from Extra package to here, and improve its
