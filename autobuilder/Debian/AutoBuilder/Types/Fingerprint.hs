@@ -51,6 +51,7 @@ data Fingerprint
                   -- This will be the same as the version field plus
                   -- the suffix that was added by the autobuilder.
     | NoFingerprint
+    deriving Show
 
 readMethod :: String -> Maybe P.RetrieveMethod
 readMethod s = maybeRead s

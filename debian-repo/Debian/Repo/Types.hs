@@ -180,7 +180,7 @@ class (Eq a, Ord a) => PackageVersion a where
 -- Debian.Relation module.
 data PkgVersion = PkgVersion { getName :: BinPkgName
                              , getVersion :: DebianVersion
-                             } deriving (Eq, Ord)
+                             } deriving (Eq, Ord, Show)
 
 instance PackageVersion PkgVersion where
     pkgName = getName
