@@ -30,7 +30,8 @@ ghcBuiltIns :: Compiler -> Bundled
 ghcBuiltIns (Compiler {compilerId = CompilerId GHC compilerVersion}) =
     case Map.lookup compilerVersion
              (Map.fromList (map (\ (cmp, ver, lst) -> (ver, (cmp, ver, lst)))
-                            [ (GHC, Version [7,6,1] [], ghc761BuiltIns)
+                            [ (GHC, Version [7,6,2] [], ghc762BuiltIns)
+                            , (GHC, Version [7,6,1] [], ghc761BuiltIns)
                             , (GHC, Version [7,6,1,20121207] [], ghc761BuiltIns)
                             , (GHC, Version [7,4,1] [], ghc741BuiltIns)
                             , (GHC, Version [7,4,0,20111219] [], ghc740BuiltIns)
@@ -59,6 +60,35 @@ ghcBuiltIn compiler package =
 
 v :: String -> [Int] -> PackageIdentifier
 v n x = PackageIdentifier (PackageName n) (Version x [])
+
+-- Removed: rts, extensible-exceptions
+ghc762BuiltIns :: [PackageIdentifier]
+ghc762BuiltIns = [
+    v "array" [0,4,0,1],
+    v "base" [4,6,0,1],
+    v "binary" [0,5,1,1],
+    v "bin-package-db" [0,0,0,0],
+    v "bytestring" [0,10,0,2],
+    v "Cabal" [1,16,0],
+    v "containers" [0,5,0,0],
+    v "deepseq" [1,3,0,1],
+    v "directory" [1,2,0,1],
+    v "filepath" [1,3,0,1],
+    v "ghc" [7,6,2],
+    v "ghc-prim" [0,3,0,0],
+    v "haskell2010" [1,1,1,0],
+    v "haskell98" [2,0,0,2],
+    v "hoopl" [3,9,0,0],
+    v "hpc" [0,6,0,0],
+    v "integer-gmp" [0,5,0,0],
+    v "old-locale" [1,0,0,5],
+    v "old-time" [1,1,0,1],
+    v "pretty" [1,1,1,0],
+    v "process" [1,1,0,2],
+    v "template-haskell" [2,8,0,0],
+    v "time" [1,4,0,1],
+    v "unix" [2,6,0,1]
+    ]
 
 -- Removed: rts, extensible-exceptions
 ghc761BuiltIns :: [PackageIdentifier]
