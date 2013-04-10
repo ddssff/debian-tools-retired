@@ -156,14 +156,16 @@ data PackageFlag
     -- ^ Specify the exact debian version of a package to retrieve via apt-get
     | CabalPin String
     -- ^ Specify the exact version of the Cabal package to download from Hackage.
-    | ExtraDep String
+    | BuildDep String
     -- ^ Build dependencies which should be added to the
     -- debian/control file via the --build-dep flag of cabal-debian.
-    | ExtraDevDep String
-    -- ^ Install dependencies which should be added to the Depends
-    -- entry for the dev package in the debian/control file via the
-    -- --dev-dep flag of cabal-debian.  Used, for example, to make
-    -- libssl-dev a dependency of libghc-hsopenssl-dev.
+    -- (Formerly ExtraDep.)
+    | DevelDep String
+    -- ^ Packages which should be added to the Depends entry for the
+    -- dev package in the debian/control file via the --dev-dep flag
+    -- of cabal-debian.  Used, for example, to make libssl-dev a
+    -- dependency of libghc-hsopenssl-dev.  Implies BuildDep.
+    -- (Formerly ExtraDevDep.)
     | NoDoc
     -- ^ Omit the -doc section from the control file so that no
     -- documentation files are generated.  Used to work around haddock

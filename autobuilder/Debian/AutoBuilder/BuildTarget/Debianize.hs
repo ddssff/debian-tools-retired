@@ -97,8 +97,8 @@ applyPackageFlags flags atoms = foldr applyPackageFlag atoms flags
 
 applyPackageFlag :: P.PackageFlag -> Atoms -> Atoms
 applyPackageFlag x@(P.Maintainer _) atoms = compileArgs (asCabalFlags x) atoms
-applyPackageFlag x@(P.ExtraDep _) atoms = compileArgs (asCabalFlags x) atoms
-applyPackageFlag x@(P.ExtraDevDep _) atoms = compileArgs (asCabalFlags x) atoms
+applyPackageFlag x@(P.BuildDep _) atoms = compileArgs (asCabalFlags x) atoms
+applyPackageFlag x@(P.DevelDep _) atoms = compileArgs (asCabalFlags x) atoms
 applyPackageFlag x@(P.MapDep _ _) atoms = compileArgs (asCabalFlags x) atoms
 applyPackageFlag x@(P.DebVersion _) atoms = compileArgs (asCabalFlags x) atoms
 applyPackageFlag x@(P.Revision _) atoms = compileArgs (asCabalFlags x) atoms
@@ -116,8 +116,8 @@ applyPackageFlag (P.GitBranch _) x = x
 
 asCabalFlags :: P.PackageFlag -> [String]
 asCabalFlags (P.Maintainer s) = ["--maintainer", s]
-asCabalFlags (P.ExtraDep s) = ["--build-dep", s]
-asCabalFlags (P.ExtraDevDep s) = ["--dev-dep", s]
+asCabalFlags (P.BuildDep s) = ["--build-dep", s]
+asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
 asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ unBinPkgName d]
 asCabalFlags (P.DebVersion s) = ["--deb-version", s]
 asCabalFlags (P.Revision s) = ["--revision", s]
