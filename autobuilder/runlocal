@@ -1,5 +1,10 @@
 #!/bin/sh
 
+# for this to work you need to pass the --top argument after the dist name,
+# otherwise it will look in /root/.autobuilder instead of $HOME/.autobuilder:
+#
+#  ./runlocal precise-seereason --top ${HOME}/.autobuilder --all-targets ...
+
 AUTOBUILDER=${PWD}
 CABALDEBIAN=${PWD}/../cabal-debian/src
 DEBIANREPO=${PWD}/../debian-repo
