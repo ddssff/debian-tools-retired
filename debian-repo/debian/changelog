@@ -1,3 +1,11 @@
+haskell-debian-repo (5.40.4) unstable; urgency=low
+
+  * Add some bang patterns in Debian.Repo.Insert to help newdist
+    finish executing without exceeding memory limit on dreamhost.
+    More work needed here.
+
+ -- David Fox <dsf@seereason.com>  Fri, 12 Apr 2013 16:23:48 -0700
+
 haskell-debian-repo (5.40.3) unstable; urgency=low
 
   * Add Show instance for PkgVersion.
