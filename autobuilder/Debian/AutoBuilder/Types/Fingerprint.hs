@@ -5,6 +5,7 @@ module Debian.AutoBuilder.Types.Fingerprint
     , showFingerprint
     , dependencyChanges
     , showDependencies
+    , showDependencies'
     , targetFingerprint
     , BuildDecision(..)
     , buildDecision
@@ -32,6 +33,7 @@ import Debian.Repo.Types (SourcePackage(sourceParagraph, sourcePackageID), PkgVe
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.VersionPolicy(dropTag, parseTag)
 import Extra.Misc(columns)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | This type represents a package's fingerprint, (formerly its
 -- revision string,) which includes three pieces of information: how
@@ -82,6 +84,11 @@ showFingerprint _ = error "missing fingerprint info"
 showDependencies :: Fingerprint -> [String]
 showDependencies (Fingerprint _ _ deps _) = map showPkgVersion deps
 showDependencies _ = []
+
+-- | Show the dependency list without the version numbers.
+showDependencies' :: Fingerprint -> [String]
+showDependencies' (Fingerprint _ _ deps _) = map (show . pretty . getName) deps
+showDependencies' _ = []
 
 dependencyChanges :: Fingerprint -> Fingerprint -> String
 dependencyChanges old new =

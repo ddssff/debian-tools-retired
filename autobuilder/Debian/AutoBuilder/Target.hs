@@ -32,7 +32,7 @@ import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Types.Buildable (Buildable(..), Target(tgt, cleanSource, targetDepends), targetName, prepareTarget, targetRelaxed, targetControl, relaxDepends, failing, debianSourcePackageName)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
-import Debian.AutoBuilder.Types.Fingerprint (Fingerprint, packageFingerprint, showFingerprint, dependencyChanges, targetFingerprint, showDependencies, BuildDecision(..), buildDecision)
+import Debian.AutoBuilder.Types.Fingerprint (Fingerprint, packageFingerprint, showFingerprint, dependencyChanges, targetFingerprint, showDependencies, showDependencies', BuildDecision(..), buildDecision)
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
@@ -782,7 +782,7 @@ downloadDependencies :: OSImage -> DebianBuildTree -> [String] -> Fingerprint ->
 downloadDependencies os source extra sourceFingerprint =
 
     do -- qPutStrLn "Downloading build dependencies"
-       quieter 1 $ qPutStrLn $ "Dependency package versions:\n " ++ intercalate "\n  " (showDependencies sourceFingerprint)
+       quieter 1 $ qPutStrLn $ "Dependency package versions:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)
        qPutStrLn ("Downloading build dependencies into " ++ rootPath (rootDir os))
        (code, out, _, _) <- useEnv' (rootPath root) forceList (runProcess (shell command) L.empty) >>=
                             return . collectOutputs . mergeToStdout
@@ -794,7 +794,7 @@ downloadDependencies os source extra sourceFingerprint =
       command = ("export DEBIAN_FRONTEND=noninteractive; " ++
                  (if True then aptGetCommand else pbuilderCommand))
       pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
-      aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True --download-only " ++ intercalate " " (showDependencies sourceFingerprint ++ extra)
+      aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True --download-only " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
       path = pathBelow (rootPath root) (topdir source)
       root = rootDir os
 
@@ -817,7 +817,7 @@ installDependencies os source extra sourceFingerprint =
       command = ("export DEBIAN_FRONTEND=noninteractive; " ++
                  (if True then aptGetCommand else pbuilderCommand))
       pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
-      aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True " ++ intercalate " " (showDependencies sourceFingerprint ++ extra)
+      aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
       --aptGetCommand = "apt-get --yes build-dep -o APT::Install-Recommends=False " ++ sourcpackagename
       path = pathBelow (rootPath root) (topdir source)
       root = rootDir os
