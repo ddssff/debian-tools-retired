@@ -27,6 +27,7 @@ import Data.List(intersperse, intercalate, intersect, isSuffixOf,
 import Data.Maybe(catMaybes, fromJust, isNothing, listToMaybe)
 import qualified Data.Set as Set
 import Data.Time(NominalDiffTime)
+import Debian.Arch (Arch)
 import Debian.AutoBuilder.Env (buildEnv)
 import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Types.Buildable (Buildable(..), Target(tgt, cleanSource, targetDepends), targetName, prepareTarget, targetRelaxed, targetControl, relaxDepends, failing, debianSourcePackageName)
@@ -44,7 +45,7 @@ import Debian.Control
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString(Relations, Relation(..))
-import Debian.Release (Arch, releaseName')
+import Debian.Release (releaseName')
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Monads.Top (MonadTop)
 import Debian.Repo.SourceTree (buildDebs)
@@ -782,7 +783,7 @@ downloadDependencies :: OSImage -> DebianBuildTree -> [String] -> Fingerprint ->
 downloadDependencies os source extra sourceFingerprint =
 
     do -- qPutStrLn "Downloading build dependencies"
-       quieter 1 $ qPutStrLn $ "Dependency package versions:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)
+       quieter 1 $ qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)
        qPutStrLn ("Downloading build dependencies into " ++ rootPath (rootDir os))
        (code, out, _, _) <- useEnv' (rootPath root) forceList (runProcess (shell command) L.empty) >>=
                             return . collectOutputs . mergeToStdout

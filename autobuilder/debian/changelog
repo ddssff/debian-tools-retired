@@ -1,3 +1,9 @@
+autobuilder (6.53.3) unstable; urgency=low
+
+  * Changes for debian-3.71
+
+ -- David Fox <dsf@seereason.com>  Sun, 14 Apr 2013 13:33:02 -0700
+
 autobuilder (6.53.2) unstable; urgency=low
 
   * Don't specify version numbers when building an apt-get install
