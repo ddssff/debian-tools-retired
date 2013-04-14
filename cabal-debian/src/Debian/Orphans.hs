@@ -70,11 +70,8 @@ deriving instance Read Relation
 deriving instance Read SrcPkgName
 deriving instance Read VersionReq
 
-deriving instance Show ArchitectureReq
 deriving instance Show ChangeLog
 deriving instance Show ChangeLogEntry
-deriving instance Show Relation
-deriving instance Show VersionReq
 
 dropPrefix :: String -> String -> Maybe String
 dropPrefix p s = if isPrefixOf p s then Just (drop (length p) s) else Nothing

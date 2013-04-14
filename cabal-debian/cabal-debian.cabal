@@ -1,5 +1,5 @@
 Name:           cabal-debian
-Version:        3.3.1
+Version:        3.3.2
 License:        BSD3
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>
@@ -32,7 +32,7 @@ Library
    Cabal >= 1.9,
    containers,
    data-lens,
-   debian >= 3.70,
+   debian >= 3.71,
    Diff,
    directory,
    filepath,
