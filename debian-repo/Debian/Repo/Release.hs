@@ -13,13 +13,15 @@ import qualified Data.ByteString.Lazy.Char8 as L ( empty, readFile )
 import Data.Digest.Pure.MD5 (md5)
 import Data.List ( sortBy, groupBy, group, intercalate, nub, sort )
 import Data.Maybe ( catMaybes )
+import Data.Text.Encoding (decodeUtf8)
 import Data.Time ( getCurrentTime )
+import Debian.Arch (Arch(..), prettyArch)
 import qualified Debian.Control.String as S ( Field'(Field), Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
-import Debian.Release (Section, ReleaseName, Arch(..), archName, parseSection', releaseName', sectionName')
+import Debian.Release (Section, ReleaseName, releaseName', sectionName')
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), findRelease, putRelease )
 import Debian.Repo.Types ( PackageIndex(packageIndexArch, packageIndexComponent, packageIndexRelease), Release(..), ReleaseInfo(..),
                            LocalRepository(LocalRepository, repoLayout, repoRoot), Repository(LocalRepo), outsidePath )
-import Debian.Repo.LocalRepository ( prepareLocalRepository )
+import Debian.Repo.LocalRepository ( prepareLocalRepository, parseComponents, parseArchitectures )
 import Debian.Repo.PackageIndex ( packageIndexName, packageIndexDir, releaseDir, packageIndexList )
 import qualified Extra.Files as EF ( maybeWriteFile, prepareSymbolicLink, writeAndZipFile )
 import qualified Extra.GPGSign as EG ( PGPKey, pgpSignFiles, cd )
@@ -114,7 +116,7 @@ writeRelease release@(Release {releaseRepo = LocalRepo repo}) =
                      S.Paragraph
                           [S.Field ("Archive", releaseName' . releaseInfoName . releaseInfo . packageIndexRelease $ index),
                            S.Field ("Component", sectionName' (packageIndexComponent index)),
-                           S.Field ("Architecture", archName (packageIndexArch index)),
+                           S.Field ("Architecture", show (prettyArch (packageIndexArch index))),
                            S.Field ("Origin", " SeeReason Partners LLC"),
                            S.Field ("Label", " SeeReason")]
              let path = packageIndexDir index ++ "/Release"
@@ -137,7 +139,7 @@ writeRelease release@(Release {releaseRepo = LocalRepo repo}) =
                                      S.Field ("Suite", " " ++ (releaseName' . releaseInfoName . releaseInfo $ release)),
                                      S.Field ("Codename", " " ++ (releaseName' . releaseInfoName . releaseInfo $ release)),
                                      S.Field ("Date", " " ++ timestamp),
-                                     S.Field ("Architectures", " " ++ (intercalate " " . map archName . releaseInfoArchitectures . releaseInfo $ release)),
+                                     S.Field ("Architectures", " " ++ (intercalate " " . map (show . prettyArch) . releaseInfoArchitectures . releaseInfo $ release)),
                                      S.Field ("Components", " " ++ (intercalate " " . map sectionName' . releaseInfoComponents . releaseInfo $ release)),
                                      S.Field ("Description", " SeeReason Internal Use - Not Released"),
                                      S.Field ("Md5Sum", "\n" ++ checksums)]
@@ -192,10 +194,10 @@ findLocalRelease repo releaseInfo =
                                        (ReleaseInfo
                                         { releaseInfoName = dist
                                         , releaseInfoAliases = releaseInfoAliases releaseInfo
-                                        , releaseInfoComponents = map parseSection' . words $ components
-                                        , releaseInfoArchitectures = map Binary . words $ architectures}) in
+                                        , releaseInfoComponents = parseComponents (decodeUtf8 components)
+                                        , releaseInfoArchitectures = parseArchitectures (decodeUtf8 architectures)}) in
                          insertRelease release
-                     _ -> 
+                     _ ->
                          error $ "Invalid release file: " ++ path
                _ -> error $ "Invalid release file: " ++ path
       dist = releaseInfoName releaseInfo

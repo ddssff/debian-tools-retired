@@ -12,7 +12,8 @@ module Debian.Repo.PackageIndex
     , debSourceFromIndex
     ) where
 
-import Debian.Release (Arch(..), archName, releaseName', sectionName')
+import Debian.Arch (Arch(..), prettyArch)
+import Debian.Release (releaseName', sectionName')
 import Debian.Sources (SourceType(..), DebSource(..))
 import Debian.Repo.Types ( PackageIndex(..), Release(releaseRepo), Repo(repoURI), releaseName, releaseComponents, releaseArchitectures )
 import System.FilePath ( (</>) )
@@ -32,7 +33,8 @@ packageIndexDir index =
       Source -> releaseDir (packageIndexRelease index) ++ "/" ++ sectionName' (packageIndexComponent index) ++ "/source"
       _ -> (releaseDir (packageIndexRelease index) ++ "/" ++
             sectionName' (packageIndexComponent index) ++
-            "/binary-" ++ archName (packageIndexArch index))
+            -- Will prettyArch give us linux-amd64 when we just want amd64?
+            "/binary-" ++ show (prettyArch (packageIndexArch index)))
 
 releaseDir release = "dists/" ++ (releaseName' . releaseName $ release)
 
@@ -70,7 +72,7 @@ showIndexBrief index =
     (releaseName' . releaseName $ release) </> sectionName' (packageIndexComponent index) </> showArch (packageIndexArch index)
     where release = packageIndexRelease index
           showArch Source = "source"
-          showArch (Binary x) = "binary-" ++ x
+          showArch x@(Binary _ _) = "binary-" ++ show (prettyArch x)
 
 debSourceFromIndex :: PackageIndex -> DebSource
 debSourceFromIndex index =
@@ -78,7 +80,7 @@ debSourceFromIndex index =
                sourceUri = repoURI repo,
                sourceDist = Right (dist, components)}
     where
-      typ = case arch of Binary _ -> Deb; Source -> DebSrc
+      typ = case arch of (Binary _ _) -> Deb; Source -> DebSrc
       arch = packageIndexArch index
       dist = releaseName release
       components = releaseComponents release

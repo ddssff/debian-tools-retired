@@ -1,4 +1,5 @@
-module Debian.Repo.Types 
+{-# LANGUAGE StandaloneDeriving #-}
+module Debian.Repo.Types
     ( EnvRoot(..)
     , EnvPath(..)
     , outsidePath
@@ -48,12 +49,13 @@ module Debian.Repo.Types
     ) where
 
 --import Control.Monad.Trans (MonadIO)
+import Debian.Arch (Arch(..))
 import qualified Data.ByteString.Char8 as B ( ByteString )
 import qualified Debian.Control.ByteString as B ( Paragraph )
 import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.URI ( URI(uriPath), URIString, fileFromURI, parseURI )
-import Debian.Release (Section(..), ReleaseName(..), Arch(..))
+import Debian.Release (Section(..), ReleaseName(..))
 import Debian.Sources ( SliceName(..), DebSource(..) )
 import Debian.Version ( DebianVersion, prettyDebianVersion )
 import Control.Exception ( throw )

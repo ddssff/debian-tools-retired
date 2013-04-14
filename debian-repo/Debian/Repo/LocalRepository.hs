@@ -2,16 +2,19 @@
 module Debian.Repo.LocalRepository where
 
 import Control.Monad.Trans (liftIO)
+import Data.Text (Text, unpack)
+import Debian.Arch (Arch, parseArch)
 import qualified Debian.Control.ByteString as B ( Paragraph, ControlFunctions(parseControl), fieldValue )
 import qualified Debian.Control.String as S ( Control'(Control) )
-import Debian.Release (Section(..), ReleaseName, Arch(Binary), parseReleaseName, releaseName', sectionName')
+import Debian.Release (Section(..), ReleaseName, parseReleaseName, releaseName', sectionName', parseSection')
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository)
 import Debian.Repo.Types ( ReleaseInfo(..), Repo(repoURI), Layout(..), LocalRepository(..), Repository(LocalRepo), EnvPath, outsidePath, compatibilityFile, libraryCompatibilityLevel)
 import Control.Applicative.Error ( Failing(Success, Failure) )
 import Control.Monad ( filterM, when )
-import qualified Data.ByteString.Char8 as B ( ByteString, unpack )
+import qualified Data.ByteString.Char8 as B ( ByteString )
 import Data.List ( isPrefixOf, groupBy, partition, sort )
 import Data.Maybe ( catMaybes )
+import Data.Text.Encoding (decodeUtf8)
 import Extra.Files ( maybeWriteFile )
 import "Extra" Extra.List ( partitionM )
 import System.FilePath ( (</>) )
@@ -129,15 +132,11 @@ makeReleaseInfo file@(F.File {F.text = Failure msgs}) _name _aliases =
 makeReleaseInfo file@(F.File {F.text = Success info}) name aliases =
     case (B.fieldValue "Architectures" info, B.fieldValue "Components" info) of
       (Just archList, Just compList) ->
-          let architectures = splitRegex re (B.unpack archList)
-              components = splitRegex re (B.unpack compList) in
           ReleaseInfo { releaseInfoName = name
                       , releaseInfoAliases = aliases
-                      , releaseInfoArchitectures = map Binary architectures
-                      , releaseInfoComponents = map Section components }
+                      , releaseInfoArchitectures = parseArchitectures (decodeUtf8 archList)
+                      , releaseInfoComponents = parseComponents (decodeUtf8 compList) }
       _ -> error $ "Missing Architectures or Components field in Release file " ++ show (F.path file)
-    where
-      re = mkRegex "[ ,]+"
 
 isSymLink path = F.getSymbolicLinkStatus path >>= return . F.isSymbolicLink
 
@@ -155,3 +154,15 @@ computeLayout root =
         (True, _) -> return (Just Flat)
         (False, True) -> return (Just Pool)
         _ -> return Nothing
+
+parseArchitectures :: Text -> [Arch]
+parseArchitectures archList =
+    map parseArch . splitRegex re . unpack $ archList
+    where
+      re = mkRegex "[ ,]+"
+
+parseComponents :: Text -> [Section]
+parseComponents compList =
+    map parseSection' . splitRegex re . unpack  $ compList
+    where
+      re = mkRegex "[ ,]+"

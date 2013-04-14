@@ -23,6 +23,7 @@ module Debian.Repo.Cache
     , binaryPackages
     ) where
 
+import Control.DeepSeq (force, NFData)
 import Control.Exception (evaluate)
 import "mtl" Control.Monad.Trans ( MonadIO(..) )
 import qualified Data.ByteString as B
@@ -31,8 +32,9 @@ import qualified Data.ByteString.UTF8 as UTF8
 import Data.Data (Data)
 import Data.List ( sortBy, intercalate )
 import Data.Typeable (Typeable)
+import Debian.Arch (Arch(..), prettyArch, ArchOS(..), ArchCPU(..))
 import Debian.Relation (SrcPkgName(..), BinPkgName)
-import Debian.Release ( ReleaseName(relName), Arch(..), releaseName', sectionName' )
+import Debian.Release ( ReleaseName(relName), releaseName', sectionName' )
 import Debian.Sources ( SourceType(..), DebSource(..) )
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Slice ( verifySourcesList )
@@ -45,14 +47,14 @@ import System.Exit ( ExitCode(ExitSuccess) )
 import Extra.Files ( replaceFile )
 import System.Directory ( createDirectoryIfMissing, doesFileExist, removeFile )
 import System.IO ( stdin, hGetLine )
+import System.Posix.Env (setEnv)
 import System.Unix.Chroot ( useEnv )
 import System.Unix.Directory ( removeRecursiveSafely )
-import System.Process (shell)
+import System.Process (readProcessWithExitCode)
 import System.Process.Progress (readProcessChunks, ePutStrLn, ePutStr, runProcess, collectOutputs, quieter, qPutStrLn)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
+import Text.PrettyPrint.ANSI.Leijen (Doc, pretty)
 
-forceList :: [a] -> IO [a]
-forceList output = evaluate (length output) >> return output
+instance NFData ExitCode
 
 -- The following are path functions which can be used while
 -- constructing instances of AptCache.  Each is followed by a
@@ -138,10 +140,10 @@ archFiles :: Arch -> DebSource -> [FilePath]
 archFiles arch deb =
     case (arch, deb) of
       (Source, _) -> error "Invalid build architecture: Source"
-      (Binary _, deb@(DebSource DebSrc _ _)) ->
+      (Binary _ _, deb@(DebSource DebSrc _ _)) ->
           map (++ "_source_Sources") (archFiles' deb)
-      (Binary arch, deb@(DebSource Deb _ _)) ->
-          map (++ ("_binary-" ++ arch ++ "_Packages")) (archFiles' deb)
+      (arch@(Binary os cpu), deb@(DebSource Deb _ _)) ->
+          map (++ ("_binary-" ++ show (prettyArch arch) ++ "_Packages")) (archFiles' deb)
 
 archFiles' :: DebSource -> [FilePath]
 archFiles' deb =
@@ -187,7 +189,15 @@ archFiles' deb =
 
 buildArchOfEnv :: EnvRoot -> IO Arch
 buildArchOfEnv (EnvRoot root)  =
-    do (code, out, err, _) <- useEnv root forceList (readProcessChunks (shell cmd) L.empty) >>= return . collectOutputs
+    do setEnv "LOGNAME" "root" True -- This is required for dpkg-architecture to work in a build environment
+       a@(code1, out1, err1) <- useEnv root (return . force) $ readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_OS"] ""
+       b@(code2, out2, err2) <- useEnv root (return . force) $ readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_CPU"] ""
+       case (code1, lines out1, code2, lines out2) of
+         x@(ExitSuccess, os : _, ExitSuccess, cpu : _) ->
+             return $ Binary (ArchOS os) (ArchCPU cpu)
+         _ -> error $ "Failure computing build architecture of build env at " ++ root ++ ": " ++ show (a, b)
+{-
+  (err, _) <- useEnv root forceList (readProcessChunks (shell cmd) L.empty) >>= return . collectOutputs
        case code of
          (ExitSuccess : _) ->
              case words (UTF8.toString (B.concat (L.toChunks out))) of
@@ -196,9 +206,22 @@ buildArchOfEnv (EnvRoot root)  =
          _ -> error $ "Failure: " ++ cmd ++ " -> " ++ show code ++ "\n\nstdout:\n\n" ++ show out ++ "\n\nstderr:\n\n" ++ show err
     where
       cmd = "export LOGNAME=root; dpkg-architecture -qDEB_BUILD_ARCH"
+-}
 
 buildArchOfRoot :: IO Arch
 buildArchOfRoot =
+    do a@(code1, out1, err1) <- readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_OS"] ""
+       b@(code2, out2, err2) <- readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_CPU"] ""
+       case (code1, lines out1, code2, lines out2) of
+         x@(ExitSuccess, os : _, ExitSuccess, cpu : _) ->
+             return $ Binary (parseArchOS os) (parseArchCPU cpu)
+         _ -> error $ "Failure computing build architecture of /: " ++ show (a, b)
+    where
+      parseArchOS "any" = ArchOSAny
+      parseArchOS x = ArchOS x
+      parseArchCPU "any" = ArchCPUAny
+      parseArchCPU x = ArchCPU x
+{-
     do (code, out, err, _) <- runProcess (shell cmd) L.empty >>= return . collectOutputs
        case code of
          (ExitSuccess : _) ->
@@ -208,6 +231,7 @@ buildArchOfRoot =
          _ -> error $ "Failure: " ++ cmd ++ " -> " ++ show code ++ "\n\nstdout:\n\n" ++ show out ++ "\n\nstderr:\n\n" ++ show err
     where
       cmd = "dpkg-architecture -qDEB_BUILD_ARCH"
+-}
 
 (+?+) :: String -> String -> String
 (+?+) a ('_' : b) = a +?+ b

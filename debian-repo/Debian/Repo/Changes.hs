@@ -32,9 +32,11 @@ module Debian.Repo.Changes
 import "mtl" Control.Monad.Trans ( MonadIO(..) )
 import Data.List ( isSuffixOf )
 import Data.Maybe ( catMaybes )
+import Data.Monoid ((<>))
+import Debian.Arch (Arch(Binary), ArchCPU(..), prettyArch, parseArch)
 import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName, parseChanges )
 import qualified Debian.Control.String as S ( Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue, modifyField, Paragraph )
-import Debian.Release (SubSection(section), Arch(Binary), archName, parseReleaseName, parseSection)
+import Debian.Release (SubSection(section), parseReleaseName, parseSection)
 import Debian.Repo.LocalRepository ( poolDir )
 import Debian.Repo.Types ( Release(releaseRepo), LocalRepository(repoRoot), Repository(LocalRepo), outsidePath )
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
@@ -42,7 +44,7 @@ import Extra.Files ( replaceFile )
 import System.FilePath ( splitFileName, (</>) )
 import System.Directory ( doesFileExist, getDirectoryContents )
 import qualified System.Posix.Files as F ( createLink, removeLink )
-import Text.PrettyPrint.ANSI.Leijen (pretty)
+import Text.PrettyPrint.ANSI.Leijen (pretty, text)
 import Text.Regex ( matchRegex, matchRegexAll, mkRegex )
 import qualified Debian.Control.ByteString as B ()
 import Debian.URI ()
@@ -230,7 +232,7 @@ matchKey changes key = key == (changePackage changes, changeVersion changes, cha
 
 base :: ChangesFile -> String
 base changes =
-    changePackage changes ++ "_" ++ show (prettyDebianVersion (changeVersion changes)) ++ "_" ++ archName (changeArch changes)
+    changePackage changes ++ "_" ++ show (prettyDebianVersion (changeVersion changes) <> text "_" <> prettyArch (changeArch changes))
 
 name :: ChangesFile -> FilePath
 name changes = base changes ++ ".changes"
@@ -238,11 +240,12 @@ name changes = base changes ++ ".changes"
 path :: ChangesFile -> FilePath
 path changes = changeDir changes ++ "/" ++ name changes
 
--- 		       filename     name   version   arch    ext
+-- | I suspect it would be more correct to read the contents of the file and
+-- use that to construct the info we are inferring here from the filename.
 parseChangesFilename :: String -> Maybe (String, DebianVersion, Arch)
 parseChangesFilename name =
     case matchRegex (mkRegex "^(.*/)?([^_]*)_(.*)_([^.]*)\\.changes$") name of
-      Just [_, name, version, arch] -> Just (name, parseDebianVersion version, Binary arch)
+      Just [_, name, version, arch] -> Just (name, parseDebianVersion version, parseArch arch)
       _ -> error ("Invalid .changes file name: " ++ name)
 
 -- parseChangesFile :: FilePath -> String -> IO (Either ParseError S.Control)

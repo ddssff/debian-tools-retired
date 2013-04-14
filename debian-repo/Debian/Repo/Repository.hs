@@ -19,11 +19,12 @@ import Data.List ( sortBy, groupBy, intercalate, isSuffixOf )
 import Data.Maybe ( catMaybes, fromJust )
 import Data.Time ( NominalDiffTime )
 import qualified Data.Set as Set ( member, fromList )
+import Debian.Arch (Arch, parseArch)
 import Debian.Changes ( ChangesFile(changeDir, changePackage, changeRelease, changeVersion) )
 import qualified Debian.Control.ByteString as B ( Paragraph, Control'(Control), ControlFunctions(parseControl), fieldValue )
 import qualified Debian.Control.String as S ( Paragraph', Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
 import Debian.Relation (BinPkgName(..))
-import Debian.Release (Arch(Binary), ReleaseName(..), parseReleaseName, releaseName')
+import Debian.Release (ReleaseName(..), parseReleaseName, releaseName')
 import Debian.Repo.Changes ( findChangesFiles, key, path )
 import Debian.Repo.LocalRepository ( prepareLocalRepository, makeReleaseInfo )
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository, lookupRepository )
@@ -316,7 +317,7 @@ parseUploadFilename :: FilePath
                     -> Failing UploadFile
 parseUploadFilename dir name =
     case matchRegex (mkRegex "^(.*/)?([^_]*)_(.*)_([^.]*)\\.upload$") name of
-      Just [_, name, version, arch] -> Success (Upload dir name (parseDebianVersion version) (Binary arch))
+      Just [_, name, version, arch] -> Success (Upload dir name (parseDebianVersion version) (parseArch arch))
       _ -> Failure ["Invalid .upload file name: " ++ name]
 
 showPkgVersion :: PkgVersion -> String

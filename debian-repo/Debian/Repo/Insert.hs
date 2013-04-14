@@ -21,6 +21,7 @@ import Data.Either ( partitionEithers, rights )
 import Data.List ( group, sort, intercalate, sortBy, groupBy, isSuffixOf, partition )
 import Data.Maybe ( catMaybes )
 import qualified Data.Set as Set
+import Debian.Arch (Arch(..), prettyArch)
 import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName )
 import Debian.Control ( formatControl )
 import qualified Debian.Control.ByteString as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(parseControlFromHandle), Control,
@@ -33,7 +34,7 @@ import qualified Debian.Repo.Package as DRP ( sourceFilePaths, toBinaryPackage, 
 import Debian.Repo.PackageIndex ( packageIndexPath, packageIndexList, sourceIndexList )
 import Debian.Repo.Release ( prepareRelease, signRelease, findReleases )
 import Debian.Repo.Repository ( repoArchList )
-import Debian.Release (SubSection(section), Section(..), ReleaseName, Arch(..), archName, parseSection', releaseName', sectionName, sectionName')
+import Debian.Release (SubSection(section), Section(..), ReleaseName, parseSection', releaseName', sectionName, sectionName')
 import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, binaryPackageName, PackageIDLocal, SourcePackage(sourcePackageID), sourcePackageName,
                            BinaryPackage(packageID, packageInfo), PackageID(packageIndex, packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
                            PackageVersion(pkgVersion), Release(..), ReleaseInfo(releaseInfoAliases, releaseInfoComponents, releaseInfoName),
@@ -635,13 +636,13 @@ findLive repo@(LocalRepository root (Just layout) _) =
           map ((outsidePath root ++ "/installed/") ++) . changesFileNames releases $ package
       changesFileNames releases package = 
           map (\ arch -> intercalate "_" [show (pretty (sourcePackageName package)),
-                                          show . prettyDebianVersion . packageVersion . sourcePackageID $ package,
-                                          archName arch] ++ ".changes") (nub (concat (architectures releases)))
+                                          show (prettyDebianVersion . packageVersion . sourcePackageID $ package),
+                                          show (prettyArch arch)] ++ ".changes") (nub (concat (architectures releases)))
       uploadFilePaths root releases package = map ((outsidePath root ++ "/") ++) . uploadFileNames releases $ package
       uploadFileNames releases package =
           map (\ arch -> intercalate "_" [show (pretty (sourcePackageName package)),
-                                          show . prettyDebianVersion . packageVersion . sourcePackageID $ package,
-                                          archName arch] ++ ".upload") (nub (concat (architectures releases)))
+                                          show (prettyDebianVersion . packageVersion . sourcePackageID $ package),
+                                          show (prettyArch arch)] ++ ".upload") (nub (concat (architectures releases)))
       architectures releases = map head . group . sort . map releaseArchitectures $ releases
 
 deleteSourcePackages :: Maybe PGPKey -> [PackageIDLocal BinPkgName] -> IO [Release]
@@ -689,7 +690,7 @@ instance F.Pretty PackageIndex where
                          "dist",
 		         (releaseName' . releaseInfoName . releaseInfo . packageIndexRelease $ i),
 		         show (F.pretty (packageIndexComponent i)),
-                         show (F.pretty (packageIndexArch i))]
+                         show (prettyArch (packageIndexArch i))]
 
 instance F.Pretty Release where
     pretty r = cat [F.pretty (releaseRepo r), text " ", F.pretty (releaseInfo r)]
@@ -705,9 +706,11 @@ instance F.Pretty ReleaseInfo where
 instance F.Pretty Section where
     pretty (Section s) = text s
 
+{-
 instance F.Pretty Arch where
-    pretty x@(Binary _) = text $ "binary-" ++ archName x
-    pretty x = text $ archName x
+    pretty x@(Binary _ _) = text "binary-" <> prettyArch x
+    pretty x = prettyArch x
+-}
 
 instance F.Pretty BinaryPackage where
     pretty p = F.pretty (packageID p)

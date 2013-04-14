@@ -20,13 +20,14 @@ import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy as L
 import Data.List ( intercalate )
 import Data.Time ( NominalDiffTime )
-import Debian.Release ( ReleaseName(..), Arch, archName, parseReleaseName, parseSection' )
+import Debian.Arch (Arch)
+import Debian.Release ( ReleaseName(..), parseReleaseName, parseSection' )
 import Debian.Sources ( SourceType(..), SliceName(sliceName), DebSource(DebSource, sourceDist, sourceUri) )
 import Debian.Repo.Cache ( SourcesChangedAction(SourcesChangedError), distDir, sourcesPath, sliceIndexes, buildArchOfRoot )
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Monads.Top (MonadTop(askTop))
 import Debian.Repo.Package ( sourcePackagesOfIndex', binaryPackagesOfIndex' )
-import Debian.Relation ( ParseRelations(..), Relations )
+import Debian.Relation (ParseRelations(..), Relations)
 import Debian.Repo.Slice ( sourceSlices, binarySlices, verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Sync (rsync)
@@ -80,7 +81,7 @@ instance Show OSImage where
     show os = intercalate " " ["OS {",
                                rootPath (osRoot os),
                                relName (osReleaseName os),
-                               archName (osArch os),
+                               show (osArch os),
                                show (osLocalRepoMaster os)]
 
 instance Ord OSImage where

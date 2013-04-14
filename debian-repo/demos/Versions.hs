@@ -4,7 +4,7 @@ module Main where
 import Control.Exception (throw)
 import Control.Monad.Trans
 import Data.Maybe
-import Debian.Release (Arch(Binary))
+import Debian.Arch (Arch(Binary), ArchCPU(..), ArchOS(..))
 import Debian.Repo.Monads.Apt (MonadApt, runAptT)
 import Debian.Repo.PackageIndex
 import Debian.Repo.Package
@@ -35,4 +35,4 @@ packages :: MonadApt m => PackageIndex -> m [BinaryPackage]
 packages index = liftIO (binaryPackagesOfIndex index) >>= return . either throw id
 
 uri = "http://deb.seereason.com/ubuntu/"
-arch = Binary "i386"
+arch = Binary (ArchOS "linux") (ArchCPU "i386")

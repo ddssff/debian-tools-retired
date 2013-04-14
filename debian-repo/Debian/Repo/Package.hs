@@ -24,13 +24,14 @@ module Debian.Repo.Package
 import Control.Exception as E ( SomeException(..), catch, try, ErrorCall(..) )
 import Data.Either ( partitionEithers )
 import Debian.Apt.Index ( Compression(..), controlFromIndex )
+import Debian.Arch (Arch(..), prettyArch)
 import Debian.Control ( Paragraph', ControlFunctions(asString, stripWS), fieldValue, formatParagraph )
 import Debian.Repo.PackageIndex ( packageIndexPath, sourceIndexList, binaryIndexList )
 import qualified Debian.Control.ByteString as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(lookupP), fieldValue )
 import Debian.Relation (BinPkgName(..))
 import qualified Debian.Relation.ByteString as B ( ParseRelations(..), Relations )
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupSourcePackages, insertSourcePackages, lookupBinaryPackages, insertBinaryPackages, readParagraphs)
-import Debian.Release (Arch(..), releaseName', sectionName')
+import Debian.Release (releaseName', sectionName')
 import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..),
                            BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..),
                            Release(releaseInfo, releaseRepo), ReleaseInfo(releaseInfoName), Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo),
@@ -260,9 +261,9 @@ sourcePackagesOfIndex' cache index =
 indexCacheFile :: (AptCache a) => a -> PackageIndex -> FilePath
 indexCacheFile apt index =
     case (aptArch apt, packageIndexArch index) of
+      (Binary _ _, Source) -> indexPrefix index ++ "_source_Sources"
+      (Binary _ _, arch@(Binary _ _)) -> indexPrefix index ++ "_binary-" ++ show (prettyArch arch) ++ "_Packages"
       (Source, _) -> error "Invalid build architecture: Source"
-      (Binary _, Source) -> indexPrefix index ++ "_source_Sources"
-      (Binary _, Binary arch) -> indexPrefix index ++ "_binary-" ++ arch ++ "_Packages"
 
 indexPrefix :: PackageIndex -> FilePath
 indexPrefix index =

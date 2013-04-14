@@ -12,9 +12,10 @@ module Debian.Repo.Dependencies
     , testArch
     ) where
 
+import Data.Set (toList)
+import Debian.Arch (Arch(Source, Binary), ArchCPU(..))
 import Debian.Control ()
 import qualified Debian.Control.String as S ()
-import Debian.Release (Arch(Source, Binary))
 import Debian.Repo.Types ( PackageVersion, PkgVersion(PkgVersion), prettyPkgVersion, pkgName, getName, getVersion, pkgVersion, BinaryPackage,
                            binaryPackageName, packageID, pProvides, packageVersion)
 import Debian.Version ( DebianVersion )
@@ -39,13 +40,19 @@ prettySimpleRelation Nothing = text ""
 prettySimpleRelation (Just p) = prettyPkgVersion p
 
 -- |Each element is an or-list of specific package versions.
-type SimpleRelations = [[SimpleRelation]]                     
+type SimpleRelations = [[SimpleRelation]]
 
 -- Does this relation apply to this architecture?
 testArch :: Arch -> Relation -> Bool
 testArch _ (Rel _ _ Nothing) = True
-testArch architecture (Rel _ _ (Just (ArchOnly archList))) = elem architecture (map Binary archList)
-testArch architecture (Rel _ _ (Just (ArchExcept archList))) = not (elem architecture (map Binary archList))
+testArch architecture (Rel _ _ (Just (ArchOnly archList))) = any (testArch' architecture) (toList archList)
+testArch architecture (Rel _ _ (Just (ArchExcept archList))) = not (any (testArch' architecture) (toList archList))
+
+testArch' :: Arch -> Arch -> Bool
+testArch' (Binary _ (ArchCPU x)) (Binary _ (ArchCPU cpu)) = x == cpu
+testArch' _ (Binary _os ArchCPUAny) = True
+testArch' Source Source = True
+testArch' _ _ = False
 
 -- |Turn the expressive inequality style relations to a set of simple
 -- equality relations on only the packages in the available list.
@@ -84,15 +91,15 @@ simplifyRelations available relations preferred arch =
 -- environment and satisfy the original relation.
 expandVirtual :: Arch -> ProvidesMap -> ProvidesMap -> Relations -> SimpleRelations
 expandVirtual Source _ _ _ = undefined
-expandVirtual (Binary arch) nameMap providesMap relations =
+expandVirtual arch nameMap providesMap relations =
     map (nub . concat . map expand) relations
     where
       -- A relation with no version or architecture requirement
       -- can be satisfied by a provides or a real package.
       expand :: Relation -> [SimpleRelation]
       -- If the relation only applies to other architectures it can be ignored.
-      expand (Rel _ _ (Just (ArchOnly archList))) | not (elem arch archList) = [Nothing]
-      expand (Rel _ _ (Just (ArchExcept archList))) | elem arch archList = [Nothing]
+      expand (Rel _ _ (Just (ArchOnly archList))) | not (any (testArch' arch) (toList archList)) = [Nothing]
+      expand (Rel _ _ (Just (ArchExcept archList))) | any (testArch' arch) (toList archList) = [Nothing]
       expand (Rel name Nothing Nothing) = map eqRel (Map.findWithDefault [] name providesMap)
       expand rel@(Rel name _ _) = map eqRel (filter (satisfies rel) (Map.findWithDefault [] name nameMap))
       eqRel :: BinaryPackage -> SimpleRelation

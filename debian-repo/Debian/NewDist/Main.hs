@@ -8,8 +8,10 @@ import		 Debian.Config as Config
 import		 Control.Monad
 import		 Data.List
 import		 Data.Maybe
+import           Data.Text (pack)
 import		 Extra.GPGSign
 import		 Extra.Lock
+import           Debian.Arch (Arch(Binary, Source), ArchCPU(..), ArchOS(..), prettyArch)
 import           Debian.Changes (ChangesFile(..))
 import           Debian.Relation (BinPkgName)
 import           Debian.Release
@@ -101,7 +103,7 @@ defaultStyles = (setFinish (Just "done.") .
                  setDots IO.stderr 1024 ',') (Debian.IO.defStyle 0)
 -}
 
-defaultArchitectures = [Binary "i386", Binary "amd64"]
+defaultArchitectures = [Binary (ArchOS "linux") (ArchCPU "i386"), Binary (ArchOS "linux") (ArchCPU "amd64")]
 
 {-
 style :: [Flag] -> TStyle -> TStyle
@@ -205,7 +207,7 @@ runFlags flags =
       successEmail repo changesFile =
           let subject = ("newdist: " ++ changePackage changesFile ++ "-" ++ show (prettyDebianVersion (changeVersion changesFile)) ++ 
                          " now available in " ++ releaseName' (changeRelease changesFile) ++
-                         " (" ++ archName (changeArch changesFile) ++")")
+                         " (" ++ show (prettyArch (changeArch changesFile)) ++")")
               body = ("Repository " ++ envPath (repoRoot repo)) : [] : (lines $ show $ pretty $ changeInfo changesFile) in
     	  (subject, body)
       failureEmail :: ChangesFile -> InstallResult -> (String, [String])
@@ -261,7 +263,7 @@ root flags = EnvPath (EnvRoot "") (case findValues flags "Root" of
                                      [root] -> root
                                      roots -> error $ "Multiple roots: " ++ show roots)
 
-archList flags = maybe defaultArchitectures (map Binary . words) $ findValue flags "Architectures"
+archList flags = maybe defaultArchitectures (parseArchitectures . pack) $ findValue flags "Architectures"
 
 layout flags =
     case findValue flags "Layout" of
