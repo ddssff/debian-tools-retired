@@ -48,7 +48,13 @@ groups :: Eq a => (a -> a -> Bool) -> [a] -> [[a]]
 groups f xs =
     filter (/= []) $ reverse (groups' [[]] xs)
     where
+      -- Predicate satisfied, add x to the current group r and recurse with y at head
       groups' (r : rs) (x : y : xs') | f x y = groups' ((x : r) : rs) (y : xs')
+      -- Predicate not satisfied, add x to current group and start a new group containing y
       groups' (r : rs) (x : y : xs') = groups' ([y] : reverse (x : r) : rs) xs'
+      -- Last element, add it to the current group
       groups' (r : rs) [y] = reverse (y : r) : rs
+      -- Nothing left, return result
       groups' rs [] = rs
+      -- This won't happen, groups' is always called with a non-empty list in the first argument
+      groups' [] (_ : _) = error "groups"

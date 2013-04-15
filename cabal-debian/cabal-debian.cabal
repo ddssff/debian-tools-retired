@@ -23,7 +23,7 @@ Source-Repository head
 
 Library
  Hs-Source-Dirs: src
- GHC-Options: -threaded -Wall -O2
+ GHC-Options: -threaded -Wall -Werror -O2
  Build-Depends:
    ansi-wl-pprint,
    applicative-extras,

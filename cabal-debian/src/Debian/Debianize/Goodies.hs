@@ -18,23 +18,21 @@ module Debian.Debianize.Goodies
     , execAtoms
     ) where
 
-import Data.Lens.Lazy (getL, setL, modL)
+import Data.Lens.Lazy (getL, modL)
 import Data.List as List (map, intersperse, intercalate)
-import Data.Map as Map (Map, fromList, insertWith)
+import Data.Map as Map (insertWith)
 import Data.Maybe (fromMaybe)
-import Data.Monoid (mempty, (<>))
+import Data.Monoid ((<>))
 import Data.Set as Set (insert, union, singleton)
 import Data.Text as Text (Text, pack, unlines, intercalate)
-import Data.Version (Version(Version))
 import Debian.Debianize.Atoms as Atoms ()
 import Debian.Debianize.Atoms as Atoms
     (Atoms, packageDescription, rulesFragments, website, serverInfo, link, backups, executable,
      install, installTo, installCabalExecTo, file, installDir, logrotateStanza, postInst,
      installInit, installCabalExec, rulesFragments, packageDescription, executable,
-     serverInfo, website, backups, depends, epochMap, debianNameMap)
+     serverInfo, website, backups, depends)
 import Debian.Debianize.ControlFile as Debian (PackageType(..))
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
-import Debian.Debianize.Types.VersionSplits (VersionSplits)
 import Debian.Debianize.Utility (trim)
 import Debian.Orphans ()
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)

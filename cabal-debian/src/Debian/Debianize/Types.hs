@@ -8,7 +8,6 @@ module Debian.Debianize.Types
     , DebAction(..)
     ) where
 
-import Data.Version (Version(Version))
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName)
 import Debian.Version (DebianVersion)

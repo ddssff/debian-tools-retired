@@ -243,10 +243,10 @@ parseUploaders x =
                           [] -> Left ("No valid debian maintainers in " ++ show x)
                           xs' -> Right xs'
       fixNameAddr :: NameAddr -> Maybe NameAddr
-      fixNameAddr x =
-          case nameAddr_name x of
+      fixNameAddr y =
+          case nameAddr_name y of
             Nothing -> Nothing
-            _ -> Just x
+            _ -> Just y
 
 parseMaintainer :: String -> Either String NameAddr
 parseMaintainer x =

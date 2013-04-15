@@ -5,21 +5,17 @@ module Debian.Debianize.Types.VersionSplits
     , makePackage
     , insertSplit
     , doSplits
+    , knownVersionSplits
     ) where
-
-import Debug.Trace
 
 import Data.Version (Version(Version), showVersion)
 import Debian.Debianize.Interspersed (Interspersed(leftmost, pairs, foldInverted), foldTriples)
 import Data.Map as Map (Map, fromList)
 import Debian.Orphans ()
-import Debian.Relation (BinPkgName)
 import qualified Debian.Relation as D
-import Debian.Version (DebianVersion, parseDebianVersion)
+import Debian.Version (parseDebianVersion)
 import Distribution.Package (PackageName(PackageName))
-import Distribution.Version (VersionRange, anyVersion, foldVersionRange', intersectVersionRanges, unionVersionRanges,
-                             laterVersion, orLaterVersion, earlierVersion, orEarlierVersion, fromVersionIntervals, toVersionIntervals, withinVersion,
-                             isNoVersion, asVersionIntervals)
+import Distribution.Version (VersionRange, anyVersion, intersectVersionRanges, earlierVersion, orLaterVersion)
 import Prelude hiding (init, unlines, log)
 
 -- | Describes a mapping from cabal package name and version to debian
@@ -42,11 +38,11 @@ makePackage name = VersionSplits {oldestPackage = name, splits = []}
 
 -- | Split the version range and give the older packages a new name.
 insertSplit :: Version -> String -> VersionSplits -> VersionSplits
-insertSplit ver@(Version ns _) ltname sp@(VersionSplits {}) =
+insertSplit ver@(Version _ _) ltname sp@(VersionSplits {}) =
     -- (\ x -> trace ("insertSplit " ++ show (ltname, ver, sp) ++ " -> " ++ show x) x) $
     case splits sp of
       -- This is the oldest split, change oldestPackage and insert a new head pair
-      (ver', name') : _ | ver' > ver -> sp {oldestPackage = ltname, splits = (ver, oldestPackage sp) : splits sp}
+      (ver', _) : _ | ver' > ver -> sp {oldestPackage = ltname, splits = (ver, oldestPackage sp) : splits sp}
       [] -> sp {oldestPackage = ltname, splits = [(ver, oldestPackage sp)]}
       -- Not the oldest split, insert it in its proper place.
       _ -> sp {splits = reverse (insert (reverse (splits sp)))}
@@ -66,13 +62,14 @@ instance Interspersed VersionSplits String Version where
     pairs (VersionSplits {splits = xs}) = xs
 
 packageRangesFromVersionSplits :: VersionSplits -> [(String, VersionRange)]
-packageRangesFromVersionSplits splits =
+packageRangesFromVersionSplits s =
     foldInverted (\ older dname newer more ->
                       (dname, intersectVersionRanges (maybe anyVersion orLaterVersion older) (maybe anyVersion earlierVersion newer)) : more)
                  []
-                 splits
+                 s
 
-doSplits splits version =
+doSplits :: VersionSplits -> Maybe D.VersionReq -> String
+doSplits s version =
     foldTriples' (\ ltName v geName _ ->
                            let split = parseDebianVersion (showVersion v) in
                                 case version of
@@ -84,8 +81,8 @@ doSplits splits version =
                                   Just (D.GRE v') | v' < split -> ltName
                                   Just (D.SGR v') | v' < split -> ltName
                                   _ -> geName)
-                 (oldestPackage splits)
-                 splits
+                 (oldestPackage s)
+                 s
     where
       foldTriples' :: (String -> Version -> String -> String -> String) -> String -> VersionSplits -> String
       foldTriples' = foldTriples
