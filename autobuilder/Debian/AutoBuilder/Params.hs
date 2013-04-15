@@ -41,8 +41,8 @@ buildCache params =
        build <- maybe (return $ SliceList { slices = [] }) (repoSources Nothing) uri
        return $ CacheRec {params = params, allSources = all, buildRepoSources = build}
     where
-      parseNamedSliceList (name, text) = 
-          do sources <- (verifySourcesList Nothing . parseSourcesList) text
+      parseNamedSliceList (name, lines) =
+          do sources <- verifySourcesList Nothing lines
              return $ NamedSliceList { sliceListName = SliceName name, sliceList = sources }
 
 -- |An instance of RunClass contains all the information we need to

@@ -32,7 +32,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (Atoms)
-import Debian.Release (parseSection', releaseName')
+import Debian.Release (ReleaseName, parseSection', releaseName')
 import Debian.Sources (SliceName(..))
 import Debian.Repo.AptImage(prepareAptEnv)
 import Debian.Repo.Cache(updateCacheSources)
@@ -47,9 +47,10 @@ import Debian.Repo.Slice(appendSliceLists, inexactPathSlices, releaseSlices, rep
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types(EnvRoot(EnvRoot, rootPath), EnvPath(..),
                          Layout(Flat), Release(releaseRepo),
-                         NamedSliceList(..), Repository(LocalRepo),
-                         LocalRepository(LocalRepository), outsidePath)
-import Debian.URI(URIAuth(uriUserInfo, uriRegName), URI(uriScheme, uriPath, uriAuthority), parseURI)
+                         NamedSliceList(..), Repository(LocalRepo, VerifiedRepo),
+                         LocalRepository(LocalRepository), outsidePath,
+                         SliceList(slices), Slice(sliceRepo), ReleaseInfo(releaseInfoName))
+import Debian.URI(URIAuth(uriUserInfo, uriRegName, uriPort), URI(uriScheme, uriPath, uriAuthority), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
@@ -163,6 +164,7 @@ runParameterSet defaultAtoms cache =
     do
       top <- askTop
       liftIO doRequiredVersion
+      liftIO doVerifyBuildRepo
       when (P.showParams params) (withModifiedVerbosity (const defaultVerbosity) (liftIO doShowParams))
       when (P.showSources params) (withModifiedVerbosity (const defaultVerbosity) (liftIO doShowSources))
       when (P.flushAll params) (liftIO $ doFlush top)
@@ -216,6 +218,27 @@ runParameterSet defaultAtoms cache =
             printReason :: (DebianVersion, Maybe String) -> IO ()
             printReason (v, s) =
                 ePutStr (" Version >= " ++ show (prettyDebianVersion v) ++ " is required" ++ maybe "" ((++) ":") s)
+
+      doVerifyBuildRepo :: IO ()
+      doVerifyBuildRepo =
+          when (not (any (== (P.buildRelease params)) (concatMap info (slices (C.buildRepoSources cache)))))
+               (case P.uploadURI params of
+                  Just uri ->
+                      let ssh = case uriAuthority uri of
+                                  Just auth -> uriUserInfo auth ++ uriRegName auth ++ uriPort auth
+                                  Nothing -> "user@hostname"
+                          rel = releaseName' (P.buildRelease params)
+                          top = uriPath uri in -- "/home/autobuilder/deb-private/debian"
+                      error $ "Build repository does not exist on remote server: " ++ rel ++ "\nUse newdist there to create it:" ++
+                              "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-release=" ++ rel ++
+                              "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-section=" ++ rel ++ ",main" ++
+                              "\nYou will also need to remove the local file ~/.autobuilder/repoCache.")
+          where
+            info :: Slice -> [ReleaseName]
+            info slice =
+                case sliceRepo slice of
+                  (VerifiedRepo _ rels) -> map releaseInfoName rels
+                  _ -> []
       doShowParams = ePutStr $ "Configuration parameters:\n" ++ P.prettyPrint params
       doShowSources =
           either (error . show) doShow (P.findSlice cache (SliceName (releaseName' (P.buildRelease params))))

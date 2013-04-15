@@ -43,6 +43,7 @@ import Debian.URI ( URIAuth(uriPort, uriRegName, uriUserInfo), URI(uriAuthority,
 import System.Exit ( ExitCode(ExitSuccess) )
 import Extra.Files ( replaceFile )
 import System.Directory ( createDirectoryIfMissing, doesFileExist, removeFile )
+import System.FilePath ((</>))
 import System.IO ( stdin, hGetLine )
 import System.Posix.Env (setEnv)
 import System.Unix.Chroot ( useEnv )
@@ -74,7 +75,7 @@ aptDir cache package = distDir cache ++ "/apt/" ++ unSrcPkgName package
 
 -- | The path where a text of the SliceList is stored.
 cacheSourcesPath :: FilePath -> ReleaseName -> FilePath
-cacheSourcesPath cacheDir release = cacheDistDir cacheDir release ++ "/sources"
+cacheSourcesPath cacheDir release = cacheDistDir cacheDir release </> "sources"
 
 sourcesPath :: AptCache c => c -> FilePath
 sourcesPath cache = cacheSourcesPath (globalCacheDir cache) (aptReleaseName cache)

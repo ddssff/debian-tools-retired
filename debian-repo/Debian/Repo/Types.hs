@@ -56,7 +56,7 @@ import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, Bi
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.URI ( URI(uriPath), URIString, fileFromURI, parseURI )
 import Debian.Release (Section(..), ReleaseName(..))
-import Debian.Sources ( SliceName(..), DebSource(..) )
+import Debian.Sources ( SliceName(..), DebSource(..), SourceType(..) )
 import Debian.Version ( DebianVersion, prettyDebianVersion )
 import Control.Exception ( throw )
 import qualified Data.ByteString.Lazy.Char8 as L ( unpack )
@@ -257,6 +257,9 @@ releaseArchitectures = releaseInfoArchitectures . releaseInfo
 
 ----------------- SLICES (SOURCES.LIST ENTRIES) ---------------
 
+deriving instance Show SourceType
+deriving instance Show DebSource
+
 {-
 data SourceType
     = Deb | DebSrc
@@ -290,14 +293,14 @@ data SliceName = SliceName { sliceName :: String } deriving (Eq, Ord, Show)
 data Slice
     = Slice { sliceRepo :: Repository
             , sliceSource :: DebSource
-            } deriving (Eq, Ord)
+            } deriving (Eq, Ord, Show)
 
-data SliceList = SliceList {slices :: [Slice]} deriving (Eq, Ord)
+data SliceList = SliceList {slices :: [Slice]} deriving (Eq, Ord, Show)
 
 data NamedSliceList
     = NamedSliceList { sliceList :: SliceList
                      , sliceListName :: SliceName
-                     } deriving (Eq, Ord)
+                     } deriving (Eq, Ord, Show)
 
 instance Pretty Slice where
     pretty = pretty . sliceSource

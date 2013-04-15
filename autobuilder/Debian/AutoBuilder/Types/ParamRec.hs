@@ -16,10 +16,12 @@ import Debian.Arch (Arch)
 import Debian.AutoBuilder.Types.Packages (Packages(Packages, Package, NoPackage, name, list, group), TargetName(TargetName))
 import Debian.Release (ReleaseName )
 import Debian.Repo.Cache ( SourcesChangedAction )
+import Debian.Sources (DebSource)
 import Debian.Version ( DebianVersion, prettyDebianVersion )
 import Debian.URI ( URI )
 import Prelude hiding (map)
 import System.Console.GetOpt
+import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat)
 
 -- |An instance of 'ParamClass' contains the configuration parameters
 -- for a run of the autobuilder.  Among other things, it defined a set
@@ -156,7 +158,7 @@ data ParamRec =
 
     -- THINGS THAT RARELY CHANGE
 
-    , sources :: [(String, String)]
+    , sources :: [(String, [DebSource])]
     -- ^ Specify all known @source.list@ files as (name, text) pairs.
     -- The names can be used in apt targets.
     , globalRelaxInfo :: [String]
@@ -288,7 +290,7 @@ prettyPrint x =
             , "showParams=" ++ take 120 (show (showParams x))
             , "flushAll=" ++ take 120 (show (flushAll x))
             , "useRepoCache=" ++ take 120 (show (useRepoCache x))
-            , "sources=" ++ take 120 (show (sources x))
+            , "sources=" ++ take 120 (show (vcat (map pretty (sources x))))
             , "targets=" ++ take 120 (show (targets x))
             , "goals=" ++ take 120 (show (goals x))
             , "discard=" ++ take 120 (show (discard x))
