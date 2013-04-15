@@ -20,5 +20,5 @@ readFile :: FilePath -> IO (File B.ByteString)
 readFile x = File <$> return (LocalPath x) <*> (try (B.readFile x) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success)
 
 instance Show Source where
-    show (LocalPath path) = path
+    show (LocalPath p) = p
     show (RemotePath uri) = show uri

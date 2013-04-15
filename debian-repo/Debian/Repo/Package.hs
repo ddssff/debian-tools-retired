@@ -1,4 +1,5 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables #-}
+{-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package
     ( -- * Source and binary packages 
       sourceFilePaths
@@ -51,6 +52,7 @@ import System.IO.Unsafe ( unsafeInterleaveIO )
 import System.Posix ( getFileStatus )
 import Text.Regex ( matchRegex, mkRegex, splitRegex )
 
+uriToString' :: URI -> String
 uriToString' uri = uriToString id uri ""
 
 sourceFilePaths :: SourcePackage -> [FilePath]
@@ -81,8 +83,8 @@ binarySourceVersion paragraph =
 binarySourceVersion' :: (ControlFunctions a) => BinPkgName -> DebianVersion -> Paragraph' a -> Maybe (String, DebianVersion)
 binarySourceVersion' binaryName binaryVersion paragraph =
     case (B.fieldValue "Source" paragraph) of
-      Just source ->
-          case matchRegex re (asString source) of
+      Just source' ->
+          case matchRegex re (asString source') of
             Just [name, _, ""] -> Just (name, binaryVersion)
             Just [name, _, version] -> Just (name, copyEpoch binaryVersion (parseDebianVersion version))
             _ -> error "internal error"
@@ -113,13 +115,13 @@ toSourcePackage index package =
           maybe Nothing (Just . parseDebianVersion . B.unpack) (B.fieldValue "Version" package)) of
       (Just directory, Just files, Just name, Just version) ->
           case parseSourcesFileList files of
-            Right files ->
+            Right files' ->
                 SourcePackage
                 { sourcePackageID = makeSourcePackageID index (B.unpack name) version
                 , sourceParagraph = package
                 , sourceControl = fromMaybe (error ("Failure parsing Source package control information: " ++ asString (formatParagraph package))) (parseSourceParagraph package)
                 , sourceDirectory = B.unpack directory
-                , sourcePackageFiles = files }
+                , sourcePackageFiles = files' }
             Left messages -> error $ "Invalid file list: " ++ show messages
       _ -> error $ "Missing info in source package control information:\n" ++ B.unpack (formatParagraph package)
     where      
@@ -184,13 +186,13 @@ tryParseRel _ = []
 binaryPackageSourceID :: BinaryPackage -> PackageID BinPkgName
 binaryPackageSourceID package =
     case maybe Nothing (matchRegex re . B.unpack) (B.fieldValue "Source" (packageInfo package)) of
-      Just [name, _, ""] -> makeBinaryPackageID sourceIndex name (packageVersion id)
+      Just [name, _, ""] -> makeBinaryPackageID sourceIndex name (packageVersion pid)
       Just [name, _, version] -> makeBinaryPackageID sourceIndex name (parseDebianVersion version)
       _ -> error "Missing Source attribute in binary package info"
     where
       sourceIndex = PackageIndex release component Source
-      (PackageIndex release component _) = packageIndex id
-      id = packageID package
+      (PackageIndex release component _) = packageIndex pid
+      pid = packageID package
       re = mkRegex "^[ ]*([^ (]*)[ ]*(\\([ ]*([^ )]*)\\))?[ ]*$"
 
 sourcePackageBinaryIDs :: Arch -> SourcePackage -> [PackageID BinPkgName]
@@ -263,7 +265,7 @@ indexCacheFile apt index =
     case (aptArch apt, packageIndexArch index) of
       (Binary _ _, Source) -> indexPrefix index ++ "_source_Sources"
       (Binary _ _, arch@(Binary _ _)) -> indexPrefix index ++ "_binary-" ++ show (prettyArch arch) ++ "_Packages"
-      (Source, _) -> error "Invalid build architecture: Source"
+      (x, _) -> error "Invalid build architecture: " ++ show x
 
 indexPrefix :: PackageIndex -> FilePath
 indexPrefix index =

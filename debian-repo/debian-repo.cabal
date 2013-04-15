@@ -26,7 +26,7 @@ flag local-debian
   Manual: True
 
 Library
-  ghc-options: -O2 -threaded -W
+  ghc-options: -O2 -threaded -Wall
 
   if flag(local-debian)
     Hs-Source-Dirs: ., ../haskell-debian
@@ -67,7 +67,7 @@ Library
 
 Executable debian-versions
   Main-is: demos/Versions.hs
-  ghc-options: -O2 -threaded -W
+  ghc-options: -O2 -threaded -Wall
   if flag(local-debian)
     Hs-Source-Dirs: ., ../haskell-debian
   else
@@ -75,7 +75,7 @@ Executable debian-versions
 
 Executable newdist
   Main-is: Debian/NewDist/Main.hs
-  ghc-options: -O2 -threaded -W
+  ghc-options: -O2 -threaded -Wall
   if flag(local-debian)
     Hs-Source-Dirs: ., ../haskell-debian
   else

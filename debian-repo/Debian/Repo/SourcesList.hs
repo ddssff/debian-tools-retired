@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 --- | A DebSource represents a release of a remote repository and a
 --- method for accessing that repository.
 module Debian.Repo.SourcesList

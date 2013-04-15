@@ -8,7 +8,6 @@ module Debian.Repo.SourceTree.Types
 
 import Control.Applicative ((<$>), (<*>), pure)
 import Control.Monad.Trans ( MonadIO(..) )
-import qualified Data.ByteString.Lazy.Char8 as L ( empty )
 import Data.List ( nubBy, sortBy, intercalate )
 import Debian.Changes ( ChangeLogEntry(..), parseEntries )
 import Debian.Control.String ( Field'(Comment), Paragraph'(..), Control'(Control), ControlFunctions(parseControl), Control )
@@ -19,8 +18,7 @@ import System.Directory ( createDirectoryIfMissing, doesDirectoryExist, doesFile
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.IO (withFile, IOMode(ReadMode), hGetContents)
 import System.FilePath ((</>))
-import System.Process (proc, readProcessWithExitCode)
-import System.Process.Progress (runProcess)
+import System.Process (readProcessWithExitCode)
 
 -- |Any directory containing source code.
 data SourceTree =
@@ -55,16 +53,16 @@ instance SourceTreeC DebianSourceTree where
     copySourceTree tree dest = DebianSourceTree <$> copySourceTree (tree' tree) dest <*> pure (control' tree) <*> pure (entry' tree)
     findSourceTree path0 =
       findSourceTree path0 >>= \ tree ->
-      readFile controlPath >>= return . parseControl controlPath >>= either (fail . show) (return . removeCommentParagraphs) >>= \ control ->
+      readFile controlPath >>= return . parseControl controlPath >>= either (fail . show) (return . removeCommentParagraphs) >>= \ c ->
       -- We only read part of the changelog, so be careful that the file
       -- descriptor gets closed.
       withFile changelogPath ReadMode
         (\ handle ->
-          hGetContents handle >>= \ log ->
-          case parseEntries log of
-            (Right entry : _) ->
+          hGetContents handle >>= \ l ->
+          case parseEntries l of
+            (Right e : _) ->
               -- ePutStrLn ("findDebianSourceTree " ++ show path0 ++ " -> " ++ topdir tree) >>
-              return (DebianSourceTree tree control entry)
+              return (DebianSourceTree tree c e)
             (Left msgs : _) -> error $ "Bad changelog entry in " ++ show changelogPath ++ ": " ++ intercalate ", " msgs
             [] -> return $ error $ "Empty changelog file: " ++ show changelogPath)
       where
@@ -90,13 +88,13 @@ instance SourceTreeC DebianBuildTree where
         where
           copySource = rsync [] (topdir' build) dest
           -- copySource = DebianBuildTree <$> pure dest <*> pure (subdir' tree) <*> copySourceTree (debTree' tree) (dest </> subdir' tree)
-          copyTarball (ExitFailure n) = error $ "Failed to copy source tree: " ++ topdir' build ++ " -> " ++ dest
+          copyTarball (ExitFailure _) = error $ "Failed to copy source tree: " ++ topdir' build ++ " -> " ++ dest
           copyTarball ExitSuccess =
               do exists <- liftIO $ doesFileExist origPath
                  case exists of
                    False -> return (ExitSuccess, "", "")
                    True -> liftIO $ readProcessWithExitCode "cp" ["-p", origPath, dest ++ "/"] ""
-          moveBuild (ExitFailure 1, _, _) = error $ "Failed to copy Tarball: " ++ origPath ++ " -> " ++ dest ++ "/"
+          moveBuild (ExitFailure _, _, _) = error $ "Failed to copy Tarball: " ++ origPath ++ " -> " ++ dest ++ "/"
           moveBuild (ExitSuccess, _, _) = build {topdir' = dest, debTree' = moveSource (debTree' build)}
           moveSource source = source {tree' = SourceTree {dir' = dest </> subdir build}}
           origPath = topdir build </> orig
@@ -120,4 +118,4 @@ instance DebianSourceTreeC DebianBuildTree where
 
 instance DebianBuildTreeC DebianBuildTree where
     subdir = subdir'
-    findBuildTree path subdir = findSourceTree (path </> subdir) >>= return . DebianBuildTree path subdir
+    findBuildTree path d = findSourceTree (path </> d) >>= return . DebianBuildTree path d

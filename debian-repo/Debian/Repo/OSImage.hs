@@ -206,6 +206,7 @@ prepareDevs :: FilePath -> IO ()
 prepareDevs root = do
   mapM_ prepareDev devices
   where
+    devices :: [(FilePath, String, Int, Int)]
     devices = [(root ++ "/dev/null", "c", 1, 3),
                (root ++ "/dev/zero", "c", 1, 5),
                (root ++ "/dev/full", "c", 1, 7),
@@ -222,7 +223,7 @@ prepareDevs root = do
                        False -> readProcessChunks (shell cmd) L.empty >>= return . oneResult
                        True -> return ExitSuccess
 
-pbuilderBuild :: MonadApt m =>
+_pbuilderBuild :: MonadApt m =>
             FilePath
          -> EnvRoot
          -> NamedSliceList
@@ -232,7 +233,7 @@ pbuilderBuild :: MonadApt m =>
          -> [String]
          -> [String]
          -> m OSImage
-pbuilderBuild cacheDir root distro arch repo extraEssential omitEssential extra =
+_pbuilderBuild cacheDir root distro arch repo _extraEssential _omitEssential _extra =
       -- We can't create the environment if the sources.list has any
       -- file:// URIs because they can't yet be visible inside the
       -- environment.  So we grep them out, create the environment, and
@@ -249,9 +250,9 @@ pbuilderBuild cacheDir root distro arch repo extraEssential omitEssential extra 
                    , osLocalRepoMaster = repo
                    , osSourcePackages = []
                    , osBinaryPackages = [] }
-       let sourcesPath = rootPath root ++ "/etc/apt/sources.list"
+       let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
        -- Rewrite the sources.list with the local pool added.
-       liftIO $ replaceFile sourcesPath (show . pretty . aptSliceList $ os)
+       liftIO $ replaceFile sourcesPath' (show . pretty . aptSliceList $ os)
        updateEnv os >>= either (error . show) return
     where
       codefn _ ExitSuccess = return ()
@@ -334,9 +335,9 @@ buildEnv root distro arch repo include exclude components =
                   , osLocalRepoMaster = repo
                   , osSourcePackages = []
                   , osBinaryPackages = [] }
-      let sourcesPath = rootPath root ++ "/etc/apt/sources.list"
+      let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
       -- Rewrite the sources.list with the local pool added.
-      liftIO $ replaceFile sourcesPath (show . pretty . aptSliceList $ os)
+      liftIO $ replaceFile sourcesPath' (show . pretty . aptSliceList $ os)
       updateEnv os >>= either (error . show) return
     where
       codefn _ ExitSuccess = return ()
@@ -370,36 +371,36 @@ buildEnv root distro arch repo include exclude components =
 updateEnv :: MonadApt m => OSImage -> m (Either UpdateError OSImage)
 updateEnv os =
     do liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc") >> readFile "/etc/resolv.conf" >>= writeFile (rootPath root ++ "/etc/resolv.conf")
-       verified <- verifySources os
+       verified <- verifySources
        case verified of
          Left x -> return $ Left x
          Right _ ->
              do liftIO $ prepareDevs (rootPath root)
                 os' <- liftIO $ syncPool os
-                liftIO $ updateLists os'
-                liftIO $ sshCopy (rootPath root)
+                _ <- liftIO $ updateLists os'
+                _ <- liftIO $ sshCopy (rootPath root)
                 source <- getSourcePackages os'
                 binary <- getBinaryPackages os'
                 return . Right $ os' {osSourcePackages = source, osBinaryPackages = binary}
     where
-      verifySources :: MonadApt m => OSImage -> m (Either UpdateError OSImage)
-      verifySources os =
+      verifySources :: MonadApt m => m (Either UpdateError OSImage)
+      verifySources =
           do let computed = remoteOnly (aptSliceList os)
-                 sourcesPath = rootPath root ++ "/etc/apt/sources.list"
-             text <- liftIO (try $ readFile sourcesPath)
+                 sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
+             text <- liftIO (try $ readFile sourcesPath')
              installed <-
                  case text of
                    Left (_ :: SomeException) -> return Nothing
                    Right s -> verifySourcesList (Just root) (parseSourcesList s) >>= return . Just . remoteOnly
              case installed of
-               Nothing -> return $ Left $ Missing (osReleaseName os) sourcesPath
-               Just installed
-                   | installed /= computed ->
-                       return $ Left $ Changed (osReleaseName os) sourcesPath computed installed
+               Nothing -> return $ Left $ Missing (osReleaseName os) sourcesPath'
+               Just installed'
+                   | installed' /= computed ->
+                       return $ Left $ Changed (osReleaseName os) sourcesPath' computed installed'
                _ -> return $ Right os
       root = osRoot os
       remoteOnly :: SliceList -> SliceList
-      remoteOnly x = x {slices = filter r (slices x)} where r x = (uriScheme . sourceUri . sliceSource $ x) == "file:"
+      remoteOnly x = x {slices = filter r (slices x)} where r y = (uriScheme . sourceUri . sliceSource $ y) == "file:"
 
 chrootEnv :: OSImage -> EnvRoot -> OSImage
 chrootEnv os dst = os {osRoot=dst}
@@ -555,8 +556,8 @@ buildEssential os =
           return . takeWhile (/= "END LIST OF PACKAGES") >>=
           return . filter ((/= Nothing) . (matchRegex re))
       -- ePut ("buildEssentialText: " ++ intercalate ", " relationText)
-      let buildEssential = parseRelations (intercalate ", " relationText)
-      let buildEssential' = either (\ l -> error ("parse error in /usr/share/build-essential/list:\n" ++ show l)) id buildEssential
+      let buildEssential'' = parseRelations (intercalate ", " relationText)
+      let buildEssential' = either (\ l -> error ("parse error in /usr/share/build-essential/list:\n" ++ show l)) id buildEssential''
       return (essential ++ buildEssential')
     where
       root = osRoot os
@@ -599,11 +600,11 @@ updateLists os =
     withProc os $ quieter 2 $ do
       qPutStrLn ("Updating OSImage " ++ root)
       out <- useEnv root forceList (runProcess update L.empty)
-      case keepResult out of
-        [ExitFailure _] ->
-            do useEnv root forceList (runProcessF configure L.empty)
-               useEnv root forceList (runProcessF update L.empty)
-        _ -> return []
+      _ <- case keepResult out of
+             [ExitFailure _] ->
+                 do _ <- useEnv root forceList (runProcessF configure L.empty)
+                    useEnv root forceList (runProcessF update L.empty)
+             _ -> return []
       (_, elapsed) <- timeTask (useEnv root forceList (runProcessF upgrade L.empty))
       return elapsed
     where

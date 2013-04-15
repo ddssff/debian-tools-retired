@@ -1,4 +1,5 @@
 {-# LANGUAGE PackageImports #-}
+{-# OPTIONS -fno-warn-name-shadowing -fno-warn-missing-signatures #-}
 -- |Basic types for the Apt library.
 module Debian.Repo.Changes
     (-- * read, show
@@ -33,7 +34,7 @@ import "mtl" Control.Monad.Trans ( MonadIO(..) )
 import Data.List ( isSuffixOf )
 import Data.Maybe ( catMaybes )
 import Data.Monoid ((<>))
-import Debian.Arch (Arch(Binary), ArchCPU(..), prettyArch, parseArch)
+import Debian.Arch (Arch, prettyArch, parseArch)
 import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName, parseChanges )
 import qualified Debian.Control.String as S ( Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue, modifyField, Paragraph )
 import Debian.Release (SubSection(section), parseReleaseName, parseSection)

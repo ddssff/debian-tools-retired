@@ -1,5 +1,5 @@
 {-# LANGUAGE BangPatterns, ScopedTypeVariables #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-name-shadowing -fno-warn-missing-signatures #-}
 -- |Insert packages into a release, remove packages from a release.
 module Debian.Repo.Insert
     ( scanIncoming
@@ -673,7 +673,7 @@ deleteSourcePackages keyname packages =
       putIndex' keyname index entries =
           do let release@(Release {releaseRepo = LocalRepo repo}) = packageIndexRelease index
                  root = repoRoot repo
-             putIndex root index entries
+             _ <- putIndex root index entries
              signRelease keyname release
              return release
       putIndex :: EnvPath -> PackageIndexLocal -> [BinaryPackageLocal] -> IO (Either [String] ())

@@ -138,6 +138,7 @@ makeReleaseInfo file@(F.File {F.text = Success info}) name aliases =
                       , releaseInfoComponents = parseComponents (decodeUtf8 compList) }
       _ -> error $ "Missing Architectures or Components field in Release file " ++ show (F.path file)
 
+isSymLink :: FilePath -> IO Bool
 isSymLink path = F.getSymbolicLinkStatus path >>= return . F.isSymbolicLink
 
 -- |Try to determine a repository's layout.

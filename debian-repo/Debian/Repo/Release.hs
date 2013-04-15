@@ -1,3 +1,4 @@
+{-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Release
     ( lookupRelease
     , insertRelease
@@ -65,13 +66,13 @@ prepareRelease repo dist aliases sections archList =
              let release' = release { releaseRepo = LocalRepo repo' }
              --vPutStrLn 0 $ "prepareRelease: prepareLocalRepository -> " ++ show repo'
              insertRelease release'
-      initIndex root index = initIndexFile (root </> packageIndexDir index) (packageIndexName index)
+      initIndex root' index = initIndexFile (root' </> packageIndexDir index) (packageIndexName index)
       initIndexFile dir name =
           do liftIO $ createDirectoryIfMissing True dir
              liftIO $ setFileMode dir 0o040755
              ensureIndex (dir </> name)
-      initAlias root dist alias = 
-          liftIO $ EF.prepareSymbolicLink (releaseName' dist) (root ++ "/dists/" ++ releaseName' alias)
+      initAlias root' dist alias = 
+          liftIO $ EF.prepareSymbolicLink (releaseName' dist) (root' ++ "/dists/" ++ releaseName' alias)
       root = repoRoot repo
 
 -- | Make sure an index file exists.
@@ -151,9 +152,10 @@ writeRelease release@(Release {releaseRepo = LocalRepo repo}) =
       indexPaths index =
           map ((packageIndexDir index) </>) ["Packages", "Packages.gz", "Packages.bz2", "Packages.diff/Index", "Release"]
       formatFileInfo fw sum size name = intercalate " " $ ["",sum, pad ' ' fw $ show size, name]
-      fieldWidth = ceiling . (logBase 10) . fromIntegral . maximum
+      fieldWidth = ceiling . (logBase (10 :: Double)) . fromIntegral . maximum
 writeRelease _release = error $ "Attempt to write release files to non-local repository"
 
+pad :: Char -> Int -> String -> String
 pad padchar padlen s = replicate p padchar ++ s
     where p = padlen - length s
 

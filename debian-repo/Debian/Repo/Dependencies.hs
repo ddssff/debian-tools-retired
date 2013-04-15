@@ -170,14 +170,14 @@ solutions available relations limit =
       available' = availMap available
       solutions' :: (PackageVersion a) => Int -> [[[SimpleRelation]]] -> AvailMap a -> Either String [(Int, [a])]
       solutions' _ [] _ = Left "All candidate solutions failed"
-      solutions' count (alternative : alternatives) available =
+      solutions' count (alternative : alternatives) available'' =
           if count > limit
           then Left ("No solutions found in first " ++ show limit ++ " candidates")
-          else case testAlternative available alternative of
+          else case testAlternative available'' alternative of
                  Left _excuse ->
-                     solutions' (count + 1) alternatives available
+                     solutions' (count + 1) alternatives available''
                  Right solution ->
-                     Right ((count, solution) : either (const []) id (solutions' (count + 1) alternatives available))
+                     Right ((count, solution) : either (const []) id (solutions' (count + 1) alternatives available''))
 
 -- |The alternative argument is a possible solution to the dependency
 -- problem.  Each element of alternative represents the relations on a

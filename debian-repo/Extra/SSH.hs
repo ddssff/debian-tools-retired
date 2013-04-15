@@ -42,7 +42,7 @@ generatePublicKey =
 -- |See if we already have access to the destination (user\@host).
 sshVerify :: String -> Maybe Int -> IO (Either String ())
 sshVerify dest port =
-    do r@(result, out, err) <- readProcessWithExitCode cmd args ""
+    do r@(result, _out, _err) <- readProcessWithExitCode cmd args ""
        case result of
          ExitSuccess -> return (Right ())		-- We do
          ExitFailure _ ->
@@ -50,9 +50,9 @@ sshVerify dest port =
     where
       cmd = "ssh"
       args = (["-o", "PreferredAuthentications hostbased,publickey"] ++ maybe [] (\ n -> ["-p", show n]) port ++ [dest, "pwd"])
-      sshTestCmd dest port =
+      _sshTestCmd dest' port' =
           ("ssh -o 'PreferredAuthentications hostbased,publickey' " ++
-           (maybe "" (("-p " ++) . show) port) ++ " " ++ show dest ++ " pwd > /dev/null && exit 0")
+           (maybe "" (("-p " ++) . show) port') ++ " " ++ show dest' ++ " pwd > /dev/null && exit 0")
 
 testAccess :: String -> Maybe Int -> FilePath -> IO (Either String (Maybe FilePath))
 testAccess dest port keypath =

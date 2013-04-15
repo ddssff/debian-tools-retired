@@ -270,22 +270,22 @@ uploadRemote repo uri =
 
 validRevision' :: Failing ChangesFile -> IO (Failing ChangesFile)
 validRevision' (Failure x) = return (Failure x)
-validRevision' (Success c) = validRevision c
+validRevision' (Success c) = validRevision
     where
-      validRevision :: ChangesFile -> IO (Failing ChangesFile)
-      validRevision c =
+      validRevision :: IO (Failing ChangesFile)
+      validRevision =
           doesFileExist dscPath >>=
                         cond (S.parseControlFromFile dscPath >>=
                               either (\ e -> return (Failure [show e])) (checkRevision dscPath))
                              (return (Success c))
       dscPath = changeDir c </> changePackage c ++ "_" ++ show (prettyDebianVersion (changeVersion c)) ++ ".dsc"
       checkRevision :: FilePath -> S.Control' String -> IO (Failing ChangesFile)
-      checkRevision dscPath (S.Control [p]) =
-          case maybe (Failure ["Missing Fingerprint field in " ++ dscPath]) parseRevision (S.fieldValue "Fingerprint" p) of
+      checkRevision dscPath' (S.Control [p]) =
+          case maybe (Failure ["Missing Fingerprint field in " ++ dscPath']) parseRevision (S.fieldValue "Fingerprint" p) of
             Failure msgs -> return (Failure msgs)
             Success (x, _) | x == invalidRevision -> return (Failure ["Invalid revision: " ++ show x])
             Success _ -> return (Success c)
-      checkRevision dscPath _ = return (Failure ["Invalid .dsc file: " ++ show dscPath])
+      checkRevision dscPath' _ = return (Failure ["Invalid .dsc file: " ++ show dscPath'])
       invalidRevision = "none"
       -- Parse the "Fingerprint:" value describing the origin of the
       -- package's source and the dependency versions used to build it:
@@ -317,7 +317,7 @@ parseUploadFilename :: FilePath
                     -> Failing UploadFile
 parseUploadFilename dir name =
     case matchRegex (mkRegex "^(.*/)?([^_]*)_(.*)_([^.]*)\\.upload$") name of
-      Just [_, name, version, arch] -> Success (Upload dir name (parseDebianVersion version) (parseArch arch))
+      Just [_, name', version, arch] -> Success (Upload dir name' (parseDebianVersion version) (parseArch arch))
       _ -> Failure ["Invalid .upload file name: " ++ name]
 
 showPkgVersion :: PkgVersion -> String

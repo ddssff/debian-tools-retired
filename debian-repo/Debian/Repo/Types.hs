@@ -145,9 +145,9 @@ class (Ord t, Eq t) => Repo t where
           test cmd (_, _, _) = error $ "*** FAILURE: " ++ cmd
 -}
           parse :: String -> Maybe Int
-          parse text = case takeWhile isDigit text of
+          parse s = case takeWhile isDigit s of
                          "" -> Nothing
-                         s -> Just . read $ s
+                         s' -> Just . read $ s'
     -- | This method returns a list of all the release in the
     -- repository.  This can be used to identify all of the files
     -- in the repository that are not garbage.

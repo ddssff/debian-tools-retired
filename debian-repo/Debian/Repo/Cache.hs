@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable, PackageImports #-}
+{-# OPTIONS -fno-warn-orphans #-}
 -- |An AptCache represents a local cache of a remote repository.  The
 -- cached information is usually downloaded by running "apt-get
 -- update", and appears in @\/var\/lib\/apt\/lists@.
@@ -24,11 +25,7 @@ module Debian.Repo.Cache
     ) where
 
 import Control.DeepSeq (force, NFData)
-import Control.Exception (evaluate)
 import "mtl" Control.Monad.Trans ( MonadIO(..) )
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy.Char8 as L
-import qualified Data.ByteString.UTF8 as UTF8
 import Data.Data (Data)
 import Data.List ( sortBy, intercalate )
 import Data.Typeable (Typeable)
@@ -51,8 +48,8 @@ import System.Posix.Env (setEnv)
 import System.Unix.Chroot ( useEnv )
 import System.Unix.Directory ( removeRecursiveSafely )
 import System.Process (readProcessWithExitCode)
-import System.Process.Progress (readProcessChunks, ePutStrLn, ePutStr, runProcess, collectOutputs, quieter, qPutStrLn)
-import Text.PrettyPrint.ANSI.Leijen (Doc, pretty)
+import System.Process.Progress (ePutStrLn, ePutStr, qPutStrLn)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 instance NFData ExitCode
 
@@ -95,8 +92,8 @@ aptSourcePackagesSorted :: AptCache t => t -> [SrcPkgName] -> [SourcePackage]
 aptSourcePackagesSorted os names =
     sortBy cmp . filterNames names . aptSourcePackages $ os
     where
-      filterNames names packages =
-          filter (flip elem names . sourcePackageName) packages
+      filterNames names' packages =
+          filter (flip elem names' . sourcePackageName) packages
       cmp p1 p2 =
           compare v2 v1		-- Flip args to get newest first
           where
@@ -139,11 +136,11 @@ aptCacheFilesOfSlice apt slice = archFiles (aptArch apt) (sliceSource slice)
 archFiles :: Arch -> DebSource -> [FilePath]
 archFiles arch deb =
     case (arch, deb) of
-      (Source, _) -> error "Invalid build architecture: Source"
-      (Binary _ _, deb@(DebSource DebSrc _ _)) ->
+      (Binary _ _, DebSource DebSrc _ _) ->
           map (++ "_source_Sources") (archFiles' deb)
-      (arch@(Binary os cpu), deb@(DebSource Deb _ _)) ->
+      (Binary _os _cpu, DebSource Deb _ _) ->
           map (++ ("_binary-" ++ show (prettyArch arch) ++ "_Packages")) (archFiles' deb)
+      (x, _) -> error $ "Invalid build architecture: " ++ show x
 
 archFiles' :: DebSource -> [FilePath]
 archFiles' deb =
@@ -190,10 +187,10 @@ archFiles' deb =
 buildArchOfEnv :: EnvRoot -> IO Arch
 buildArchOfEnv (EnvRoot root)  =
     do setEnv "LOGNAME" "root" True -- This is required for dpkg-architecture to work in a build environment
-       a@(code1, out1, err1) <- useEnv root (return . force) $ readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_OS"] ""
-       b@(code2, out2, err2) <- useEnv root (return . force) $ readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_CPU"] ""
+       a@(code1, out1, _err1) <- useEnv root (return . force) $ readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_OS"] ""
+       b@(code2, out2, _err2) <- useEnv root (return . force) $ readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_CPU"] ""
        case (code1, lines out1, code2, lines out2) of
-         x@(ExitSuccess, os : _, ExitSuccess, cpu : _) ->
+         (ExitSuccess, os : _, ExitSuccess, cpu : _) ->
              return $ Binary (ArchOS os) (ArchCPU cpu)
          _ -> error $ "Failure computing build architecture of build env at " ++ root ++ ": " ++ show (a, b)
 {-
@@ -210,10 +207,10 @@ buildArchOfEnv (EnvRoot root)  =
 
 buildArchOfRoot :: IO Arch
 buildArchOfRoot =
-    do a@(code1, out1, err1) <- readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_OS"] ""
-       b@(code2, out2, err2) <- readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_CPU"] ""
+    do a@(code1, out1, _err1) <- readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_OS"] ""
+       b@(code2, out2, _err2) <- readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_CPU"] ""
        case (code1, lines out1, code2, lines out2) of
-         x@(ExitSuccess, os : _, ExitSuccess, cpu : _) ->
+         (ExitSuccess, os : _, ExitSuccess, cpu : _) ->
              return $ Binary (parseArchOS os) (parseArchCPU cpu)
          _ -> error $ "Failure computing build architecture of /: " ++ show (a, b)
     where
@@ -244,7 +241,7 @@ buildArchOfRoot =
 wordsBy :: Eq a => (a -> Bool) -> [a] -> [[a]]
 wordsBy p s =
     case (break p s) of
-      (s, []) -> [s]
+      (s', []) -> [s']
       (h, t) -> h : wordsBy p (drop 1 t)
 
 data SourcesChangedAction =

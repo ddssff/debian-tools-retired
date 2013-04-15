@@ -36,6 +36,7 @@ packageIndexDir index =
             -- Will prettyArch give us linux-amd64 when we just want amd64?
             "/binary-" ++ show (prettyArch (packageIndexArch index)))
 
+releaseDir :: Release -> String
 releaseDir release = "dists/" ++ (releaseName' . releaseName $ release)
 
 packageIndexPathList :: Release -> [FilePath]
@@ -72,6 +73,7 @@ showIndexBrief index =
     (releaseName' . releaseName $ release) </> sectionName' (packageIndexComponent index) </> showArch (packageIndexArch index)
     where release = packageIndexRelease index
           showArch Source = "source"
+          showArch All = "all"
           showArch x@(Binary _ _) = "binary-" ++ show (prettyArch x)
 
 debSourceFromIndex :: PackageIndex -> DebSource
@@ -80,7 +82,7 @@ debSourceFromIndex index =
                sourceUri = repoURI repo,
                sourceDist = Right (dist, components)}
     where
-      typ = case arch of (Binary _ _) -> Deb; Source -> DebSrc
+      typ = case arch of (Binary _ _) -> Deb; Source -> DebSrc; All -> Deb
       arch = packageIndexArch index
       dist = releaseName release
       components = releaseComponents release

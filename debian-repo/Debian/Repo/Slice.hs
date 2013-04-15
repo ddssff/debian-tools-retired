@@ -109,7 +109,7 @@ parseNamedSliceList' (name, text) =
 verifySourcesList :: MonadApt m => Maybe EnvRoot -> [DebSource] -> m SliceList
 verifySourcesList chroot list =
     mapM (verifyDebSource chroot) list >>=
-    (\ list -> return $ SliceList { slices = list })
+    (\ xs -> return $ SliceList { slices = xs })
 
 verifySourceLine :: MonadApt m => Maybe EnvRoot -> String -> m Slice
 verifySourceLine chroot str = verifyDebSource chroot (parseSourceLine str)

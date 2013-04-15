@@ -63,11 +63,11 @@ data VersionTag
 -- | Parse a Debian revision string (the portion of the version number
 -- following the final dash) into a prefix and a VersionTag.
 parseTag :: [String] -> DebianVersion -> (DebianVersion, Maybe VersionTag)
-parseTag vendors version =
-    fromMaybe (version, Nothing) . listToMaybe . filter (isJust . snd) . map (`tryTag` version) $ vendors
+parseTag vendors ver =
+    fromMaybe (ver, Nothing) . listToMaybe . filter (isJust . snd) . map (`tryTag` ver) $ vendors
     where
-      tryTag vendor version =
-        let (e, v, r) = evr version in
+      tryTag vendor ver' =
+        let (e, v, r) = evr ver' in
         let (prefix, tag) =
                 case r of
                   Nothing -> (Nothing, Nothing)
@@ -88,8 +88,8 @@ parseTag vendors version =
         -- Try to parse the r5 from the end of the prefix.
         let (prefix', tag') =
                 case (maybe Nothing (matchRegex extraRE) prefix, tag) of
-                  (Just [prefix1, prefix2, digits], Just tag) -> 
-                      (Just (prefix1 ++ prefix2), Just (tag {extraNumber = Just (read digits)}))
+                  (Just [prefix1, prefix2, digits], Just tag'') -> 
+                      (Just (prefix1 ++ prefix2), Just (tag'' {extraNumber = Just (read digits)}))
                   _ -> (prefix, tag) in
         (buildDebianVersion e v (if prefix' == Just "0" then Nothing else prefix'), tag')
         where
@@ -109,11 +109,11 @@ escapeForRegex s =
 
 -- | The tag returned by splitTag
 getTag :: [String] -> DebianVersion -> Maybe VersionTag
-getTag vendors version = snd (parseTag vendors version)
+getTag vendors ver = snd (parseTag vendors ver)
 
 -- | The prefix returned by splitTag
 dropTag :: [String] -> DebianVersion -> DebianVersion
-dropTag vendors version = fst (parseTag vendors version)
+dropTag vendors ver = fst (parseTag vendors ver)
 
 -- |Modify a version number by adding or changing the vendor tag.  The
 -- result will be newer than the distVersion (the newest already
@@ -149,7 +149,7 @@ setTag :: (String -> String)
 setTag alias vendor oldVendors release extra distVersion allVersions sourceVersion =
     case oldTag of
       Failure msgs -> Failure msgs
-      Success x -> Success . appendTag alias sourceUpstreamVersion . Just . findAvailableTag . newTag $ x
+      Success x -> Success . appendTag alias sourceUpstreamVersion . Just . findAvailableTag . newTag' $ x
     where
       oldTag = 
             case maybe Nothing (Just . parseTag (vendor : oldVendors)) distVersion of
@@ -162,7 +162,7 @@ setTag alias vendor oldVendors release extra distVersion allVersions sourceVersi
                     -- Make sure we have the new vendor tag, not the one that
                     -- we just parsed.
                     EQ -> Success (maybe Nothing (Just . fixVendor vendor) distTag)
-      fixVendor vendor tag = let (_, n) = vendorTag tag in tag {vendorTag = (vendor, n)}
+      fixVendor vendor' tag = let (_, n) = vendorTag tag in tag {vendorTag = (vendor', n)}
       -- The new tag must
       --  1) be newer than the old tag
       --  2) be at least as new as the tag in the source code changelog.
@@ -172,9 +172,9 @@ setTag alias vendor oldVendors release extra distVersion allVersions sourceVersi
       -- non-development.  In that case we will have to bump the
       -- vendor build number, not the release build number, and then
       -- add the release tag.
-      newTag Nothing =
+      newTag' Nothing =
           VersionTag {vendorTag = (vendor, 1), releaseTag = maybe Nothing (\ relName -> Just (relName, 1)) release, extraNumber = extra}
-      newTag (Just distTag) =
+      newTag' (Just distTag) =
           let distTag' = fixReleaseName release (bumpTag (fixVendor vendor distTag)) in
           let sourceTag' = maybe Nothing (Just . setReleaseName release) sourceTag in
           case tagMax [Just distTag', sourceTag'] of
@@ -191,12 +191,13 @@ setTag alias vendor oldVendors release extra distVersion allVersions sourceVersi
       findAvailableTag candidate =
           if elem candidate allTags then findAvailableTag (bumpTag candidate) else candidate
 
+tagCmp :: Maybe VersionTag -> Maybe VersionTag -> Ordering
 tagCmp (Just tagA) (Just tagB) =
     let (_, a) = vendorTag tagA
         (_, b) = vendorTag tagB in
     case compare a b of
       EQ -> case (releaseTag tagA, releaseTag tagB) of
-              (Just (_, a), Just (_, b)) -> compare a b
+              (Just (_, c), Just (_, d)) -> compare c d
               (Nothing, Nothing) -> EQ
               (Nothing, _) -> LT
               (_, Nothing) -> GT
@@ -208,12 +209,14 @@ tagCmp _ Nothing = GT
 tagMax :: [Maybe VersionTag] -> Maybe VersionTag
 tagMax tags = head (sortBy (flip tagCmp) tags)
 
+bumpTag :: VersionTag -> VersionTag
 bumpTag tag@(VersionTag {releaseTag = Just (relName, relBuild)}) = tag {releaseTag = Just (relName, relBuild + 1)}
 bumpTag tag@(VersionTag {vendorTag = (name, build), releaseTag = Nothing}) = tag {vendorTag = (name, build + 1)}
 
 -- If one of the version number candidates has the wrong release name
 -- this function fixes it, ensuring that the new tag isn't trumped by
 -- the old.
+fixReleaseName :: Maybe String -> VersionTag -> VersionTag
 fixReleaseName release tag@(VersionTag {vendorTag = (vendorName, vendorBuild)}) =
     case (release, releaseTag tag) of
       (Just relName, Just (oldRelName, _)) | relName == oldRelName -> tag
@@ -226,6 +229,7 @@ fixReleaseName release tag@(VersionTag {vendorTag = (vendorName, vendorBuild)}) 
 -- This is similer to fixReleaseName, but we don't require the result to
 -- trump the argument.  This is applied to the source package version number,
 -- which is not necessarily present in the dist.
+setReleaseName :: Maybe String -> VersionTag -> VersionTag
 setReleaseName release tag =
     case (release, releaseTag tag) of
       (Just relName, Just (oldRelName, _)) | relName == oldRelName -> tag
@@ -234,6 +238,7 @@ setReleaseName release tag =
       (Nothing, _) -> tag {releaseTag = Nothing}
 
 -- Create a tag which is one click newer.
+newTag :: String -> Maybe String -> Maybe Int -> VersionTag
 newTag vendor Nothing extra = VersionTag { extraNumber = extra, vendorTag = (vendor, 1), releaseTag = Nothing }
 newTag vendor (Just name) extra = VersionTag { extraNumber = extra, vendorTag = (vendor, 0), releaseTag = Just (name, 1) }
 
@@ -271,6 +276,7 @@ setRevision ver rev = buildDebianVersion (epoch ver) (version ver) rev
 -- Specifically, we must assume that if the version matches when we
 -- strip off one or both sections of the tag on the distribution
 -- version number.
+compareSourceAndDist :: [String] -> DebianVersion -> DebianVersion -> Ordering
 compareSourceAndDist vendor s d =
     let (verS, tagS) = parseTag vendor s
         (verD, tagD) = parseTag vendor d in

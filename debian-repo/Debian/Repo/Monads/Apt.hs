@@ -91,8 +91,8 @@ tryAB task =
     do state <- get
        mapStateT (try' state) task
     where
-      try' state task =
-          do result <- try task
+      try' state task' =
+          do result <- try task'
              case result of
                Left e -> return (Left e, state)
                Right (a, state') -> return (Right a, state')
@@ -104,8 +104,8 @@ tryJustAB f task =
     do state <- get
        mapStateT (tryJust' state) task
     where
-      tryJust' state task =
-          do result <- tryJust f task
+      tryJust' state task' =
+          do result <- tryJust f task'
              case result of
                Left b -> return (Left b, state)
                Right (a, state') -> return (Right a, state')

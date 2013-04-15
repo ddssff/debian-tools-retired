@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 -- |Print the available version numbers of a package.
 module Main where
 
