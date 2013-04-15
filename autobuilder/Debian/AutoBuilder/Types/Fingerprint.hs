@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall -Werror #-}
 module Debian.AutoBuilder.Types.Fingerprint
     ( Fingerprint
     , packageFingerprint

@@ -4,7 +4,6 @@ module Debian.AutoBuilder.BuildTarget.Darcs
     , prepare
     ) where
 
-import Control.Exception (try, SomeException)
 import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
@@ -22,15 +21,15 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (shell)
-import System.Process.Progress (keepStdout, keepResult, timeTask, runProcessF, runProcess)
+import System.Process.Progress (keepResult, timeTask, runProcessF, runProcess)
 import System.Unix.Directory
-import Text.Regex
 
 documentation = [ "darcs:<string> - a target of this form obtains the source code by running"
                 , "darcs get <string>.  If the argument needs to use ssh to reach the darcs"
                 , "repository, it is necessary to set up ssh keys to allow access without"
                 , "typing a password.  See the --ssh-export option for help doing this." ]
 
+{-
 darcsRev :: SourceTree -> P.RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
     try (runProcess (shell cmd) B.empty >>= return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack . B.concat . keepStdout) >>= 
@@ -39,6 +38,7 @@ darcsRev tree m =
     where
       cmd = "cd " ++ path ++ " && darcs changes --xml-output"
       path = topdir tree
+-}
 
 prepare :: MonadDeb m => P.CacheRec -> P.Packages -> String -> m T.Download
 prepare cache package theUri =

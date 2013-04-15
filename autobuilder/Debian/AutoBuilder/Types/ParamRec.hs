@@ -12,11 +12,11 @@ import Control.Arrow (first)
 import Data.List as List (map)
 import Data.Map as Map (Map, insertWith, elems, empty)
 import Data.Set as Set (Set, insert, empty, fold, member)
-import Debian.Arch (Arch(Binary))
+import Debian.Arch (Arch)
 import Debian.AutoBuilder.Types.Packages (Packages(Packages, Package, NoPackage, name, list, group), TargetName(TargetName))
-import Debian.Release (ReleaseName(ReleaseName) )
-import Debian.Repo.Cache ( SourcesChangedAction(SourcesChangedError) )
-import Debian.Version ( DebianVersion, parseDebianVersion, prettyDebianVersion )
+import Debian.Release (ReleaseName )
+import Debian.Repo.Cache ( SourcesChangedAction )
+import Debian.Version ( DebianVersion, prettyDebianVersion )
 import Debian.URI ( URI )
 import Prelude hiding (map)
 import System.Console.GetOpt
@@ -472,7 +472,7 @@ usage header =
                     Opt {long = "-----------", short = "------------"}]
 
 fmtOpt :: OptDescr a -> [DescrLine]
-fmtOpt paramDescr@(Option sos los ad descr) =
+fmtOpt (Option sos los ad descr) =
    let ds = [Text ""] ++ map Text (lines descr) ++ [Text ""]
        ss = map (fmtShort ad) sos
        ls = map (fmtLong  ad) los in
@@ -492,10 +492,12 @@ fmtLong (NoArg  _   ) lo = "--" ++ lo
 fmtLong (ReqArg _ ad) lo = "--" ++ lo ++ "=" ++ ad
 fmtLong (OptArg _ ad) lo = "--" ++ lo ++ "[=" ++ ad ++ "]"
 
+{-
 fmtParam :: ArgDescr a -> String -> String
 fmtParam (NoArg  _   ) po = po ++ ": Yes"
 fmtParam (ReqArg _ ad) po = po ++ ": " ++ ad
 fmtParam (OptArg _ ad) po = po ++ ": " ++ ad
+-}
 
 buildTargets :: ParamRec -> Packages -> Packages
 buildTargets params knownTargets =

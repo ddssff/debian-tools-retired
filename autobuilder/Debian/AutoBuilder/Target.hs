@@ -1,5 +1,5 @@
 {-# LANGUAGE BangPatterns, PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
-{-# OPTIONS -Wall -fwarn-unused-imports -fno-warn-name-shadowing -fno-warn-orphans #-}
+{-# OPTIONS -fwarn-unused-imports -fno-warn-name-shadowing -fno-warn-orphans #-}
 -- |A Target represents a particular set of source code and the
 -- methods to retrieve and update it.
 -- 
@@ -33,7 +33,7 @@ import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Types.Buildable (Buildable(..), Target(tgt, cleanSource, targetDepends), targetName, prepareTarget, targetRelaxed, targetControl, relaxDepends, failing, debianSourcePackageName)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
-import Debian.AutoBuilder.Types.Fingerprint (Fingerprint, packageFingerprint, showFingerprint, dependencyChanges, targetFingerprint, showDependencies, showDependencies', BuildDecision(..), buildDecision)
+import Debian.AutoBuilder.Types.Fingerprint (Fingerprint, packageFingerprint, showFingerprint, dependencyChanges, targetFingerprint, showDependencies', BuildDecision(..), buildDecision)
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V

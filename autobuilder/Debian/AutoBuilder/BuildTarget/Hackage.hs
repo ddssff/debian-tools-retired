@@ -1,5 +1,5 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TypeFamilies #-}
-{-# OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-type-defaults -fno-warn-missing-signatures #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing -fno-warn-type-defaults -fno-warn-missing-signatures #-}
 module Debian.AutoBuilder.BuildTarget.Hackage
     ( prepare
     , documentation

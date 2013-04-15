@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, TypeSynonymInstances #-}
-{-# OPTIONS -Wall #-}
 module Debian.AutoBuilder.Monads.Deb
     ( MonadDeb
     , runDebT
