@@ -1,4 +1,4 @@
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE FlexibleInstances, StandaloneDeriving, TypeSynonymInstances #-}
 module Debian.Repo.Types
     ( EnvRoot(..)
     , EnvPath(..)
@@ -51,7 +51,7 @@ module Debian.Repo.Types
 --import Control.Monad.Trans (MonadIO)
 import Debian.Arch (Arch(..))
 import qualified Data.ByteString.Char8 as B ( ByteString )
-import qualified Debian.Control.ByteString as B ( Paragraph )
+import qualified Debian.Control.ByteString as B
 import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.URI ( URI(uriPath), URIString, fileFromURI, parseURI )
@@ -63,9 +63,16 @@ import qualified Data.ByteString.Lazy.Char8 as L ( unpack )
 import Data.Char ( isDigit )
 import Data.Maybe ( fromJust )
 import System.FilePath ( (</>) )
+import System.Posix.Files (FileStatus(..))
 import System.Posix.Types ( FileOffset )
 --import System.Unix.QIO (quieter, qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), vcat, Pretty(pretty))
+
+deriving instance Show (B.Field' B.ByteString)
+deriving instance Show B.Paragraph
+
+instance Show FileStatus where
+    show _ = "def :: FileStatus"
 
 -- |The root directory of an OS image.
 data EnvRoot = EnvRoot { rootPath :: FilePath } deriving (Ord, Eq, Read, Show)
@@ -344,7 +351,7 @@ data PackageID n
       { packageIndex :: PackageIndex
       , packageName :: n
       , packageVersion :: DebianVersion
-      } deriving (Eq, Ord)
+      } deriving (Eq, Ord, Show)
 
 binaryPackageName :: BinaryPackage -> BinPkgName
 binaryPackageName = packageName . packageID
@@ -381,7 +388,7 @@ data SourcePackage
       , sourceControl :: SourceControl
       , sourceDirectory :: String
       , sourcePackageFiles :: [SourceFileSpec]
-      }
+      } deriving (Show)
 
 -- |Source package information derived from the control paragraph.
 data SourceControl
@@ -397,7 +404,7 @@ data SourceControl
       , buildConflictsIndep :: [Package]
       , standardsVersion :: Maybe StandardsVersion -- There are packages that don't have this
       , homepage :: Maybe B.ByteString -- There are packages that don't have this
-      }
+      } deriving (Show)
 
 type NameAddr = B.ByteString
 type StandardsVersion = B.ByteString
@@ -411,6 +418,7 @@ data SourceFileSpec
       , sourceFileSize :: FileOffset
       , sourceFileName :: FilePath
       }
+    deriving (Show)
 
 type PackageIDLocal = PackageID
 type BinaryPackageLocal = BinaryPackage
