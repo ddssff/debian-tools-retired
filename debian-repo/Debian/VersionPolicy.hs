@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 -- |This module contains functions governing the assignment of version
 -- numbers, patterned after Ubuntu version number policy:
 --
@@ -151,13 +152,13 @@ setTag alias vendor oldVendors release extra distVersion allVersions sourceVersi
       Failure msgs -> Failure msgs
       Success x -> Success . appendTag alias sourceUpstreamVersion . Just . findAvailableTag . newTag' $ x
     where
-      oldTag = 
+      oldTag =
             case maybe Nothing (Just . parseTag (vendor : oldVendors)) distVersion of
               Nothing -> Success Nothing
               Just (distUpstreamVersion, distTag) ->
                   case compare sourceUpstreamVersion distUpstreamVersion of
-                    LT -> Failure ["Source version " ++ show (prettyDebianVersion sourceVersion) ++
-                                   " is too old to trump uploaded version " ++ show (prettyDebianVersion distUpstreamVersion)]
+                    LT -> Failure ["Source version " ++ show (prettyDebianVersion sourceVersion) ++ " (upstream: " ++ show (prettyDebianVersion sourceUpstreamVersion) ++ ")" ++
+                                   " is too old to trump uploaded version " ++ show (prettyDebianVersion distUpstreamVersion) ++ " (dist: " ++ maybe "Nothing" (show . prettyDebianVersion) distVersion ++ ")"]
                     GT -> Success Nothing
                     -- Make sure we have the new vendor tag, not the one that
                     -- we just parsed.
@@ -244,12 +245,11 @@ newTag vendor (Just name) extra = VersionTag { extraNumber = extra, vendorTag = 
 
 -- | Format a tag as a string.
 showTag :: (String -> String) -> VersionTag -> String
-showTag alias (VersionTag { extraNumber = extra
-                          , vendorTag = (vendor, vendorBuildNumber)
-                          , releaseTag = releaseInfo }) =
-   maybe "" (("r" ++) . show) extra ++
+showTag alias v@(VersionTag {..}) =
+   let (vendor, vendorBuildNumber) = vendorTag in
+   maybe "" (("r" ++) . show) extraNumber ++
          vendor ++ show vendorBuildNumber ++
-         maybe "" (\ (relname, relbuild) -> "~" ++ alias relname ++ show relbuild) releaseInfo
+         maybe "" (\ (relname, relbuild) -> "~" ++ alias relname ++ show relbuild) releaseTag
 
 -- | Append a vendor tag to a string containing the revision portion
 -- of a debian version number.
