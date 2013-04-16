@@ -395,8 +395,9 @@ data SourceControl
       , buildDependsIndep :: [Package]
       , buildConflicts :: [Package]
       , buildConflictsIndep :: [Package]
-      , standardsVersion :: StandardsVersion
-      , homepage :: B.ByteString }
+      , standardsVersion :: Maybe StandardsVersion -- There are packages that don't have this
+      , homepage :: Maybe B.ByteString -- There are packages that don't have this
+      }
 
 type NameAddr = B.ByteString
 type StandardsVersion = B.ByteString

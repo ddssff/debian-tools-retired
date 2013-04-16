@@ -114,17 +114,19 @@ toSourcePackage index package =
           B.fieldValue "Package" package,
           maybe Nothing (Just . parseDebianVersion . B.unpack) (B.fieldValue "Version" package)) of
       (Just directory, Just files, Just name, Just version) ->
-          case parseSourcesFileList files of
-            Right files' ->
+          case (parseSourcesFileList files, parseSourceParagraph package) of
+            (Right files', Right para) ->
                 SourcePackage
                 { sourcePackageID = makeSourcePackageID index (B.unpack name) version
                 , sourceParagraph = package
-                , sourceControl = fromMaybe (error ("Failure parsing Source package control information: " ++ asString (formatParagraph package))) (parseSourceParagraph package)
+                , sourceControl = para
                 , sourceDirectory = B.unpack directory
                 , sourcePackageFiles = files' }
-            Left messages -> error $ "Invalid file list: " ++ show messages
-      _ -> error $ "Missing info in source package control information:\n" ++ B.unpack (formatParagraph package)
-    where      
+            (Left messages, _) -> error $ "Invalid file list: " ++ show messages
+            (_, Left messages) -> error $ "Error in source paragraph\n package=" ++ show package ++ "\n  index=" ++ show index ++ "\n  messages:\n   " ++ intercalate "\n   " messages
+      x -> error $ "Missing info in source package control information in " ++ show index ++ " -> " ++ show x ++ " :\n" ++ B.unpack (formatParagraph package)
+    where
+      sourceParagraph = parseSourceParagraph package
       -- Parse the list of files in a paragraph of a Sources index.
       parseSourcesFileList :: B.ByteString -> Either [String] [SourceFileSpec]
       parseSourcesFileList text =
@@ -138,26 +140,26 @@ toSourcePackage index package =
                   (a, []) -> Left . catMaybes . map (either Just (const Nothing )) $ a
                   (_, a) -> Right . catMaybes . map (either (const Nothing) Just) $ a
 
-parseSourceParagraph :: B.Paragraph -> Maybe SourceControl
+parseSourceParagraph :: B.Paragraph -> Either [String] SourceControl
 parseSourceParagraph p =
     -- Look up the required fields
-    B.fieldValue "Source" p >>= \ source' ->
-    B.fieldValue "Maintainer" p >>= \ maintainer' ->
-    B.fieldValue "Standards-Version" p >>= \ standardsVersion' ->
-    B.fieldValue "Homepage" p >>= \ homepage' ->
-    -- The optional fields can be parsed as pure values
-    return (SourceControl
-            { source = source'
-            , maintainer = maintainer'
-            , uploaders = maybe [] (: []) $ B.fieldValue "Uploaders" p
-            , packageSection = fmap stripWS $ B.fieldValue "Section" p
-            , packagePriority = fmap stripWS $ B.fieldValue "Priority" p
-            , buildDepends = maybe [] (: []) $ B.fieldValue "Build-Depends" p
-            , buildDependsIndep = maybe [] (: []) $ B.fieldValue "Build-Depends-Indep" p
-            , buildConflicts = maybe [] (: []) $ B.fieldValue "Build-Conflicts" p
-            , buildConflictsIndep = maybe [] (: []) $ B.fieldValue "Build-Conflicts-Indep" p
-            , standardsVersion = standardsVersion'
-            , homepage = homepage' })
+    case (B.fieldValue "Package" p,
+          B.fieldValue "Maintainer" p) of
+      (Just source', Just maintainer') ->
+          -- The optional fields can be parsed as pure values
+          Right (SourceControl
+                  { source = source'
+                  , maintainer = maintainer'
+                  , uploaders = maybe [] (: []) $ B.fieldValue "Uploaders" p
+                  , packageSection = fmap stripWS $ B.fieldValue "Section" p
+                  , packagePriority = fmap stripWS $ B.fieldValue "Priority" p
+                  , buildDepends = maybe [] (: []) $ B.fieldValue "Build-Depends" p
+                  , buildDependsIndep = maybe [] (: []) $ B.fieldValue "Build-Depends-Indep" p
+                  , buildConflicts = maybe [] (: []) $ B.fieldValue "Build-Conflicts" p
+                  , buildConflictsIndep = maybe [] (: []) $ B.fieldValue "Build-Conflicts-Indep" p
+                  , standardsVersion = fmap stripWS $ B.fieldValue "Standards-Version" p
+                  , homepage = fmap stripWS $ B.fieldValue "Homepage" p })
+      x -> Left ["parseSourceParagraph - One or more required fields (Package, Maintainer, Standards-Version) missing: " ++ show p]
 
 toBinaryPackage :: PackageIndex -> B.Paragraph -> BinaryPackage
 toBinaryPackage index p =
@@ -245,7 +247,7 @@ sourcePackagesOfIndex index =
       Source -> getPackages index >>= return . either Left (Right . map (toSourcePackage index . packageInfo))
       _ -> return (Right [])
 
--- FIXME: assuming the index is part of the cache 
+-- FIXME: assuming the index is part of the cache
 sourcePackagesOfIndex' :: (AptCache a, MonadApt m) => a -> PackageIndex -> m [SourcePackage]
 sourcePackagesOfIndex' cache index =
     do state <- getApt
@@ -254,7 +256,7 @@ sourcePackagesOfIndex' cache index =
        case cached of
          Just (status', packages) | status == status' -> return packages
          _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
-                 let packages = map (toSourcePackage index) paragraphs 
+                 let packages = map (toSourcePackage index) paragraphs
                  putApt (insertSourcePackages path (status, packages) state)
                  return packages
     where
