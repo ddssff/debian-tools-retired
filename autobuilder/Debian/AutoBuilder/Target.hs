@@ -1,5 +1,5 @@
 {-# LANGUAGE BangPatterns, PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
-{-# OPTIONS -fwarn-unused-imports -fno-warn-name-shadowing -fno-warn-orphans #-}
+{-# OPTIONS -Wall -fwarn-unused-imports -fno-warn-name-shadowing -fno-warn-orphans #-}
 -- |A Target represents a particular set of source code and the
 -- methods to retrieve and update it.
 -- 
@@ -365,8 +365,7 @@ buildTarget cache cleanOS globalBuildDeps repo poolOS !target =
                let sourceVersion = logVersion sourceLog
                    newFingerprint = targetFingerprint target sourceDependencies
                let spkgs = aptSourcePackagesSorted poolOS [G.sourceName (targetDepends target)]
-                   buildTrumped = elem (targetName target) (P.buildTrumped (P.params cache))
-                   newVersion = computeNewVersion cache spkgs (if buildTrumped then Nothing else releaseControlInfo) sourceVersion
+                   newVersion = computeNewVersion cache cleanOS spkgs target sourceVersion
                    decision = buildDecision cache target oldFingerprint newFingerprint releaseStatus
                ePutStrLn ("Build decision: " ++ show decision)
                -- quieter (const 0) $ qPutStrLn ("newVersion: " ++ show (fmap prettyDebianVersion newVersion))
@@ -627,13 +626,12 @@ data Status = Complete | Missing [BinPkgName]
 -- |Compute a new version number for a package by adding a vendor tag
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
-computeNewVersion :: P.CacheRec -> [SourcePackage] -> Maybe SourcePackage -> DebianVersion -> Failing DebianVersion
+computeNewVersion :: P.CacheRec -> OSImage -> [SourcePackage] -> Target -> DebianVersion -> Failing DebianVersion
 computeNewVersion cache
+                  cleanOS
                   available		-- All the versions that exist in the pool in any dist,
 					-- the new version number must not equal any of these.
-                  current		-- The control file paragraph for the currently uploaded
-                                        -- version in this dist.  The new version must be newer
-                                        -- than this.
+                  target
                   sourceVersion =	-- Version number in the changelog entry of the checked-out
                                         -- source code.  The new version must also be newer than this.
     case P.doNotChangeVersion (P.params cache) of
@@ -644,10 +642,17 @@ computeNewVersion cache
               release = if (P.isDevelopmentRelease (P.params cache)) then
                             Nothing else
                             (Just (sliceName (P.baseRelease (P.params cache))))
-              extra = P.extraReleaseTag (P.params cache) 
+              extra = P.extraReleaseTag (P.params cache)
               aliases = \ x -> maybe x id (lookup x (P.releaseAliases (P.params cache))) in
-          case parseTag (vendor : oldVendors) sourceVersion of
+{-
+              aliases = f
+                  where
+                    f x = case lookup x (P.releaseAliases (P.params cache)) of
+                            Nothing -> x
+                            Just x' -> if x == x' then x else f x' in
+-}
 
+          case parseTag (vendor : oldVendors) sourceVersion of
             (_, Just tag) -> Failure ["Error: the version string in the changelog has a vendor tag (" ++ show tag ++
                                       ".)  This is prohibited because the autobuilder needs to fully control suffixes" ++
                                       " of this form.  This makes it difficult for the author to know what version" ++
@@ -667,6 +672,12 @@ computeNewVersion cache
                         then Failure ["Autobuilder bug: new version number " ++ show (prettyDebianVersion result) ++ " is not newer than current version number " ++ show (prettyDebianVersion v)]
                         else Success result)
                 currentVersion
+      -- The control file paragraph for the currently uploaded
+      -- version in this dist.  The new version must be newer
+      -- than this.
+      current = if buildTrumped then Nothing else releaseControlInfo
+      buildTrumped = elem (targetName target) (P.buildTrumped (P.params cache))
+      (releaseControlInfo, _releaseStatus, _message) = getReleaseControlInfo cleanOS target
 
 -- FIXME: Most of this code should move into Debian.Repo.Dependencies
 buildDepSolutions' :: Arch -> [BinPkgName] -> OSImage -> Relations -> Control -> Failing [(Int, [BinaryPackage])]
