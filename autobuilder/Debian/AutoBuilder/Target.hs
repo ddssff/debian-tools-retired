@@ -361,11 +361,8 @@ buildTarget cache cleanOS globalBuildDeps repo poolOS !target =
                let repoVersion = fmap (packageVersion . sourcePackageID) releaseControlInfo
                    oldFingerprint = packageFingerprint releaseControlInfo
                -- Get the changelog entry from the clean source
-               let sourceLog = entry . cleanSource $ target
-               let sourceVersion = logVersion sourceLog
-                   newFingerprint = targetFingerprint target sourceDependencies
-               let spkgs = aptSourcePackagesSorted poolOS [G.sourceName (targetDepends target)]
-                   newVersion = computeNewVersion cache cleanOS spkgs target sourceVersion
+               let newFingerprint = targetFingerprint target sourceDependencies
+                   newVersion = computeNewVersion cache cleanOS poolOS target
                    decision = buildDecision cache target oldFingerprint newFingerprint releaseStatus
                ePutStrLn ("Build decision: " ++ show decision)
                -- quieter (const 0) $ qPutStrLn ("newVersion: " ++ show (fmap prettyDebianVersion newVersion))
@@ -381,13 +378,13 @@ buildTarget cache cleanOS globalBuildDeps repo poolOS !target =
                      case decision of
                        Error message -> qError ("Failure making build decision: " ++ message)
                        No _ -> return Nothing
-                       _ ->  buildPackage cache cleanOS buildVersion oldFingerprint newFingerprint sourceLog target releaseStatus repo >>=
+                       _ ->  buildPackage cache cleanOS buildVersion oldFingerprint newFingerprint target releaseStatus repo >>=
                              return . Just
 
 -- | Build a package and upload it to the local repository.
 buildPackage :: (MonadApt m, MonadTop m) =>
-                P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> ChangeLogEntry -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
-buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog !target status repo =
+                P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
+buildPackage cache cleanOS newVersion oldFingerprint newFingerprint !target status repo =
     checkDryRun >>
     buildEnv (P.buildRelease (P.params cache)) >>= return . Debian.Repo.chrootEnv cleanOS >>= \ buildOS ->
     liftIO (prepareBuildImage cache cleanOS newFingerprint buildOS target) >>=
@@ -396,6 +393,7 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint sourceLog !t
     find >>=
     doLocalUpload
     where
+      sourceLog = entry . cleanSource $ target
       checkDryRun = when (P.dryRun (P.params cache))
                       (do qPutStrLn "Not proceeding due to -n option."
                           liftIO (exitWith ExitSuccess))
@@ -626,14 +624,8 @@ data Status = Complete | Missing [BinPkgName]
 -- |Compute a new version number for a package by adding a vendor tag
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
-computeNewVersion :: P.CacheRec -> OSImage -> [SourcePackage] -> Target -> DebianVersion -> Failing DebianVersion
-computeNewVersion cache
-                  cleanOS
-                  available		-- All the versions that exist in the pool in any dist,
-					-- the new version number must not equal any of these.
-                  target
-                  sourceVersion =	-- Version number in the changelog entry of the checked-out
-                                        -- source code.  The new version must also be newer than this.
+computeNewVersion :: AptCache t => P.CacheRec -> OSImage -> t -> Target -> Failing DebianVersion
+computeNewVersion cache cleanOS poolOS target =
     case P.doNotChangeVersion (P.params cache) of
       True -> Success sourceVersion
       False ->
@@ -661,6 +653,13 @@ computeNewVersion cache
             (_, Nothing) -> setTag aliases vendor oldVendors release extra currentVersion (catMaybes . map getVersion $ available) sourceVersion >>=
                             checkVersion
     where
+      -- Version number in the changelog entry of the checked-out
+      -- source code.  The new version must also be newer than this.
+      sourceVersion = logVersion sourceLog
+      sourceLog = entry . cleanSource $ target
+      -- All the versions that exist in the pool in any dist,
+      -- the new version number must not equal any of these.
+      available = aptSourcePackagesSorted poolOS [G.sourceName (targetDepends target)]
       getVersion paragraph =
           maybe Nothing (Just . parseDebianVersion . B.unpack) (fieldValue "Version" . sourceParagraph $ paragraph)
       currentVersion =
