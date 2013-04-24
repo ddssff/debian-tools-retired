@@ -4,8 +4,8 @@ module Debian.Repo.LocalRepository where
 import Control.Monad.Trans (liftIO)
 import Data.Text (Text, unpack)
 import Debian.Arch (Arch, parseArch)
-import qualified Debian.Control.ByteString as B ( Paragraph, ControlFunctions(parseControl), fieldValue )
-import qualified Debian.Control.String as S ( Control'(Control) )
+import qualified Debian.Control.Text as B ( Paragraph, ControlFunctions(parseControl), fieldValue )
+import qualified Debian.Control.Text as S ( Control'(Control) )
 import Debian.Release (Section(..), ReleaseName, parseReleaseName, releaseName', sectionName', parseSection')
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository)
 import Debian.Repo.Types ( ReleaseInfo(..), Repo(repoURI), Layout(..), LocalRepository(..), Repository(LocalRepo), EnvPath, outsidePath, compatibilityFile, libraryCompatibilityLevel)
@@ -116,7 +116,7 @@ parseReleaseFile path dist aliases =
        return $ parseRelease path text dist aliases
 -}
 
-parseRelease :: ReleaseName -> [ReleaseName] -> F.File B.ByteString -> ReleaseInfo
+parseRelease :: ReleaseName -> [ReleaseName] -> F.File Text -> ReleaseInfo
 parseRelease name aliases file =
     case F.text file of
       Failure msgs -> error $ "Could not read " ++ show (F.path file) ++ ": " ++ show msgs
@@ -134,8 +134,8 @@ makeReleaseInfo file@(F.File {F.text = Success info}) name aliases =
       (Just archList, Just compList) ->
           ReleaseInfo { releaseInfoName = name
                       , releaseInfoAliases = aliases
-                      , releaseInfoArchitectures = parseArchitectures (decodeUtf8 archList)
-                      , releaseInfoComponents = parseComponents (decodeUtf8 compList) }
+                      , releaseInfoArchitectures = parseArchitectures archList
+                      , releaseInfoComponents = parseComponents compList }
       _ -> error $ "Missing Architectures or Components field in Release file " ++ show (F.path file)
 
 isSymLink :: FilePath -> IO Bool

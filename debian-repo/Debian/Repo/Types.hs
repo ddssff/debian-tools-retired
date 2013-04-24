@@ -49,9 +49,9 @@ module Debian.Repo.Types
     ) where
 
 --import Control.Monad.Trans (MonadIO)
+import Data.Text (Text)
 import Debian.Arch (Arch(..))
-import qualified Data.ByteString.Char8 as B ( ByteString )
-import qualified Debian.Control.ByteString as B
+import qualified Debian.Control.Text as B
 import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.URI ( URI(uriPath), URIString, fileFromURI, parseURI )
@@ -63,12 +63,12 @@ import qualified Data.ByteString.Lazy.Char8 as L ( unpack )
 import Data.Char ( isDigit )
 import Data.Maybe ( fromJust )
 import System.FilePath ( (</>) )
-import System.Posix.Files (FileStatus(..))
+import System.Posix.Files (FileStatus)
 import System.Posix.Types ( FileOffset )
 --import System.Unix.QIO (quieter, qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), vcat, Pretty(pretty))
 
-deriving instance Show (B.Field' B.ByteString)
+deriving instance Show (B.Field' Text)
 deriving instance Show B.Paragraph
 
 instance Show FileStatus where
@@ -393,7 +393,7 @@ data SourcePackage
 -- |Source package information derived from the control paragraph.
 data SourceControl
     = SourceControl
-      { source :: B.ByteString
+      { source :: Text
       , maintainer :: NameAddr
       , uploaders :: [NameAddr]
       , packageSection :: Maybe Section' -- Should this be the same type as the Section field in a .changes file?
@@ -403,14 +403,14 @@ data SourceControl
       , buildConflicts :: [Package]
       , buildConflictsIndep :: [Package]
       , standardsVersion :: Maybe StandardsVersion -- There are packages that don't have this
-      , homepage :: Maybe B.ByteString -- There are packages that don't have this
+      , homepage :: Maybe Text -- There are packages that don't have this
       } deriving (Show)
 
-type NameAddr = B.ByteString
-type StandardsVersion = B.ByteString
-type Section' = B.ByteString
-type Priority = B.ByteString
-type Package = B.ByteString
+type NameAddr = Text
+type StandardsVersion = Text
+type Section' = Text
+type Priority = Text
+type Package = Text
 
 data SourceFileSpec
     = SourceFileSpec

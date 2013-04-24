@@ -24,13 +24,16 @@ module Debian.Repo.Package
 
 import Control.Exception as E ( SomeException(..), catch, try, ErrorCall(..) )
 import Data.Either ( partitionEithers )
+import qualified Data.Text as T (Text, unpack, concat, pack)
+import Data.Text.Encoding (encodeUtf8)
 import Debian.Apt.Index ( Compression(..), controlFromIndex )
 import Debian.Arch (Arch(..), prettyArch)
-import Debian.Control ( Paragraph', ControlFunctions(asString, stripWS), fieldValue, formatParagraph )
+import Debian.Control ( Paragraph', ControlFunctions(asString, stripWS))
+import Debian.Control (formatParagraph)
 import Debian.Repo.PackageIndex ( packageIndexPath, sourceIndexList, binaryIndexList )
-import qualified Debian.Control.ByteString as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(lookupP), fieldValue )
+import qualified Debian.Control.Text as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(lookupP), fieldValue )
 import Debian.Relation (BinPkgName(..))
-import qualified Debian.Relation.ByteString as B ( ParseRelations(..), Relations )
+import qualified Debian.Relation.Text as B ( ParseRelations(..), Relations )
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupSourcePackages, insertSourcePackages, lookupBinaryPackages, insertBinaryPackages, readParagraphs)
 import Debian.Release (releaseName', sectionName')
 import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..),
@@ -42,7 +45,6 @@ import Debian.Version ( parseDebianVersion, DebianVersion )
 import qualified Debian.Version as V ( buildDebianVersion, epoch, revision, version )
 import "mtl" Control.Monad.Trans ( MonadIO(..) )
 import qualified Data.ByteString.Lazy.Char8 as L ( ByteString, fromChunks )
-import qualified Data.ByteString.Char8 as B ( concat, ByteString, pack, unpack )
 import Data.List ( intersperse, intercalate, partition )
 import Data.Maybe ( catMaybes, fromMaybe )
 import qualified Extra.Files as EF ( writeAndZipFileWithBackup )
@@ -70,10 +72,10 @@ binaryPackageSourceVersion package =
 -- |Return the name and version number of the source package that
 -- generated this binary package.
 -- see also: 'binaryPackageSourceVersion'
-binarySourceVersion :: B.Paragraph -> Maybe ((BinPkgName, DebianVersion), (String, DebianVersion))
+binarySourceVersion :: Paragraph' T.Text -> Maybe ((BinPkgName, DebianVersion), (String, DebianVersion))
 binarySourceVersion paragraph =
-    let mBinaryName = fmap (BinPkgName . B.unpack) $ fieldValue "Package" paragraph
-        mBinaryVersion = fmap (parseDebianVersion . B.unpack) $ fieldValue "Version" paragraph
+    let mBinaryName = fmap (BinPkgName . T.unpack) $ B.fieldValue "Package" paragraph
+        mBinaryVersion = fmap (parseDebianVersion . T.unpack) $ B.fieldValue "Version" paragraph
     in
       case (mBinaryName, mBinaryVersion) of
         (Just binaryName, Just binaryVersion) ->
@@ -104,33 +106,33 @@ sourcePackageBinaryNames package =
 sourceBinaryNames :: B.Paragraph -> [BinPkgName]
 sourceBinaryNames paragraph = 
     case B.fieldValue "Binary" paragraph of
-      Just names -> map BinPkgName (splitRegex (mkRegex "[ ,\t\n]+") (B.unpack names))
-      _ -> error ("Source package info has no 'Binary' field:\n" ++ (B.unpack . formatParagraph $ paragraph))
+      Just names -> map BinPkgName (splitRegex (mkRegex "[ ,\t\n]+") (T.unpack names))
+      _ -> error ("Source package info has no 'Binary' field:\n" ++ (T.unpack . formatParagraph $ paragraph))
 
 toSourcePackage :: PackageIndex -> B.Paragraph -> SourcePackage
 toSourcePackage index package =
     case (B.fieldValue "Directory" package,
           B.fieldValue "Files" package,
           B.fieldValue "Package" package,
-          maybe Nothing (Just . parseDebianVersion . B.unpack) (B.fieldValue "Version" package)) of
+          maybe Nothing (Just . parseDebianVersion . T.unpack) (B.fieldValue "Version" package)) of
       (Just directory, Just files, Just name, Just version) ->
           case (parseSourcesFileList files, parseSourceParagraph package) of
             (Right files', Right para) ->
                 SourcePackage
-                { sourcePackageID = makeSourcePackageID index (B.unpack name) version
+                { sourcePackageID = makeSourcePackageID index (T.unpack name) version
                 , sourceParagraph = package
                 , sourceControl = para
-                , sourceDirectory = B.unpack directory
+                , sourceDirectory = T.unpack directory
                 , sourcePackageFiles = files' }
             (Left messages, _) -> error $ "Invalid file list: " ++ show messages
             (_, Left messages) -> error $ "Error in source paragraph\n package=" ++ show package ++ "\n  index=" ++ show index ++ "\n  messages:\n   " ++ intercalate "\n   " messages
-      x -> error $ "Missing info in source package control information in " ++ show index ++ " -> " ++ show x ++ " :\n" ++ B.unpack (formatParagraph package)
+      x -> error $ "Missing info in source package control information in " ++ show index ++ " -> " ++ show x ++ " :\n" ++ T.unpack (formatParagraph package)
     where
       sourceParagraph = parseSourceParagraph package
       -- Parse the list of files in a paragraph of a Sources index.
-      parseSourcesFileList :: B.ByteString -> Either [String] [SourceFileSpec]
+      parseSourcesFileList :: T.Text -> Either [String] [SourceFileSpec]
       parseSourcesFileList text =
-          merge . catMaybes . map parseSourcesFiles . lines . B.unpack $ text
+          merge . catMaybes . map parseSourcesFiles . lines . T.unpack $ text
       parseSourcesFiles line =
           case words line of
             [md5sum, size, name] -> Just (Right (SourceFileSpec md5sum (read size) name))
@@ -167,7 +169,7 @@ toBinaryPackage index p =
       (Just name, Just version) ->
           BinaryPackage 
           { packageID =
-                makeBinaryPackageID index (B.unpack name) (parseDebianVersion (B.unpack version))
+                makeBinaryPackageID index (T.unpack name) (parseDebianVersion (T.unpack version))
           , packageInfo = p
           , pDepends = tryParseRel $ B.lookupP "Depends" p
           , pPreDepends = tryParseRel $ B.lookupP "Pre-Depends" p
@@ -187,7 +189,7 @@ tryParseRel _ = []
 -- package.
 binaryPackageSourceID :: BinaryPackage -> PackageID BinPkgName
 binaryPackageSourceID package =
-    case maybe Nothing (matchRegex re . B.unpack) (B.fieldValue "Source" (packageInfo package)) of
+    case maybe Nothing (matchRegex re . T.unpack) (B.fieldValue "Source" (packageInfo package)) of
       Just [name, _, ""] -> makeBinaryPackageID sourceIndex name (packageVersion pid)
       Just [name, _, version] -> makeBinaryPackageID sourceIndex name (parseDebianVersion version)
       _ -> error "Missing Source attribute in binary package info"
@@ -201,8 +203,8 @@ sourcePackageBinaryIDs :: Arch -> SourcePackage -> [PackageID BinPkgName]
 sourcePackageBinaryIDs Source _ = error "invalid argument"
 sourcePackageBinaryIDs arch package =
     case (B.fieldValue "Version" info, B.fieldValue "Binary" info) of
-      (Just version, Just names) -> map (binaryID (parseDebianVersion (B.unpack version))) $ splitRegex (mkRegex "[ ,]+") (B.unpack names)
-      _ -> error ("Source package info has no 'Binary' field:\n" ++ (B.unpack . formatParagraph $ info))
+      (Just version, Just names) -> map (binaryID (parseDebianVersion (T.unpack version))) $ splitRegex (mkRegex "[ ,]+") (T.unpack names)
+      _ -> error ("Source package info has no 'Binary' field:\n" ++ (T.unpack . formatParagraph $ info))
     where
       -- Note that this version number may be wrong - we need to
       -- look at the Source field of the binary package info.
@@ -358,9 +360,9 @@ releaseBinaryPackages release =
 putPackages :: PackageIndexLocal ->  [BinaryPackageLocal] -> IO ()
 putPackages index packages =
     case releaseRepo release of
-      LocalRepo repo ->  EF.writeAndZipFileWithBackup (outsidePath (repoRoot repo) </> packageIndexPath index) text >>= either (fail . intercalate "\n") return
+      LocalRepo repo ->  EF.writeAndZipFileWithBackup (outsidePath (repoRoot repo) </> packageIndexPath index) (L.fromChunks [encodeUtf8 text]) >>= either (fail . intercalate "\n") return
       x -> fail $ "Package.putPackages: Expected local repository, found " ++ show x
     where
       release = packageIndexRelease index
       --repo = releaseRepo release
-      text = L.fromChunks [B.concat (intersperse (B.pack "\n") . map formatParagraph . map packageInfo $ packages)]
+      text = T.concat (intersperse (T.pack "\n") . map formatParagraph . map packageInfo $ packages)

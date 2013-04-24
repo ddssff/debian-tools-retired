@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, OverloadedStrings, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-name-shadowing -fno-warn-missing-signatures #-}
 -- |Insert packages into a release, remove packages from a release.
 module Debian.Repo.Insert
@@ -14,19 +14,21 @@ module Debian.Repo.Insert
 
 import Control.Monad ( filterM, foldM, when )
 import Control.Monad.Trans (liftIO)
-import qualified Data.ByteString.Char8 as B ( pack, unpack )
 import qualified Data.ByteString.Lazy.Char8 as L ( fromChunks, readFile )
 import Data.Digest.Pure.MD5 (md5)
 import Data.Either ( partitionEithers, rights )
 import Data.List ( group, sort, intercalate, sortBy, groupBy, isSuffixOf, partition )
 import Data.Maybe ( catMaybes )
+import Data.Monoid ((<>), mconcat)
 import qualified Data.Set as Set
+import Data.Text as T (Text, pack, unpack)
+import Data.Text.Encoding (encodeUtf8)
 import Debian.Arch (Arch(..), prettyArch)
 import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName )
-import Debian.Control ( formatControl )
-import qualified Debian.Control.ByteString as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(parseControlFromHandle), Control,
+import Debian.Control ( Paragraph', formatControl )
+import qualified Debian.Control.Text as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(parseControlFromHandle), Control,
                                                   appendFields, fieldValue, modifyField, raiseFields, renameField )
-import qualified Debian.Control.String as S ( Control'(Control), ControlFunctions(parseControlFromFile) )
+import qualified Debian.Control.Text as S ( Control'(Control), ControlFunctions(parseControlFromFile) )
 import Debian.Relation (BinPkgName, PkgName)
 import Debian.Repo.Changes ( findChangesFiles, poolDir', name, path )
 import Debian.Repo.Monads.Apt (MonadApt)
@@ -41,6 +43,7 @@ import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, binaryPackag
                            Layout(..), LocalRepository(LocalRepository, repoLayout, repoRoot), Repository(..), EnvPath, outsidePath,
                            releaseName, releaseComponents, releaseArchitectures )
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
+import Debian.Version.Text ()
 import Extra.GPGSign ( PGPKey )
 import Extra.Files ( writeAndZipFileWithBackup )
 import Extra.Misc ( listDiff )
@@ -424,15 +427,15 @@ keepRight xs = catMaybes $ map (either (const Nothing) Just) xs
 keepLeft :: [Either a b] -> [a]
 keepLeft xs = catMaybes $ map (either Just (const Nothing)) xs
 
-addDebFields :: Release -> ChangesFile -> ChangedFileSpec -> B.Paragraph -> (Either InstallResult B.Paragraph)
+addDebFields :: Release -> ChangesFile -> ChangedFileSpec -> Paragraph' Text -> (Either InstallResult (Paragraph' Text))
 addDebFields release changes file info =
     let (binaryVersion :: DebianVersion) =
-            maybe (error $ "Missing 'Version' field") (parseDebianVersion . B.unpack) (B.fieldValue "Version" info) in
+            maybe (error $ "Missing 'Version' field") parseDebianVersion (B.fieldValue "Version" info) in
     let (newfields :: [B.Field]) =
-            [B.Field (B.pack "Source", B.pack (" " ++ source ++ versionSuffix binaryVersion)),
-             B.Field (B.pack "Filename", B.pack (" " ++ poolDir' release changes file </> changedFileName file)),
-             B.Field (B.pack "Size", B.pack (" " ++ show (changedFileSize file))),
-             B.Field (B.pack "MD5sum", B.pack (" " ++ changedFileMD5sum file))] in
+            [B.Field (T.pack "Source", " " <> source <> T.pack (versionSuffix binaryVersion)),
+             B.Field (T.pack "Filename", T.pack (" " ++ poolDir' release changes file </> changedFileName file)),
+             B.Field (T.pack "Size", T.pack (" " ++ show (changedFileSize file))),
+             B.Field (T.pack "MD5sum", T.pack (" " ++ changedFileMD5sum file))] in
     Right $ B.appendFields newfields info
     where
       versionSuffix :: DebianVersion -> String
@@ -445,29 +448,29 @@ addSourceFields :: Release -> ChangesFile -> ChangedFileSpec -> B.Paragraph -> (
 addSourceFields release changes file info =
     Right . append . raise . modify . rename $ info
     where
-      rename = B.renameField (B.pack "Source") (B.pack "Package")
-      modify = B.modifyField (B.pack "Files") (\ b -> (B.pack (B.unpack b ++ "\n " ++ filesLine file))) .
-               B.modifyField (B.pack "Checksums-Sha1") (\ b -> (B.pack (B.unpack b ++ "\n " ++ sha1Line file))) .
-               B.modifyField (B.pack "Checksums-Sha256") (\ b -> (B.pack (B.unpack b ++ "\n " ++ sha256Line file)))
-      raise = B.raiseFields (== (B.pack "Package"))
+      rename = B.renameField (T.pack "Source") (T.pack "Package")
+      modify = B.modifyField (T.pack "Files") (\ b -> (T.pack (T.unpack b ++ "\n " ++ filesLine file))) .
+               B.modifyField (T.pack "Checksums-Sha1") (\ b -> (T.pack (T.unpack b ++ "\n " ++ sha1Line file))) .
+               B.modifyField (T.pack "Checksums-Sha256") (\ b -> (T.pack (T.unpack b ++ "\n " ++ sha256Line file)))
+      raise = B.raiseFields (== (T.pack "Package"))
       append = B.appendFields $ 
-               [B.Field (B.pack "Priority", B.pack (" " ++ changedFilePriority file)),
-                B.Field (B.pack "Section", B.pack  (" " ++ (sectionName (changedFileSection file)))),
-                B.Field (B.pack "Directory", B.pack (" " ++ poolDir' release changes file))] ++
-               maybe [] (\ s -> [B.Field (B.pack "Build-Info", B.pack (" " ++ s))]) (B.fieldValue "Build-Info" (changeInfo changes))
+               [B.Field (T.pack "Priority", T.pack (" " ++ changedFilePriority file)),
+                B.Field (T.pack "Section", T.pack  (" " ++ (sectionName (changedFileSection file)))),
+                B.Field (T.pack "Directory", T.pack (" " ++ poolDir' release changes file))] ++
+               maybe [] (\ s -> [B.Field (T.pack "Build-Info", " " <> s)]) (B.fieldValue "Build-Info" (changeInfo changes))
       filesLine file = changedFileMD5sum file ++ " "  ++ show (changedFileSize file) ++ " " ++ changedFileName file
       sha1Line file = changedFileSHA1sum file ++ " "  ++ show (changedFileSize file) ++ " " ++ changedFileName file
       sha256Line file = changedFileSHA256sum file ++ " "  ++ show (changedFileSize file) ++ " " ++ changedFileName file
 {-    
-    let info' = B.renameField (B.pack "Source") (B.pack "Package") info in
-    let info'' = B.modifyField (B.pack "Files") (\ b -> (B.pack (B.unpack b ++ "\n " ++ changedFileMD5sum file ++ " "  ++ 
+    let info' = B.renameField (T.pack "Source") (T.pack "Package") info in
+    let info'' = B.modifyField (T.pack "Files") (\ b -> (T.pack (B.unpack b ++ "\n " ++ changedFileMD5sum file ++ " "  ++ 
                                                                  show (changedFileSize file) ++ " " ++
                                                                  changedFileName file))) info' in
-    let info''' = B.raiseFields (== (B.pack "Package")) info'' in
-    let newfields = [B.Field (B.pack "Priority", B.pack (" " ++ changedFilePriority file)),
-                     B.Field (B.pack "Section", B.pack  (" " ++ (sectionName (changedFileSection file)))),
-                     B.Field (B.pack "Directory", B.pack (" " ++ poolDir' release changes file))] ++
-                    maybe [] (\ s -> [B.Field (B.pack "Build-Info", B.pack (" " ++ s))])
+    let info''' = B.raiseFields (== (T.pack "Package")) info'' in
+    let newfields = [B.Field (T.pack "Priority", T.pack (" " ++ changedFilePriority file)),
+                     B.Field (T.pack "Section", T.pack  (" " ++ (sectionName (changedFileSection file)))),
+                     B.Field (T.pack "Directory", T.pack (" " ++ poolDir' release changes file))] ++
+                    maybe [] (\ s -> [B.Field (T.pack "Build-Info", T.pack (" " ++ s))])
                               (B.fieldValue "Build-Info" (changeInfo changes)) in
     Right $ B.appendFields newfields info'''    
 -}
@@ -625,7 +628,7 @@ findLive repo@(LocalRepository root (Just layout) _) =
        binaryPackages <- mapM (liftIO . DRP.releaseBinaryPackages) releases >>= return . map (either (error . show) id) >>= return . concat
        let sourceFiles = map ((outsidePath root ++ "/") ++) . concat . map DRP.sourceFilePaths $ sourcePackages
        let binaryFiles =
-               map ((outsidePath root ++ "/") ++) . map B.unpack . catMaybes $ map (B.fieldValue "Filename" . packageInfo) binaryPackages
+               map ((outsidePath root ++ "/") ++) . map T.unpack . catMaybes $ map (B.fieldValue "Filename" . packageInfo) binaryPackages
        let changesFiles = concat . map (changesFilePaths root layout releases) $ sourcePackages
        let uploadFiles = concat . map (uploadFilePaths root releases) $ sourcePackages
        return $ sourceFiles ++ binaryFiles ++ changesFiles ++ uploadFiles
@@ -678,8 +681,8 @@ deleteSourcePackages keyname packages =
              return release
       putIndex :: EnvPath -> PackageIndexLocal -> [BinaryPackageLocal] -> IO (Either [String] ())
       putIndex root index packages =
-                let text = L.fromChunks (formatControl (B.Control (map packageInfo packages))) in
-                liftIO $ writeAndZipFileWithBackup (outsidePath root </> packageIndexPath index) text
+                let text = formatControl (B.Control (map packageInfo packages)) in
+                liftIO $ writeAndZipFileWithBackup (outsidePath root </> packageIndexPath index) (L.fromChunks [encodeUtf8 (mconcat text)])
 
 instance PkgName name => F.Pretty (PackageID name) where
     pretty p = prettyPackageID p -- packageName p ++ "=" ++ show (prettyDebianVersion (packageVersion p))

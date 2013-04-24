@@ -9,8 +9,10 @@ module Debian.Repo.SourceTree.Types
 import Control.Applicative ((<$>), (<*>), pure)
 import Control.Monad.Trans ( MonadIO(..) )
 import Data.List ( nubBy, sortBy, intercalate )
+import Data.Text (Text)
+import Data.Text.IO as T (readFile)
 import Debian.Changes ( ChangeLogEntry(..), parseEntries )
-import Debian.Control.String ( Field'(Comment), Paragraph'(..), Control'(Control), ControlFunctions(parseControl), Control )
+import Debian.Control.Text ( Field'(Comment), Paragraph'(..), Control'(Control), ControlFunctions(parseControl), Control )
 import Debian.Repo.SourceTree.Classes (SourceTreeC(..), DebianSourceTreeC(..), DebianBuildTreeC(..), findDebianBuildTrees)
 import Debian.Repo.Sync (rsync)
 import qualified Debian.Version as V ( version )
@@ -28,7 +30,7 @@ data SourceTree =
 -- at least a control file and a changelog.
 data DebianSourceTree =
     DebianSourceTree {tree' :: SourceTree,
-                      control' :: Control,
+                      control' :: Control' Text,
                       entry' :: ChangeLogEntry}
 
 -- |A Debian source tree plus a parent directory, which is where the
@@ -53,7 +55,7 @@ instance SourceTreeC DebianSourceTree where
     copySourceTree tree dest = DebianSourceTree <$> copySourceTree (tree' tree) dest <*> pure (control' tree) <*> pure (entry' tree)
     findSourceTree path0 =
       findSourceTree path0 >>= \ tree ->
-      readFile controlPath >>= return . parseControl controlPath >>= either (fail . show) (return . removeCommentParagraphs) >>= \ c ->
+      T.readFile controlPath >>= return . parseControl controlPath >>= either (fail . show) (return . removeCommentParagraphs) >>= \ (c :: Control' Text) ->
       -- We only read part of the changelog, so be careful that the file
       -- descriptor gets closed.
       withFile changelogPath ReadMode

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Release
     ( lookupRelease
@@ -14,10 +15,11 @@ import qualified Data.ByteString.Lazy.Char8 as L ( empty, readFile )
 import Data.Digest.Pure.MD5 (md5)
 import Data.List ( sortBy, groupBy, group, intercalate, nub, sort )
 import Data.Maybe ( catMaybes )
-import Data.Text.Encoding (decodeUtf8)
+import Data.Monoid ((<>))
+import Data.Text as T (Text, pack, intercalate)
 import Data.Time ( getCurrentTime )
 import Debian.Arch (Arch(..), prettyArch)
-import qualified Debian.Control.String as S ( Field'(Field), Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
+import qualified Debian.Control.Text as S ( Field'(Field), Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
 import Debian.Release (Section, ReleaseName, releaseName', sectionName')
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), findRelease, putRelease )
 import Debian.Repo.Types ( PackageIndex(packageIndexArch, packageIndexComponent, packageIndexRelease), Release(..), ReleaseInfo(..),
@@ -72,7 +74,7 @@ prepareRelease repo dist aliases sections archList =
              liftIO $ setFileMode dir 0o040755
              ensureIndex (dir </> name)
       initAlias root' dist alias = 
-          liftIO $ EF.prepareSymbolicLink (releaseName' dist) (root' ++ "/dists/" ++ releaseName' alias)
+          liftIO $ EF.prepareSymbolicLink (releaseName' dist) (root' <> "/dists/" <> releaseName' alias)
       root = repoRoot repo
 
 -- | Make sure an index file exists.
@@ -96,7 +98,7 @@ signRelease keyname release@(Release {releaseRepo = LocalRepo repo}) =
                         let failed = catMaybes $ map (\ (path, flag) -> if (not flag) then Just path else Nothing) (zip files results)
                         case failed of
                           [] -> return ()
-                          files -> qPutStrLn ("Unable to sign:\n  " ++ intercalate "\n  " files)
+                          files -> qPutStrLn ("Unable to sign:\n  " ++ Data.List.intercalate "\n  " files)
 signRelease _keyname _release = error $ "Attempt to sign non-local repository"
 
 -- |Write out the @Release@ files that describe a 'Release'.
@@ -115,11 +117,11 @@ writeRelease release@(Release {releaseRepo = LocalRepo repo}) =
       writeIndex root index =
           do let para =
                      S.Paragraph
-                          [S.Field ("Archive", releaseName' . releaseInfoName . releaseInfo . packageIndexRelease $ index),
-                           S.Field ("Component", sectionName' (packageIndexComponent index)),
-                           S.Field ("Architecture", show (prettyArch (packageIndexArch index))),
+                          [S.Field ("Archive", pack . releaseName' . releaseInfoName . releaseInfo . packageIndexRelease $ index),
+                           S.Field ("Component", pack $ sectionName' (packageIndexComponent index)),
+                           S.Field ("Architecture", pack $ show (prettyArch (packageIndexArch index))),
                            S.Field ("Origin", " SeeReason Partners LLC"),
-                           S.Field ("Label", " SeeReason")]
+                           S.Field ("Label", " SeeReason")] :: S.Paragraph' Text
              let path = packageIndexDir index ++ "/Release"
              EF.maybeWriteFile (root </> path) (show (pretty para))
              return path
@@ -132,18 +134,18 @@ writeRelease release@(Release {releaseRepo = LocalRepo repo}) =
                              sums <-  mapM (\ path -> L.readFile path >>= return . show . md5) paths'
                              sizes <- mapM (liftM F.fileSize . F.getFileStatus) paths'
                              return (paths', sums, sizes)))
-             let checksums = intercalate "\n" $ zipWith3 (formatFileInfo (fieldWidth sizes))
+             let checksums = Data.List.intercalate "\n" $ zipWith3 (formatFileInfo (fieldWidth sizes))
                       	   sums sizes (map (drop (1 + length (releaseDir release))) paths')
              timestamp <- liftIO (getCurrentTime >>= return . ET.formatDebianDate)
              let para = S.Paragraph [S.Field ("Origin", " SeeReason Partners"),
                                      S.Field ("Label", " SeeReason"),
-                                     S.Field ("Suite", " " ++ (releaseName' . releaseInfoName . releaseInfo $ release)),
-                                     S.Field ("Codename", " " ++ (releaseName' . releaseInfoName . releaseInfo $ release)),
-                                     S.Field ("Date", " " ++ timestamp),
-                                     S.Field ("Architectures", " " ++ (intercalate " " . map (show . prettyArch) . releaseInfoArchitectures . releaseInfo $ release)),
-                                     S.Field ("Components", " " ++ (intercalate " " . map sectionName' . releaseInfoComponents . releaseInfo $ release)),
+                                     S.Field ("Suite", " " <> (pack . releaseName' . releaseInfoName . releaseInfo $ release)),
+                                     S.Field ("Codename", " " <> (pack . releaseName' . releaseInfoName . releaseInfo $ release)),
+                                     S.Field ("Date", " " <> pack timestamp),
+                                     S.Field ("Architectures", " " <> (T.intercalate " " . map (pack . show . prettyArch) . releaseInfoArchitectures . releaseInfo $ release)),
+                                     S.Field ("Components", " " <> (T.intercalate " " . map (pack . sectionName') . releaseInfoComponents . releaseInfo $ release)),
                                      S.Field ("Description", " SeeReason Internal Use - Not Released"),
-                                     S.Field ("Md5Sum", "\n" ++ checksums)]
+                                     S.Field ("Md5Sum", "\n" <> pack checksums)] :: S.Paragraph' Text
              let path = "dists/" ++ (releaseName' . releaseInfoName . releaseInfo $ release) ++ "/Release"
              liftIO $ EF.maybeWriteFile (root </> path) (show (pretty para))
              return path
@@ -151,7 +153,7 @@ writeRelease release@(Release {releaseRepo = LocalRepo repo}) =
           map ((packageIndexDir index) </>) ["Sources", "Sources.gz", "Sources.bz2", "Sources.diff/Index", "Release"]
       indexPaths index =
           map ((packageIndexDir index) </>) ["Packages", "Packages.gz", "Packages.bz2", "Packages.diff/Index", "Release"]
-      formatFileInfo fw sum size name = intercalate " " $ ["",sum, pad ' ' fw $ show size, name]
+      formatFileInfo fw sum size name = Data.List.intercalate " " $ ["",sum, pad ' ' fw $ show size, name]
       fieldWidth = ceiling . (logBase (10 :: Double)) . fromIntegral . maximum
 writeRelease _release = error $ "Attempt to write release files to non-local repository"
 
@@ -186,7 +188,7 @@ findLocalRelease repo releaseInfo =
     where
       readRelease :: MonadApt m => m Release
       readRelease =
-          do let path = (outsidePath (repoRoot repo) ++ "/dists/" ++ releaseName' dist ++ "/Release")
+          do let path = (outsidePath (repoRoot repo) <> "/dists/" <> releaseName' dist <> "/Release")
              info <- liftIO $ S.parseControlFromFile path
              case info of
                Right (S.Control (paragraph : _)) ->
@@ -196,8 +198,8 @@ findLocalRelease repo releaseInfo =
                                        (ReleaseInfo
                                         { releaseInfoName = dist
                                         , releaseInfoAliases = releaseInfoAliases releaseInfo
-                                        , releaseInfoComponents = parseComponents (decodeUtf8 components)
-                                        , releaseInfoArchitectures = parseArchitectures (decodeUtf8 architectures)}) in
+                                        , releaseInfoComponents = parseComponents components
+                                        , releaseInfoArchitectures = parseArchitectures architectures}) in
                          insertRelease release
                      _ ->
                          error $ "Invalid release file: " ++ path

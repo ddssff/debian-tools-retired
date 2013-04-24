@@ -14,15 +14,18 @@ import Control.Arrow (second)
 import Control.Exception ( ErrorCall(..), toException )
 import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy as L
-import qualified Data.ByteString.Char8 as B (concat, ByteString, unpack)
+import qualified Data.ByteString as B
+-- import qualified Data.ByteString.Char8 as B (concat, ByteString, unpack)
 import Data.List ( sortBy, groupBy, intercalate, isSuffixOf )
 import Data.Maybe ( catMaybes, fromJust )
+import Data.Text as T (Text, unpack)
+import Data.Text.Encoding (decodeUtf8)
 import Data.Time ( NominalDiffTime )
 import qualified Data.Set as Set ( member, fromList )
 import Debian.Arch (Arch, parseArch)
 import Debian.Changes ( ChangesFile(changeDir, changePackage, changeRelease, changeVersion) )
-import qualified Debian.Control.ByteString as B ( Paragraph, Control'(Control), ControlFunctions(parseControl), fieldValue )
-import qualified Debian.Control.String as S ( Paragraph', Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
+import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), ControlFunctions(parseControl), fieldValue )
+import qualified Debian.Control.Text as S ( Paragraph', Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
 import Debian.Relation (BinPkgName(..))
 import Debian.Release (ReleaseName(..), parseReleaseName, releaseName')
 import Debian.Repo.Changes ( findChangesFiles, key, path )
@@ -141,25 +144,25 @@ getReleaseInfoRemote uri =
       distsURI = uri {uriPath = uriPath uri </> "dists/"}
       verify names =
           do let dists = map parseReleaseName names
-             (releaseFiles :: [F.File (S.Paragraph' B.ByteString)]) <- mapM getReleaseFile dists
+             (releaseFiles :: [F.File (S.Paragraph' Text)]) <- mapM getReleaseFile dists
              let releasePairs = zip3 (map getSuite releaseFiles) releaseFiles dists
              return $ map (uncurry3 getReleaseInfo) releasePairs
-      releaseNameField releaseFile = case fmap B.unpack (B.fieldValue "Origin" releaseFile) of Just "Debian" -> "Codename"; _ -> "Suite"
-      getReleaseInfo :: Maybe B.ByteString -> (F.File B.Paragraph) -> ReleaseName -> Maybe ReleaseInfo
+      releaseNameField releaseFile = case fmap T.unpack (B.fieldValue "Origin" releaseFile) of Just "Debian" -> "Codename"; _ -> "Suite"
+      getReleaseInfo :: Maybe Text -> (F.File B.Paragraph) -> ReleaseName -> Maybe ReleaseInfo
       getReleaseInfo Nothing _ _ = Nothing
-      getReleaseInfo (Just dist) _ relname | (parseReleaseName (B.unpack dist)) /= relname = Nothing
-      getReleaseInfo (Just dist) info _ = Just $ makeReleaseInfo info (parseReleaseName (B.unpack dist)) []
-      getSuite :: F.File (S.Paragraph' B.ByteString) -> Maybe B.ByteString
+      getReleaseInfo (Just dist) _ relname | (parseReleaseName (T.unpack dist)) /= relname = Nothing
+      getReleaseInfo (Just dist) info _ = Just $ makeReleaseInfo info (parseReleaseName (T.unpack dist)) []
+      getSuite :: F.File (S.Paragraph' Text) -> Maybe Text
       getSuite (F.File {F.text = Success releaseFile}) = B.fieldValue (releaseNameField releaseFile) releaseFile
       getSuite (F.File {F.text = Failure msgs}) = fail (intercalate "\n" msgs)
-      getReleaseFile :: ReleaseName -> IO (F.File (S.Paragraph' B.ByteString))
+      getReleaseFile :: ReleaseName -> IO (F.File (S.Paragraph' Text))
       -- getReleaseFile :: ReleaseName -> IO (S.Paragraph' B.ByteString)
       getReleaseFile distName =
           do qPutStr "."
-             release <- fileFromURI releaseURI >>= return . either Left (Right . B.concat . L.toChunks)
-             let control = either Left (either (Left . toException . ErrorCall . show) Right . B.parseControl (show releaseURI)) release
+             release <- fileFromURI releaseURI
+             let control = either Left (either (Left . toException . ErrorCall . show) Right . B.parseControl (show releaseURI) . decodeUtf8 . B.concat . L.toChunks) release
              case control of
-               Right (B.Control [info]) -> return $ F.File {F.path = F.RemotePath releaseURI, F.text = Success info}
+               Right (B.Control [info :: S.Paragraph' Text]) -> return $ F.File {F.path = F.RemotePath releaseURI, F.text = Success info}
                _ -> error ("Failed to get release info from dist " ++ show (relName distName) ++ ", uri " ++ show releaseURI)
           where
             releaseURI = distURI {uriPath = uriPath distURI </> "Release"}

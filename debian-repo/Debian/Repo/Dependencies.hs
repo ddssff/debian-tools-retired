@@ -15,7 +15,7 @@ module Debian.Repo.Dependencies
 import Data.Set (toList)
 import Debian.Arch (Arch(Source, Binary), ArchCPU(..))
 import Debian.Control ()
-import qualified Debian.Control.String as S ()
+import qualified Debian.Control.Text as S ()
 import Debian.Repo.Types ( PackageVersion, PkgVersion(PkgVersion), prettyPkgVersion, pkgName, getName, getVersion, pkgVersion, BinaryPackage,
                            binaryPackageName, packageID, pProvides, packageVersion)
 import Debian.Version ( DebianVersion )

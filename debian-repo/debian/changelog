@@ -1,3 +1,9 @@
+haskell-debian-repo (5.42) unstable; urgency=low
+
+  * Switch from String based control files to Text, for debian-3.74.
+
+ -- David Fox <dsf@seereason.com>  Tue, 23 Apr 2013 22:44:43 -0700
+
 haskell-debian-repo (5.41) unstable; urgency=low
 
   * Changes to use new Arch type in debian-3.71.

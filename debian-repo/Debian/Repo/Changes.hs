@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE PackageImports, OverloadedStrings #-}
 {-# OPTIONS -fno-warn-name-shadowing -fno-warn-missing-signatures #-}
 -- |Basic types for the Apt library.
 module Debian.Repo.Changes
@@ -33,10 +33,11 @@ module Debian.Repo.Changes
 import "mtl" Control.Monad.Trans ( MonadIO(..) )
 import Data.List ( isSuffixOf )
 import Data.Maybe ( catMaybes )
-import Data.Monoid ((<>))
+import Data.Monoid ((<>), mconcat)
+import Data.Text (Text, pack, unpack)
 import Debian.Arch (Arch, prettyArch, parseArch)
 import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName, parseChanges )
-import qualified Debian.Control.String as S ( Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue, modifyField, Paragraph )
+import qualified Debian.Control.Text as S ( Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue, modifyField, Paragraph )
 import Debian.Release (SubSection(section), parseReleaseName, parseSection)
 import Debian.Repo.LocalRepository ( poolDir )
 import Debian.Repo.Types ( Release(releaseRepo), LocalRepository(repoRoot), Repository(LocalRepo), outsidePath )
@@ -47,7 +48,7 @@ import System.Directory ( doesFileExist, getDirectoryContents )
 import qualified System.Posix.Files as F ( createLink, removeLink )
 import Text.PrettyPrint.ANSI.Leijen (pretty, text)
 import Text.Regex ( matchRegex, matchRegexAll, mkRegex )
-import qualified Debian.Control.ByteString as B ()
+import qualified Debian.Control.Text as B ()
 import Debian.URI ()
 
 {-
@@ -192,16 +193,16 @@ load dir file =
                     -- the paragraphs into one (rather than erroring out
                     -- or discarding all but the first paragraph.)
                     let changes' = mergeParagraphs changes in
-                    case (S.fieldValue "Files" changes',
-                          S.fieldValue "Checksums-Sha1" changes',
-                          S.fieldValue "Checksums-Sha256" changes',
+                    case (S.fieldValue "Files" changes' :: Maybe Text,
+                          S.fieldValue "Checksums-Sha1" changes' :: Maybe Text,
+                          S.fieldValue "Checksums-Sha256" changes' :: Maybe Text,
                           maybe Nothing parseChanges (S.fieldValue "Changes" changes'),
                           S.fieldValue "Distribution" changes') of
                       (Just text, sha1text, sha256text, Just entry, Just release) ->
                           do return . Just $ Changes { changeDir = dir
                                                      , changePackage = name
                                                      , changeVersion = ver
-                                                     , changeRelease = parseReleaseName release
+                                                     , changeRelease = parseReleaseName (unpack release)
                                                      , changeArch = arch
                                                      , changeInfo = changes'
                                                      , changeEntry = entry
@@ -210,7 +211,7 @@ load dir file =
                 Left _error -> return Nothing
         Nothing -> return Nothing		-- Couldn't parse changes filename
 
-mergeParagraphs :: [S.Paragraph] -> S.Paragraph 
+mergeParagraphs :: [S.Paragraph' Text] -> S.Paragraph' Text
 mergeParagraphs paragraphs =
     S.Paragraph . concat . map fieldsOf $ paragraphs
     where fieldsOf (S.Paragraph fields) = fields
@@ -252,7 +253,7 @@ parseChangesFilename name =
 -- parseChangesFile :: FilePath -> String -> IO (Either ParseError S.Control)
 parseChangesFile dir file = S.parseControlFromFile (dir ++ "/" ++ file)
 
-changedFileSpecs :: String -> Maybe String -> Maybe String -> [ChangedFileSpec]
+changedFileSpecs :: Text -> Maybe Text -> Maybe Text -> [ChangedFileSpec]
 changedFileSpecs text sha1text sha256text =
     map changedFileSpec fileInfo
     where
@@ -264,9 +265,9 @@ changedFileSpecs text sha1text sha256text =
                                 , changedFileSection = parseSection section
                                 , changedFilePriority = priority
                                 , changedFileName = filename }
-      fileInfo = parseFileList text
-      sha1sums = maybe [] parseChecksums sha1text
-      sha256sums = maybe [] parseChecksums sha256text
+      fileInfo = parseFileList (unpack text)
+      sha1sums = maybe [] (parseChecksums . unpack) sha1text
+      sha256sums = maybe [] (parseChecksums . unpack) sha256text
 
 parseFileList :: String -> [(String, String, String, String, String)]
 parseFileList text =
@@ -291,16 +292,16 @@ parseChecksums text =
       t = "[^ \t\n]+"
       w = "[ \t]+"
 
-showFileList :: [ChangedFileSpec] -> String
-showFileList files = concat (map (("\n " ++) . show . pretty) files)
+showFileList :: [ChangedFileSpec] -> Text
+showFileList files = pack $ concat (map (("\n " <>) . show . pretty) files)
 
-showSHA1List :: [ChangedFileSpec] -> String
-showSHA1List files = concat (map (("\n " ++) . showSHA1) files)
-    where showSHA1 x = changedFileSHA1sum x ++ " " ++ show (changedFileSize x) ++ " " ++ changedFileName x
+showSHA1List :: [ChangedFileSpec] -> Text
+showSHA1List files = mconcat (map (("\n " <>) . showSHA1) files)
+    where showSHA1 x = pack $ changedFileSHA1sum x ++ " " ++ show (changedFileSize x) ++ " " ++ changedFileName x
 
-showSHA256List :: [ChangedFileSpec] -> String
-showSHA256List files = concat (map (("\n " ++) . showSHA256) files)
-    where showSHA256 x = changedFileSHA256sum x ++ " " ++ show (changedFileSize x) ++ " " ++ changedFileName x
+showSHA256List :: [ChangedFileSpec] -> Text
+showSHA256List files = mconcat (map (("\n " <>) . showSHA256) files)
+    where showSHA256 x = pack $ changedFileSHA256sum x ++ " " ++ show (changedFileSize x) ++ " " ++ changedFileName x
 
 -- | Return the subdirectory in the pool where a source package would be
 -- installed.
@@ -310,7 +311,7 @@ poolDir' release changes file =
       Nothing -> error "No 'Source' field in .changes file"
       Just source ->
           case releaseRepo release of
-             LocalRepo repo -> poolDir repo (section . changedFileSection $ file) source
+             LocalRepo repo -> poolDir repo (section . changedFileSection $ file) (unpack source)
              x -> error $ "Unexpected repository passed to poolDir': " ++ show x
 
 -- | Move a build result into a local repository's 'incoming' directory.
