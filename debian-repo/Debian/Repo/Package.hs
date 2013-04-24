@@ -24,6 +24,8 @@ module Debian.Repo.Package
 
 import Control.Exception as E ( SomeException(..), catch, try, ErrorCall(..) )
 import Data.Either ( partitionEithers )
+import Data.List as List (map)
+import Data.Set as Set (Set, unions, fromList, map)
 import qualified Data.Text as T (Text, unpack, concat, pack)
 import Data.Text.Encoding (encodeUtf8)
 import Debian.Apt.Index ( Compression(..), controlFromIndex )
@@ -46,7 +48,7 @@ import qualified Debian.Version as V ( buildDebianVersion, epoch, revision, vers
 import "mtl" Control.Monad.Trans ( MonadIO(..) )
 import qualified Data.ByteString.Lazy.Char8 as L ( ByteString, fromChunks )
 import Data.List ( intersperse, intercalate, partition )
-import Data.Maybe ( catMaybes, fromMaybe )
+import Data.Maybe ( catMaybes )
 import qualified Extra.Files as EF ( writeAndZipFileWithBackup )
 import Network.URI ( URI(..), URIAuth(..), escapeURIString, uriToString )
 import System.FilePath ((</>), takeDirectory)
@@ -57,9 +59,9 @@ import Text.Regex ( matchRegex, mkRegex, splitRegex )
 uriToString' :: URI -> String
 uriToString' uri = uriToString id uri ""
 
-sourceFilePaths :: SourcePackage -> [FilePath]
+sourceFilePaths :: SourcePackage -> Set FilePath
 sourceFilePaths package =
-    map ((sourceDirectory package) </>) . map sourceFileName . sourcePackageFiles $ package
+    Set.map ((sourceDirectory package) </>) . Set.map sourceFileName . Set.fromList . sourcePackageFiles $ package
 
 -- | Return the name and version number of the source package that
 -- generated this binary package.  
@@ -106,7 +108,7 @@ sourcePackageBinaryNames package =
 sourceBinaryNames :: B.Paragraph -> [BinPkgName]
 sourceBinaryNames paragraph = 
     case B.fieldValue "Binary" paragraph of
-      Just names -> map BinPkgName (splitRegex (mkRegex "[ ,\t\n]+") (T.unpack names))
+      Just names -> List.map BinPkgName (splitRegex (mkRegex "[ ,\t\n]+") (T.unpack names))
       _ -> error ("Source package info has no 'Binary' field:\n" ++ (T.unpack . formatParagraph $ paragraph))
 
 toSourcePackage :: PackageIndex -> B.Paragraph -> SourcePackage
@@ -128,19 +130,18 @@ toSourcePackage index package =
             (_, Left messages) -> error $ "Error in source paragraph\n package=" ++ show package ++ "\n  index=" ++ show index ++ "\n  messages:\n   " ++ intercalate "\n   " messages
       x -> error $ "Missing info in source package control information in " ++ show index ++ " -> " ++ show x ++ " :\n" ++ T.unpack (formatParagraph package)
     where
-      sourceParagraph = parseSourceParagraph package
       -- Parse the list of files in a paragraph of a Sources index.
       parseSourcesFileList :: T.Text -> Either [String] [SourceFileSpec]
       parseSourcesFileList text =
-          merge . catMaybes . map parseSourcesFiles . lines . T.unpack $ text
+          merge . catMaybes . List.map parseSourcesFiles . lines . T.unpack $ text
       parseSourcesFiles line =
           case words line of
             [md5sum, size, name] -> Just (Right (SourceFileSpec md5sum (read size) name))
             [] -> Nothing
             _ -> Just (Left ("Invalid line in Files list: '" ++ show line ++ "'"))
       merge x = case partition (either (const True) (const False)) x of
-                  (a, []) -> Left . catMaybes . map (either Just (const Nothing )) $ a
-                  (_, a) -> Right . catMaybes . map (either (const Nothing) Just) $ a
+                  (a, []) -> Left . catMaybes . List.map (either Just (const Nothing )) $ a
+                  (_, a) -> Right . catMaybes . List.map (either (const Nothing) Just) $ a
 
 parseSourceParagraph :: B.Paragraph -> Either [String] SourceControl
 parseSourceParagraph p =
@@ -161,7 +162,7 @@ parseSourceParagraph p =
                   , buildConflictsIndep = maybe [] (: []) $ B.fieldValue "Build-Conflicts-Indep" p
                   , standardsVersion = fmap stripWS $ B.fieldValue "Standards-Version" p
                   , homepage = fmap stripWS $ B.fieldValue "Homepage" p })
-      x -> Left ["parseSourceParagraph - One or more required fields (Package, Maintainer, Standards-Version) missing: " ++ show p]
+      _x -> Left ["parseSourceParagraph - One or more required fields (Package, Maintainer, Standards-Version) missing: " ++ show p]
 
 toBinaryPackage :: PackageIndex -> B.Paragraph -> BinaryPackage
 toBinaryPackage index p =
@@ -203,7 +204,7 @@ sourcePackageBinaryIDs :: Arch -> SourcePackage -> [PackageID BinPkgName]
 sourcePackageBinaryIDs Source _ = error "invalid argument"
 sourcePackageBinaryIDs arch package =
     case (B.fieldValue "Version" info, B.fieldValue "Binary" info) of
-      (Just version, Just names) -> map (binaryID (parseDebianVersion (T.unpack version))) $ splitRegex (mkRegex "[ ,]+") (T.unpack names)
+      (Just version, Just names) -> List.map (binaryID (parseDebianVersion (T.unpack version))) $ splitRegex (mkRegex "[ ,]+") (T.unpack names)
       _ -> error ("Source package info has no 'Binary' field:\n" ++ (T.unpack . formatParagraph $ info))
     where
       -- Note that this version number may be wrong - we need to
@@ -224,7 +225,7 @@ getPackages index =
       readControl (Right s) =
           try (case controlFromIndex Uncompressed (show uri') s of
                  Left e -> return $ Left (SomeException (ErrorCall (show uri' ++ ": " ++ show e)))
-                 Right (B.Control control) -> return $ Right $ map (toBinaryPackage index) control) >>=
+                 Right (B.Control control) -> return $ Right $ List.map (toBinaryPackage index) control) >>=
           return . either (\ (e :: SomeException) -> Left . SomeException . ErrorCall . ((show uri' ++ ":") ++) . show $ e) id
       uri' = uri {uriPath = uriPath uri </> packageIndexPath index}
       uri = repoURI repo
@@ -240,13 +241,13 @@ binaryPackagesOfIndex :: PackageIndex -> IO (Either SomeException [BinaryPackage
 binaryPackagesOfIndex index =
     case packageIndexArch index of
       Source -> return (Right [])
-      _ -> getPackages index -- >>= return . either Left (Right . map (toBinaryPackage index . packageInfo))
+      _ -> getPackages index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
 
 -- | Get the contents of a package index
 sourcePackagesOfIndex :: PackageIndex -> IO (Either SomeException [SourcePackage])
 sourcePackagesOfIndex index =
     case packageIndexArch index of
-      Source -> getPackages index >>= return . either Left (Right . map (toSourcePackage index . packageInfo))
+      Source -> getPackages index >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
       _ -> return (Right [])
 
 -- FIXME: assuming the index is part of the cache
@@ -258,7 +259,7 @@ sourcePackagesOfIndex' cache index =
        case cached of
          Just (status', packages) | status == status' -> return packages
          _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
-                 let packages = map (toSourcePackage index) paragraphs
+                 let packages = List.map (toSourcePackage index) paragraphs
                  putApt (insertSourcePackages path (status, packages) state)
                  return packages
     where
@@ -332,29 +333,30 @@ binaryPackagesOfIndex' cache index =
        case cached of
          Just (status', packages) | status == status' -> return packages
          _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
-                 let packages = map (toBinaryPackage index) paragraphs
+                 let packages = List.map (toBinaryPackage index) paragraphs
                  putApt (insertBinaryPackages path (status, packages) state)
                  return packages
     where
       path = rootPath (rootDir cache) ++ indexCacheFile cache index
 
 -- | Return a list of all source packages.
-releaseSourcePackages :: Release -> IO (Either ErrorCall [SourcePackage])
+releaseSourcePackages :: Release -> IO (Set SourcePackage)
 releaseSourcePackages release =
     mapM sourcePackagesOfIndex (sourceIndexList release) >>= return . test
     where
+      test :: [Either SomeException [SourcePackage]] -> Set SourcePackage
       test xs = case partitionEithers xs of
-                  ([], ok) -> Right (concat ok)
-                  (bad, _) -> Left . ErrorCall $ intercalate ", " (map show bad)
+                  ([], ok) -> Set.unions (List.map Set.fromList ok)
+                  (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Return a list of all the binary packages for all supported architectures.
-releaseBinaryPackages :: Release -> IO (Either ErrorCall [BinaryPackage])
+releaseBinaryPackages :: Release -> IO (Set BinaryPackage)
 releaseBinaryPackages release =
     mapM binaryPackagesOfIndex (binaryIndexList release) >>= return . test
     where
       test xs = case partitionEithers xs of
-                  ([], ok) -> Right (concat ok)
-                  (bad, _) -> Left . ErrorCall $ intercalate ", " (map show bad)
+                  ([], ok) -> Set.unions (List.map Set.fromList ok)
+                  (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Write a set of packages into a package index.
 putPackages :: PackageIndexLocal ->  [BinaryPackageLocal] -> IO ()
@@ -365,4 +367,4 @@ putPackages index packages =
     where
       release = packageIndexRelease index
       --repo = releaseRepo release
-      text = T.concat (intersperse (T.pack "\n") . map formatParagraph . map packageInfo $ packages)
+      text = T.concat (intersperse (T.pack "\n") . List.map formatParagraph . List.map packageInfo $ packages)

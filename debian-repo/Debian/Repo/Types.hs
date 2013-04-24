@@ -69,7 +69,9 @@ import System.Posix.Types ( FileOffset )
 import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), vcat, Pretty(pretty))
 
 deriving instance Show (B.Field' Text)
+deriving instance Ord (B.Field' Text)
 deriving instance Show B.Paragraph
+deriving instance Ord B.Paragraph
 
 instance Show FileStatus where
     show _ = "def :: FileStatus"
@@ -388,7 +390,7 @@ data SourcePackage
       , sourceControl :: SourceControl
       , sourceDirectory :: String
       , sourcePackageFiles :: [SourceFileSpec]
-      } deriving (Show)
+      } deriving (Show, Eq, Ord)
 
 -- |Source package information derived from the control paragraph.
 data SourceControl
@@ -404,7 +406,7 @@ data SourceControl
       , buildConflictsIndep :: [Package]
       , standardsVersion :: Maybe StandardsVersion -- There are packages that don't have this
       , homepage :: Maybe Text -- There are packages that don't have this
-      } deriving (Show)
+      } deriving (Show, Eq, Ord)
 
 type NameAddr = Text
 type StandardsVersion = Text
@@ -418,7 +420,7 @@ data SourceFileSpec
       , sourceFileSize :: FileOffset
       , sourceFileName :: FilePath
       }
-    deriving (Show)
+    deriving (Show, Eq, Ord)
 
 type PackageIDLocal = PackageID
 type BinaryPackageLocal = BinaryPackage
