@@ -24,15 +24,14 @@
 -- Author: David Fox <ddssff@gmail.com>
 module Debian.Config
     ( Flag(..)
-    , seedFlags	
+    -- , seedFlags
     , optBaseSpecs
     , computeConfig
     , configPath
     , findValues
     , findValue
     , findBool
-    , ParamSet
-    , values
+    -- , values
     , ParamDescr(..)
     , option
     , Debian.Config.usageInfo
@@ -108,12 +107,13 @@ instance Read Flag where
                      _ -> [(Value (stripWS name) (stripWS value), after)]
                _ -> error ("Parse error reading flag: '" ++ s ++ "'"))
 
+{-
 -- | Convert a list of command line arguments into a set of flags.
 -- These seed flags are later expanded by applying the Name\/Use
 -- mechanism to the information loaded from the configuration file or
 -- directory.  The appName argument is used to construct the usage
 -- string when invalid arguments are given.
-seedFlags :: String -> [ParamDescr] -> [String] -> [Flag]
+seedFlags :: String -> [ParamDescr a] -> [String] -> [Flag]
 seedFlags appName options args =
     -- Convert the command line arguments to flags.  Any arguments
     -- not recognized by getOpt is treated as implicit "--use"
@@ -121,10 +121,11 @@ seedFlags appName options args =
     case getOpt Permute (map option customizedOptions) args of
       (o, [], []) -> o
       (o, extra, []) -> (o ++ [Use extra])
-      (_, _, errs) -> error (concat errs ++ Debian.Config.usageInfo header customizedOptions)      
+      (_, _, errs) -> error (concat errs ++ Debian.Config.usageInfo header customizedOptions)
     where
       customizedOptions = mergeSpecs appName options
       header = "Usage: " ++ appName ++ " [OPTION...]"
+-}
 
 -- |Return the configuration information computed from a set of seed
 -- flags and the configuration files.
@@ -343,9 +344,11 @@ expandSections toExpand expansions =
 -- --config <path> - specify the path to a configuration file
 -- --include <path> - pull in options from a file
 -- --use 'name1 name2 ...' - pull in some named sections
-mergeSpecs :: String -> [ParamDescr] -> [ParamDescr]
+{-
+mergeSpecs :: String -> [ParamDescr a] -> [ParamDescr a]
 mergeSpecs appName specs =
     specs ++ optBaseSpecs appName
+-}
 
 optBaseSpecs appName =
     [ Param { shortOpts = ['c']
@@ -449,21 +452,18 @@ cartesianProduct (xs : yss) =
 -- System.Console.GetOpt.  It adds a list of parameter names which are
 -- used in the configuration file, and a function to retrieve the
 -- available values for the parameter.
-data ParamDescr
+data ParamDescr a
     = Param { --option :: OptDescr Flag
               shortOpts :: [Char]
 	    , longOpts :: [String]
             , names :: [String]
-	    , argDescr :: (ArgDescr Flag)
+	    , argDescr :: (ArgDescr a)
 	    , description :: String
             }
 
-option :: ParamDescr -> OptDescr Flag
+option :: ParamDescr a -> OptDescr a
 option param =
     Option (shortOpts param) (longOpts param) (argDescr param) (description param)
-
-class ParamSet a where
-    values :: ParamSet a => a -> ParamDescr -> [String]
 
 -- Modified version of usageInfo.
 
@@ -476,7 +476,7 @@ data DescrLine
 -- |Modified version of System.Console.GetOpt.usageInfo, avoids printing
 -- such wide lines.
 usageInfo :: String		-- header
-          -> [ParamDescr]	-- parameter descriptor
+          -> [ParamDescr a]	-- parameter descriptor
           -> String		-- nicely formatted decription of options
 usageInfo header params = unlines (header:table)
    where xs = concatMap fmtOpt params
@@ -497,7 +497,7 @@ usageInfo header params = unlines (header:table)
          legend = [Opt {long = "Long option", short = "Short option", param = "Config file parameter"},
                    Opt {long = "-----------", short = "------------", param = "---------------------"}]
 
-fmtOpt :: ParamDescr -> [DescrLine]
+fmtOpt :: ParamDescr a -> [DescrLine]
 fmtOpt paramDescr =
    let Option sos los ad descr = option paramDescr in
    let ds = [Text ""] ++ map Text (lines descr) ++ [Text ""]

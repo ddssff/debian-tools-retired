@@ -154,13 +154,13 @@ explainError other = show other
 -- process each.
 scanIncoming :: MonadApt m => Bool -> Maybe PGPKey -> LocalRepository -> m ([ChangesFile], [(ChangesFile, InstallResult)])
 scanIncoming createSections keyname repo@(LocalRepository root _ _) =
-    (\ x -> qPutStrLn ("Uploading packages to " ++ outsidePath root ++ "/incoming") >> quieter 2 x) $
+    (\ x -> qPutStrLn ("Uploading packages to " ++ outsidePath root ++ "/incoming") >> {-quieter 2-} x) $
     do releases <- findReleases repo
        changes <- liftIO (findChangesFiles (outsidePath root </> "incoming"))
        case changes of
          [] -> qPutStrLn "Nothing to install."
          _ -> qPutStrLn ("To install:\n  " ++ (intercalate "\n  " . List.map (show . pretty) $ changes))
-       results <- installPackages createSections keyname repo releases changes
+       !results <- installPackages createSections keyname repo releases changes
        case results of
          [] -> return ()
          _ -> qPutStrLn ("Upload results:\n  " ++
