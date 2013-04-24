@@ -21,6 +21,7 @@ import Control.Monad.Trans (liftIO)
 import Data.List (intercalate)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Data.Text (Text, unpack)
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Download as T
 import Debian.AutoBuilder.Types.Download (Download(..))
@@ -29,7 +30,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as R
 import Debian.AutoBuilder.Types.Packages (foldPackages, TargetName)
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Changes (logVersion, ChangeLogEntry(..))
-import Debian.Control (Control, Control'(Control), fieldValue,  Paragraph'(Paragraph), Field'(Comment), parseControlFromFile)
+import Debian.Control (Control'(Control), fieldValue,  Paragraph'(Paragraph), Field'(Comment), parseControlFromFile)
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
@@ -134,7 +135,7 @@ prepareTarget cache globalBuildDeps os source =
     failing (\ msgs -> error (intercalate "\n  " ("Failure obtaining dependency information:" : msgs)))
             (\ deps -> return $ Target { tgt = source, cleanSource = tree, targetDepends = deps })
 
-targetControl :: Target -> Control
+targetControl :: Target -> Control' Text
 targetControl = control . cleanSource
 
 -- | Given a download, examine it to see if it is a debian source
@@ -218,7 +219,7 @@ debianSourcePackageName :: Target -> SrcPkgName
 debianSourcePackageName target =
     case removeCommentParagraphs (targetControl target) of
       (Control (paragraph : _)) ->
-          maybe (error "Missing Source field") SrcPkgName $ fieldValue "Source" paragraph
+          maybe (error "Missing Source field") (SrcPkgName . unpack) $ fieldValue "Source" paragraph
       _ -> error "Target control information missing"
 
 -- | The /Source:/ attribute of debian\/control.
@@ -226,7 +227,7 @@ srcPkgName :: Buildable -> SrcPkgName
 srcPkgName tgt =
     case removeCommentParagraphs (control' (debianSourceTree tgt)) of
       (Control (paragraph : _)) ->
-          maybe (error "Missing Source field") SrcPkgName $ fieldValue "Source" paragraph
+          maybe (error "Missing Source field") (SrcPkgName . unpack) $ fieldValue "Source" paragraph
       _ -> error "Buildable control information missing"
 
 {-

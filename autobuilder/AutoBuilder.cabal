@@ -1,5 +1,5 @@
 Name:           AutoBuilder
-Version:        6.53.3
+Version:        6.54
 License:        BSD3
 Copyright:      (c) 2006-2013, SeeReason Partners LLC
 Author:         David Fox <dsf@seereason.com>
@@ -85,6 +85,7 @@ Library
       , regex-tdfa
       , tar >= 0.4
       , template-haskell
+      , text
       , time
       , unix
       , Unixutils >= 1.51

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Debian.AutoBuilder.Types.Fingerprint
     ( Fingerprint
     , packageFingerprint
@@ -11,11 +12,11 @@ module Debian.AutoBuilder.Types.Fingerprint
     ) where
 
 import Control.Applicative.Error (maybeRead)
-import qualified Data.ByteString.Char8 as B
 import Data.List (intercalate, intersperse, find, partition, nub)
 import qualified Data.Map as Map
 import Data.Maybe(fromJust, isJust, isNothing)
 import qualified Data.Set as Set
+import Data.Text (unpack)
 import Debian.AutoBuilder.Types.Buildable (Target(tgt, cleanSource), Buildable(download), targetRelaxed, targetControl, relaxDepends)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -60,7 +61,7 @@ readMethod s = maybeRead s
 packageFingerprint :: Maybe SourcePackage -> Fingerprint
 packageFingerprint Nothing = NoFingerprint
 packageFingerprint (Just package) =
-    maybe NoFingerprint (parseRevision . B.unpack) (S.fieldValue "Fingerprint" . sourceParagraph $ package)
+    maybe NoFingerprint (parseRevision . unpack) (S.fieldValue "Fingerprint" . sourceParagraph $ package)
     where
       parseRevision s =
           case reads s :: [(String, String)] of

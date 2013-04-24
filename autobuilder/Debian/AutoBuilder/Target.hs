@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
+{-# LANGUAGE BangPatterns, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
 {-# OPTIONS -Wall -fwarn-unused-imports -fno-warn-name-shadowing -fno-warn-orphans #-}
 -- |A Target represents a particular set of source code and the
 -- methods to retrieve and update it.
@@ -25,7 +25,9 @@ import Data.Function (on)
 import Data.List(intersperse, intercalate, intersect, isSuffixOf,
                  nub, partition, sortBy)
 import Data.Maybe(catMaybes, fromJust, isNothing, listToMaybe)
+import Data.Monoid ((<>))
 import qualified Data.Set as Set
+import qualified Data.Text as T (Text, pack, unpack)
 import Data.Time(NominalDiffTime)
 import Debian.Arch (Arch)
 import Debian.AutoBuilder.Env (buildEnv)
@@ -80,7 +82,7 @@ import System.Process (proc, shell, CreateProcess(cwd), readProcessWithExitCode,
 import System.Process.Progress (mergeToStdout, keepStdout, keepResult, collectOutputs,
                                 keepResult, runProcessF, runProcess, quieter, noisier, qPutStrLn, ePutStr, ePutStrLn)
 import System.Process.Read (readModifiedProcess)
-import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), pretty)
+import Text.PrettyPrint.ANSI.Leijen (Doc, text, pretty)
 import Text.Printf(printf)
 import Text.Regex(matchRegex, mkRegex)
 
@@ -456,7 +458,7 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint !target stat
           let info' = map (setDist name) fields in
           changes { changeInfo = Paragraph info'
                   , changeRelease = name }
-          where setDist name (Field ("Distribution", _)) = Field ("Distribution", ' ' : releaseName' name)
+          where setDist name (Field ("Distribution", _)) = Field ("Distribution", " " <> T.pack (releaseName' name))
                 setDist _ other = other
       doLocalUpload :: MonadApt m => (ChangesFile, NominalDiffTime) -> m LocalRepository
       doLocalUpload (changesFile, elapsed) =
@@ -572,14 +574,14 @@ getReleaseControlInfo cleanOS target =
       sourcePackages = sortBy compareVersion . Debian.Repo.Cache.sourcePackages cleanOS $ [packageName]
       sourcePackageVersion package =
           case ((fieldValue "Package" . sourceParagraph $ package), (fieldValue "Version" . sourceParagraph $ package)) of
-            (Just name, Just version) -> (B.unpack name, parseDebianVersion (B.unpack version))
+            (Just name, Just version) -> (T.unpack name, parseDebianVersion (T.unpack version))
             _ -> error "Missing Package or Version field"
       binaryPackageVersion package =
           case ((fieldValue "Package" . packageInfo $ package), (fieldValue "Version" . packageInfo $ package)) of
-            (Just name, Just version) -> (BinPkgName (B.unpack name), parseDebianVersion (B.unpack version))
+            (Just name, Just version) -> (BinPkgName (T.unpack name), parseDebianVersion (T.unpack version))
             _ -> error "Missing Package or Version field"
       compareVersion a b = case ((fieldValue "Version" . sourceParagraph $ a), (fieldValue "Version" . sourceParagraph $ b)) of
-                             (Just a', Just b') -> compare (parseDebianVersion . B.unpack $ b') (parseDebianVersion . B.unpack $ a')
+                             (Just a', Just b') -> compare (parseDebianVersion . T.unpack $ b') (parseDebianVersion . T.unpack $ a')
                              _ -> error "Missing Version field"
       -- The source package is complete if the correct versions of the
       -- required binary packages are all available, either as debs or
@@ -661,9 +663,9 @@ computeNewVersion cache cleanOS poolOS target =
       -- the new version number must not equal any of these.
       available = aptSourcePackagesSorted poolOS [G.sourceName (targetDepends target)]
       getVersion paragraph =
-          maybe Nothing (Just . parseDebianVersion . B.unpack) (fieldValue "Version" . sourceParagraph $ paragraph)
+          maybe Nothing (Just . parseDebianVersion . T.unpack) (fieldValue "Version" . sourceParagraph $ paragraph)
       currentVersion =
-          maybe Nothing (Just . parseDebianVersion . B.unpack) (maybe Nothing (fieldValue "Version" . sourceParagraph) current)
+          maybe Nothing (Just . parseDebianVersion . T.unpack) (maybe Nothing (fieldValue "Version" . sourceParagraph) current)
       checkVersion :: DebianVersion -> Failing DebianVersion
       checkVersion result =
           maybe (Success result)
@@ -679,7 +681,7 @@ computeNewVersion cache cleanOS poolOS target =
       (releaseControlInfo, _releaseStatus, _message) = getReleaseControlInfo cleanOS target
 
 -- FIXME: Most of this code should move into Debian.Repo.Dependencies
-buildDepSolutions' :: Arch -> [BinPkgName] -> OSImage -> Relations -> Control -> Failing [(Int, [BinaryPackage])]
+buildDepSolutions' :: Arch -> [BinPkgName] -> OSImage -> Relations -> Control' T.Text -> Failing [(Int, [BinaryPackage])]
 buildDepSolutions' arch preferred os globalBuildDeps debianControl =
     -- q12 "Searching for build dependency solution" $
     -- We don't discard any dependencies here even if they are
@@ -774,7 +776,7 @@ updateChangesFile elapsed changes =
                       maybeField "CPU cache: " (lookup "cache size" cpuInfo) ++
                       maybeField "Host: " hostname
       let fields' = sinkFields (== "Files")
-                    (Paragraph $ fields ++ [Field ("Build-Info", "\n " ++ intercalate "\n " buildInfo)])
+                    (Paragraph $ fields ++ [Field ("Build-Info", T.pack ("\n " <> intercalate "\n " buildInfo))])
       -- let changes' = changes {changeInfo = Paragraph fields'}
       -- replaceFile (Debian.Repo.path changes') (show (Control [fields']))
       return changes {changeInfo = fields'}

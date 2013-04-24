@@ -22,6 +22,7 @@ customize log =
     setL copyright (Just (Left AllRightsReserved)) .
     setL sourceFormat (Just Native3) .
     setL changelog (Just log) .
+    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "ghc") Nothing Nothing))) .
     modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "libghc-autobuilder-dev") (Just (EEQ (buildDebianVersion Nothing "${Source-Version}" Nothing))) Nothing))) .
     modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "debootstrap") Nothing Nothing))) .
     modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "rsync") Nothing Nothing))) .
