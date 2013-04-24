@@ -110,6 +110,7 @@ isError :: InstallResult -> Bool
 isError Ok = False
 isError _ = True
 
+plural :: String -> [a] -> String
 plural "do" [_] = "does"
 plural "do" _ = "do"
 
