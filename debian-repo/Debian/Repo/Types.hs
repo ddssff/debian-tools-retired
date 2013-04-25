@@ -22,7 +22,7 @@ module Debian.Repo.Types
     , releaseComponents
     , releaseArchitectures
     -- * Each line of the sources.list represents a slice of a repository
-    , Slice(..)
+    , Slice
     , SliceList(..)
     , NamedSliceList(..)
     -- * Package, Source and Binary Debs
@@ -299,10 +299,14 @@ instance Show DebSource where
 data SliceName = SliceName { sliceName :: String } deriving (Eq, Ord, Show)
 -}
 
+type Slice = (Repository, DebSource)
+
+{-
 data Slice
     = Slice { sliceRepo :: Repository
             , sliceSource :: DebSource
             } deriving (Eq, Ord, Show)
+-}
 
 data SliceList = SliceList {slices :: [Slice]} deriving (Eq, Ord, Show)
 
@@ -311,11 +315,13 @@ data NamedSliceList
                      , sliceListName :: SliceName
                      } deriving (Eq, Ord, Show)
 
+{-
 instance Pretty Slice where
     pretty = pretty . sliceSource
+-}
 
 instance Pretty SliceList where
-    pretty = vcat . map pretty . slices
+    pretty = vcat . map (pretty . snd) . slices
 
 ---------------- PACKAGES AND PACKAGE INDEXES -------------
 

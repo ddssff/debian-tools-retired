@@ -31,8 +31,10 @@ import Debian.Relation (ParseRelations(..), Relations)
 import Debian.Repo.Slice ( sourceSlices, binarySlices, verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Sync (rsync)
-import Debian.Repo.Types ( AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage, NamedSliceList(sliceList, sliceListName), SliceList(..), Slice(..),
-                           Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo), EnvPath(EnvPath, envRoot), EnvRoot(rootPath), outsidePath )
+import Debian.Repo.Types ( AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage,
+                           NamedSliceList(sliceList, sliceListName), SliceList(..), Slice,
+                           Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo),
+                           EnvPath(EnvPath, envRoot), EnvRoot(rootPath), outsidePath )
 import Debian.URI ( uriToString', URI(uriScheme) )
 import Extra.Files ( replaceFile )
 import "Extra" Extra.List ( isSublistOf )
@@ -121,8 +123,7 @@ localSources os =
           let name = relName (osReleaseName os) in
           let src = DebSource Deb (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
               bin = DebSource DebSrc (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"])) in
-          SliceList { slices = [Slice { sliceRepo = LocalRepo repo', sliceSource = src }, 
-                                Slice { sliceRepo = LocalRepo repo', sliceSource = bin }] }
+          SliceList {slices = [(LocalRepo repo', src), (LocalRepo repo', bin)] }
 
 -- |Change the root directory of a repository.  FIXME: This should
 -- also sync the repository to ensure consistency.
@@ -348,8 +349,8 @@ buildEnv root distro arch repo include exclude components =
 
       woot = rootPath root
       wootNew = woot ++ ".new"
-      baseDist = either id (relName . fst) . sourceDist . sliceSource . head . slices . sliceList $ distro
-      mirror = uriToString' . sourceUri . sliceSource . head . slices . sliceList $ distro
+      baseDist = either id (relName . fst) . sourceDist . snd . head . slices . sliceList $ distro
+      mirror = uriToString' . sourceUri . snd . head . slices . sliceList $ distro
       cmd = intercalate " && "
               ["set -x",
                "rm -rf " ++ wootNew,
@@ -400,7 +401,7 @@ updateEnv os =
                _ -> return $ Right os
       root = osRoot os
       remoteOnly :: SliceList -> SliceList
-      remoteOnly x = x {slices = filter r (slices x)} where r y = (uriScheme . sourceUri . sliceSource $ y) == "file:"
+      remoteOnly x = x {slices = filter r (slices x)} where r y = (uriScheme . sourceUri . snd $ y) == "file:"
 
 chrootEnv :: OSImage -> EnvRoot -> OSImage
 chrootEnv os dst = os {osRoot=dst}

@@ -28,24 +28,24 @@ import Debian.Repo.LocalRepository ( prepareLocalRepository )
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Repository ( prepareRepository )
 import Debian.Repo.SourcesList ( parseSourceLine, parseSourcesList )
-import Debian.Repo.Types ( NamedSliceList(..), SliceList(..), Slice(..), Repository(LocalRepo), EnvPath(EnvPath), EnvRoot(..) )
+import Debian.Repo.Types ( NamedSliceList(..), SliceList(..), Slice, Repository(LocalRepo), EnvPath(EnvPath), EnvRoot(..) )
 import Debian.URI ( URI(uriScheme, uriPath), dirFromURI, fileFromURI )
 import Debian.UTF8 as Deb (decode)
 import System.FilePath ((</>))
 import Text.Regex ( mkRegex, splitRegex )
 
 sourceSlices :: SliceList -> SliceList
-sourceSlices = SliceList . filter ((== DebSrc) . sourceType . sliceSource) . slices
+sourceSlices = SliceList . filter ((== DebSrc) . sourceType . snd) . slices
 
 binarySlices :: SliceList -> SliceList
-binarySlices = SliceList . filter ((== Deb) . sourceType . sliceSource) . slices
+binarySlices = SliceList . filter ((== Deb) . sourceType . snd) . slices
 
 inexactPathSlices :: SliceList -> SliceList
-inexactPathSlices = SliceList . filter (either (const False) (const True) . sourceDist . sliceSource) . slices
+inexactPathSlices = SliceList . filter (either (const False) (const True) . sourceDist . snd) . slices
 
 releaseSlices :: ReleaseName -> SliceList -> SliceList
 releaseSlices release list =
-    SliceList . filter (isRelease . sourceDist . sliceSource) $ (slices list)
+    SliceList . filter (isRelease . sourceDist . snd) $ (slices list)
     where isRelease = either (const False) (\ (x, _) -> x == release)
 
 appendSliceLists :: [SliceList] -> SliceList
@@ -124,6 +124,6 @@ verifyDebSource chroot line =
                      prepareLocalRepository path Nothing >>= return . LocalRepo
                  _ ->
                      prepareRepository uri
-       return $ Slice { sliceRepo = repo, sliceSource = line }
+       return $ (repo, line)
     where
       uri = sourceUri line

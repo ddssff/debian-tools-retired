@@ -230,7 +230,7 @@ getPackages index =
       uri = repoURI repo
       repo = releaseRepo release
       release = packageIndexRelease index
-      toLazy s = L.fromChunks [s]
+      --toLazy s = L.fromChunks [s]
       --showStream :: Either Exception L.ByteString -> IO (Either Exception L.ByteString)
       --showStream x@(Left e) = hPutStrLn stderr (show uri' ++ " - exception: " ++ show e) >> return x
       --showStream x@(Right s) = hPutStrLn stderr (show uri' ++ " - stream length: " ++ show (L.length s)) >> return x

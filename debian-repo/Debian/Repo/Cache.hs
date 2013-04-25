@@ -38,7 +38,7 @@ import Debian.Repo.Slice ( verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Types ( AptCache(aptArch, aptBaseSliceList, aptBinaryPackages, aptReleaseName, aptSourcePackages, globalCacheDir), SourcePackage(sourcePackageID),
                            sourcePackageName, BinaryPackage(packageID), binaryPackageName, PackageID(packageVersion), PackageIndex(..), SliceList(slices),
-                           Slice(sliceRepo, sliceSource), Release(..), ReleaseInfo(releaseInfoName), Repo(repoReleaseInfo), EnvRoot(EnvRoot) )
+                           Slice, Release(..), ReleaseInfo(releaseInfoName), Repo(repoReleaseInfo), EnvRoot(EnvRoot) )
 import Debian.URI ( URIAuth(uriPort, uriRegName, uriUserInfo), URI(uriAuthority, uriPath, uriScheme), escapeURIString )
 import System.Exit ( ExitCode(ExitSuccess) )
 import Extra.Files ( replaceFile )
@@ -104,24 +104,24 @@ aptSourcePackagesSorted os names =
 -- |Return a list of the index files that contain the packages of a
 -- slice.
 sliceIndexes :: AptCache a => a -> Slice -> [PackageIndex]
-sliceIndexes cache slice =
-    case (sourceDist . sliceSource $ slice) of
+sliceIndexes cache (repo, slice) =
+    case (sourceDist slice) of
       Left exact -> error $ "Can't handle exact path in sources.list: " ++ exact
       Right (release, sections) -> map (makeIndex release) sections
     where
       makeIndex release section =
-          PackageIndex { packageIndexRelease = Release { releaseRepo = sliceRepo slice
+          PackageIndex { packageIndexRelease = Release { releaseRepo = repo
                                                        , releaseInfo = findReleaseInfo release }
                        , packageIndexComponent = section
-                       , packageIndexArch = case (sourceType . sliceSource $ slice) of
+                       , packageIndexArch = case (sourceType slice) of
                                               DebSrc -> Source
                                               Deb -> aptArch cache }
       findReleaseInfo release =
-          case filter ((==) release . releaseInfoName) (repoReleaseInfo (sliceRepo slice)) of
+          case filter ((==) release . releaseInfoName) (repoReleaseInfo repo) of
             [x] -> x
             [] -> error $ ("sliceIndexes: Invalid release name: " ++ releaseName' release ++
                            "\n  You may need to remove ~/.autobuilder/repoCache." ++
-                           "\n  Available: " ++ (show . map releaseInfoName . repoReleaseInfo . sliceRepo $ slice))
+                           "\n  Available: " ++ (show . map releaseInfoName . repoReleaseInfo $ repo))
             xs -> error $ "Internal error 5 - multiple releases named " ++ releaseName' release ++ "\n" ++ show xs
 
 -- |Return the paths in the local cache of the index files of a slice list.
@@ -130,7 +130,7 @@ aptCacheFiles apt sources = concat . map (aptCacheFilesOfSlice apt) $ (slices so
 
 -- |Return the paths in the local cache of the index files of a single slice.
 aptCacheFilesOfSlice :: AptCache a => a -> Slice -> [FilePath]
-aptCacheFilesOfSlice apt slice = archFiles (aptArch apt) (sliceSource slice)
+aptCacheFilesOfSlice apt (repo, slice) = archFiles (aptArch apt) slice
 
 -- |Return the list of files that apt-get update would write into
 -- \/var\/lib\/apt\/lists when it processed the given list of DebSource.
