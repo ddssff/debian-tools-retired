@@ -32,17 +32,17 @@ module Debian.Repo.Monads.Apt
     , countTasks
     ) where
 
+import Control.Exception ( try )
 import Control.Exception as E (Exception, tryJust)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.State (get, put)
+import Control.Monad.State ( MonadTrans(..), MonadIO(..), StateT(runStateT), mapStateT )
+import qualified Data.Map as Map (Map, insert, empty, lookup)
 import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), ControlFunctions(parseControlFromHandle) )
 import Debian.Release (ReleaseName)
 import Debian.Sources (SliceName)
 import Debian.Repo.Types ( AptImage, SourcePackage, BinaryPackage, Release, Repo(repoURI), Repository )
-import Control.Exception ( try )
-import Control.Monad.State ( MonadTrans(..), MonadIO(..), StateT(runStateT), mapStateT )
-import qualified Data.Map as Map ( insert, Map, empty, findWithDefault )
 import Debian.URI ( URI )
 import qualified System.IO as IO ( IOMode(ReadMode), hClose, openBinaryFile )
 import System.Posix.Files ( FileStatus, deviceID, fileID, modificationTime )
@@ -70,11 +70,11 @@ type AptIO = AptIOT IO
 -- | This represents the state of the IO system.
 data AptState
     = AptState
-      { repoMap :: Map.Map URI (Maybe Repository)		-- ^ Map to look up known Repository objects
-      , releaseMap :: Map.Map (URI, ReleaseName) (Maybe Release) -- ^ Map to look up known Release objects
-      , aptImageMap :: Map.Map SliceName (Maybe AptImage)	-- ^ Map to look up prepared AptImage objects
-      , sourcePackageMap :: Map.Map FilePath (Maybe (FileStatus, [SourcePackage]))
-      , binaryPackageMap :: Map.Map FilePath (Maybe (FileStatus, [BinaryPackage]))
+      { repoMap :: Map.Map URI Repository		-- ^ Map to look up known Repository objects
+      , releaseMap :: Map.Map (URI, ReleaseName) Release -- ^ Map to look up known Release objects
+      , aptImageMap :: Map.Map SliceName AptImage	-- ^ Map to look up prepared AptImage objects
+      , sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
+      , binaryPackageMap :: Map.Map FilePath (FileStatus, [BinaryPackage])
       }
 
 -- |Perform an AptIO monad task in the IO monad.
@@ -121,36 +121,36 @@ initState = AptState
             , binaryPackageMap = Map.empty
             }
 
-setRepoMap :: Map.Map URI (Maybe Repository) -> AptState -> AptState
+setRepoMap :: Map.Map URI Repository -> AptState -> AptState
 setRepoMap m state = state {repoMap = m}
 
-getRepoMap :: AptState -> Map.Map URI (Maybe Repository)
+getRepoMap :: AptState -> Map.Map URI Repository
 getRepoMap state = repoMap state
 
 lookupRepository :: URI -> AptState -> Maybe Repository
-lookupRepository uri state = Map.findWithDefault Nothing uri (repoMap state)
+lookupRepository uri state = Map.lookup uri (repoMap state)
 
 insertRepository :: URI -> Repository -> AptState -> AptState
-insertRepository uri repo state = state {repoMap = Map.insert uri (Just repo) (repoMap state)}
+insertRepository uri repo state = state {repoMap = Map.insert uri repo (repoMap state)}
 
 lookupAptImage :: SliceName -> AptState -> Maybe AptImage
-lookupAptImage name state = Map.findWithDefault Nothing  name (aptImageMap state)
+lookupAptImage name state = Map.lookup  name (aptImageMap state)
 
 insertAptImage :: SliceName -> AptImage -> AptState -> AptState
-insertAptImage name image state = state {aptImageMap = Map.insert name (Just image) (aptImageMap state)}
+insertAptImage name image state = state {aptImageMap = Map.insert name image (aptImageMap state)}
 
 lookupSourcePackages :: FilePath -> AptState -> Maybe (FileStatus, [SourcePackage])
-lookupSourcePackages key state = Map.findWithDefault Nothing key (sourcePackageMap state)
+lookupSourcePackages key state = Map.lookup key (sourcePackageMap state)
 
 insertSourcePackages :: FilePath -> (FileStatus, [SourcePackage]) -> AptState -> AptState
-insertSourcePackages key packages state = state {sourcePackageMap = Map.insert key (Just packages) (sourcePackageMap state)}
+insertSourcePackages key packages state = state {sourcePackageMap = Map.insert key packages (sourcePackageMap state)}
 
 lookupBinaryPackages :: FilePath -> AptState -> Maybe (FileStatus, [BinaryPackage])
-lookupBinaryPackages key state = Map.findWithDefault Nothing key (binaryPackageMap state)
+lookupBinaryPackages key state = Map.lookup key (binaryPackageMap state)
 
 insertBinaryPackages :: FilePath -> (FileStatus, [BinaryPackage]) -> AptState -> AptState
 insertBinaryPackages key packages state =
-    state {binaryPackageMap = Map.insert key (Just packages) (binaryPackageMap state)}
+    state {binaryPackageMap = Map.insert key packages (binaryPackageMap state)}
 
 readParagraphs :: FilePath -> IO [B.Paragraph]
 readParagraphs path =
@@ -163,11 +163,11 @@ readParagraphs path =
 
 findRelease :: Repository -> ReleaseName -> AptState -> Maybe Release
 findRelease repo dist state =
-    Map.findWithDefault Nothing (repoURI repo, dist) (releaseMap state)
+    Map.lookup (repoURI repo, dist) (releaseMap state)
 
 putRelease :: Repository -> ReleaseName -> Release -> AptState -> AptState
 putRelease repo dist release state =
-    state {releaseMap = Map.insert (repoURI repo, dist) (Just release) (releaseMap state)}
+    state {releaseMap = Map.insert (repoURI repo, dist) release (releaseMap state)}
 
 -- | Perform a list of tasks with log messages.
 countTasks :: MonadIO m => [(String, m a)] -> m [a]
