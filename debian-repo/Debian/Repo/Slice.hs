@@ -26,7 +26,7 @@ import Debian.Release ( ReleaseName, parseReleaseName, parseSection')
 import Debian.Sources  ( SourceType(..), SliceName(SliceName), DebSource(..) )
 import Debian.Repo.LocalRepository ( prepareLocalRepository )
 import Debian.Repo.Monads.Apt (MonadApt)
-import Debian.Repo.Repository ( prepareRepository )
+import Debian.Repo.Repository ( prepareRepository' )
 import Debian.Repo.SourcesList ( parseSourceLine, parseSourcesList )
 import Debian.Repo.Types ( NamedSliceList(..), SliceList(..), Slice, Repository(LocalRepo), EnvPath(EnvPath), EnvRoot(..) )
 import Debian.URI ( URI(uriScheme, uriPath), dirFromURI, fileFromURI )
@@ -118,12 +118,4 @@ verifySourceLine chroot str = verifyDebSource chroot (parseSourceLine str)
 
 verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m Slice
 verifyDebSource chroot line =
-    do repo <- case uriScheme uri of
-                 "file:" -> 
-                     let path = EnvPath (maybe (EnvRoot "") id chroot) (uriPath uri) in
-                     prepareLocalRepository path Nothing >>= return . LocalRepo
-                 _ ->
-                     prepareRepository uri
-       return $ (repo, line)
-    where
-      uri = sourceUri line
+    prepareRepository' chroot (sourceUri line) >>= \ repo -> return (repo, line)

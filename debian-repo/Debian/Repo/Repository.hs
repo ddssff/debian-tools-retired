@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, PackageImports #-}
 module Debian.Repo.Repository
     ( UploadFile(..)
+    , prepareRepository'
     , prepareRepository
     , repoArchList
     , readPkgVersion
@@ -53,6 +54,15 @@ import qualified Tmp.File as F ( File(..), Source(RemotePath) )
 
 -- |The file produced by dupload when a package upload attempt is made.
 data UploadFile = Upload FilePath String DebianVersion Arch
+
+prepareRepository' :: MonadApt m => Maybe EnvRoot -> URI -> m Repository
+prepareRepository' chroot uri =
+    case uriScheme uri of
+      "file:" ->
+          let dir = EnvPath (maybe (EnvRoot "") id chroot) (uriPath uri) in
+          prepareLocalRepository dir Nothing >>= return . LocalRepo
+      _ ->
+          prepareRepository uri
 
 -- |This is a remote repository which we have queried to find out the
 -- names, sections, and supported architectures of its releases.
