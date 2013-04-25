@@ -127,7 +127,7 @@ toSourcePackage index package =
           case (parseSourcesFileList files, parseSourceParagraph package) of
             (Right files', Right para) ->
                 SourcePackage
-                { sourcePackageID = makeSourcePackageID index (T.unpack name) version
+                { sourcePackageID = makeSourcePackageID (T.unpack name) version
                 , sourceParagraph = package
                 , sourceControl = para
                 , sourceDirectory = T.unpack directory
@@ -175,8 +175,7 @@ toBinaryPackage index p =
     case (B.fieldValue "Package" p, B.fieldValue "Version" p) of
       (Just name, Just version) ->
           BinaryPackage 
-          { packageID =
-                makeBinaryPackageID index (T.unpack name) (parseDebianVersion (T.unpack version))
+          { packageID = makeBinaryPackageID (T.unpack name) (parseDebianVersion (T.unpack version))
           , packageInfo = p
           , pDepends = tryParseRel $ B.lookupP "Depends" p
           , pPreDepends = tryParseRel $ B.lookupP "Pre-Depends" p

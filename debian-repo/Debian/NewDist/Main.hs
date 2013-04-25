@@ -370,16 +370,18 @@ getReleases root' layout' dists section' archList' =
        return $ mergeReleases (existingReleases ++ requiredReleases)
 
 deletePackages releases flags keyname =
-    do let toRemove = map parsePackage $ removePackages flags
-       deleteSourcePackages keyname toRemove
+    deleteSourcePackages keyname toRemove
     where
-      parsePackage :: String -> PackageID BinPkgName
+      toRemove :: [(PackageIndex, PackageID BinPkgName)]
+      toRemove = map parsePackage $ removePackages flags
+      parsePackage :: String -> (PackageIndex, PackageID BinPkgName)
       -- Parse a string in the form <dist>,<packagename>=<versionnumber>
       parsePackage s =
           case splitRegex (mkRegex "[,=]") s of
             [dist, component, name, ver] ->
                 maybe (error ("Can't find release: " ++ dist))
-                      (\ release -> makeBinaryPackageID (PackageIndex release (parseSection' component) Source) name (parseDebianVersion ver))
+                      (\ release -> (PackageIndex release (parseSection' component) Source,
+                                     makeBinaryPackageID name (parseDebianVersion ver)))
                       (findReleaseByName (parseReleaseName dist)) 
             x -> error ("Invalid remove spec: " ++ show x)
       findReleaseByName :: ReleaseName -> Maybe Release

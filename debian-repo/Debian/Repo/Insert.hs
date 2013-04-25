@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-name-shadowing -fno-warn-missing-signatures #-}
 -- |Insert packages into a release, remove packages from a release.
 module Debian.Repo.Insert
@@ -12,6 +12,7 @@ module Debian.Repo.Insert
     , explainError
     ) where
 
+import Control.Exception (SomeException)
 import Control.Monad ( filterM, foldM, when )
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as L ( fromChunks, readFile )
@@ -38,7 +39,7 @@ import Debian.Repo.Release ( prepareRelease, signRelease, findReleases )
 import Debian.Repo.Repository ( repoArchList )
 import Debian.Release (SubSection(section), Section(..), ReleaseName, parseSection', releaseName', sectionName, sectionName')
 import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, binaryPackageName, PackageIDLocal, SourcePackage(sourcePackageID), sourcePackageName,
-                           BinaryPackage(packageID, packageInfo), PackageID(packageIndex, packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
+                           BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
                            PackageVersion(pkgVersion), Release(..), ReleaseInfo(releaseInfoAliases, releaseInfoComponents, releaseInfoName),
                            Layout(..), LocalRepository(LocalRepository, repoLayout, repoRoot), Repository(..), EnvPath, outsidePath,
                            releaseName, releaseComponents, releaseArchitectures )
@@ -511,11 +512,11 @@ deleteTrumped keyname releases =
       [_] ->
           mapM findTrumped releases >>=
           return . partitionEithers >>=
-          \ (bad, good) -> 
-              case bad of 
+          \ (bad, good) ->
+              case bad of
                 [] -> return (concat good) >>=
                       ifEmpty (qPutStr "deleteTrumped: nothing to delete") >>=
-                      deleteSourcePackages keyname . List.map packageID
+                      deleteSourcePackages keyname . (List.map (\ (i, p) -> (i, packageID p)))
                 _ -> error $ "Error reading package lists"
       [] -> error "internal error"
       repos -> error ("Multiple repositories passed to deleteTrumped:\n  " ++
@@ -527,9 +528,18 @@ deleteTrumped keyname releases =
 
 -- | Return a list of packages in a release which are trumped by some
 -- newer version.
-findTrumped :: Release -> IO (Either String [BinaryPackage])
+findTrumped :: Release -> IO (Either String [(PackageIndex, BinaryPackage)])
 findTrumped release =
     do
+      mapM doIndex (sourceIndexList release) >>= return . merge
+    where
+      doIndex index = DRP.getPackages index >>= return . either Left (Right . (List.map (index,)))
+      merge :: [Either SomeException [(PackageIndex, BinaryPackage)]] -> Either String [(PackageIndex, BinaryPackage)]
+      merge packages =
+          case partitionEithers packages of
+            ([], packages') -> Right . concat . List.map tail . List.map newestFirst . groupByName . concat $ packages'
+            (bad, _) -> Left $ "Error(s) reading source indexes: " ++ intercalate ", " (List.map show bad)
+{-
       --ePutStr ("findTrumped " ++ show release)
       packages <- mapM DRP.getPackages (sourceIndexList release)
       case partitionEithers packages of
@@ -538,19 +548,20 @@ findTrumped release =
                mapM_ (qPutStrLn) (catMaybes . List.map formatGroup $ groups)
                return . Right . concat . List.map tail $ groups
         (bad, _) -> return (Left $ "Error reading source indexes: " ++ intercalate ", " (List.map show bad))
-    where
-      groupByName :: [BinaryPackage] -> [[BinaryPackage]]
+-}
+
+      groupByName :: [(PackageIndex, BinaryPackage)] -> [[(PackageIndex, BinaryPackage)]]
       groupByName = groupBy equalNames . sortBy compareNames
-      equalNames a b = binaryPackageName a == binaryPackageName b
-      compareNames a b = compare (binaryPackageName a) (binaryPackageName b)
+      equalNames a b = binaryPackageName (snd a) == binaryPackageName (snd b)
+      compareNames a b = compare (binaryPackageName (snd a)) (binaryPackageName (snd b))
       newestFirst = sortBy (flip compareVersions)
-      compareVersions a b = compare (pkgVersion a) (pkgVersion b)
-      formatGroup :: [BinaryPackage] -> Maybe String
+      compareVersions a b = compare (pkgVersion (snd a)) (pkgVersion (snd b))
+      formatGroup :: [(PackageIndex, BinaryPackage)] -> Maybe String
       formatGroup [] = Nothing
       formatGroup [_] = Nothing
-      formatGroup (newest : other) =
-          Just ("Trumped by " ++ show (F.pretty newest) ++ " in " ++ show (F.pretty (packageIndex (packageID newest))) ++ ":\n " ++
-                intercalate "\n " (List.map (show . F.pretty) other))
+      formatGroup ((index, newest) : other) =
+          Just ("Trumped by " ++ show (F.pretty newest) ++ " in " ++ show (F.pretty index) ++ ":\n " ++
+                intercalate "\n " (List.map (show . F.pretty . snd) other))
 
 -- | Collect files that no longer appear in any package index and move
 -- them to the removed directory.  The .changes files are treated
@@ -630,29 +641,31 @@ findLive repo@(LocalRepository root (Just layout) _) =
                                               show (prettyArch arch)] ++ ".upload") (Set.fromList (concat (architectures releases)))
       architectures releases = List.map head . group . sort . List.map releaseArchitectures $ releases
 
-deleteSourcePackages :: Maybe PGPKey -> [PackageIDLocal BinPkgName] -> IO [Release]
+deleteSourcePackages :: Maybe PGPKey -> [(PackageIndex, PackageIDLocal BinPkgName)] -> IO [Release]
 deleteSourcePackages keyname packages =
     if Set.null invalid
-    then qPutStrLn (unlines ("Removing packages:" : List.map (show . F.pretty) packages)) >>
-         mapM getEntries indexes' >>=
-         return . zip indexes' . List.map (List.partition victim) >>=
-         mapM put
+    then qPutStrLn (unlines ("Removing packages:" : List.map (show . F.pretty . snd) packages)) >>
+         mapM doIndex indexes'
     else error "deleteSourcePackages: not a source index"
     where
-      put (index, (junk, keep)) =
+      doIndex index = getEntries index >>= put index . List.partition (victim index)
+      put :: PackageIndex -> ([BinaryPackage], [BinaryPackage]) -> IO Release
+      put index (junk, keep) =
           when (junk /= []) (qPutStrLn ("Removing packages from " ++ show (F.pretty index) ++ ": " ++ intercalate " " (List.map (show . F.pretty . packageID) junk))) >>
           putIndex' keyname index keep
       indexes' = concatMap allIndexes (Set.toList indexes)
-      (indexes, invalid) = Set.partition (\ index -> packageIndexArch index == Source) (Set.fromList (List.map packageIndex packages))
+      (indexes, invalid) = Set.partition (\ index -> packageIndexArch index == Source) (Set.fromList (List.map fst packages))
       allIndexes sourceIndex = packageIndexList (packageIndexRelease sourceIndex)
       -- Compute the id of the source package this entry is from, and see if
       -- it is one of the packages we are deleting.
-      victim :: BinaryPackage -> Bool
-      victim entry = Set.member (sourceIdent entry) (Set.fromList packages)
-      sourceIdent entry =
-          case packageIndexArch (packageIndex (packageID entry)) of
+      victim :: PackageIndex -> BinaryPackage -> Bool
+      victim index entry = Set.member (index, sourceIdent index entry) (Set.fromList packages)
+      sourceIdent :: PackageIndex -> BinaryPackage -> PackageID BinPkgName
+      sourceIdent index entry =
+          case packageIndexArch index of
             Source -> packageID entry
-            _ -> DRP.binaryPackageSourceID entry
+            _ -> DRP.binaryPackageSourceID index entry
+      getEntries :: PackageIndex -> IO [BinaryPackage]
       getEntries index = DRP.getPackages index >>= return . either (error . show) id
       putIndex' :: Maybe PGPKey -> PackageIndexLocal -> [BinaryPackageLocal] -> IO Release
       putIndex' keyname index entries =

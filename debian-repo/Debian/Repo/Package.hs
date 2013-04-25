@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package
     ( -- * Source and binary packages 
@@ -121,7 +121,7 @@ toSourcePackage index package =
           case (parseSourcesFileList files, parseSourceParagraph package) of
             (Right files', Right para) ->
                 SourcePackage
-                { sourcePackageID = makeSourcePackageID index (T.unpack name) version
+                { sourcePackageID = makeSourcePackageID (T.unpack name) version
                 , sourceParagraph = package
                 , sourceControl = para
                 , sourceDirectory = T.unpack directory
@@ -170,7 +170,7 @@ toBinaryPackage index p =
       (Just name, Just version) ->
           BinaryPackage 
           { packageID =
-                makeBinaryPackageID index (T.unpack name) (parseDebianVersion (T.unpack version))
+                makeBinaryPackageID (T.unpack name) (parseDebianVersion (T.unpack version))
           , packageInfo = p
           , pDepends = tryParseRel $ B.lookupP "Depends" p
           , pPreDepends = tryParseRel $ B.lookupP "Pre-Depends" p
@@ -188,29 +188,27 @@ tryParseRel _ = []
 -- information, this may specify a version number for the source
 -- package if it differs from the version number of the binary
 -- package.
-binaryPackageSourceID :: BinaryPackage -> PackageID BinPkgName
-binaryPackageSourceID package =
+binaryPackageSourceID :: PackageIndex -> BinaryPackage -> PackageID BinPkgName
+binaryPackageSourceID (PackageIndex release component _) package =
     case maybe Nothing (matchRegex re . T.unpack) (B.fieldValue "Source" (packageInfo package)) of
-      Just [name, _, ""] -> makeBinaryPackageID sourceIndex name (packageVersion pid)
-      Just [name, _, version] -> makeBinaryPackageID sourceIndex name (parseDebianVersion version)
+      Just [name, _, ""] -> makeBinaryPackageID name (packageVersion pid)
+      Just [name, _, version] -> makeBinaryPackageID name (parseDebianVersion version)
       _ -> error "Missing Source attribute in binary package info"
     where
       sourceIndex = PackageIndex release component Source
-      (PackageIndex release component _) = packageIndex pid
       pid = packageID package
       re = mkRegex "^[ ]*([^ (]*)[ ]*(\\([ ]*([^ )]*)\\))?[ ]*$"
 
-sourcePackageBinaryIDs :: Arch -> SourcePackage -> [PackageID BinPkgName]
-sourcePackageBinaryIDs Source _ = error "invalid argument"
-sourcePackageBinaryIDs arch package =
+sourcePackageBinaryIDs :: Arch -> PackageIndex -> SourcePackage -> [PackageID BinPkgName]
+sourcePackageBinaryIDs Source _ _ = error "invalid argument"
+sourcePackageBinaryIDs arch sourceIndex package =
     case (B.fieldValue "Version" info, B.fieldValue "Binary" info) of
       (Just version, Just names) -> List.map (binaryID (parseDebianVersion (T.unpack version))) $ splitRegex (mkRegex "[ ,]+") (T.unpack names)
       _ -> error ("Source package info has no 'Binary' field:\n" ++ (T.unpack . formatParagraph $ info))
     where
       -- Note that this version number may be wrong - we need to
       -- look at the Source field of the binary package info.
-      binaryID version name = makeBinaryPackageID binaryIndex name version
-      sourceIndex = packageIndex (sourcePackageID package)
+      binaryID version name = makeBinaryPackageID name version
       binaryIndex = sourceIndex { packageIndexArch = arch }
       info = sourceParagraph package
 

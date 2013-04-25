@@ -27,7 +27,7 @@ module Debian.Repo.Types
     -- * Package, Source and Binary Debs
     , PackageIndex(..)
     , PackageIndexLocal
-    , PackageID(packageIndex, packageVersion)
+    , PackageID(packageVersion)
     , prettyPackageID
     , BinaryPackage(..)
     , binaryPackageName
@@ -338,11 +338,11 @@ type PackageIndexLocal = PackageIndex
 prettyBinaryPackage :: BinaryPackage -> Doc
 prettyBinaryPackage p = pretty (pkgName p) <> text "-" <> prettyDebianVersion (pkgVersion p)
 
-makeBinaryPackageID :: PackageIndex -> String -> DebianVersion -> PackageID BinPkgName
-makeBinaryPackageID i n v = PackageID i (BinPkgName n) v
+makeBinaryPackageID :: String -> DebianVersion -> PackageID BinPkgName
+makeBinaryPackageID n v = PackageID (BinPkgName n) v
 
-makeSourcePackageID :: PackageIndex -> String -> DebianVersion -> PackageID SrcPkgName
-makeSourcePackageID i n v = PackageID i (SrcPkgName n) v
+makeSourcePackageID :: String -> DebianVersion -> PackageID SrcPkgName
+makeSourcePackageID n v = PackageID (SrcPkgName n) v
 
 instance PackageVersion BinaryPackage where
     pkgName = binaryPackageName
@@ -351,10 +351,10 @@ instance PackageVersion BinaryPackage where
 -- | The 'PackageID' type fully identifies a package by name, version,
 -- and a 'PackageIndex' which identifies the package's release,
 -- component and architecture.
+
 data PackageID n
     = PackageID
-      { packageIndex :: PackageIndex
-      , packageName :: n
+      { packageName :: n
       , packageVersion :: DebianVersion
       } deriving (Eq, Ord, Show)
 
@@ -425,7 +425,7 @@ data SourceFileSpec
       }
     deriving (Show, Eq, Ord)
 
-type PackageIDLocal = PackageID
+type PackageIDLocal n = PackageID n
 type BinaryPackageLocal = BinaryPackage
 type SourcePackageLocal = SourcePackage
 
