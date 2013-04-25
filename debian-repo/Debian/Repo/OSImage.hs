@@ -32,7 +32,7 @@ import Debian.Repo.Slice ( sourceSlices, binarySlices, verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types ( AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage,
-                           NamedSliceList(sliceList, sliceListName), SliceList(..), Slice,
+                           NamedSliceList(sliceList, sliceListName), SliceList(..),
                            Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo),
                            EnvPath(EnvPath, envRoot), EnvRoot(rootPath), outsidePath )
 import Debian.URI ( uriToString', URI(uriScheme) )

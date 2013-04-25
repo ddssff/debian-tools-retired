@@ -28,7 +28,7 @@ import Debian.Repo.LocalRepository ( prepareLocalRepository )
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Repository ( prepareRepository' )
 import Debian.Repo.SourcesList ( parseSourceLine, parseSourcesList )
-import Debian.Repo.Types ( NamedSliceList(..), SliceList(..), Slice, Repository(LocalRepo), EnvPath(EnvPath), EnvRoot(..) )
+import Debian.Repo.Types ( NamedSliceList(..), SliceList(..), Repository(LocalRepo), EnvPath(EnvPath), EnvRoot(..) )
 import Debian.URI ( URI(uriScheme, uriPath), dirFromURI, fileFromURI )
 import Debian.UTF8 as Deb (decode)
 import System.FilePath ((</>))
@@ -113,9 +113,9 @@ verifySourcesList chroot list =
     mapM (verifyDebSource chroot) list >>=
     (\ xs -> return $ SliceList { slices = xs })
 
-verifySourceLine :: MonadApt m => Maybe EnvRoot -> String -> m Slice
+verifySourceLine :: MonadApt m => Maybe EnvRoot -> String -> m (Repository, DebSource)
 verifySourceLine chroot str = verifyDebSource chroot (parseSourceLine str)
 
-verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m Slice
+verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m (Repository, DebSource)
 verifyDebSource chroot line =
     prepareRepository' chroot (sourceUri line) >>= \ repo -> return (repo, line)
