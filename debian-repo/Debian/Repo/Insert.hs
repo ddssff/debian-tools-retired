@@ -160,7 +160,7 @@ scanIncoming createSections keyname repo@(LocalRepository root _ _) =
        case changes of
          [] -> qPutStrLn "Nothing to install."
          _ -> qPutStrLn ("To install:\n  " ++ (intercalate "\n  " . List.map (show . pretty) $ changes))
-       !results <- installPackages createSections keyname repo releases changes
+       results <- installPackages createSections keyname repo releases changes
        case results of
          [] -> return ()
          _ -> qPutStrLn ("Upload results:\n  " ++
@@ -190,7 +190,7 @@ installPackages :: MonadApt m =>
                 -> [Release]			-- ^ Releases in target repository
                 -> [ChangesFile]		-- ^ Package to be installed
                 -> m [InstallResult]	-- ^ Outcome of each source package
-installPackages createSections keyname repo@(LocalRepository root layout _) releases !changeFileList =
+installPackages createSections keyname repo@(LocalRepository root layout _) releases changeFileList =
     do live <- findLive repo
        (_, releases', results) <- foldM (installFiles root) (live, releases, []) changeFileList
        let results' = reverse results
@@ -331,7 +331,7 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
                            Right (S.Control _) -> return . Left . Rejected $ [OtherProblem "Invalid control file"]
                   addFields :: (Either InstallResult B.Paragraph) -> (Either InstallResult B.Paragraph)
                   addFields (Left result) = Left result
-                  addFields (Right !info) =
+                  addFields (Right info) =
                       case isSuffixOf ".deb" . changedFileName $ file of
                         True -> addDebFields release changes file info
                         False -> addSourceFields release changes file info
@@ -350,17 +350,17 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
       -- For a successful install this unlinks the files from INCOMING and
       -- moves the .changes file into INSTALLED.  For a failure it moves
       -- all the files to REJECT.
-      finish root layout !changes Ok =
+      finish root layout changes Ok =
           do --vPutStrBl 1 stderr $ "  finish Ok " ++ changesFileName changes
              mapM_ (removeFile . ((outsidePath root ++ "/incoming/") ++) . changedFileName) (changeFiles changes)
              installChangesFile root layout changes
-      finish root _ !changes (Rejected _) =
+      finish root _ changes (Rejected _) =
           do --vPutStrBl 1 stderr $ "  finish Rejected " ++ changesFileName changes
              mapM_ (\ name -> moveFile (outsidePath root ++ "/incoming/" ++ name) (outsidePath root ++ "/reject/" ++ name))
                       (List.map changedFileName (changeFiles changes))
              moveFile (outsidePath root ++ "/incoming/" ++ Debian.Repo.Changes.name changes)
                                 (outsidePath root ++ "/reject/" ++ Debian.Repo.Changes.name changes)
-      finish _ _ !changes (Failed _) =
+      finish _ _ changes (Failed _) =
           do qPutStrLn $ "  Finish Failed " ++ changesFileName changes
              return ()
       installChangesFile :: EnvPath -> Layout -> ChangesFile -> IO ()
@@ -606,9 +606,9 @@ deleteGarbage repo =
 findLive :: MonadApt m => LocalRepository -> m (Set Text)
 findLive (LocalRepository _ Nothing _) = return Set.empty	-- Repository is empty
 findLive repo@(LocalRepository root (Just layout) _) =
-    do releases <- findReleases repo
-       sourcePackages <- mapM (liftIO . DRP.releaseSourcePackages) releases >>= return . Set.unions
-       binaryPackages <- mapM (liftIO . DRP.releaseBinaryPackages) releases >>= return . Set.unions
+    do !releases <- findReleases repo
+       !sourcePackages <- mapM (liftIO . DRP.releaseSourcePackages) releases >>= return . Set.unions
+       !binaryPackages <- mapM (liftIO . DRP.releaseBinaryPackages) releases >>= return . Set.unions
        let sourceFiles = Set.map (T.pack (outsidePath root ++ "/") <>) . Set.map T.pack . Set.fold Set.union Set.empty . Set.map DRP.sourceFilePaths $ sourcePackages
        let binaryFiles = Set.map (T.pack (outsidePath root ++ "/") <>) . Set.fold (\ mt s -> maybe s (`Set.insert` s) mt) Set.empty $ Set.map (B.fieldValue "Filename" . packageInfo) binaryPackages
        let changesFiles = Set.map T.pack . Set.fold Set.union Set.empty $ Set.map (Set.fromList . changesFilePaths root layout releases) sourcePackages
