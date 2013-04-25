@@ -75,7 +75,15 @@ Executable debian-versions
 
 Executable newdist
   Main-is: Debian/NewDist/Main.hs
-  ghc-options: -O2 -threaded -Wall
+  ghc-options: -O2 -threaded -Wall -rtsopts
+  if flag(local-debian)
+    Hs-Source-Dirs: ., ../../haskell-debian
+  else
+    Build-Depends: debian >= 3.75
+
+Executable speedtest
+  Main-is: Test/Speed.hs
+  ghc-options: -O2 -threaded -Wall -rtsopts
   if flag(local-debian)
     Hs-Source-Dirs: ., ../../haskell-debian
   else
