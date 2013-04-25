@@ -18,10 +18,10 @@ module Debian.Repo.Slice
 
 import Control.Exception ( throw )
 import Control.Monad.Trans (liftIO)
-import qualified Data.ByteString.Lazy.Char8 as L ( unpack )
 import Data.List ( nubBy )
 import Data.Maybe ( catMaybes )
-import Debian.Control ( Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph )
+import Data.Text as T (Text, pack, unpack)
+import Debian.Control ( Control'(Control), Paragraph', ControlFunctions(parseControl), fieldValue )
 import Debian.Release ( ReleaseName, parseReleaseName, parseSection')
 import Debian.Sources  ( SourceType(..), SliceName(SliceName), DebSource(..) )
 import Debian.Repo.LocalRepository ( prepareLocalRepository )
@@ -30,6 +30,8 @@ import Debian.Repo.Repository ( prepareRepository )
 import Debian.Repo.SourcesList ( parseSourceLine, parseSourcesList )
 import Debian.Repo.Types ( NamedSliceList(..), SliceList(..), Slice(..), Repository(LocalRepo), EnvPath(EnvPath), EnvRoot(..) )
 import Debian.URI ( URI(uriScheme, uriPath), dirFromURI, fileFromURI )
+import Debian.UTF8 as Deb (decode)
+import System.FilePath ((</>))
 import Text.Regex ( mkRegex, splitRegex )
 
 sourceSlices :: SliceList -> SliceList
@@ -59,13 +61,13 @@ repoSources chroot uri =
     do dirs <- liftIO (uriSubdirs chroot (uri {uriPath = uriPath uri ++ "/dists/"}))
        releaseFiles <- mapM (liftIO . readRelease uri) dirs >>= return . catMaybes
        let codenames = map (maybe Nothing (zap (flip elem dirs))) . map (fieldValue "Codename") $ releaseFiles
-           sections = map (maybe Nothing (Just . map parseSection' . splitRegex (mkRegex "[ \t,]+")) . fieldValue "Components") $ releaseFiles
+           sections = map (maybe Nothing (Just . map parseSection' . splitRegex (mkRegex "[ \t,]+") . unpack) . fieldValue "Components") $ releaseFiles
            result = concat $ map sources . nubBy (\ (a, _) (b, _) -> a == b) . zip codenames $ sections
        mapM (verifyDebSource Nothing) result >>= (\ list -> return $ SliceList { slices = list })
     where
       sources (Just codename, Just components@(_ : _)) =
-          [DebSource {sourceType = Deb, sourceUri = uri, sourceDist = Right (parseReleaseName codename, components)},
-           DebSource {sourceType = DebSrc, sourceUri = uri, sourceDist = Right (parseReleaseName codename, components)}]
+          [DebSource {sourceType = Deb, sourceUri = uri, sourceDist = Right (parseReleaseName (unpack codename), components)},
+           DebSource {sourceType = DebSrc, sourceUri = uri, sourceDist = Right (parseReleaseName (unpack codename), components)}]
       sources _ = []
       -- Compute the list of sections for each dist on a remote server.
       zap p x = if p x then Just x else Nothing
@@ -74,24 +76,24 @@ repoSources chroot uri =
 -- list of directories in the dists subdirectory.  Currently
 -- this is only known to work with Apache.  Note that some of
 -- the returned directories may be symlinks.
-uriSubdirs :: (Maybe EnvRoot) -> URI -> IO [String]
+uriSubdirs :: (Maybe EnvRoot) -> URI -> IO [Text]
 uriSubdirs root uri =
-    liftIO (dirFromURI uri') >>= either throw return
+    liftIO (dirFromURI uri') >>= either throw (return . map pack)
     where
       uri' = case uriScheme uri of
                "file:" -> uri {uriPath = maybe "" rootPath root ++ (uriPath uri)}
                _ -> uri
 
-readRelease :: URI -> String -> IO (Maybe Paragraph)
+readRelease :: URI -> Text -> IO (Maybe (Paragraph' Text))
 readRelease uri name =
     do output <- liftIO (fileFromURI uri')
        case output of
          Left e -> throw e
-         Right s -> case parseControl (show uri') (L.unpack s) of
+         Right s -> case parseControl (show uri') (Deb.decode s) of
                       Right (Control [paragraph]) -> return (Just paragraph)
                       _ -> return Nothing
     where
-      uri' = uri {uriPath = uriPath uri ++ "/dists/" ++ name ++ "/Release"}
+      uri' = uri {uriPath = uriPath uri </> "dists" </> unpack name </> "Release"}
 
 parseNamedSliceList :: MonadApt m => (String, String) -> m (Maybe NamedSliceList)
 parseNamedSliceList (name, text) =

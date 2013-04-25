@@ -217,15 +217,14 @@ sourcePackageBinaryIDs arch package =
 -- | Get the contents of a package index
 getPackages :: PackageIndex -> IO (Either SomeException [BinaryPackage])
 getPackages index =
-    liftIO ({- hPutStrLn stderr ("getPackages: index = " ++ show index) >> -}
-            fileFromURIStrict uri' >>= return . either (Left . SomeException) (Right . toLazy) >>= {- showStream >>= -} readControl)
+    fileFromURIStrict uri' >>= return . either (Left . SomeException) Right >>= {- showStream >>= -} readControl
     where
       readControl :: Either SomeException L.ByteString -> IO (Either SomeException [BinaryPackage])
       readControl (Left e) = return (Left e)
       readControl (Right s) =
           try (case controlFromIndex Uncompressed (show uri') s of
                  Left e -> return $ Left (SomeException (ErrorCall (show uri' ++ ": " ++ show e)))
-                 Right (B.Control control) -> return $ Right $ List.map (toBinaryPackage index) control) >>=
+                 Right (B.Control control) -> return (Right $ List.map (toBinaryPackage index) control)) >>=
           return . either (\ (e :: SomeException) -> Left . SomeException . ErrorCall . ((show uri' ++ ":") ++) . show $ e) id
       uri' = uri {uriPath = uriPath uri </> packageIndexPath index}
       uri = repoURI repo

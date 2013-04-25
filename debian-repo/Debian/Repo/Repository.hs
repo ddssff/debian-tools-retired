@@ -14,12 +14,9 @@ import Control.Arrow (second)
 import Control.Exception ( ErrorCall(..), toException )
 import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy as L
-import qualified Data.ByteString as B
--- import qualified Data.ByteString.Char8 as B (concat, ByteString, unpack)
 import Data.List ( sortBy, groupBy, intercalate, isSuffixOf )
 import Data.Maybe ( catMaybes, fromJust )
 import Data.Text as T (Text, unpack)
-import Data.Text.Encoding (decodeUtf8)
 import Data.Time ( NominalDiffTime )
 import qualified Data.Set as Set ( member, fromList )
 import Debian.Arch (Arch, parseArch)
@@ -34,6 +31,7 @@ import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository, looku
 import Debian.Repo.Types ( ReleaseInfo(releaseInfoArchitectures), PkgVersion(..), prettyPkgVersion, Repo(repoReleaseInfo), LocalRepository(repoRoot),
                            Repository(..), EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath )
 import Debian.URI ( URIAuth(uriPort, uriRegName, uriUserInfo), uriToString', URI(uriAuthority, uriScheme, uriPath), dirFromURI, fileFromURI, parseURI )
+import Debian.UTF8 as Deb (decode)
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Extra.Bool ( cond )
 --import Extra.Either ( rightOnly )
@@ -160,7 +158,7 @@ getReleaseInfoRemote uri =
       getReleaseFile distName =
           do qPutStr "."
              release <- fileFromURI releaseURI
-             let control = either Left (either (Left . toException . ErrorCall . show) Right . B.parseControl (show releaseURI) . decodeUtf8 . B.concat . L.toChunks) release
+             let control = either Left (either (Left . toException . ErrorCall . show) Right . B.parseControl (show releaseURI) . Deb.decode) release
              case control of
                Right (B.Control [info :: S.Paragraph' Text]) -> return $ F.File {F.path = F.RemotePath releaseURI, F.text = Success info}
                _ -> error ("Failed to get release info from dist " ++ show (relName distName) ++ ", uri " ++ show releaseURI)

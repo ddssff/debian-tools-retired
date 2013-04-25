@@ -49,19 +49,19 @@ module Debian.Repo.Types
     ) where
 
 --import Control.Monad.Trans (MonadIO)
-import Data.Text (Text)
+import Control.Exception ( throw )
+import Data.Char ( isDigit )
+import Data.Maybe ( fromJust )
+import Data.Text (Text, unpack)
 import Debian.Arch (Arch(..))
 import qualified Debian.Control.Text as B
 import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.URI ( URI(uriPath), URIString, fileFromURI, parseURI )
+import qualified Debian.UTF8 as Deb
 import Debian.Release (Section(..), ReleaseName(..))
 import Debian.Sources ( SliceName(..), DebSource(..), SourceType(..) )
 import Debian.Version ( DebianVersion, prettyDebianVersion )
-import Control.Exception ( throw )
-import qualified Data.ByteString.Lazy.Char8 as L ( unpack )
-import Data.Char ( isDigit )
-import Data.Maybe ( fromJust )
 import System.FilePath ( (</>) )
 import System.Posix.Files (FileStatus)
 import System.Posix.Types ( FileOffset )
@@ -142,7 +142,7 @@ class (Ord t, Eq t) => Repo t where
     repoURI :: t -> URI
     repositoryCompatibilityLevel :: t -> IO (Maybe Int)
     repositoryCompatibilityLevel r =
-        fileFromURI uri' >>= either throw (return . parse . L.unpack)
+        fileFromURI uri' >>= either throw (return . parse . unpack . Deb.decode)
         where
           uri' = uri {uriPath = uriPath uri </> compatibilityFile}
           uri = repoURI r
