@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports, ScopedTypeVariables, StandaloneDeriving #-}
+{-# LANGUAGE PackageImports, ScopedTypeVariables, StandaloneDeriving, TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
 
 import Control.Exception (SomeException)
@@ -31,7 +31,7 @@ import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupSourcePackages, i
 import Debian.Release (releaseName', sectionName')
 import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..),
                            BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..),
-                           Release(releaseName), repoURI', LocalRepository(repoRoot), Repository(LocalRepo),
+                           Release(releaseName), repoURI, LocalRepository(repoRoot), Repository(LocalRepo),
                            EnvRoot(rootPath), outsidePath )
 import Debian.URI ( fileFromURIStrict )
 import Debian.Version ( parseDebianVersion, DebianVersion )
@@ -55,11 +55,11 @@ root = rootEnvPath "/srv/deb/ubuntu"
 main = runAptIO $
     do repo <- prepareLocalRepository root (Just Pool)
        releases <- findReleases repo
-       sources <- mapM (liftIO . releaseSourcePackages) releases >>= return . Set.unions
-       binaries <- mapM (liftIO . releaseBinaryPackages) releases >>= return . Set.unions
+       sources <- mapM (liftIO . releaseSourcePackages . (LocalRepo repo,)) releases >>= return . Set.unions
+       binaries <- mapM (liftIO . releaseBinaryPackages . (LocalRepo repo,)) releases >>= return . Set.unions
        -- requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
        -- return $ mergeReleases (existingReleases ++ requiredReleases)
-       liftIO (hPutStrLn stderr ("rels:\n " ++ intercalate "\n " (List.map (show . snd) releases) ++ "\n\n" ++
+       liftIO (hPutStrLn stderr ("rels:\n " ++ intercalate "\n " (List.map show releases) ++ "\n\n" ++
                                  "source packages:\n " ++ {-intercalate "\n " (List.map show (toList sources))-} show (size sources) ++ "\n\n" ++
                                  "binary packages:\n " ++ {-intercalate "\n " (List.map show (toList binaries))-} show (size binaries) ++ "\n"))
 
@@ -109,7 +109,7 @@ getPackages (repo, release) index =
                  Right (B.Control control) -> return (Right $ List.map (toBinaryPackage (repo, release) index) control)) >>=
           return . either (\ (e :: SomeException) -> Left . SomeException . ErrorCall . ((show uri' ++ ":") ++) . show $ e) id
       uri' = uri {uriPath = uriPath uri </> packageIndexPath release index}
-      uri = repoURI' repo
+      uri = repoURI repo
       toLazy s = L.fromChunks [s]
       --showStream :: Either Exception L.ByteString -> IO (Either Exception L.ByteString)
       --showStream x@(Left e) = hPutStrLn stderr (show uri' ++ " - exception: " ++ show e) >> return x

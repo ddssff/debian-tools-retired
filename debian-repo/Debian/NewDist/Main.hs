@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall -fno-warn-missing-signatures #-}
 -- |Replacement for debpool.  
 module Main where
@@ -9,7 +10,7 @@ import		 Debian.Repo (runAptIO, outsidePath, MonadApt, findReleases, scanIncomin
                               setRepositoryCompatibility, Release(..), prepareRelease,
                               EnvPath(EnvPath), EnvRoot(EnvRoot), parseArchitectures,
                               Layout(Pool, Flat), showErrors, mergeReleases, deleteSourcePackages,
-                              PackageID, makeBinaryPackageID, PackageIndex(PackageIndex), Repository)
+                              PackageID, makeBinaryPackageID, PackageIndex(PackageIndex), Repository(LocalRepo))
 import		 Debian.Config (ParamDescr(..), option)
 import		 Control.Monad
 import		 Data.Maybe
@@ -239,7 +240,7 @@ runFlags flags =
        releases <- findReleases repo
        -- Get the Repository object, this will certainly be a singleton list.
        --let repos = nub $ map releaseRepo releases
-       _ <- liftIO (deletePackages releases flags keyname)
+       _ <- liftIO (deletePackages repo releases flags keyname)
        --vPutStrBl 1 IO.stderr $ "newdist " ++ show (root flags)
        --vPutStrBl 1 IO.stderr $ "signRepository=" ++ show signRepository
        --io $ exitWith ExitSuccess
@@ -249,10 +250,10 @@ runFlags flags =
                      \ (ok, errors) -> (liftIO (sendEmails senderAddr emailAddrs (map (successEmail repo) ok)) >>
                                         liftIO (sendEmails senderAddr emailAddrs (map (\ (changes, e) -> failureEmail changes e) errors)) >>
                                         liftIO (exitOnError (map snd errors))))
-       when (expire flags)  $ liftIO (deleteTrumped keyname releases) >> return ()
+       when (expire flags)  $ liftIO (deleteTrumped keyname repo releases) >> return ()
        when (cleanUp flags) $ deleteGarbage repo >> return ()
        -- This flag says sign even if nothing changed
-       when (signRepo flags) $ liftIO (signReleases keyname releases)
+       when (signRepo flags) $ liftIO (signReleases keyname (map (LocalRepo repo,) releases))
     where
 {-
       findReleaseByName :: [Release] -> ReleaseName -> Maybe Release
@@ -308,48 +309,48 @@ createReleases flags =
        rels <- findReleases repo
        mapM_ (createRelease repo (archList flags)) (map parseReleaseName . releases $ flags)
        mapM_ (createAlias repo) (aliases flags)
-       mapM_ (createSectionOfRelease rels repo) (sections flags)
+       mapM_ (createSectionOfRelease repo rels) (sections flags)
     where
-      createSectionOfRelease releases repo arg =
+      createSectionOfRelease repo releases arg =
           case break (== ',') arg of
             (rel, ',' : sectName) ->
-                case filter (\ (repo, release) -> releaseName release == parseReleaseName rel) releases of
+                case filter (\ release -> releaseName release == parseReleaseName rel) releases of
                   [release] -> createSection repo release (parseSection' sectName)
                   [] -> error $ "createReleases: Invalid release name: " ++ rel
                   _ -> error "Internal error 1"
             _ ->
                 error $ "Invalid argument to --create-section: " ++ arg
-      createSection :: MonadApt m => LocalRepository -> (Repository, Release) -> Section -> m (Repository, Release)
-      createSection repo (repo', release) section' =
+      createSection :: MonadApt m => LocalRepository -> Release -> Section -> m Release
+      createSection repo release section' =
           case filter ((==) section') (releaseComponents release) of
             [] -> prepareRelease repo (releaseName release) (releaseAliases release)
                     (releaseComponents release ++ [section'])  (releaseArchitectures release)
-            _ -> return (repo', release)
+            _ -> return release
 
 root flags = EnvPath (EnvRoot "") (rootParam flags)
 
 archList flags = maybe defaultArchitectures (parseArchitectures . pack) $ architectures flags
 
-createRelease :: MonadApt m => LocalRepository -> [Arch] -> ReleaseName -> m (Repository, Release)
+createRelease :: MonadApt m => LocalRepository -> [Arch] -> ReleaseName -> m Release
 createRelease repo archList' name =
     do releases <- findReleases repo
-       case filter (\ (repo', release) -> elem name (releaseName release : releaseAliases release)) releases of
+       case filter (\ release -> elem name (releaseName release : releaseAliases release)) releases of
          [] -> prepareRelease repo name [] [parseSection' "main"] archList'
          [release] -> return release
          _ -> error "Internal error 2"
 
-createAlias :: MonadApt m => LocalRepository -> String -> m (Repository, Release)
+createAlias :: MonadApt m => LocalRepository -> String -> m Release
 createAlias repo arg =
     case break (== '=') arg of
       (rel, ('=' : alias)) ->
           do releases <- findReleases repo
-             case filter ((==) (parseReleaseName rel) . releaseName . snd) releases of
+             case filter ((==) (parseReleaseName rel) . releaseName) releases of
                [] -> error $ "Attempt to create alias in non-existant release: " ++ rel
-               [(repo', release)] -> 
+               [release] -> 
                    case elem (parseReleaseName alias) (releaseAliases release) of
                      False -> prepareRelease repo (parseReleaseName rel) (releaseAliases release ++ [parseReleaseName alias])
                                (releaseComponents release) (releaseArchitectures release)
-                     True -> return (repo', release)
+                     True -> return release
                _ -> error $ "Internal error 3"
       _ -> error $ "Invalid argument to --create-alias: " ++ arg
 
@@ -367,14 +368,14 @@ getReleases root' layout' dists section' archList' =
     do repo <- prepareLocalRepository root' layout'
        existingReleases <- findReleases repo
        requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
-       return $ mergeReleases (existingReleases ++ requiredReleases)
+       return $ mergeReleases (LocalRepo repo) (existingReleases ++ requiredReleases)
 
-deletePackages releases flags keyname =
-    deleteSourcePackages keyname toRemove
+deletePackages repo releases flags keyname =
+    deleteSourcePackages keyname repo toRemove
     where
-      toRemove :: [((Repository, Release), PackageIndex, PackageID BinPkgName)]
+      toRemove :: [(Release, PackageIndex, PackageID BinPkgName)]
       toRemove = map parsePackage $ removePackages flags
-      parsePackage :: String -> ((Repository, Release), PackageIndex, PackageID BinPkgName)
+      parsePackage :: String -> (Release, PackageIndex, PackageID BinPkgName)
       -- Parse a string in the form <dist>,<packagename>=<versionnumber>
       parsePackage s =
           case splitRegex (mkRegex "[,=]") s of
@@ -385,9 +386,9 @@ deletePackages releases flags keyname =
                                      makeBinaryPackageID name (parseDebianVersion ver)))
                       (findReleaseByName (parseReleaseName dist)) 
             x -> error ("Invalid remove spec: " ++ show x)
-      findReleaseByName :: ReleaseName -> Maybe (Repository, Release)
+      findReleaseByName :: ReleaseName -> Maybe Release
       findReleaseByName dist =
-          case filter (\ (repo, release) -> releaseName release == dist) releases of
+          case filter (\ release -> releaseName release == dist) releases of
             [] -> Nothing
             [release] -> (Just release)
             _ -> error ("Multiple releases with name " ++ releaseName' dist)

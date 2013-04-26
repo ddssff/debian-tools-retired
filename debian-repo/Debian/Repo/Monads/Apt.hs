@@ -70,7 +70,7 @@ type AptIO = AptIOT IO
 data AptState
     = AptState
       { repoMap :: Map.Map RepoKey Repository		-- ^ Map to look up known Repository objects
-      , releaseMap :: Map.Map (RepoKey, ReleaseName) (Repository, Release) -- ^ Map to look up known Release objects
+      , releaseMap :: Map.Map (RepoKey, ReleaseName) Release -- ^ Map to look up known Release objects
       , aptImageMap :: Map.Map SliceName AptImage	-- ^ Map to look up prepared AptImage objects
       , sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
       , binaryPackageMap :: Map.Map FilePath (FileStatus, [BinaryPackage])
@@ -160,11 +160,11 @@ readParagraphs path =
        --IO.hPutStrLn IO.stderr ("OSImage.paragraphsFromFile " ++ path ++ " done.")	-- Debugging output
        return paragraphs
 
-findRelease :: Repository -> ReleaseName -> AptState -> Maybe (Repository, Release)
+findRelease :: Repository -> ReleaseName -> AptState -> Maybe Release
 findRelease repo dist state =
     Map.lookup (repoKey repo, dist) (releaseMap state)
 
-putRelease :: Repository -> ReleaseName -> (Repository, Release) -> AptState -> AptState
+putRelease :: Repository -> ReleaseName -> Release -> AptState -> AptState
 putRelease repo dist release state =
     state {releaseMap = Map.insert (repoKey repo, dist) release (releaseMap state)}
 

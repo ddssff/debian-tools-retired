@@ -36,21 +36,21 @@ import System.FilePath ( (</>) )
 import System.Process.Progress (qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-lookupRelease :: MonadApt m => Repository -> ReleaseName -> m (Maybe (Repository, Release))
+lookupRelease :: MonadApt m => Repository -> ReleaseName -> m (Maybe Release)
 lookupRelease repo dist = getApt >>= return . findRelease repo dist
 
-insertRelease :: MonadApt m => (Repository, Release) -> m (Repository, Release)
+insertRelease :: MonadApt m => (Repository, Release) -> m Release
 insertRelease (repo, release) =
-    getApt >>= putApt . putRelease repo dist (repo, release) >> return (repo, release)
+    getApt >>= putApt . putRelease repo dist release >> return release
     where dist = releaseName release
 
 -- | Find or create a (local) release.
-prepareRelease :: MonadApt m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> m (Repository, Release)
+prepareRelease :: MonadApt m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> m Release
 prepareRelease repo dist aliases sections archList =
     -- vPutStrLn 0 ("prepareRelease " ++ name ++ ": " ++ show repo ++ " sections " ++ show sections) >>
     lookupRelease (LocalRepo repo) dist >>= maybe prepare (const prepare) -- return -- JAS - otherwise --create-section does not do anything
     where
-      prepare :: MonadApt m => m (Repository, Release)
+      prepare :: MonadApt m => m Release
       prepare =
           do -- FIXME: errors get discarded in the mapM calls here
 	     let release = Release { releaseName = dist
@@ -160,30 +160,28 @@ pad padchar padlen s = replicate p padchar ++ s
     where p = padlen - length s
 
 -- Merge a list of releases so each dist only appears once
-mergeReleases :: [(Repository, Release)] -> [(Repository, Release)]
-mergeReleases releases =
-    map (merge repos) . groupBy (==) . sortBy compare $ releases
+mergeReleases :: Repository -> [Release] -> [Release]
+mergeReleases repo releases =
+    map merge releases
     where
-      repos = nub (map fst releases)
-      merge [repo] releases =
-          let aliases = map head . group . sort . concat . map (releaseAliases . snd) $ releases
-              components = map head . group . sort . concat . map (releaseComponents . snd) $ releases
-              architectures = map head . group . sort . concat . map (releaseArchitectures . snd) $ releases in
-          (repo, Release { releaseName = (releaseName . snd . head $ releases)
-                         , releaseAliases = aliases
-                         , releaseComponents = components
-                         , releaseArchitectures = architectures })
-      merge _ _ = error "Cannot merge releases from different repositories"
+      merge release =
+          Release { releaseName = (releaseName . head $ releases)
+                  , releaseAliases = aliases
+                  , releaseComponents = components
+                  , releaseArchitectures = architectures }
+      aliases = map head . group . sort . concat . map releaseAliases $ releases
+      components = map head . group . sort . concat . map releaseComponents $ releases
+      architectures = map head . group . sort . concat . map releaseArchitectures $ releases
 
 -- | Find all the releases in a repository.
-findReleases :: MonadApt m => LocalRepository -> m [(Repository, Release)]
+findReleases :: MonadApt m => LocalRepository -> m [Release]
 findReleases repo@(LocalRepository _ _ releases) = mapM (findLocalRelease repo) releases
 
-findLocalRelease :: MonadApt m => LocalRepository -> Release -> m (Repository, Release)
+findLocalRelease :: MonadApt m => LocalRepository -> Release -> m Release
 findLocalRelease repo releaseInfo =
     lookupRelease (LocalRepo repo) dist >>= maybe readRelease return
     where
-      readRelease :: MonadApt m => m (Repository, Release)
+      readRelease :: MonadApt m => m Release
       readRelease =
           do let path = (outsidePath (repoRoot repo) <> "/dists/" <> releaseName' dist <> "/Release")
              info <- liftIO $ S.parseControlFromFile path

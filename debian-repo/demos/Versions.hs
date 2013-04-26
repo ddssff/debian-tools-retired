@@ -3,13 +3,11 @@
 -- |Print the available version numbers of a package.
 module Main where
 
-import Control.Exception (throw)
 import Control.Monad.Trans
 import Data.Maybe
 import Debian.Arch (Arch(Binary), ArchCPU(..), ArchOS(..))
 import Debian.Repo.Monads.Apt (MonadApt, runAptT)
-import Debian.Repo.PackageIndex
-import Debian.Repo.Package
+--import Debian.Repo.PackageIndex
 import Debian.Repo.Release
 import Debian.Repo.Repository
 import Debian.Repo.Types
@@ -22,7 +20,7 @@ main' :: MonadApt m => m ()
 main' =
     do repo <- prepareRepository (fromJust (parseURI uri))
        releases <- mapM insertRelease (map (repo,) (repoReleaseInfo repo))
-       let binaryIndexes = map (filter (\ i -> packageIndexArch i == arch)) (map (binaryIndexList . snd) releases)
+       -- let binaryIndexes = map (filter (\ i -> packageIndexArch i == arch)) (map binaryIndexList releases)
        -- _binaryPackages <- mapM (packageLists release) binaryIndexes
        liftIO (putStrLn ("\n" ++ show releases))
 {-
