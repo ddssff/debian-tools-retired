@@ -24,14 +24,14 @@ packageIndexName index =
       Source -> "Sources"
       _ -> "Packages"
 
-packageIndexPath :: PackageIndex -> FilePath
-packageIndexPath index = packageIndexDir index ++ "/" ++ packageIndexName index
+packageIndexPath :: Release -> PackageIndex -> FilePath
+packageIndexPath release index = packageIndexDir release index ++ "/" ++ packageIndexName index
 
-packageIndexDir :: PackageIndex -> FilePath
-packageIndexDir index =
+packageIndexDir :: Release -> PackageIndex -> FilePath
+packageIndexDir release index =
     case packageIndexArch index of
-      Source -> releaseDir (packageIndexRelease index) ++ "/" ++ sectionName' (packageIndexComponent index) ++ "/source"
-      _ -> (releaseDir (packageIndexRelease index) ++ "/" ++
+      Source -> releaseDir release ++ "/" ++ sectionName' (packageIndexComponent index) ++ "/source"
+      _ -> (releaseDir release ++ "/" ++
             sectionName' (packageIndexComponent index) ++
             -- Will prettyArch give us linux-amd64 when we just want amd64?
             "/binary-" ++ show (prettyArch (packageIndexArch index)))
@@ -40,10 +40,10 @@ releaseDir :: Release -> String
 releaseDir release = "dists/" ++ (releaseName' . releaseName $ release)
 
 packageIndexPathList :: Release -> [FilePath]
-packageIndexPathList release = map packageIndexPath . packageIndexList $ release
+packageIndexPathList release = map (packageIndexPath release) . packageIndexList $ release
 
 packageIndexDirList :: Release -> [FilePath]
-packageIndexDirList release = map packageIndexDir . packageIndexList $ release
+packageIndexDirList release = map (packageIndexDir release) . packageIndexList $ release
 
 packageIndexList :: Release -> [PackageIndex]
 packageIndexList release = sourceIndexList release ++ binaryIndexList release
@@ -51,8 +51,7 @@ packageIndexList release = sourceIndexList release ++ binaryIndexList release
 sourceIndexList :: Release -> [PackageIndex]
 sourceIndexList release =
     map componentIndex (releaseComponents release)
-    where componentIndex component = PackageIndex { packageIndexRelease = release
-                                                  , packageIndexComponent = component
+    where componentIndex component = PackageIndex { packageIndexComponent = component
                                                   , packageIndexArch = Source }
 
 binaryIndexList :: Release -> [PackageIndex]
@@ -64,20 +63,18 @@ binaryIndexList release =
           map archIndex (filter (/= Source) (releaseArchitectures release))
           where
             --archIndex :: Arch -> PackageIndex
-            archIndex arch = PackageIndex { packageIndexRelease = release
-                                          , packageIndexComponent = component
+            archIndex arch = PackageIndex { packageIndexComponent = component
                                           , packageIndexArch = arch }
 
-showIndexBrief :: PackageIndex -> String
-showIndexBrief index =
+showIndexBrief :: Release -> PackageIndex -> String
+showIndexBrief release index =
     (releaseName' . releaseName $ release) </> sectionName' (packageIndexComponent index) </> showArch (packageIndexArch index)
-    where release = packageIndexRelease index
-          showArch Source = "source"
+    where showArch Source = "source"
           showArch All = "all"
           showArch x@(Binary _ _) = "binary-" ++ show (prettyArch x)
 
-debSourceFromIndex :: PackageIndex -> DebSource
-debSourceFromIndex index =
+debSourceFromIndex :: Release -> PackageIndex -> DebSource
+debSourceFromIndex release index =
     DebSource {sourceType = typ,
                sourceUri = repoURI repo,
                sourceDist = Right (dist, components)}
@@ -87,4 +84,3 @@ debSourceFromIndex index =
       dist = releaseName release
       components = releaseComponents release
       repo = releaseRepo release
-      release = packageIndexRelease index

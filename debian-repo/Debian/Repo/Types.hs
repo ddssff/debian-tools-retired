@@ -328,8 +328,7 @@ instance Pretty SliceList where
 -- specify an architecture, the architecture here is that of
 -- the environment where the package information is cached.
 data PackageIndex
-    = PackageIndex { packageIndexRelease :: Release
-                   , packageIndexComponent :: Section
+    = PackageIndex { packageIndexComponent :: Section
                    , packageIndexArch :: Arch
                    } deriving (Eq, Ord, Show)
 

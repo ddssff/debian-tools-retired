@@ -22,7 +22,7 @@ import Debian.Arch (Arch(..), prettyArch)
 import qualified Debian.Control.Text as S ( Field'(Field), Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
 import Debian.Release (Section, ReleaseName, releaseName', sectionName')
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), findRelease, putRelease )
-import Debian.Repo.Types ( PackageIndex(packageIndexArch, packageIndexComponent, packageIndexRelease), Release(..), ReleaseInfo(..),
+import Debian.Repo.Types ( PackageIndex(packageIndexArch, packageIndexComponent), Release(..), ReleaseInfo(..),
                            LocalRepository(LocalRepository, repoLayout, repoRoot), Repository(LocalRepo), outsidePath )
 import Debian.Repo.LocalRepository ( prepareLocalRepository, parseComponents, parseArchitectures )
 import Debian.Repo.PackageIndex ( packageIndexName, packageIndexDir, releaseDir, packageIndexList )
@@ -59,7 +59,7 @@ prepareRelease repo dist aliases sections archList =
                                                                  , releaseInfoComponents = sections
                                                                  , releaseInfoArchitectures = archList })
              -- vPutStrLn 0 ("packageIndexList: " ++ show (packageIndexList release))
-             _ <- mapM (initIndex (outsidePath root)) (packageIndexList release)
+             _ <- mapM (initIndex (outsidePath root) release) (packageIndexList release)
              mapM_ (initAlias (outsidePath root) dist) aliases
              _ <- liftIO (writeRelease release)
 	     -- This ought to be identical to repo, but the layout should be
@@ -68,7 +68,7 @@ prepareRelease repo dist aliases sections archList =
              let release' = release { releaseRepo = LocalRepo repo' }
              --vPutStrLn 0 $ "prepareRelease: prepareLocalRepository -> " ++ show repo'
              insertRelease release'
-      initIndex root' index = initIndexFile (root' </> packageIndexDir index) (packageIndexName index)
+      initIndex root' release index = initIndexFile (root' </> packageIndexDir release index) (packageIndexName index)
       initIndexFile dir name =
           do liftIO $ createDirectoryIfMissing True dir
              liftIO $ setFileMode dir 0o040755
@@ -110,24 +110,24 @@ writeRelease release@(Release {releaseRepo = LocalRepo repo}) =
        return (masterReleaseFile : indexReleaseFiles)
     where
       writeIndexReleases root release =
-          mapM (writeIndex root) (packageIndexList release)
+          mapM (writeIndex root release) (packageIndexList release)
       -- It should only be necessary to write these when the component
       -- is created, not every time the index files are changed.  But
       -- for now we're doing it anyway.
-      writeIndex root index =
+      writeIndex root release index =
           do let para =
                      S.Paragraph
-                          [S.Field ("Archive", pack . releaseName' . releaseInfoName . releaseInfo . packageIndexRelease $ index),
+                          [S.Field ("Archive", pack . releaseName' . releaseInfoName . releaseInfo $ release),
                            S.Field ("Component", pack $ sectionName' (packageIndexComponent index)),
                            S.Field ("Architecture", pack $ show (prettyArch (packageIndexArch index))),
                            S.Field ("Origin", " SeeReason Partners LLC"),
                            S.Field ("Label", " SeeReason")] :: S.Paragraph' Text
-             let path = packageIndexDir index ++ "/Release"
+             let path = packageIndexDir release index ++ "/Release"
              EF.maybeWriteFile (root </> path) (show (pretty para))
              return path
       writeMasterRelease :: FilePath -> Release -> IO FilePath
       writeMasterRelease root release =
-          do let paths = concat . map indexPaths $ (packageIndexList release)
+          do let paths = concat . map (indexPaths release) $ (packageIndexList release)
              (paths', sums,sizes) <- 
                  liftIO (EG.cd root
                          (do paths' <- filterM doesFileExist paths
@@ -149,10 +149,10 @@ writeRelease release@(Release {releaseRepo = LocalRepo repo}) =
              let path = "dists/" ++ (releaseName' . releaseInfoName . releaseInfo $ release) ++ "/Release"
              liftIO $ EF.maybeWriteFile (root </> path) (show (pretty para))
              return path
-      indexPaths index | packageIndexArch index == Source =
-          map ((packageIndexDir index) </>) ["Sources", "Sources.gz", "Sources.bz2", "Sources.diff/Index", "Release"]
-      indexPaths index =
-          map ((packageIndexDir index) </>) ["Packages", "Packages.gz", "Packages.bz2", "Packages.diff/Index", "Release"]
+      indexPaths release index | packageIndexArch index == Source =
+          map ((packageIndexDir release index) </>) ["Sources", "Sources.gz", "Sources.bz2", "Sources.diff/Index", "Release"]
+      indexPaths release index =
+          map ((packageIndexDir release index) </>) ["Packages", "Packages.gz", "Packages.bz2", "Packages.diff/Index", "Release"]
       formatFileInfo fw sum size name = Data.List.intercalate " " $ ["",sum, pad ' ' fw $ show size, name]
       fieldWidth = ceiling . (logBase (10 :: Double)) . fromIntegral . maximum
 writeRelease _release = error $ "Attempt to write release files to non-local repository"

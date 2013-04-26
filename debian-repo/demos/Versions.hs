@@ -22,18 +22,18 @@ main' =
     do repo <- prepareRepository (fromJust (parseURI uri))
        releases <- mapM insertRelease (map (Release repo) (repoReleaseInfo repo))
        let binaryIndexes = map (filter (\ i -> packageIndexArch i == arch)) (map binaryIndexList releases)
-       _binaryPackages <- mapM packageLists binaryIndexes
+       -- _binaryPackages <- mapM (packageLists release) binaryIndexes
        liftIO (putStrLn ("\n" ++ show releases))
 {-
     where
       insert repo info = insertRelease repo 
 -}
 
-packageLists :: MonadApt m => [PackageIndex] -> m [[BinaryPackage]]
-packageLists indexes = mapM packages indexes
+-- packageLists :: MonadApt m => Release -> [PackageIndex] -> m [[BinaryPackage]]
+-- packageLists release indexes = mapM (packages release) indexes
 
-packages :: MonadApt m => PackageIndex -> m [BinaryPackage]
-packages index = liftIO (binaryPackagesOfIndex index) >>= return . either throw id
+-- packages :: MonadApt m => Release -> PackageIndex -> m [BinaryPackage]
+-- packages release index = liftIO (binaryPackagesOfIndex release index) >>= return . either throw id
 
 uri = "http://deb.seereason.com/ubuntu/"
 arch = Binary (ArchOS "linux") (ArchCPU "i386")

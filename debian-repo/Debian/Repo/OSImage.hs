@@ -132,12 +132,12 @@ repoCD path repo = repo { repoRoot = path }
 
 getSourcePackages :: MonadApt m => OSImage -> m [SourcePackage]
 getSourcePackages os =
-    mapM (sourcePackagesOfIndex' os) indexes >>= return . concat
+    mapM (uncurry (sourcePackagesOfIndex' os)) indexes >>= return . concat
     where indexes = concat . map (sliceIndexes os) . slices . sourceSlices . aptSliceList $ os
 
 getBinaryPackages :: MonadApt m => OSImage -> m [BinaryPackage]
 getBinaryPackages os =
-    mapM (binaryPackagesOfIndex' os) indexes >>= return . concat
+    mapM (uncurry (binaryPackagesOfIndex' os)) indexes >>= return . concat
     where indexes = concat . map (sliceIndexes os) . slices . binarySlices . aptSliceList $ os
 
 data UpdateError

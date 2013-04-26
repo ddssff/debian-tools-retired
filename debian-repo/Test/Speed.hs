@@ -66,7 +66,7 @@ main = runAptIO $
 -- | Return a list of all source packages.
 releaseSourcePackages :: Release -> IO (Set SourcePackage)
 releaseSourcePackages release =
-    mapM sourcePackagesOfIndex (sourceIndexList release) >>= return . test
+    mapM (sourcePackagesOfIndex release) (sourceIndexList release) >>= return . test
     where
       test :: [Either SomeException [SourcePackage]] -> Set SourcePackage
       test xs = case partitionEithers xs of
@@ -76,29 +76,29 @@ releaseSourcePackages release =
 -- | Return a list of all the binary packages for all supported architectures.
 releaseBinaryPackages :: Release -> IO (Set BinaryPackage)
 releaseBinaryPackages release =
-    mapM binaryPackagesOfIndex (binaryIndexList release) >>= return . test
+    mapM (binaryPackagesOfIndex release) (binaryIndexList release) >>= return . test
     where
       test xs = case partitionEithers xs of
                   ([], ok) -> Set.unions (List.map Set.fromList ok)
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Get the contents of a package index
-sourcePackagesOfIndex :: PackageIndex -> IO (Either SomeException [SourcePackage])
-sourcePackagesOfIndex index =
+sourcePackagesOfIndex :: Release -> PackageIndex -> IO (Either SomeException [SourcePackage])
+sourcePackagesOfIndex release index =
     case packageIndexArch index of
-      Source -> getPackages index >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
+      Source -> getPackages release index >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
       _ -> return (Right [])
 
 -- | Get the contents of a package index
-binaryPackagesOfIndex :: PackageIndex -> IO (Either SomeException [BinaryPackage])
-binaryPackagesOfIndex index =
+binaryPackagesOfIndex :: Release -> PackageIndex -> IO (Either SomeException [BinaryPackage])
+binaryPackagesOfIndex release index =
     case packageIndexArch index of
       Source -> return (Right [])
-      _ -> getPackages index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
+      _ -> getPackages release index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
 
 -- | Get the contents of a package index
-getPackages :: PackageIndex -> IO (Either SomeException [BinaryPackage])
-getPackages index =
+getPackages :: Release -> PackageIndex -> IO (Either SomeException [BinaryPackage])
+getPackages release index =
     fileFromURIStrict uri' >>= return . either (Left . SomeException) Right >>= {- showStream >>= -} readControl
     where
       readControl :: Either SomeException L.ByteString -> IO (Either SomeException [BinaryPackage])
@@ -106,12 +106,11 @@ getPackages index =
       readControl (Right s) =
           try (case controlFromIndex Uncompressed (show uri') s of
                  Left e -> return $ Left (SomeException (ErrorCall (show uri' ++ ": " ++ show e)))
-                 Right (B.Control control) -> return (Right $ List.map (toBinaryPackage index) control)) >>=
+                 Right (B.Control control) -> return (Right $ List.map (toBinaryPackage release index) control)) >>=
           return . either (\ (e :: SomeException) -> Left . SomeException . ErrorCall . ((show uri' ++ ":") ++) . show $ e) id
-      uri' = uri {uriPath = uriPath uri </> packageIndexPath index}
+      uri' = uri {uriPath = uriPath uri </> packageIndexPath release index}
       uri = repoURI repo
       repo = releaseRepo release
-      release = packageIndexRelease index
       toLazy s = L.fromChunks [s]
       --showStream :: Either Exception L.ByteString -> IO (Either Exception L.ByteString)
       --showStream x@(Left e) = hPutStrLn stderr (show uri' ++ " - exception: " ++ show e) >> return x
@@ -170,8 +169,8 @@ parseSourceParagraph p =
                   , homepage = fmap stripWS $ B.fieldValue "Homepage" p })
       _x -> Left ["parseSourceParagraph - One or more required fields (Package, Maintainer, Standards-Version) missing: " ++ show p]
 
-toBinaryPackage :: PackageIndex -> B.Paragraph -> BinaryPackage
-toBinaryPackage index p =
+toBinaryPackage :: Release -> PackageIndex -> B.Paragraph -> BinaryPackage
+toBinaryPackage release index p =
     case (B.fieldValue "Package" p, B.fieldValue "Version" p) of
       (Just name, Just version) ->
           BinaryPackage 
@@ -183,7 +182,7 @@ toBinaryPackage index p =
           , pReplaces =  tryParseRel $ B.lookupP "Replaces" p
           , pProvides =  tryParseRel $ B.lookupP "Provides" p
           }
-      _ -> error ("Invalid data in source index:\n " ++ packageIndexPath index)
+      _ -> error ("Invalid data in source index:\n " ++ packageIndexPath release index)
 
 tryParseRel :: Maybe B.Field -> B.Relations
 tryParseRel (Just (B.Field (_, relStr))) = either (error . show) id (B.parseRelations relStr)
