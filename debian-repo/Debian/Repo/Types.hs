@@ -53,7 +53,7 @@ import Debian.Arch (Arch(..))
 import qualified Debian.Control.Text as B
 import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
-import Debian.URI ( URI(uriPath), fileFromURI, parseURI )
+import Debian.URI ( URI'(..), URI(uriPath), fileFromURI, parseURI )
 import qualified Debian.UTF8 as Deb
 import Debian.Release (Section(..), ReleaseName(..))
 import Debian.Sources ( SliceName(..), DebSource(..), SourceType(..) )
@@ -96,9 +96,9 @@ rootEnvPath s = EnvPath { envRoot = EnvRoot "", envPath = s }
 --data Repository = forall a. (Repo a) => Repository a
 data Repository
     = LocalRepo LocalRepository
-    | VerifiedRepo URI [Release]
-    | UnverifiedRepo URI
-    deriving (Show)
+    | VerifiedRepo URI' [Release]
+    | UnverifiedRepo URI'
+    deriving (Show, Read)
 
 instance Ord Repository where
     compare a b = compare (repoURI a) (repoURI b)
@@ -119,8 +119,8 @@ data Layout = Flat | Pool deriving (Eq, Ord, Read, Show)
 
 instance Repo Repository where
     repoURI (LocalRepo (LocalRepository path _ _)) = fromJust . parseURI $ "file://" ++ envPath path
-    repoURI (VerifiedRepo uri _) = uri
-    repoURI (UnverifiedRepo uri) = uri
+    repoURI (VerifiedRepo (URI' uri) _) = uri
+    repoURI (UnverifiedRepo (URI' uri)) = uri
     repoReleaseInfo (LocalRepo (LocalRepository _ _ info)) = info
     repoReleaseInfo (VerifiedRepo _ info) = info
     repoReleaseInfo (UnverifiedRepo _uri) = error "No release info for unverified repository"

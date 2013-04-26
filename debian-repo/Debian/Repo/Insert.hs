@@ -42,12 +42,12 @@ import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, binaryPackag
                            BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
                            PackageVersion(pkgVersion), Release(releaseAliases, releaseComponents, releaseName),
                            Layout(..), LocalRepository(LocalRepository, repoLayout, repoRoot), Repository(..), EnvPath, outsidePath, Release(..))
+import Debian.URI (URI'(..))
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Debian.Version.Text ()
 import Extra.GPGSign ( PGPKey )
 import Extra.Files ( writeAndZipFileWithBackup )
 import Extra.Misc ( listDiff )
-import Network.URI (URI)
 import System.FilePath ( splitFileName, (</>) )
 import System.Directory ( createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getDirectoryContents, removeFile, renameFile )
 import System.Exit ( ExitCode(..) )
@@ -686,8 +686,8 @@ instance F.Pretty (Repository, Release) where
     pretty (repo, r) = cat [F.pretty repo, text " ", F.pretty r]
 
 -- | URI has a bogus show function
-instance F.Pretty URI where
-    pretty = text . show
+instance F.Pretty URI' where
+    pretty = text . show . unURI
 
 instance F.Pretty Repository where
     pretty (LocalRepo r) = text $ outsidePath (repoRoot r)
