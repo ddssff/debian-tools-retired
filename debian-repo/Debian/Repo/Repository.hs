@@ -29,7 +29,7 @@ import Debian.Release (ReleaseName(..), parseReleaseName, releaseName')
 import Debian.Repo.Changes ( findChangesFiles, key, path )
 import Debian.Repo.LocalRepository ( prepareLocalRepository, makeReleaseInfo )
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository, lookupRepository )
-import Debian.Repo.Types ( ReleaseInfo(releaseInfoArchitectures), PkgVersion(..), prettyPkgVersion, Repo(repoReleaseInfo), LocalRepository(repoRoot),
+import Debian.Repo.Types ( Release(..), PkgVersion(..), prettyPkgVersion, Repo(repoReleaseInfo), LocalRepository(repoRoot),
                            Repository(..), EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath )
 import Debian.URI ( URIAuth(uriPort, uriRegName, uriUserInfo), uriToString', URI(uriAuthority, uriScheme, uriPath), dirFromURI, fileFromURI, parseURI )
 import Debian.UTF8 as Deb (decode)
@@ -141,7 +141,7 @@ verifyRepository x = return x
 --      writeCache pairs = writeFile (show pairs) cachePath
 
 -- |Get the list of releases of a remote repository.
-getReleaseInfoRemote :: URI -> IO [ReleaseInfo]
+getReleaseInfoRemote :: URI -> IO [Release]
 getReleaseInfoRemote uri =
     qPutStr ("(verifying " ++ uriToString' uri ++ ".") >>
     quieter 2 (dirFromURI distsURI) >>=
@@ -156,7 +156,7 @@ getReleaseInfoRemote uri =
              let releasePairs = zip3 (map getSuite releaseFiles) releaseFiles dists
              return $ map (uncurry3 getReleaseInfo) releasePairs
       releaseNameField releaseFile = case fmap T.unpack (B.fieldValue "Origin" releaseFile) of Just "Debian" -> "Codename"; _ -> "Suite"
-      getReleaseInfo :: Maybe Text -> (F.File B.Paragraph) -> ReleaseName -> Maybe ReleaseInfo
+      getReleaseInfo :: Maybe Text -> (F.File B.Paragraph) -> ReleaseName -> Maybe Release
       getReleaseInfo Nothing _ _ = Nothing
       getReleaseInfo (Just dist) _ relname | (parseReleaseName (T.unpack dist)) /= relname = Nothing
       getReleaseInfo (Just dist) info _ = Just $ makeReleaseInfo info (parseReleaseName (T.unpack dist)) []
@@ -392,4 +392,4 @@ ignore result _ = result
 
 repoArchList :: Repo r => r -> [Arch]
 repoArchList repo =
-    listIntersection (map releaseInfoArchitectures (repoReleaseInfo repo))
+    listIntersection (map releaseArchitectures (repoReleaseInfo repo))

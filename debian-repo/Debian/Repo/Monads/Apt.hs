@@ -42,7 +42,7 @@ import qualified Data.Map as Map (Map, insert, empty, lookup)
 import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), ControlFunctions(parseControlFromHandle) )
 import Debian.Release (ReleaseName)
 import Debian.Sources (SliceName)
-import Debian.Repo.Types ( AptImage, SourcePackage, BinaryPackage, Release, Repo(repoURI), Repository )
+import Debian.Repo.Types ( AptImage, SourcePackage, BinaryPackage, Release', Repo(repoURI), Repository )
 import Debian.URI ( URI )
 import qualified System.IO as IO ( IOMode(ReadMode), hClose, openBinaryFile )
 import System.Posix.Files ( FileStatus, deviceID, fileID, modificationTime )
@@ -71,7 +71,7 @@ type AptIO = AptIOT IO
 data AptState
     = AptState
       { repoMap :: Map.Map URI Repository		-- ^ Map to look up known Repository objects
-      , releaseMap :: Map.Map (URI, ReleaseName) Release -- ^ Map to look up known Release objects
+      , releaseMap :: Map.Map (URI, ReleaseName) Release' -- ^ Map to look up known Release objects
       , aptImageMap :: Map.Map SliceName AptImage	-- ^ Map to look up prepared AptImage objects
       , sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
       , binaryPackageMap :: Map.Map FilePath (FileStatus, [BinaryPackage])
@@ -161,11 +161,11 @@ readParagraphs path =
        --IO.hPutStrLn IO.stderr ("OSImage.paragraphsFromFile " ++ path ++ " done.")	-- Debugging output
        return paragraphs
 
-findRelease :: Repository -> ReleaseName -> AptState -> Maybe Release
+findRelease :: Repository -> ReleaseName -> AptState -> Maybe Release'
 findRelease repo dist state =
     Map.lookup (repoURI repo, dist) (releaseMap state)
 
-putRelease :: Repository -> ReleaseName -> Release -> AptState -> AptState
+putRelease :: Repository -> ReleaseName -> Release' -> AptState -> AptState
 putRelease repo dist release state =
     state {releaseMap = Map.insert (repoURI repo, dist) release (releaseMap state)}
 

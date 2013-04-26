@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving, TypeSynonymInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types
     ( EnvRoot(..)
     , EnvPath(..)
@@ -16,11 +17,8 @@ module Debian.Repo.Types
     , LocalRepository(..)
     , Layout(..)
     -- * Release
-    , ReleaseInfo(..)
     , Release(..)
-    , releaseName
-    , releaseComponents
-    , releaseArchitectures
+    , Release'
     -- * Each line of the sources.list represents a slice of a repository
     , SliceList(..)
     , NamedSliceList(..)
@@ -99,7 +97,7 @@ rootEnvPath s = EnvPath { envRoot = EnvRoot "", envPath = s }
 --data Repository = forall a. (Repo a) => Repository a
 data Repository
     = LocalRepo LocalRepository
-    | VerifiedRepo URIString [ReleaseInfo]
+    | VerifiedRepo URIString [Release]
     | UnverifiedRepo URIString
     deriving (Read, Show)
 
@@ -113,7 +111,7 @@ data LocalRepository
     = LocalRepository
       { repoRoot :: EnvPath
       , repoLayout :: (Maybe Layout)
-      , repoReleaseInfoLocal :: [ReleaseInfo]
+      , repoReleaseInfoLocal :: [Release]
       } deriving (Read, Show, Ord, Eq)
 
 -- |The possible file arrangements for a repository.  An empty
@@ -147,7 +145,7 @@ class (Ord t, Eq t) => Repo t where
     -- | This method returns a list of all the release in the
     -- repository.  This can be used to identify all of the files
     -- in the repository that are not garbage.
-    repoReleaseInfo :: t -> [ReleaseInfo]
+    repoReleaseInfo :: t -> [Release]
     checkCompatibility :: t -> IO ()
     checkCompatibility repo =
         do level <- repositoryCompatibilityLevel repo
@@ -190,24 +188,13 @@ prettyPkgVersion v = pretty (getName v) <> text "=" <> prettyDebianVersion (getV
 -------------------- RELEASE --------------------
 
 -- FIXME: The lists here should be sets so that == and compare work properly.
-data ReleaseInfo = ReleaseInfo { releaseInfoName :: ReleaseName
-                               , releaseInfoAliases :: [ReleaseName]
-                               , releaseInfoArchitectures :: [Arch]
-                               , releaseInfoComponents :: [Section]
-                               } deriving (Eq, Ord, Read, Show)
+data Release = Release { releaseName :: ReleaseName
+                       , releaseAliases :: [ReleaseName]
+                       , releaseArchitectures :: [Arch]
+                       , releaseComponents :: [Section]
+                       } deriving (Eq, Ord, Read, Show)
 
-data Release = Release { releaseRepo :: Repository
-                       , releaseInfo :: ReleaseInfo
-                       } deriving (Eq, Ord, Show)
-
-releaseName :: Release -> ReleaseName
-releaseName = releaseInfoName . releaseInfo
---releaseAliases :: Release -> [ReleaseName]
---releaseAliases = releaseInfoAliases . releaseInfo
-releaseComponents :: Release -> [Section]
-releaseComponents = releaseInfoComponents . releaseInfo
-releaseArchitectures :: Release -> [Arch]
-releaseArchitectures = releaseInfoArchitectures . releaseInfo
+type Release' = (Repository, Release)
 
 ----------------- SLICES (SOURCES.LIST ENTRIES) ---------------
 

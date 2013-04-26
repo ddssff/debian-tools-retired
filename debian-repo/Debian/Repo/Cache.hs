@@ -38,7 +38,7 @@ import Debian.Repo.Slice ( verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Types ( AptCache(aptArch, aptBaseSliceList, aptBinaryPackages, aptReleaseName, aptSourcePackages, globalCacheDir), SourcePackage(sourcePackageID),
                            sourcePackageName, BinaryPackage(packageID), binaryPackageName, PackageID(packageVersion), PackageIndex(..),
-                           Release(..), ReleaseInfo(releaseInfoName), Repo(repoReleaseInfo), EnvRoot(EnvRoot), Repository )
+                           Release', Release(releaseName), Repo(repoReleaseInfo), EnvRoot(EnvRoot), Repository )
 import Debian.URI ( URIAuth(uriPort, uriRegName, uriUserInfo), URI(uriAuthority, uriPath, uriScheme), escapeURIString )
 import System.Exit ( ExitCode(ExitSuccess) )
 import Extra.Files ( replaceFile )
@@ -103,24 +103,24 @@ aptSourcePackagesSorted os names =
 
 -- |Return a list of the index files that contain the packages of a
 -- slice.
-sliceIndexes :: AptCache a => a -> (Repository, DebSource) -> [(Release, PackageIndex)]
+sliceIndexes :: AptCache a => a -> (Repository, DebSource) -> [(Release', PackageIndex)]
 sliceIndexes cache (repo, slice) =
     case (sourceDist slice) of
       Left exact -> error $ "Can't handle exact path in sources.list: " ++ exact
       Right (release, sections) -> map (makeIndex release) sections
     where
       makeIndex release section =
-          (Release {releaseRepo = repo, releaseInfo = findReleaseInfo release},
+          ((repo, findReleaseInfo release),
            PackageIndex { packageIndexComponent = section
                         , packageIndexArch = case (sourceType slice) of
                                                DebSrc -> Source
                                                Deb -> aptArch cache })
       findReleaseInfo release =
-          case filter ((==) release . releaseInfoName) (repoReleaseInfo repo) of
+          case filter ((==) release . releaseName) (repoReleaseInfo repo) of
             [x] -> x
             [] -> error $ ("sliceIndexes: Invalid release name: " ++ releaseName' release ++
                            "\n  You may need to remove ~/.autobuilder/repoCache." ++
-                           "\n  Available: " ++ (show . map releaseInfoName . repoReleaseInfo $ repo))
+                           "\n  Available: " ++ (show . map releaseName . repoReleaseInfo $ repo))
             xs -> error $ "Internal error 5 - multiple releases named " ++ releaseName' release ++ "\n" ++ show xs
 
 -- |Return the paths in the local cache of the index files of a slice list.

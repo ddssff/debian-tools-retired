@@ -40,7 +40,7 @@ import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupSourcePackages, i
 import Debian.Release (releaseName', sectionName')
 import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..),
                            BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..),
-                           Release(releaseInfo, releaseRepo), ReleaseInfo(releaseInfoName), Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo),
+                           Release', Release(releaseName), Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo),
                            EnvRoot(rootPath), outsidePath )
 import Debian.URI ( fileFromURIStrict )
 import Debian.Version ( parseDebianVersion, DebianVersion )
@@ -164,7 +164,7 @@ parseSourceParagraph p =
                   , homepage = fmap stripWS $ B.fieldValue "Homepage" p })
       _x -> Left ["parseSourceParagraph - One or more required fields (Package, Maintainer, Standards-Version) missing: " ++ show p]
 
-toBinaryPackage :: Release -> PackageIndex -> B.Paragraph -> BinaryPackage
+toBinaryPackage :: Release' -> PackageIndex -> B.Paragraph -> BinaryPackage
 toBinaryPackage release index p =
     case (B.fieldValue "Package" p, B.fieldValue "Version" p) of
       (Just name, Just version) ->
@@ -213,8 +213,8 @@ sourcePackageBinaryIDs arch sourceIndex package =
       info = sourceParagraph package
 
 -- | Get the contents of a package index
-getPackages :: Release -> PackageIndex -> IO (Either SomeException [BinaryPackage])
-getPackages release index =
+getPackages :: Release' -> PackageIndex -> IO (Either SomeException [BinaryPackage])
+getPackages (repo, release) index =
     fileFromURIStrict uri' >>= return . either (Left . SomeException) Right >>= {- showStream >>= -} readControl
     where
       readControl :: Either SomeException L.ByteString -> IO (Either SomeException [BinaryPackage])
@@ -222,33 +222,32 @@ getPackages release index =
       readControl (Right s) =
           try (case controlFromIndex Uncompressed (show uri') s of
                  Left e -> return $ Left (SomeException (ErrorCall (show uri' ++ ": " ++ show e)))
-                 Right (B.Control control) -> return (Right $ List.map (toBinaryPackage release index) control)) >>=
+                 Right (B.Control control) -> return (Right $ List.map (toBinaryPackage (repo, release) index) control)) >>=
           return . either (\ (e :: SomeException) -> Left . SomeException . ErrorCall . ((show uri' ++ ":") ++) . show $ e) id
-      uri' = uri {uriPath = uriPath uri </> packageIndexPath release index}
+      uri' = uri {uriPath = uriPath uri </> packageIndexPath (repo, release) index}
       uri = repoURI repo
-      repo = releaseRepo release
       --toLazy s = L.fromChunks [s]
       --showStream :: Either Exception L.ByteString -> IO (Either Exception L.ByteString)
       --showStream x@(Left e) = hPutStrLn stderr (show uri' ++ " - exception: " ++ show e) >> return x
       --showStream x@(Right s) = hPutStrLn stderr (show uri' ++ " - stream length: " ++ show (L.length s)) >> return x
 
 -- | Get the contents of a package index
-binaryPackagesOfIndex :: Release -> PackageIndex -> IO (Either SomeException [BinaryPackage])
-binaryPackagesOfIndex release index =
+binaryPackagesOfIndex :: Release' -> PackageIndex -> IO (Either SomeException [BinaryPackage])
+binaryPackagesOfIndex (repo, release) index =
     case packageIndexArch index of
       Source -> return (Right [])
-      _ -> getPackages release index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
+      _ -> getPackages (repo, release) index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
 
 -- | Get the contents of a package index
-sourcePackagesOfIndex :: Release -> PackageIndex -> IO (Either SomeException [SourcePackage])
-sourcePackagesOfIndex release index =
+sourcePackagesOfIndex :: Release' -> PackageIndex -> IO (Either SomeException [SourcePackage])
+sourcePackagesOfIndex (repo, release) index =
     case packageIndexArch index of
-      Source -> getPackages release index >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
+      Source -> getPackages (repo, release) index >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
       _ -> return (Right [])
 
 -- FIXME: assuming the index is part of the cache
-sourcePackagesOfIndex' :: (AptCache a, MonadApt m) => a -> Release -> PackageIndex -> m [SourcePackage]
-sourcePackagesOfIndex' cache release index =
+sourcePackagesOfIndex' :: (AptCache a, MonadApt m) => a -> Release' -> PackageIndex -> m [SourcePackage]
+sourcePackagesOfIndex' cache (repo, release) index =
     do state <- getApt
        let cached = lookupSourcePackages path state
        status <- liftIO $ getFileStatus path `E.catch` (\ (_ :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory (rootPath (rootDir cache)) ++ " and try again - sorry about that.")
@@ -259,24 +258,23 @@ sourcePackagesOfIndex' cache release index =
                  putApt (insertSourcePackages path (status, packages) state)
                  return packages
     where
-      path = rootPath (rootDir cache) ++ indexCacheFile cache release index
+      path = rootPath (rootDir cache) ++ indexCacheFile cache (repo, release) index
 
-indexCacheFile :: (AptCache a) => a -> Release -> PackageIndex -> FilePath
-indexCacheFile apt release index =
+indexCacheFile :: (AptCache a) => a -> Release' -> PackageIndex -> FilePath
+indexCacheFile apt (repo, release) index =
     case (aptArch apt, packageIndexArch index) of
-      (Binary _ _, Source) -> indexPrefix release index ++ "_source_Sources"
-      (Binary _ _, arch@(Binary _ _)) -> indexPrefix release index ++ "_binary-" ++ show (prettyArch arch) ++ "_Packages"
+      (Binary _ _, Source) -> indexPrefix (repo, release) index ++ "_source_Sources"
+      (Binary _ _, arch@(Binary _ _)) -> indexPrefix (repo, release) index ++ "_binary-" ++ show (prettyArch arch) ++ "_Packages"
       (x, _) -> error "Invalid build architecture: " ++ show x
 
-indexPrefix :: Release -> PackageIndex -> FilePath
-indexPrefix release index =
+indexPrefix :: Release' -> PackageIndex -> FilePath
+indexPrefix (repo, release) index =
     (escapeURIString (/= '@') ("/var/lib/apt/lists/" ++ uriText +?+ "dists_") ++
      releaseName' distro ++ "_" ++ (sectionName' $ section))
     where
       section = packageIndexComponent index
-      repo = releaseRepo release
       uri = repoURI repo
-      distro = releaseInfoName . releaseInfo $ release
+      distro = releaseName $ release
       scheme = uriScheme uri
       auth = uriAuthority uri
       path = uriPath uri
@@ -301,7 +299,7 @@ indexPrefix release index =
           user ++ host ++ port ++ escape path
       prefix "ssh" _ _ (Just host) port path =
           host ++ port ++ escape path
-      prefix _ _ _ _ _ _ = error ("invalid repo URI: " ++ (uriToString' . repoURI. releaseRepo $ release))
+      prefix _ _ _ _ _ _ = error ("invalid repo URI: " ++ (uriToString' . repoURI $ repo))
       maybeOfString "" = Nothing
       maybeOfString s = Just s
       escape s = intercalate "_" (wordsBy (== '/') s)
@@ -320,24 +318,24 @@ indexPrefix release index =
       _ -> a ++ "_" ++ b
 
 -- FIXME: assuming the index is part of the cache 
-binaryPackagesOfIndex' :: (MonadApt m, AptCache a) => a -> Release -> PackageIndex -> m [BinaryPackage]
-binaryPackagesOfIndex' cache release index =
+binaryPackagesOfIndex' :: (MonadApt m, AptCache a) => a -> Release' -> PackageIndex -> m [BinaryPackage]
+binaryPackagesOfIndex' cache (repo, release) index =
     do state <- getApt
        let cached = lookupBinaryPackages path state
        status <- liftIO $ getFileStatus path
        case cached of
          Just (status', packages) | status == status' -> return packages
          _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
-                 let packages = List.map (toBinaryPackage release index) paragraphs
+                 let packages = List.map (toBinaryPackage (repo, release) index) paragraphs
                  putApt (insertBinaryPackages path (status, packages) state)
                  return packages
     where
-      path = rootPath (rootDir cache) ++ indexCacheFile cache release index
+      path = rootPath (rootDir cache) ++ indexCacheFile cache (repo, release) index
 
 -- | Return a list of all source packages.
-releaseSourcePackages :: Release -> IO (Set SourcePackage)
-releaseSourcePackages release =
-    mapM (sourcePackagesOfIndex release) (sourceIndexList release) >>= return . test
+releaseSourcePackages :: Release' -> IO (Set SourcePackage)
+releaseSourcePackages (repo, release) =
+    mapM (sourcePackagesOfIndex (repo, release)) (sourceIndexList (repo, release)) >>= return . test
     where
       test :: [Either SomeException [SourcePackage]] -> Set SourcePackage
       test xs = case partitionEithers xs of
@@ -345,19 +343,19 @@ releaseSourcePackages release =
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Return a list of all the binary packages for all supported architectures.
-releaseBinaryPackages :: Release -> IO (Set BinaryPackage)
-releaseBinaryPackages release =
-    mapM (binaryPackagesOfIndex release) (binaryIndexList release) >>= return . test
+releaseBinaryPackages :: Release' -> IO (Set BinaryPackage)
+releaseBinaryPackages (repo, release) =
+    mapM (binaryPackagesOfIndex (repo, release)) (binaryIndexList (repo, release)) >>= return . test
     where
       test xs = case partitionEithers xs of
                   ([], ok) -> Set.unions (List.map Set.fromList ok)
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Write a set of packages into a package index.
-putPackages :: Release -> PackageIndexLocal ->  [BinaryPackageLocal] -> IO ()
-putPackages release index packages =
-    case releaseRepo release of
-      LocalRepo repo ->  EF.writeAndZipFileWithBackup (outsidePath (repoRoot repo) </> packageIndexPath release index) (L.fromChunks [encodeUtf8 text]) >>= either (fail . intercalate "\n") return
+putPackages :: Release' -> PackageIndexLocal ->  [BinaryPackageLocal] -> IO ()
+putPackages (repo', release) index packages =
+    case repo' of
+      LocalRepo repo ->  EF.writeAndZipFileWithBackup (outsidePath (repoRoot repo) </> packageIndexPath (repo', release) index) (L.fromChunks [encodeUtf8 text]) >>= either (fail . intercalate "\n") return
       x -> fail $ "Package.putPackages: Expected local repository, found " ++ show x
     where
       text = T.concat (intersperse (T.pack "\n") . List.map formatParagraph . List.map packageInfo $ packages)

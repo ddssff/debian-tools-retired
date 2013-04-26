@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+{-# LANGUAGE TupleSections #-}
 -- |Print the available version numbers of a package.
 module Main where
 
@@ -20,7 +21,7 @@ main = runAptT main'
 main' :: MonadApt m => m ()
 main' =
     do repo <- prepareRepository (fromJust (parseURI uri))
-       releases <- mapM insertRelease (map (Release repo) (repoReleaseInfo repo))
+       releases <- mapM insertRelease (map (repo,) (repoReleaseInfo repo))
        let binaryIndexes = map (filter (\ i -> packageIndexArch i == arch)) (map binaryIndexList releases)
        -- _binaryPackages <- mapM (packageLists release) binaryIndexes
        liftIO (putStrLn ("\n" ++ show releases))

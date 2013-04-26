@@ -9,7 +9,7 @@ import Data.Set as Set (Set, unions, toList, fromList, size)
 import Debian.Arch (Arch(..), prettyArch)
 import Debian.Repo (runAptIO, prepareLocalRepository, findReleases)
 import Debian.Repo.PackageIndex ( packageIndexPath, sourceIndexList, binaryIndexList )
-import Debian.Repo.Types (Layout(Pool), rootEnvPath, Release(releaseInfo), PackageIndex(packageIndexArch),
+import Debian.Repo.Types (Layout(Pool), rootEnvPath, Release', PackageIndex(packageIndexArch),
                           BinaryPackage(..), SourcePackage)
 import System.IO (hPutStrLn, stderr)
 
@@ -31,7 +31,7 @@ import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupSourcePackages, i
 import Debian.Release (releaseName', sectionName')
 import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..),
                            BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..),
-                           Release(releaseInfo, releaseRepo), ReleaseInfo(releaseInfoName), Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo),
+                           Release', Release(releaseName), Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo),
                            EnvRoot(rootPath), outsidePath )
 import Debian.URI ( fileFromURIStrict )
 import Debian.Version ( parseDebianVersion, DebianVersion )
@@ -59,12 +59,12 @@ main = runAptIO $
        binaries <- mapM (liftIO . releaseBinaryPackages) releases >>= return . Set.unions
        -- requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
        -- return $ mergeReleases (existingReleases ++ requiredReleases)
-       liftIO (hPutStrLn stderr ("rels:\n " ++ intercalate "\n " (List.map (show . releaseInfo) releases) ++ "\n\n" ++
+       liftIO (hPutStrLn stderr ("rels:\n " ++ intercalate "\n " (List.map (show . snd) releases) ++ "\n\n" ++
                                  "source packages:\n " ++ {-intercalate "\n " (List.map show (toList sources))-} show (size sources) ++ "\n\n" ++
                                  "binary packages:\n " ++ {-intercalate "\n " (List.map show (toList binaries))-} show (size binaries) ++ "\n"))
 
 -- | Return a list of all source packages.
-releaseSourcePackages :: Release -> IO (Set SourcePackage)
+releaseSourcePackages :: Release' -> IO (Set SourcePackage)
 releaseSourcePackages release =
     mapM (sourcePackagesOfIndex release) (sourceIndexList release) >>= return . test
     where
@@ -74,7 +74,7 @@ releaseSourcePackages release =
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Return a list of all the binary packages for all supported architectures.
-releaseBinaryPackages :: Release -> IO (Set BinaryPackage)
+releaseBinaryPackages :: Release' -> IO (Set BinaryPackage)
 releaseBinaryPackages release =
     mapM (binaryPackagesOfIndex release) (binaryIndexList release) >>= return . test
     where
@@ -83,22 +83,22 @@ releaseBinaryPackages release =
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Get the contents of a package index
-sourcePackagesOfIndex :: Release -> PackageIndex -> IO (Either SomeException [SourcePackage])
+sourcePackagesOfIndex :: Release' -> PackageIndex -> IO (Either SomeException [SourcePackage])
 sourcePackagesOfIndex release index =
     case packageIndexArch index of
       Source -> getPackages release index >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
       _ -> return (Right [])
 
 -- | Get the contents of a package index
-binaryPackagesOfIndex :: Release -> PackageIndex -> IO (Either SomeException [BinaryPackage])
+binaryPackagesOfIndex :: Release' -> PackageIndex -> IO (Either SomeException [BinaryPackage])
 binaryPackagesOfIndex release index =
     case packageIndexArch index of
       Source -> return (Right [])
       _ -> getPackages release index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
 
 -- | Get the contents of a package index
-getPackages :: Release -> PackageIndex -> IO (Either SomeException [BinaryPackage])
-getPackages release index =
+getPackages :: Release' -> PackageIndex -> IO (Either SomeException [BinaryPackage])
+getPackages (repo, release) index =
     fileFromURIStrict uri' >>= return . either (Left . SomeException) Right >>= {- showStream >>= -} readControl
     where
       readControl :: Either SomeException L.ByteString -> IO (Either SomeException [BinaryPackage])
@@ -106,11 +106,10 @@ getPackages release index =
       readControl (Right s) =
           try (case controlFromIndex Uncompressed (show uri') s of
                  Left e -> return $ Left (SomeException (ErrorCall (show uri' ++ ": " ++ show e)))
-                 Right (B.Control control) -> return (Right $ List.map (toBinaryPackage release index) control)) >>=
+                 Right (B.Control control) -> return (Right $ List.map (toBinaryPackage (repo, release) index) control)) >>=
           return . either (\ (e :: SomeException) -> Left . SomeException . ErrorCall . ((show uri' ++ ":") ++) . show $ e) id
-      uri' = uri {uriPath = uriPath uri </> packageIndexPath release index}
+      uri' = uri {uriPath = uriPath uri </> packageIndexPath (repo, release) index}
       uri = repoURI repo
-      repo = releaseRepo release
       toLazy s = L.fromChunks [s]
       --showStream :: Either Exception L.ByteString -> IO (Either Exception L.ByteString)
       --showStream x@(Left e) = hPutStrLn stderr (show uri' ++ " - exception: " ++ show e) >> return x
@@ -169,7 +168,7 @@ parseSourceParagraph p =
                   , homepage = fmap stripWS $ B.fieldValue "Homepage" p })
       _x -> Left ["parseSourceParagraph - One or more required fields (Package, Maintainer, Standards-Version) missing: " ++ show p]
 
-toBinaryPackage :: Release -> PackageIndex -> B.Paragraph -> BinaryPackage
+toBinaryPackage :: Release' -> PackageIndex -> B.Paragraph -> BinaryPackage
 toBinaryPackage release index p =
     case (B.fieldValue "Package" p, B.fieldValue "Version" p) of
       (Just name, Just version) ->

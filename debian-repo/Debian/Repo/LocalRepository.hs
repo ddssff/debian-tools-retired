@@ -8,7 +8,7 @@ import qualified Debian.Control.Text as B ( Paragraph, ControlFunctions(parseCon
 import qualified Debian.Control.Text as S ( Control'(Control) )
 import Debian.Release (Section(..), ReleaseName, parseReleaseName, releaseName', sectionName', parseSection')
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository)
-import Debian.Repo.Types ( ReleaseInfo(..), Repo(repoURI), Layout(..), LocalRepository(..), Repository(LocalRepo), EnvPath, outsidePath, compatibilityFile, libraryCompatibilityLevel)
+import Debian.Repo.Types ( Release(..), Repo(repoURI), Layout(..), LocalRepository(..), Repository(LocalRepo), EnvPath, outsidePath, compatibilityFile, libraryCompatibilityLevel)
 import Control.Applicative.Error ( Failing(Success, Failure) )
 import Control.Monad ( filterM, when )
 import Data.List ( isPrefixOf, groupBy, partition, sort )
@@ -101,12 +101,12 @@ readLocalRepo root layout =
       checkAliases :: ([(String, String)], [(String, String)]) -> (ReleaseName, [ReleaseName])
       checkAliases ([(realName, _)], aliases) = (parseReleaseName realName, map (parseReleaseName . snd) aliases)
       checkAliases _ = error "Symbolic link points to itself!"
-      getReleaseInfo :: (ReleaseName, [ReleaseName]) -> IO ReleaseInfo
+      getReleaseInfo :: (ReleaseName, [ReleaseName]) -> IO Release
       getReleaseInfo (dist, aliases) = parseReleaseFile (releasePath dist) dist aliases
       releasePath dist = distDir </> releaseName' dist ++ "/Release"
       distDir = outsidePath root ++ "/dists"
 
-parseReleaseFile :: FilePath -> ReleaseName -> [ReleaseName] -> IO ReleaseInfo
+parseReleaseFile :: FilePath -> ReleaseName -> [ReleaseName] -> IO Release
 parseReleaseFile path dist aliases =
     liftIO (F.readFile path) >>= return . parseRelease dist aliases
 {-
@@ -114,7 +114,7 @@ parseReleaseFile path dist aliases =
        return $ parseRelease path text dist aliases
 -}
 
-parseRelease :: ReleaseName -> [ReleaseName] -> F.File Text -> ReleaseInfo
+parseRelease :: ReleaseName -> [ReleaseName] -> F.File Text -> Release
 parseRelease name aliases file =
     case F.text file of
       Failure msgs -> error $ "Could not read " ++ show (F.path file) ++ ": " ++ show msgs
@@ -124,16 +124,16 @@ parseRelease name aliases file =
             Right (S.Control []) -> error $ "Empty release file: " ++ show (F.path file)
             Right (S.Control (info : _)) -> makeReleaseInfo (F.File {F.path = F.path file, F.text = Success info}) name aliases
 
-makeReleaseInfo :: F.File B.Paragraph -> ReleaseName -> [ReleaseName] -> ReleaseInfo
+makeReleaseInfo :: F.File B.Paragraph -> ReleaseName -> [ReleaseName] -> Release
 makeReleaseInfo file@(F.File {F.text = Failure msgs}) _name _aliases =
     error $ "Failure reading " ++ show (F.path file) ++ ": " ++ show msgs
 makeReleaseInfo file@(F.File {F.text = Success info}) name aliases =
     case (B.fieldValue "Architectures" info, B.fieldValue "Components" info) of
       (Just archList, Just compList) ->
-          ReleaseInfo { releaseInfoName = name
-                      , releaseInfoAliases = aliases
-                      , releaseInfoArchitectures = parseArchitectures archList
-                      , releaseInfoComponents = parseComponents compList }
+          Release { releaseName = name
+                  , releaseAliases = aliases
+                  , releaseArchitectures = parseArchitectures archList
+                  , releaseComponents = parseComponents compList }
       _ -> error $ "Missing Architectures or Components field in Release file " ++ show (F.path file)
 
 isSymLink :: FilePath -> IO Bool
