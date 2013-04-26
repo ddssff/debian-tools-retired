@@ -61,6 +61,7 @@ loadRepoCache =
        uris <- liftIO $ try (readFile repoCache) >>=
                try . evaluate . either (\ (_ :: SomeException) -> []) read >>=
                return . either (\ (_ :: SomeException) -> []) id
+       qPutStrLn $ "Loaded " ++ show (length uris) ++ " entries from the repo cache."
        putApt (setRepoMap (fromList (map fixURI uris)) state)
     where
       fixURI (s, x) = (fromJust (parseURI s), x)
