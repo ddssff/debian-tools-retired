@@ -276,37 +276,37 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
       -- do this all at once, rather than one package at a time
       updateIndexes :: EnvPath -> [(Repository, Release)] -> [InstallResult] -> IO [InstallResult]
       updateIndexes root releases results =
-          do (pairLists :: [Either InstallResult [(PackageIndexLocal, B.Paragraph)]]) <-
+          do (pairLists :: [Either InstallResult [((Repository, Release, PackageIndexLocal), B.Paragraph)]]) <-
                  mapM (uncurry $ buildInfo root releases) (zip changeFileList results)
              let sortedByIndex = sortBy compareIndex (concat (keepRight pairLists))
              let groupedByIndex = undistribute (groupBy (\ a b -> compareIndex a b == EQ) sortedByIndex)
              result <- addPackagesToIndexes groupedByIndex
              case result of
                Ok -> return $ List.map (either id (const Ok)) pairLists
-               problem -> return $ List.map (const problem) results 
+               problem -> return $ List.map (const problem) results
           where
-            compareIndex :: (PackageIndexLocal, B.Paragraph) -> (PackageIndexLocal, B.Paragraph) -> Ordering
+            compareIndex :: ((Repository, Release, PackageIndexLocal), B.Paragraph) -> ((Repository, Release, PackageIndexLocal), B.Paragraph) -> Ordering
             compareIndex (a, _) (b, _) = compare a b
       -- Build the control information to be added to the package indexes.
-      buildInfo :: EnvPath -> [(Repository, Release)] -> ChangesFile -> InstallResult -> IO (Either InstallResult [(PackageIndexLocal, B.Paragraph)])
+      buildInfo :: EnvPath -> [(Repository, Release)] -> ChangesFile -> InstallResult -> IO (Either InstallResult [((Repository, Release, PackageIndexLocal), B.Paragraph)])
       buildInfo root releases changes Ok =
           do case findRelease releases (changeRelease changes) of
                Just (repo, release) ->
                    do (info :: [Either InstallResult B.Paragraph]) <- mapM (fileInfo root (repo, release)) indexFiles
                       case keepLeft info of
                         [] ->
-                            let (pairs :: [([PackageIndexLocal], Either InstallResult B.Paragraph)]) = zip (indexLists release) info in
-                            let (pairs' :: [([PackageIndexLocal], B.Paragraph)]) =
+                            let (pairs :: [([(Repository, Release, PackageIndexLocal)], Either InstallResult B.Paragraph)]) = zip (indexLists repo release) info in
+                            let (pairs' :: [([(Repository, Release, PackageIndexLocal)], B.Paragraph)]) =
                                     catMaybes $ List.map (\ (a, b) -> either (const Nothing) (\ b' -> Just (a, b')) b) pairs in
-                            let (pairs'' :: [(PackageIndexLocal, B.Paragraph)]) = concat (List.map distribute pairs') in
+                            let (pairs'' :: [((Repository, Release, PackageIndexLocal), B.Paragraph)]) = concat (List.map distribute pairs') in
                             return (Right pairs'')
                         results -> return (Left (mergeResults results))
                Nothing -> return . Left . Failed $ [NoSuchRelease (changeRelease changes)]
           where
-            indexLists :: Release -> [[PackageIndexLocal]]
-            indexLists release = List.map (indexes release) indexFiles
-            indexes :: Release -> ChangedFileSpec -> [PackageIndexLocal]
-            indexes release file = List.map (PackageIndex (section . changedFileSection $ file)) (archList release changes file)
+            indexLists :: Repository -> Release -> [[(Repository, Release, PackageIndexLocal)]]
+            indexLists repo release = List.map (indexes repo release) indexFiles
+            indexes :: Repository -> Release -> ChangedFileSpec -> [(Repository, Release, PackageIndexLocal)]
+            indexes repo release file = List.map (\ arch -> (repo, release, PackageIndex (section . changedFileSection $ file) arch)) (archList release changes file)
             indexFiles = dsc ++ debs
             (debs :: [ChangedFileSpec]) = filter f files
                 where (f :: ChangedFileSpec -> Bool) = (isSuffixOf ".deb" . changedFileName)
@@ -468,9 +468,9 @@ moveFile src dst =
 
 -- |Add control information to several package indexes, making sure
 -- that that no duplicate package ids are inserted.
-addPackagesToIndexes :: [(PackageIndexLocal, [B.Paragraph])] -> IO InstallResult
+addPackagesToIndexes :: [((Repository, Release, PackageIndexLocal), [B.Paragraph])] -> IO InstallResult
 addPackagesToIndexes pairs =
-    do oldPackageLists <- mapM (DRP.getPackages release) (List.map fst pairs)
+    do oldPackageLists <- mapM (\ (repo, release, index) -> DRP.getPackages (repo, release) index) (List.map fst pairs)
        case partitionEithers oldPackageLists of
          ([], _) -> 
              do let (oldPackageLists' :: [[BinaryPackageLocal]]) = rights oldPackageLists
@@ -482,15 +482,14 @@ addPackagesToIndexes pairs =
                   dupes -> return $ Failed [OtherProblem ("Duplicate packages: " ++ intercalate " " (List.map (show . prettyBinaryPackage) dupes))]
          (bad, _) -> return $ Failed (List.map (OtherProblem . show) bad)
     where
-      release = undefined
-      updateIndex (index, oldPackages, newPackages) = DRP.putPackages release index (oldPackages ++ newPackages)
+      updateIndex ((repo, release, index), oldPackages, newPackages) = DRP.putPackages (repo, release) index (oldPackages ++ newPackages)
       indexes = List.map fst pairs
       indexMemberFn :: [BinaryPackageLocal] -> BinaryPackageLocal -> Bool
       indexMemberFn packages =
           let set = Set.fromList . List.map packageID $ packages
           in
             \package -> Set.member (packageID package) set
-      newPackageLists = List.map (\ (index, info) -> List.map (DRP.toBinaryPackage release index) info) pairs
+      newPackageLists = List.map (\ ((repo, release, index), info) -> List.map (DRP.toBinaryPackage release index) info) pairs
 
 -- |Delete any packages from a dist which are trumped by newer
 -- packages.  These packages are not technically garbage because they
