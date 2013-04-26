@@ -38,6 +38,7 @@ flag local-debian
 Library
 
   if flag(local-debian-repo)
+    Build-Depends: deepseq
     if flag(local-debian)
       Hs-Source-Dirs: ., ../../haskell-debian, ../debian-repo
     else
@@ -48,7 +49,7 @@ Library
 
   if flag(local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src
-    Build-Depends: hsemail, text, syb
+    Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff
   else
     Build-Depends: cabal-debian >= 3.1
 
