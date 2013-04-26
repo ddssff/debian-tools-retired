@@ -124,11 +124,6 @@ instance Repo Repository where
     repoURI (LocalRepo (LocalRepository path _ _)) = fromJust . parseURI $ "file://" ++ envPath path
     repoURI (VerifiedRepo uri _) = fromJust (parseURI uri)
     repoURI (UnverifiedRepo uri) = fromJust (parseURI uri)
-{-
-    repoURI (Repository a) = repoURI a
-    repositoryCompatibilityLevel (Repository a) = repositoryCompatibilityLevel a
-    repoReleaseInfo (Repository a) = repoReleaseInfo a
--}
     repoReleaseInfo (LocalRepo (LocalRepository _ _ info)) = info
     repoReleaseInfo (VerifiedRepo _ info) = info
     repoReleaseInfo (UnverifiedRepo _uri) = error "No release info for unverified repository"
@@ -145,13 +140,6 @@ class (Ord t, Eq t) => Repo t where
         where
           uri' = uri {uriPath = uriPath uri </> compatibilityFile}
           uri = repoURI r
-{-
-        lazyCommand cmd L.empty >>= return . collectOutput >>= test cmd
-        where
-          cmd = "curl -s -g '" ++ uriToString id (repoURI r) "" </> compatibilityFile ++ "'"
-          test _ (out, _err, [ExitSuccess]) = return (parse (L.unpack out))
-          test cmd (_, _, _) = error $ "*** FAILURE: " ++ cmd
--}
           parse :: String -> Maybe Int
           parse s = case takeWhile isDigit s of
                          "" -> Nothing
@@ -201,54 +189,12 @@ prettyPkgVersion v = pretty (getName v) <> text "=" <> prettyDebianVersion (getV
 
 -------------------- RELEASE --------------------
 
-{-
--- |A distribution (aka release) name.  This type is expected to refer
--- to a subdirectory of the dists directory which is at the top level
--- of a repository.
-data ReleaseName = ReleaseName { relName :: String } deriving (Eq, Ord, Read, Show)
-
-parseReleaseName :: String -> ReleaseName
-parseReleaseName name = ReleaseName {relName = unEscapeString name}
-
-releaseName' :: ReleaseName -> String
-releaseName' (ReleaseName {relName = s}) = escapeURIString isAllowedInURI s
--}
-
 -- FIXME: The lists here should be sets so that == and compare work properly.
 data ReleaseInfo = ReleaseInfo { releaseInfoName :: ReleaseName
                                , releaseInfoAliases :: [ReleaseName]
                                , releaseInfoArchitectures :: [Arch]
                                , releaseInfoComponents :: [Section]
                                } deriving (Eq, Ord, Read, Show)
-
-{-
--- |The types of architecture that a package can have, either Source
--- or some type of binary architecture.
-data Arch = Source | Binary String deriving (Read, Show, Eq, Ord)
-
-archName :: Arch -> String
-archName Source = "source"
-archName (Binary arch) = arch
-
--- |A section of a repository such as main, contrib, non-free,
--- restricted.  The indexes for a section are located below the
--- distribution directory.
-newtype Section = Section String deriving (Read, Show, Eq, Ord)
-
--- |A package's subsection is only evident in its control information,
--- packages from different subsections all reside in the same index.
-data SubSection = SubSection { section :: Section, subSectionName :: String } deriving (Read, {-Show,-} Eq, Ord)
-
-sectionName :: SubSection -> String
-sectionName (SubSection (Section "main") y) = y
-sectionName (SubSection x y) = sectionName' x ++ "/" ++ y
-
-sectionName' :: Section -> String
-sectionName' (Section s) = escapeURIString isAllowedInURI s
-
-sectionNameOfSubSection :: SubSection -> String
-sectionNameOfSubSection = sectionName' . section
--}
 
 data Release = Release { releaseRepo :: Repository
                        , releaseInfo :: ReleaseInfo
@@ -268,54 +214,12 @@ releaseArchitectures = releaseInfoArchitectures . releaseInfo
 deriving instance Show SourceType
 deriving instance Show DebSource
 
-{-
-data SourceType
-    = Deb | DebSrc
-    deriving (Eq, Ord)
-
-data DebSource
-    = DebSource
-    { sourceType :: SourceType
-    , sourceUri :: URI
-    , sourceDist :: Either String (ReleaseName, [Section])
-    } deriving (Eq, Ord)
-
-instance Show SourceType where
-    show Deb = "deb"
-    show DebSrc = "deb-src"
-
-instance Show DebSource where
-    show (DebSource thetype theuri thedist) =
-        (show thetype) ++ " "++ uriToString id theuri " " ++
-        (case thedist of
-           Left exactPath -> escape exactPath
-           Right (dist, sections) ->
-               releaseName' dist ++ " " ++ intercalate " " (map sectionName' sections))
-        where escape = escapeURIString isAllowedInURI
-
--- |This is a name given to a combination of parts of one or more
--- releases that can be specified by a sources.list file.
-data SliceName = SliceName { sliceName :: String } deriving (Eq, Ord, Show)
--}
-
-{-
-data Slice
-    = Slice { sliceRepo :: Repository
-            , sliceSource :: DebSource
-            } deriving (Eq, Ord, Show)
--}
-
 data SliceList = SliceList {slices :: [(Repository, DebSource)]} deriving (Eq, Ord, Show)
 
 data NamedSliceList
     = NamedSliceList { sliceList :: SliceList
                      , sliceListName :: SliceName
                      } deriving (Eq, Ord, Show)
-
-{-
-instance Pretty Slice where
-    pretty = pretty . sliceSource
--}
 
 instance Pretty SliceList where
     pretty = vcat . map (pretty . snd) . slices
