@@ -40,7 +40,7 @@ import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupSourcePackages, i
 import Debian.Release (releaseName', sectionName')
 import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..),
                            BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..),
-                           Release(releaseName), Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo),
+                           Release(releaseName), repoURI, LocalRepository(repoRoot), Repository(LocalRepo),
                            EnvRoot(rootPath), outsidePath )
 import Debian.URI ( fileFromURIStrict )
 import Debian.Version ( parseDebianVersion, DebianVersion )

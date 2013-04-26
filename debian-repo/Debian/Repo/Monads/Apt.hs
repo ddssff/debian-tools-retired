@@ -42,8 +42,7 @@ import qualified Data.Map as Map (Map, insert, empty, lookup)
 import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), ControlFunctions(parseControlFromHandle) )
 import Debian.Release (ReleaseName)
 import Debian.Sources (SliceName)
-import Debian.Repo.Types ( AptImage, SourcePackage, BinaryPackage, Release, Repo(repoURI), Repository )
-import Debian.URI ( URI )
+import Debian.Repo.Types (AptImage, SourcePackage, BinaryPackage, Release, Repo(repoKey), Repository, RepoKey(..))
 import qualified System.IO as IO ( IOMode(ReadMode), hClose, openBinaryFile )
 import System.Posix.Files ( FileStatus, deviceID, fileID, modificationTime )
 import System.Process.Progress (ePutStrLn)
@@ -70,8 +69,8 @@ type AptIO = AptIOT IO
 -- | This represents the state of the IO system.
 data AptState
     = AptState
-      { repoMap :: Map.Map URI Repository		-- ^ Map to look up known Repository objects
-      , releaseMap :: Map.Map (URI, ReleaseName) (Repository, Release) -- ^ Map to look up known Release objects
+      { repoMap :: Map.Map RepoKey Repository		-- ^ Map to look up known Repository objects
+      , releaseMap :: Map.Map (RepoKey, ReleaseName) (Repository, Release) -- ^ Map to look up known Release objects
       , aptImageMap :: Map.Map SliceName AptImage	-- ^ Map to look up prepared AptImage objects
       , sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
       , binaryPackageMap :: Map.Map FilePath (FileStatus, [BinaryPackage])
@@ -121,16 +120,16 @@ initState = AptState
             , binaryPackageMap = Map.empty
             }
 
-setRepoMap :: Map.Map URI Repository -> AptState -> AptState
+setRepoMap :: Map.Map RepoKey Repository -> AptState -> AptState
 setRepoMap m state = state {repoMap = m}
 
-getRepoMap :: AptState -> Map.Map URI Repository
+getRepoMap :: AptState -> Map.Map RepoKey Repository
 getRepoMap state = repoMap state
 
-lookupRepository :: URI -> AptState -> Maybe Repository
+lookupRepository :: RepoKey -> AptState -> Maybe Repository
 lookupRepository uri state = Map.lookup uri (repoMap state)
 
-insertRepository :: URI -> Repository -> AptState -> AptState
+insertRepository :: RepoKey -> Repository -> AptState -> AptState
 insertRepository uri repo state = state {repoMap = Map.insert uri repo (repoMap state)}
 
 lookupAptImage :: SliceName -> AptState -> Maybe AptImage
@@ -163,11 +162,11 @@ readParagraphs path =
 
 findRelease :: Repository -> ReleaseName -> AptState -> Maybe (Repository, Release)
 findRelease repo dist state =
-    Map.lookup (repoURI repo, dist) (releaseMap state)
+    Map.lookup (repoKey repo, dist) (releaseMap state)
 
 putRelease :: Repository -> ReleaseName -> (Repository, Release) -> AptState -> AptState
 putRelease repo dist release state =
-    state {releaseMap = Map.insert (repoURI repo, dist) release (releaseMap state)}
+    state {releaseMap = Map.insert (repoKey repo, dist) release (releaseMap state)}
 
 -- | Perform a list of tasks with log messages.
 countTasks :: MonadIO m => [(String, m a)] -> m [a]

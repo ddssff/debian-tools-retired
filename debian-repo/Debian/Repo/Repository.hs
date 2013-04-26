@@ -30,7 +30,7 @@ import Debian.Repo.Changes ( findChangesFiles, key, path )
 import Debian.Repo.LocalRepository ( prepareLocalRepository, makeReleaseInfo )
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository, lookupRepository )
 import Debian.Repo.Types ( Release(..), PkgVersion(..), prettyPkgVersion, Repo(repoReleaseInfo), LocalRepository(repoRoot),
-                           Repository(..), EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath )
+                           Repository(..), RepoKey(..), EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath )
 import Debian.URI (URI'(..), URIAuth(uriPort, uriRegName, uriUserInfo), uriToString', URI(uriAuthority, uriScheme, uriPath), dirFromURI, fileFromURI)
 import Debian.UTF8 as Deb (decode)
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
@@ -55,6 +55,7 @@ import qualified Tmp.File as F ( File(..), Source(RemotePath) )
 -- |The file produced by dupload when a package upload attempt is made.
 data UploadFile = Upload FilePath String DebianVersion Arch
 
+{-
 prepareRepository' :: MonadApt m => Maybe EnvRoot -> URI -> m Repository
 prepareRepository' chroot uri =
     case uriScheme uri of
@@ -63,6 +64,13 @@ prepareRepository' chroot uri =
           prepareLocalRepository dir Nothing >>= return . LocalRepo
       _ ->
           prepareRepository uri
+-}
+
+prepareRepository' :: MonadApt m => RepoKey -> m Repository
+prepareRepository' key =
+    case key of
+      Local path -> prepareLocalRepository path Nothing >>= return . LocalRepo
+      Remote uri -> prepareRepository uri
 
 -- |This is a remote repository which we have queried to find out the
 -- names, sections, and supported architectures of its releases.
@@ -91,8 +99,8 @@ instance Eq UnverifiedRepo where
 prepareRepository :: MonadApt m => URI -> m Repository
 prepareRepository uri =
     do state <- getApt
-       repo <- maybe newRepo return (lookupRepository uri state)
-       putApt (insertRepository uri repo state)
+       repo <- maybe newRepo return (lookupRepository (Remote uri) state)
+       putApt (insertRepository (Remote uri) repo state)
        return repo
     where
       newRepo =

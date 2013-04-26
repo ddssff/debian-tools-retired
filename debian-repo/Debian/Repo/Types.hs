@@ -8,6 +8,8 @@ module Debian.Repo.Types
     , rootEnvPath
     -- * Repository
     , Repo(..)
+    , RepoKey(..)
+    , repoURI
     , PackageVersion(..)
     , PkgVersion(..)
     , prettyPkgVersion
@@ -100,8 +102,13 @@ data Repository
     | UnverifiedRepo URI'
     deriving (Show, Read)
 
+data RepoKey
+    = Remote URI
+    | Local EnvPath
+      deriving (Show, Eq, Ord)
+
 instance Ord Repository where
-    compare a b = compare (repoURI a) (repoURI b)
+    compare a b = compare (repoKey a) (repoKey b)
 
 instance Eq Repository where
     a == b = compare a b == EQ
@@ -118,25 +125,27 @@ data LocalRepository
 data Layout = Flat | Pool deriving (Eq, Ord, Read, Show)
 
 instance Repo Repository where
-    repoURI (LocalRepo (LocalRepository path _ _)) = fromJust . parseURI $ "file://" ++ envPath path
-    repoURI (VerifiedRepo (URI' uri) _) = uri
-    repoURI (UnverifiedRepo (URI' uri)) = uri
+    repoKey (LocalRepo (LocalRepository path _ _)) = Local path -- fromJust . parseURI $ "file://" ++ envPath path
+    repoKey (VerifiedRepo (URI' uri) _) = Remote uri
+    repoKey (UnverifiedRepo (URI' uri)) = Remote uri
     repoReleaseInfo (LocalRepo (LocalRepository _ _ info)) = info
     repoReleaseInfo (VerifiedRepo _ info) = info
     repoReleaseInfo (UnverifiedRepo _uri) = error "No release info for unverified repository"
 
 instance Repo LocalRepository where
-    repoURI (LocalRepository path _ _) = fromJust . parseURI $ "file://" ++ envPath path
+    repoKey (LocalRepository path _ _) = Local path -- fromJust . parseURI $ "file://" ++ envPath path
     repoReleaseInfo (LocalRepository _ _ info) = info
 
 class (Ord t, Eq t) => Repo t where
-    repoURI :: t -> URI
+    repoKey :: t -> RepoKey
     repositoryCompatibilityLevel :: t -> IO (Maybe Int)
     repositoryCompatibilityLevel r =
         fileFromURI uri' >>= either throw (return . parse . unpack . Deb.decode)
         where
           uri' = uri {uriPath = uriPath uri </> compatibilityFile}
-          uri = repoURI r
+          uri = case repoKey r of
+                  Remote x -> x
+                  Local x -> fromJust . parseURI $ "file://" ++ envPath x
           parse :: String -> Maybe Int
           parse s = case takeWhile isDigit s of
                          "" -> Nothing
@@ -153,6 +162,12 @@ class (Ord t, Eq t) => Repo t where
              Just n | n >= libraryCompatibilityLevel -> return ()
              Just n -> error ("Compatibility error: repository level " ++ show n ++
                               " < library level " ++ show libraryCompatibilityLevel ++ ", please upgrade.")
+
+repoURI :: Repo r => r -> URI
+repoURI r =
+    case repoKey r of
+      Local path -> fromJust . parseURI $ "file://" ++ envPath path
+      Remote uri -> uri
 
 -- |The name of the file which holds the repository's compatibility
 -- level.

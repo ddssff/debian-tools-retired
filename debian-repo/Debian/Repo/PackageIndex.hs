@@ -15,7 +15,7 @@ module Debian.Repo.PackageIndex
 import Debian.Arch (Arch(..), prettyArch)
 import Debian.Release (releaseName', sectionName')
 import Debian.Sources (SourceType(..), DebSource(..))
-import Debian.Repo.Types (Repository, PackageIndex(..), Release(..), Repo(repoURI))
+import Debian.Repo.Types (Repository, PackageIndex(..), Release(..), repoURI)
 import System.FilePath ( (</>) )
 
 packageIndexName :: PackageIndex -> FilePath

@@ -8,7 +8,7 @@ import qualified Debian.Control.Text as B ( Paragraph, ControlFunctions(parseCon
 import qualified Debian.Control.Text as S ( Control'(Control) )
 import Debian.Release (Section(..), ReleaseName, parseReleaseName, releaseName', sectionName', parseSection')
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository)
-import Debian.Repo.Types ( Release(..), Repo(repoURI), Layout(..), LocalRepository(..), Repository(LocalRepo), EnvPath, outsidePath, compatibilityFile, libraryCompatibilityLevel)
+import Debian.Repo.Types ( Release(..), Repo(repoKey), Layout(..), LocalRepository(..), Repository(LocalRepo), EnvPath, outsidePath, compatibilityFile, libraryCompatibilityLevel)
 import Control.Applicative.Error ( Failing(Success, Failure) )
 import Control.Monad ( filterM, when )
 import Data.List ( isPrefixOf, groupBy, partition, sort )
@@ -94,7 +94,7 @@ readLocalRepo root layout =
       let repo = LocalRepository { repoRoot = root
                                  , repoLayout = layout
                                  , repoReleaseInfoLocal = releaseInfo }
-      putApt (insertRepository (repoURI repo) (LocalRepo repo) state)
+      putApt (insertRepository (repoKey repo) (LocalRepo repo) state)
       return repo
     where
       fstEq (a, _) (b, _) = a == b

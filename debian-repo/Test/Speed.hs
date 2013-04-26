@@ -31,7 +31,7 @@ import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupSourcePackages, i
 import Debian.Release (releaseName', sectionName')
 import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..),
                            BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..),
-                           Release(releaseName), Repo(repoURI), LocalRepository(repoRoot), Repository(LocalRepo),
+                           Release(releaseName), repoURI', LocalRepository(repoRoot), Repository(LocalRepo),
                            EnvRoot(rootPath), outsidePath )
 import Debian.URI ( fileFromURIStrict )
 import Debian.Version ( parseDebianVersion, DebianVersion )
@@ -109,7 +109,7 @@ getPackages (repo, release) index =
                  Right (B.Control control) -> return (Right $ List.map (toBinaryPackage (repo, release) index) control)) >>=
           return . either (\ (e :: SomeException) -> Left . SomeException . ErrorCall . ((show uri' ++ ":") ++) . show $ e) id
       uri' = uri {uriPath = uriPath uri </> packageIndexPath release index}
-      uri = repoURI repo
+      uri = repoURI' repo
       toLazy s = L.fromChunks [s]
       --showStream :: Either Exception L.ByteString -> IO (Either Exception L.ByteString)
       --showStream x@(Left e) = hPutStrLn stderr (show uri' ++ " - exception: " ++ show e) >> return x

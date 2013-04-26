@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE PackageImports, TupleSections #-}
 -- |Types that represent a "slice" of a repository, as defined by a
 -- list of DebSource.  This is called a slice because some sections
 -- may be omitted, and because different repositories may be combined
@@ -19,7 +19,7 @@ module Debian.Repo.Slice
 import Control.Exception ( throw )
 import Control.Monad.Trans (liftIO)
 import Data.List ( nubBy )
-import Data.Maybe ( catMaybes )
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text as T (Text, pack, unpack)
 import Debian.Control ( Control'(Control), Paragraph', ControlFunctions(parseControl), fieldValue )
 import Debian.Release ( ReleaseName, parseReleaseName, parseSection')
@@ -27,7 +27,7 @@ import Debian.Sources  ( SourceType(..), SliceName(SliceName), DebSource(..) )
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Repository ( prepareRepository' )
 import Debian.Repo.SourcesList ( parseSourceLine, parseSourcesList )
-import Debian.Repo.Types ( NamedSliceList(..), SliceList(..), Repository, EnvRoot(..) )
+import Debian.Repo.Types ( NamedSliceList(..), SliceList(..), Repository, EnvPath(..), EnvRoot(..), RepoKey(..) )
 import Debian.URI ( URI(uriScheme, uriPath), dirFromURI, fileFromURI )
 import Debian.UTF8 as Deb (decode)
 import System.FilePath ((</>))
@@ -115,6 +115,17 @@ verifySourcesList chroot list =
 verifySourceLine :: MonadApt m => Maybe EnvRoot -> String -> m (Repository, DebSource)
 verifySourceLine chroot str = verifyDebSource chroot (parseSourceLine str)
 
+{-
 verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m (Repository, DebSource)
 verifyDebSource chroot line =
     prepareRepository' chroot (sourceUri line) >>= \ repo -> return (repo, line)
+-}
+verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m (Repository, DebSource)
+verifyDebSource chroot line =
+    repo >>= return . (, line)
+    where
+      repo =
+          case uriScheme (sourceUri line) of
+            "file:" -> prepareRepository' (Local (EnvPath chroot' (uriPath (sourceUri line))))
+            _ -> prepareRepository' (Remote (sourceUri line))
+      chroot' = fromMaybe (EnvRoot "") chroot
