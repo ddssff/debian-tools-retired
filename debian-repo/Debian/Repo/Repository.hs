@@ -16,7 +16,7 @@ import Control.Exception ( ErrorCall(..), toException )
 import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy as L
 import Data.List ( sortBy, groupBy, intercalate, isSuffixOf )
-import Data.Maybe ( catMaybes, fromJust )
+import Data.Maybe (catMaybes)
 import Data.Text as T (Text, unpack)
 import Data.Time ( NominalDiffTime )
 import qualified Data.Set as Set ( member, fromList )
@@ -31,7 +31,7 @@ import Debian.Repo.LocalRepository ( prepareLocalRepository, makeReleaseInfo )
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository, lookupRepository )
 import Debian.Repo.Types ( Release(..), PkgVersion(..), prettyPkgVersion, Repo(repoReleaseInfo), LocalRepository(repoRoot),
                            Repository(..), EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath )
-import Debian.URI ( URIAuth(uriPort, uriRegName, uriUserInfo), uriToString', URI(uriAuthority, uriScheme, uriPath), dirFromURI, fileFromURI, parseURI )
+import Debian.URI (URIAuth(uriPort, uriRegName, uriUserInfo), uriToString', URI(uriAuthority, uriScheme, uriPath), dirFromURI, fileFromURI)
 import Debian.UTF8 as Deb (decode)
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Extra.Bool ( cond )
@@ -99,7 +99,7 @@ prepareRepository uri =
              case uriScheme uri of
                "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
                -- FIXME: We only want to verifyRepository on demand.
-               _ -> verifyRepository (UnverifiedRepo (show uri))
+               _ -> verifyRepository (UnverifiedRepo uri)
                -- _ -> return . Repository . UnverifiedRepo $ uri
 
 {-# NOINLINE verifyRepository #-}
@@ -109,7 +109,7 @@ verifyRepository (UnverifiedRepo uri) =
        -- Use unsafeInterleaveIO to avoid querying the repository
        -- until the value is actually needed.
        -- qPutStrLn $ "verifyRepository " ++ uri
-       releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . fromJust . parseURI $ uri
+       releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote $ uri
        {- tio (vHPutStrLn IO.stderr 0 $ "\n" {- -> VerifiedRepo " ++ show uri ++ " " ++ show releaseInfo -} ) -}
        return $ VerifiedRepo uri releaseInfo
 verifyRepository x = return x

@@ -47,6 +47,7 @@ import Debian.Version.Text ()
 import Extra.GPGSign ( PGPKey )
 import Extra.Files ( writeAndZipFileWithBackup )
 import Extra.Misc ( listDiff )
+import Network.URI (URI)
 import System.FilePath ( splitFileName, (</>) )
 import System.Directory ( createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getDirectoryContents, removeFile, renameFile )
 import System.Exit ( ExitCode(..) )
@@ -56,7 +57,7 @@ import System.Posix.Types ( FileOffset )
 import System.Process ( runInteractiveCommand, waitForProcess )
 import System.Process.Progress (quieter, qPutStr, qPutStrLn)
 import qualified Text.Format as F ( Pretty(..) )
-import Text.PrettyPrint.ANSI.Leijen (text, cat, pretty)
+import Text.PrettyPrint.ANSI.Leijen (Pretty(..), text, cat, pretty)
 
 data InstallResult 
     = Ok
@@ -684,10 +685,14 @@ instance F.Pretty ((Repository, Release), PackageIndex) where
 instance F.Pretty (Repository, Release) where
     pretty (repo, r) = cat [F.pretty repo, text " ", F.pretty r]
 
+-- | URI has a bogus show function
+instance F.Pretty URI where
+    pretty = text . show
+
 instance F.Pretty Repository where
     pretty (LocalRepo r) = text $ outsidePath (repoRoot r)
-    pretty (VerifiedRepo s _) = text s
-    pretty (UnverifiedRepo s) = text s
+    pretty (VerifiedRepo s _) = F.pretty s
+    pretty (UnverifiedRepo s) = F.pretty s
 
 instance F.Pretty Release where
     pretty r = text $ intercalate " " (releaseName' (releaseName r) : List.map (show . F.pretty) (releaseComponents r))
