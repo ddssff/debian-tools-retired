@@ -22,7 +22,7 @@ import Debian.Arch (Arch(..), prettyArch)
 import qualified Debian.Control.Text as S ( Field'(Field), Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
 import Debian.Release (Section, ReleaseName, releaseName', sectionName')
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), findRelease, putRelease )
-import Debian.Repo.Types ( PackageIndex(packageIndexArch, packageIndexComponent), Release', Release(..),
+import Debian.Repo.Types ( PackageIndex(packageIndexArch, packageIndexComponent), Release(..),
                            LocalRepository(LocalRepository, repoLayout, repoRoot), Repository(LocalRepo), outsidePath )
 import Debian.Repo.LocalRepository ( prepareLocalRepository, parseComponents, parseArchitectures )
 import Debian.Repo.PackageIndex ( packageIndexName, packageIndexDir, releaseDir, packageIndexList )
@@ -36,21 +36,21 @@ import System.FilePath ( (</>) )
 import System.Process.Progress (qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-lookupRelease :: MonadApt m => Repository -> ReleaseName -> m (Maybe Release')
+lookupRelease :: MonadApt m => Repository -> ReleaseName -> m (Maybe (Repository, Release))
 lookupRelease repo dist = getApt >>= return . findRelease repo dist
 
-insertRelease :: MonadApt m => Release' -> m Release'
+insertRelease :: MonadApt m => (Repository, Release) -> m (Repository, Release)
 insertRelease (repo, release) =
     getApt >>= putApt . putRelease repo dist (repo, release) >> return (repo, release)
     where dist = releaseName release
 
 -- | Find or create a (local) release.
-prepareRelease :: MonadApt m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> m Release'
+prepareRelease :: MonadApt m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> m (Repository, Release)
 prepareRelease repo dist aliases sections archList =
     -- vPutStrLn 0 ("prepareRelease " ++ name ++ ": " ++ show repo ++ " sections " ++ show sections) >>
     lookupRelease (LocalRepo repo) dist >>= maybe prepare (const prepare) -- return -- JAS - otherwise --create-section does not do anything
     where
-      prepare :: MonadApt m => m Release'
+      prepare :: MonadApt m => m (Repository, Release)
       prepare =
           do -- FIXME: errors get discarded in the mapM calls here
 	     let release = Release { releaseName = dist
@@ -58,7 +58,7 @@ prepareRelease repo dist aliases sections archList =
                                    , releaseComponents = sections
                                    , releaseArchitectures = archList }
              -- vPutStrLn 0 ("packageIndexList: " ++ show (packageIndexList release))
-             _ <- mapM (initIndex (outsidePath root) (LocalRepo repo, release)) (packageIndexList (LocalRepo repo, release))
+             _ <- mapM (initIndex (outsidePath root) release) (packageIndexList release)
              mapM_ (initAlias (outsidePath root) dist) aliases
              _ <- liftIO (writeRelease (LocalRepo repo, release))
 	     -- This ought to be identical to repo, but the layout should be
@@ -83,10 +83,10 @@ ensureIndex path =
          False -> liftIO $ EF.writeAndZipFile path L.empty
          True -> return $ Right ()
 
-signReleases :: Maybe EG.PGPKey -> [Release'] -> IO ()
+signReleases :: Maybe EG.PGPKey -> [(Repository, Release)] -> IO ()
 signReleases keyname releases = mapM_ (signRelease keyname) releases
 
-signRelease :: Maybe EG.PGPKey -> Release' -> IO ()
+signRelease :: Maybe EG.PGPKey -> (Repository, Release) -> IO ()
 signRelease keyname (LocalRepo repo, release) =
     do let root = repoRoot repo
        files <- writeRelease (LocalRepo repo, release)
@@ -100,15 +100,15 @@ signRelease keyname (LocalRepo repo, release) =
 signRelease _keyname _release = error $ "Attempt to sign non-local repository"
 
 -- |Write out the @Release@ files that describe a 'Release'.
-writeRelease :: Release' -> IO [FilePath]
+writeRelease :: (Repository, Release) -> IO [FilePath]
 writeRelease (LocalRepo repo, release) =
     do let root = repoRoot repo
        indexReleaseFiles <- liftIO $ writeIndexReleases (outsidePath root) release
-       masterReleaseFile <- writeMasterRelease (outsidePath root) (LocalRepo repo, release)
+       masterReleaseFile <- writeMasterRelease (outsidePath root) release
        return (masterReleaseFile : indexReleaseFiles)
     where
       writeIndexReleases root release =
-          mapM (writeIndex root release) (packageIndexList (LocalRepo repo, release))
+          mapM (writeIndex root release) (packageIndexList release)
       -- It should only be necessary to write these when the component
       -- is created, not every time the index files are changed.  But
       -- for now we're doing it anyway.
@@ -120,12 +120,12 @@ writeRelease (LocalRepo repo, release) =
                            S.Field ("Architecture", pack $ show (prettyArch (packageIndexArch index))),
                            S.Field ("Origin", " SeeReason Partners LLC"),
                            S.Field ("Label", " SeeReason")] :: S.Paragraph' Text
-             let path = packageIndexDir (LocalRepo repo, release) index ++ "/Release"
+             let path = packageIndexDir release index ++ "/Release"
              EF.maybeWriteFile (root </> path) (show (pretty para))
              return path
-      writeMasterRelease :: FilePath -> Release' -> IO FilePath
-      writeMasterRelease root (repo, release) =
-          do let paths = concat . map (indexPaths (repo, release)) $ (packageIndexList (repo, release))
+      writeMasterRelease :: FilePath -> Release -> IO FilePath
+      writeMasterRelease root release =
+          do let paths = concat . map (indexPaths release) $ (packageIndexList release)
              (paths', sums,sizes) <- 
                  liftIO (EG.cd root
                          (do paths' <- filterM doesFileExist paths
@@ -133,7 +133,7 @@ writeRelease (LocalRepo repo, release) =
                              sizes <- mapM (liftM F.fileSize . F.getFileStatus) paths'
                              return (paths', sums, sizes)))
              let checksums = Data.List.intercalate "\n" $ zipWith3 (formatFileInfo (fieldWidth sizes))
-                      	   sums sizes (map (drop (1 + length (releaseDir (repo, release)))) paths')
+                      	   sums sizes (map (drop (1 + length (releaseDir release))) paths')
              timestamp <- liftIO (getCurrentTime >>= return . ET.formatDebianDate)
              let para = S.Paragraph [S.Field ("Origin", " SeeReason Partners"),
                                      S.Field ("Label", " SeeReason"),
@@ -160,7 +160,7 @@ pad padchar padlen s = replicate p padchar ++ s
     where p = padlen - length s
 
 -- Merge a list of releases so each dist only appears once
-mergeReleases :: [Release'] -> [Release']
+mergeReleases :: [(Repository, Release)] -> [(Repository, Release)]
 mergeReleases releases =
     map (merge repos) . groupBy (==) . sortBy compare $ releases
     where
@@ -176,14 +176,14 @@ mergeReleases releases =
       merge _ _ = error "Cannot merge releases from different repositories"
 
 -- | Find all the releases in a repository.
-findReleases :: MonadApt m => LocalRepository -> m [Release']
+findReleases :: MonadApt m => LocalRepository -> m [(Repository, Release)]
 findReleases repo@(LocalRepository _ _ releases) = mapM (findLocalRelease repo) releases
 
-findLocalRelease :: MonadApt m => LocalRepository -> Release -> m Release'
+findLocalRelease :: MonadApt m => LocalRepository -> Release -> m (Repository, Release)
 findLocalRelease repo releaseInfo =
     lookupRelease (LocalRepo repo) dist >>= maybe readRelease return
     where
-      readRelease :: MonadApt m => m Release'
+      readRelease :: MonadApt m => m (Repository, Release)
       readRelease =
           do let path = (outsidePath (repoRoot repo) <> "/dists/" <> releaseName' dist <> "/Release")
              info <- liftIO $ S.parseControlFromFile path

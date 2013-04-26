@@ -18,7 +18,6 @@ module Debian.Repo.Types
     , Layout(..)
     -- * Release
     , Release(..)
-    , Release'
     -- * Each line of the sources.list represents a slice of a repository
     , SliceList(..)
     , NamedSliceList(..)
@@ -193,8 +192,6 @@ data Release = Release { releaseName :: ReleaseName
                        , releaseArchitectures :: [Arch]
                        , releaseComponents :: [Section]
                        } deriving (Eq, Ord, Read, Show)
-
-type Release' = (Repository, Release)
 
 ----------------- SLICES (SOURCES.LIST ENTRIES) ---------------
 

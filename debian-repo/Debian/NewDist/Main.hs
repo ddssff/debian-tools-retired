@@ -6,10 +6,10 @@ import		 Prelude hiding (putStr, putStrLn, putChar)
 import		 Control.Monad.Trans
 import		 Debian.Repo (runAptIO, outsidePath, MonadApt, findReleases, scanIncoming, deleteTrumped, deleteGarbage, signReleases,
                               LocalRepository, envPath, repoRoot, InstallResult, explainError, resultToProblems, prepareLocalRepository,
-                              setRepositoryCompatibility, Release', Release(..), prepareRelease,
+                              setRepositoryCompatibility, Release(..), prepareRelease,
                               EnvPath(EnvPath), EnvRoot(EnvRoot), parseArchitectures,
                               Layout(Pool, Flat), showErrors, mergeReleases, deleteSourcePackages,
-                              PackageID, makeBinaryPackageID, PackageIndex(PackageIndex))
+                              PackageID, makeBinaryPackageID, PackageIndex(PackageIndex), Repository)
 import		 Debian.Config (ParamDescr(..), option)
 import		 Control.Monad
 import		 Data.Maybe
@@ -319,7 +319,7 @@ createReleases flags =
                   _ -> error "Internal error 1"
             _ ->
                 error $ "Invalid argument to --create-section: " ++ arg
-      createSection :: MonadApt m => LocalRepository -> Release' -> Section -> m Release'
+      createSection :: MonadApt m => LocalRepository -> (Repository, Release) -> Section -> m (Repository, Release)
       createSection repo (repo', release) section' =
           case filter ((==) section') (releaseComponents release) of
             [] -> prepareRelease repo (releaseName release) (releaseAliases release)
@@ -330,7 +330,7 @@ root flags = EnvPath (EnvRoot "") (rootParam flags)
 
 archList flags = maybe defaultArchitectures (parseArchitectures . pack) $ architectures flags
 
-createRelease :: MonadApt m => LocalRepository -> [Arch] -> ReleaseName -> m Release'
+createRelease :: MonadApt m => LocalRepository -> [Arch] -> ReleaseName -> m (Repository, Release)
 createRelease repo archList' name =
     do releases <- findReleases repo
        case filter (\ (repo', release) -> elem name (releaseName release : releaseAliases release)) releases of
@@ -338,7 +338,7 @@ createRelease repo archList' name =
          [release] -> return release
          _ -> error "Internal error 2"
 
-createAlias :: MonadApt m => LocalRepository -> String -> m Release'
+createAlias :: MonadApt m => LocalRepository -> String -> m (Repository, Release)
 createAlias repo arg =
     case break (== '=') arg of
       (rel, ('=' : alias)) ->
@@ -372,9 +372,9 @@ getReleases root' layout' dists section' archList' =
 deletePackages releases flags keyname =
     deleteSourcePackages keyname toRemove
     where
-      toRemove :: [(Release', PackageIndex, PackageID BinPkgName)]
+      toRemove :: [((Repository, Release), PackageIndex, PackageID BinPkgName)]
       toRemove = map parsePackage $ removePackages flags
-      parsePackage :: String -> (Release', PackageIndex, PackageID BinPkgName)
+      parsePackage :: String -> ((Repository, Release), PackageIndex, PackageID BinPkgName)
       -- Parse a string in the form <dist>,<packagename>=<versionnumber>
       parsePackage s =
           case splitRegex (mkRegex "[,=]") s of
@@ -385,7 +385,7 @@ deletePackages releases flags keyname =
                                      makeBinaryPackageID name (parseDebianVersion ver)))
                       (findReleaseByName (parseReleaseName dist)) 
             x -> error ("Invalid remove spec: " ++ show x)
-      findReleaseByName :: ReleaseName -> Maybe Release'
+      findReleaseByName :: ReleaseName -> Maybe (Repository, Release)
       findReleaseByName dist =
           case filter (\ (repo, release) -> releaseName release == dist) releases of
             [] -> Nothing

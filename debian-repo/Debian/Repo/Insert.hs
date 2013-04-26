@@ -40,9 +40,8 @@ import Debian.Repo.Repository ( repoArchList )
 import Debian.Release (SubSection(section), Section(..), ReleaseName, parseSection', releaseName', sectionName, sectionName')
 import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, binaryPackageName, PackageIDLocal, SourcePackage(sourcePackageID), sourcePackageName,
                            BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
-                           PackageVersion(pkgVersion), Release'(..), Release(releaseAliases, releaseComponents, releaseName),
-                           Layout(..), LocalRepository(LocalRepository, repoLayout, repoRoot), Repository(..), EnvPath, outsidePath,
-                           Release'(..), Release(..))
+                           PackageVersion(pkgVersion), Release(releaseAliases, releaseComponents, releaseName),
+                           Layout(..), LocalRepository(LocalRepository, repoLayout, repoRoot), Repository(..), EnvPath, outsidePath, Release(..))
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Debian.Version.Text ()
 import Extra.GPGSign ( PGPKey )
@@ -188,7 +187,7 @@ installPackages :: MonadApt m =>
                    Bool				-- ^ ok to create new releases and sections
                 -> Maybe PGPKey		-- ^ key to sign repository with
                 -> LocalRepository		-- ^ target repository
-                -> [Release']			-- ^ Releases in target repository
+                -> [(Repository, Release)]			-- ^ Releases in target repository
                 -> [ChangesFile]		-- ^ Package to be installed
                 -> m [InstallResult]	-- ^ Outcome of each source package
 installPackages createSections keyname repo@(LocalRepository root layout _) releases changeFileList =
@@ -208,7 +207,7 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
       -- Hard link the files of each package into the repository pool,
       -- but don't unlink the files in incoming in case of subsequent
       -- failure.
-      installFiles :: MonadApt m => EnvPath -> (Set.Set Text, [Release'], [InstallResult]) -> ChangesFile -> m (Set.Set Text, [Release'], [InstallResult])
+      installFiles :: MonadApt m => EnvPath -> (Set.Set Text, [(Repository, Release)], [InstallResult]) -> ChangesFile -> m (Set.Set Text, [(Repository, Release)], [InstallResult])
       installFiles root (live, releases, results) changes =
           findOrCreateRelease releases (changeRelease changes) >>=
           maybe (return (live, releases, Failed [NoSuchRelease (changeRelease changes)] : results)) installFiles'
@@ -274,7 +273,7 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
       -- Update all the index files affected by the successful
       -- installs.  This is a time consuming operation, so we want to
       -- do this all at once, rather than one package at a time
-      updateIndexes :: EnvPath -> [Release'] -> [InstallResult] -> IO [InstallResult]
+      updateIndexes :: EnvPath -> [(Repository, Release)] -> [InstallResult] -> IO [InstallResult]
       updateIndexes root releases results =
           do (pairLists :: [Either InstallResult [(PackageIndexLocal, B.Paragraph)]]) <-
                  mapM (uncurry $ buildInfo root releases) (zip changeFileList results)
@@ -288,7 +287,7 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
             compareIndex :: (PackageIndexLocal, B.Paragraph) -> (PackageIndexLocal, B.Paragraph) -> Ordering
             compareIndex (a, _) (b, _) = compare a b
       -- Build the control information to be added to the package indexes.
-      buildInfo :: EnvPath -> [Release'] -> ChangesFile -> InstallResult -> IO (Either InstallResult [(PackageIndexLocal, B.Paragraph)])
+      buildInfo :: EnvPath -> [(Repository, Release)] -> ChangesFile -> InstallResult -> IO (Either InstallResult [(PackageIndexLocal, B.Paragraph)])
       buildInfo root releases changes Ok =
           do case findRelease releases (changeRelease changes) of
                Just release ->
@@ -303,9 +302,9 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
                         results -> return (Left (mergeResults results))
                Nothing -> return . Left . Failed $ [NoSuchRelease (changeRelease changes)]
           where
-            indexLists :: Release' -> [[PackageIndexLocal]]
+            indexLists :: Release -> [[PackageIndexLocal]]
             indexLists release = List.map (indexes release) indexFiles
-            indexes :: Release'  -> ChangedFileSpec -> [PackageIndexLocal]
+            indexes :: Release -> ChangedFileSpec -> [PackageIndexLocal]
             indexes release file = List.map (PackageIndex (section . changedFileSection $ file)) (archList release changes file)
             indexFiles = dsc ++ debs
             (debs :: [ChangedFileSpec]) = filter f files
@@ -316,7 +315,7 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
             -- (indepDebs, archDebs) = partition (isSuffixOf "_all.deb" . changedFileName) debs
             -- (dsc, other) = partition (isSuffixOf ".dsc" . changedFileName) nonDebs
             --fileIndex release file = List.map (PackageIndex release (section . changedFileSection $ file)) (archList release changes file)
-            fileInfo :: EnvPath -> Release' -> ChangedFileSpec -> IO (Either InstallResult B.Paragraph)
+            fileInfo :: EnvPath -> (Repository, Release) -> ChangedFileSpec -> IO (Either InstallResult B.Paragraph)
             fileInfo root release file =
                 getControl >>= return . addFields
                 where
@@ -370,7 +369,7 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
           where dst = case layout of
                         Flat -> outsidePath root </> Debian.Repo.Changes.name changes
                         Pool -> outsidePath root ++ "/installed/" ++ Debian.Repo.Changes.name changes
-      findOrCreateRelease :: MonadApt m => [Release'] -> ReleaseName -> m (Maybe Release')
+      findOrCreateRelease :: MonadApt m => [(Repository, Release)] -> ReleaseName -> m (Maybe (Repository, Release))
       findOrCreateRelease releases name =
           case createSections of
             False -> return (findRelease releases name)
@@ -380,15 +379,15 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
                              do newRelease <- prepareRelease repo name [] [parseSection' "main"] (repoArchList repo)
                                 return (Just newRelease)
                          Just release -> return (Just release)
-      findRelease :: [Release'] -> ReleaseName -> Maybe Release'
+      findRelease :: [(Repository, Release)] -> ReleaseName -> Maybe (Repository, Release)
       findRelease releases name = 
           case filter (\ (_repo, release) -> elem name (releaseName release : releaseAliases release)) releases of
             [] -> Nothing
             [x] -> Just x
             _ -> error $ "Internal error 16 - multiple releases named " ++ releaseName' name
 
-archList :: Release' -> ChangesFile -> ChangedFileSpec -> [Arch]
-archList (repo, release) changes file =
+archList :: Release -> ChangesFile -> ChangedFileSpec -> [Arch]
+archList release changes file =
     case () of
       _ | isSuffixOf "_all.deb" name -> releaseArchitectures release
       _ | isSuffixOf ".deb" name -> [changeArch changes]
@@ -411,7 +410,7 @@ keepRight xs = catMaybes $ List.map (either (const Nothing) Just) xs
 keepLeft :: [Either a b] -> [a]
 keepLeft xs = catMaybes $ List.map (either Just (const Nothing)) xs
 
-addDebFields :: Release' -> ChangesFile -> ChangedFileSpec -> Paragraph' Text -> (Either InstallResult (Paragraph' Text))
+addDebFields :: (Repository, Release) -> ChangesFile -> ChangedFileSpec -> Paragraph' Text -> (Either InstallResult (Paragraph' Text))
 addDebFields release changes file info =
     let (binaryVersion :: DebianVersion) =
             maybe (error $ "Missing 'Version' field") parseDebianVersion (B.fieldValue "Version" info) in
@@ -428,7 +427,7 @@ addDebFields release changes file info =
       sourceVersion = changeVersion changes
 
 
-addSourceFields :: Release' -> ChangesFile -> ChangedFileSpec -> B.Paragraph -> (Either InstallResult B.Paragraph)
+addSourceFields :: (Repository, Release) -> ChangesFile -> ChangedFileSpec -> B.Paragraph -> (Either InstallResult B.Paragraph)
 addSourceFields release changes file info =
     Right . append . raise . modify . rename $ info
     where
@@ -496,7 +495,7 @@ addPackagesToIndexes pairs =
 -- packages.  These packages are not technically garbage because they
 -- can still be installed by explicitly giving their version number to
 -- apt, but it is not really a good idea to use them.
-deleteTrumped :: Maybe PGPKey -> [Release'] -> IO [Release']
+deleteTrumped :: Maybe PGPKey -> [(Repository, Release)] -> IO [(Repository, Release)]
 deleteTrumped _ [] = error "deleteTrumped called with empty release list"
 deleteTrumped keyname releases =
     case nub . List.map fst $ releases of
@@ -519,13 +518,13 @@ deleteTrumped keyname releases =
 
 -- | Return a list of packages in a release which are trumped by some
 -- newer version.
-findTrumped :: Release' -> IO (Either String [(Release', PackageIndex, BinaryPackage)])
-findTrumped release =
+findTrumped :: (Repository, Release) -> IO (Either String [((Repository, Release), PackageIndex, BinaryPackage)])
+findTrumped (repo, release) =
     do
       mapM doIndex (sourceIndexList release) >>= return . merge
     where
-      doIndex index = DRP.getPackages release index >>= return . either Left (Right . (List.map (\ b -> (release, index, b))))
-      merge :: [Either SomeException [(Release', PackageIndex, BinaryPackage)]] -> Either String [(Release', PackageIndex, BinaryPackage)]
+      doIndex index = DRP.getPackages (repo, release) index >>= return . either Left (Right . (List.map (\ b -> ((repo, release), index, b))))
+      merge :: [Either SomeException [((Repository, Release), PackageIndex, BinaryPackage)]] -> Either String [((Repository, Release), PackageIndex, BinaryPackage)]
       merge packages =
           case partitionEithers packages of
             ([], packages') -> Right . concat . List.map tail . List.map newestFirst . groupByName . concat $ packages'
@@ -541,13 +540,13 @@ findTrumped release =
         (bad, _) -> return (Left $ "Error reading source indexes: " ++ intercalate ", " (List.map show bad))
 -}
 
-      groupByName :: [(Release', PackageIndex, BinaryPackage)] -> [[(Release', PackageIndex, BinaryPackage)]]
+      groupByName :: [((Repository, Release), PackageIndex, BinaryPackage)] -> [[((Repository, Release), PackageIndex, BinaryPackage)]]
       groupByName = groupBy equalNames . sortBy compareNames
-      equalNames a@(_, _, a') b@(_, _, b') = binaryPackageName a' == binaryPackageName b'
-      compareNames a@(_, _, a') b@(_, _, b') = compare (binaryPackageName a') (binaryPackageName b')
+      equalNames (_, _, a') (_, _, b') = binaryPackageName a' == binaryPackageName b'
+      compareNames (_, _, a') (_, _, b') = compare (binaryPackageName a') (binaryPackageName b')
       newestFirst = sortBy (flip compareVersions)
-      compareVersions a@(_, _, a') b@(_, _, b') = compare (pkgVersion a') (pkgVersion b')
-      formatGroup :: [(Release', PackageIndex, BinaryPackage)] -> Maybe String
+      compareVersions (_, _, a') (_, _, b') = compare (pkgVersion a') (pkgVersion b')
+      formatGroup :: [((Repository, Release), PackageIndex, BinaryPackage)] -> Maybe String
       formatGroup [] = Nothing
       formatGroup [_] = Nothing
       formatGroup ((release, index, newest) : other) =
@@ -632,7 +631,7 @@ findLive repo@(LocalRepository root (Just layout) _) =
                                               show (prettyArch arch)] ++ ".upload") (Set.fromList (concat (architectures releases)))
       architectures releases = List.map head . group . sort . List.map (releaseArchitectures . snd) $ releases
 
-deleteSourcePackages :: Maybe PGPKey -> [(Release', PackageIndex, PackageIDLocal BinPkgName)] -> IO [Release']
+deleteSourcePackages :: Maybe PGPKey -> [((Repository, Release), PackageIndex, PackageIDLocal BinPkgName)] -> IO [(Repository, Release)]
 deleteSourcePackages keyname packages =
     if Set.null invalid
     then qPutStrLn (unlines ("Removing packages:" : List.map (show . F.pretty . (\ (_, _, x) -> x)) packages)) >>
@@ -640,34 +639,33 @@ deleteSourcePackages keyname packages =
     else error "deleteSourcePackages: not a source index"
     where
       doIndex (release, index) = getEntries release index >>= put release index . List.partition (victim release index)
-      put :: Release' -> PackageIndex -> ([BinaryPackage], [BinaryPackage]) -> IO Release'
+      put :: (Repository, Release) -> PackageIndex -> ([BinaryPackage], [BinaryPackage]) -> IO (Repository, Release)
       put release index (junk, keep) =
           when (junk /= []) (qPutStrLn ("Removing packages from " ++ show (F.pretty (release, index)) ++ ": " ++ intercalate " " (List.map (show . F.pretty . packageID) junk))) >>
           putIndex' keyname release index keep
-      indexes' = Set.fold Set.union Set.empty (Set.map (\ (r, _) -> Set.fromList (List.map (r,) (packageIndexList r))) indexes) -- concatMap allIndexes (Set.toList indexes)
-      (indexes, invalid) = Set.partition (\ (r, i) -> packageIndexArch i == Source) (Set.fromList (List.map (\ (r, i, b) -> (r, i)) packages))
+      indexes' = Set.fold Set.union Set.empty (Set.map (\ ((repo, r), _) -> Set.fromList (List.map ((repo, r),) (packageIndexList r))) indexes) -- concatMap allIndexes (Set.toList indexes)
+      (indexes, invalid) = Set.partition (\ (_, i) -> packageIndexArch i == Source) (Set.fromList (List.map (\ ((repo, r), i, _) -> ((repo, r), i)) packages))
       -- (source, invalid) = Set.partition (\ (r, i, b) -> packageIndexArch i == Source) (Set.fromList packages)
       -- (indexes, invalid) = Set.partition (\ index -> packageIndexArch index == Source) (Set.fromList (List.map fst packages))
       -- allIndexes (release, sourceIndex) = packageIndexList release
       -- Compute the id of the source package this entry is from, and see if
       -- it is one of the packages we are deleting.
-      victim :: Release' -> PackageIndex -> BinaryPackage -> Bool
+      victim :: (Repository, Release) -> PackageIndex -> BinaryPackage -> Bool
       victim release index entry = Set.member (release, index, sourceIdent index entry) (Set.fromList packages)
       sourceIdent :: PackageIndex -> BinaryPackage -> PackageID BinPkgName
       sourceIdent index entry =
           case packageIndexArch index of
             Source -> packageID entry
             _ -> DRP.binaryPackageSourceID index entry
-      getEntries :: Release' -> PackageIndex -> IO [BinaryPackage]
+      getEntries :: (Repository, Release) -> PackageIndex -> IO [BinaryPackage]
       getEntries release index = DRP.getPackages release index >>= return . either (error . show) id
-      putIndex' :: Maybe PGPKey -> Release' -> PackageIndexLocal -> [BinaryPackageLocal] -> IO Release'
-      putIndex' keyname release index entries =
-          do let (LocalRepo repo, _) = release
-                 root = repoRoot repo
+      putIndex' :: Maybe PGPKey -> (Repository, Release) -> PackageIndexLocal -> [BinaryPackageLocal] -> IO (Repository, Release)
+      putIndex' keyname (LocalRepo repo, release) index entries =
+          do let root = repoRoot repo
              _ <- putIndex root release index entries
-             signRelease keyname release
-             return release
-      putIndex :: EnvPath -> Release' -> PackageIndexLocal -> [BinaryPackageLocal] -> IO (Either [String] ())
+             signRelease keyname (LocalRepo repo, release)
+             return (LocalRepo repo, release)
+      putIndex :: EnvPath -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO (Either [String] ())
       putIndex root release index packages =
                 let text = formatControl (B.Control (List.map packageInfo packages)) in
                 liftIO $ writeAndZipFileWithBackup (outsidePath root </> packageIndexPath release index) (L.fromChunks [encodeUtf8 (mconcat text)])
@@ -675,7 +673,7 @@ deleteSourcePackages keyname packages =
 instance PkgName name => F.Pretty (PackageID name) where
     pretty p = prettyPackageID p -- packageName p ++ "=" ++ show (prettyDebianVersion (packageVersion p))
 
-instance F.Pretty (Release', PackageIndex) where
+instance F.Pretty ((Repository, Release), PackageIndex) where
     pretty ((repo, r), i) = text $
         intercalate "/" [show (F.pretty repo),
                          "dist",
@@ -683,7 +681,7 @@ instance F.Pretty (Release', PackageIndex) where
 		         show (F.pretty (packageIndexComponent i)),
                          show (prettyArch (packageIndexArch i))]
 
-instance F.Pretty Release' where
+instance F.Pretty (Repository, Release) where
     pretty (repo, r) = cat [F.pretty repo, text " ", F.pretty r]
 
 instance F.Pretty Repository where

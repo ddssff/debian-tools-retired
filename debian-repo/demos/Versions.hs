@@ -22,7 +22,7 @@ main' :: MonadApt m => m ()
 main' =
     do repo <- prepareRepository (fromJust (parseURI uri))
        releases <- mapM insertRelease (map (repo,) (repoReleaseInfo repo))
-       let binaryIndexes = map (filter (\ i -> packageIndexArch i == arch)) (map binaryIndexList releases)
+       let binaryIndexes = map (filter (\ i -> packageIndexArch i == arch)) (map (binaryIndexList . snd) releases)
        -- _binaryPackages <- mapM (packageLists release) binaryIndexes
        liftIO (putStrLn ("\n" ++ show releases))
 {-
