@@ -290,8 +290,8 @@ installPackages createSections keyname repo@(LocalRepository root layout _) rele
       buildInfo :: EnvPath -> [(Repository, Release)] -> ChangesFile -> InstallResult -> IO (Either InstallResult [(PackageIndexLocal, B.Paragraph)])
       buildInfo root releases changes Ok =
           do case findRelease releases (changeRelease changes) of
-               Just release ->
-                   do (info :: [Either InstallResult B.Paragraph]) <- mapM (fileInfo root release) indexFiles
+               Just (repo, release) ->
+                   do (info :: [Either InstallResult B.Paragraph]) <- mapM (fileInfo root (repo, release)) indexFiles
                       case keepLeft info of
                         [] ->
                             let (pairs :: [([PackageIndexLocal], Either InstallResult B.Paragraph)]) = zip (indexLists release) info in
