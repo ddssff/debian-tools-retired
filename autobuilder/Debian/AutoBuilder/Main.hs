@@ -33,7 +33,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (Atoms)
 import Debian.Release (ReleaseName, parseSection', releaseName')
-import Debian.Sources (SliceName(..))
+import Debian.Sources (SliceName(..), DebSource)
 import Debian.Repo.AptImage(prepareAptEnv)
 import Debian.Repo.Cache(updateCacheSources)
 import Debian.Repo.Insert(deleteGarbage)
@@ -46,10 +46,10 @@ import Debian.Repo.Repository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Slice(appendSliceLists, inexactPathSlices, releaseSlices, repoSources)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types(EnvRoot(EnvRoot, rootPath), EnvPath(..),
-                         Layout(Flat), Release(releaseRepo),
+                         Layout(Flat), Release(releaseName),
                          NamedSliceList(..), Repository(LocalRepo, VerifiedRepo),
                          LocalRepository(LocalRepository), outsidePath,
-                         SliceList(slices), Slice(sliceRepo), ReleaseInfo(releaseInfoName))
+                         SliceList(slices))
 import Debian.URI(URIAuth(uriUserInfo, uriRegName, uriPort), URI(uriScheme, uriPath, uriAuthority), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
@@ -234,10 +234,10 @@ runParameterSet defaultAtoms cache =
                               "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-section=" ++ rel ++ ",main" ++
                               "\nYou will also need to remove the local file ~/.autobuilder/repoCache.")
           where
-            info :: Slice -> [ReleaseName]
-            info slice =
-                case sliceRepo slice of
-                  (VerifiedRepo _ rels) -> map releaseInfoName rels
+            info :: (Repository, DebSource) -> [ReleaseName]
+            info (repo, slice) =
+                case repo of
+                  (VerifiedRepo _ rels) -> map releaseName rels
                   _ -> []
       doShowParams = ePutStr $ "Configuration parameters:\n" ++ P.prettyPrint params
       doShowSources =
@@ -264,8 +264,8 @@ runParameterSet defaultAtoms cache =
              repo <- prepareLocalRepository path (Just Flat) >>=
                      (if P.flushPool params then flushLocalRepository else return)
              qPutStrLn $ "Preparing release main in local repository at " ++ outsidePath path
-             release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
-             case releaseRepo release of
+             (repo, release) <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
+             case repo of
                LocalRepo repo' ->
                    case P.cleanUp params of
                      True -> deleteGarbage repo'
@@ -335,11 +335,11 @@ runParameterSet defaultAtoms cache =
              return ()
           where
             isRemote (uri, _) = uriScheme uri /= "file:"
-            loadCache :: FilePath -> IO (Map.Map URI (Maybe Repository))
+            loadCache :: FilePath -> IO (Map.Map URI Repository)
             loadCache path =
                 do pairs <- readFile path `IO.catch` (\ (_ :: SomeException) -> return "[]") >>= 
-                            return . fromMaybe [] . maybeRead :: IO [(String, Maybe Repository)]
-                   let (pairs' :: [(URI, Maybe Repository)]) =
+                            return . fromMaybe [] . maybeRead :: IO [(String, Repository)]
+                   let (pairs' :: [(URI, Repository)]) =
                            catMaybes (map (\ (s, x) -> case parseURI s of
                                                          Nothing -> Nothing
                                                          Just uri -> Just (uri, x)) pairs)

@@ -42,16 +42,16 @@ Library
     if flag(local-debian)
       Hs-Source-Dirs: ., ../../haskell-debian, ../debian-repo
     else
-      Build-Depends: debian >= 3.70.1
+      Build-Depends: debian >= 3.76
       Hs-Source-Dirs: ., ../debian-repo
   else
-    Build-Depends: debian-repo >= 5.40.1, debian >= 3.70.1
+    Build-Depends: debian-repo >= 5.42, debian >= 3.76
 
   if flag(local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src
     Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff
   else
-    Build-Depends: cabal-debian >= 3.1
+    Build-Depends: cabal-debian >= 3.3.2
 
   Build-Depends:
         ansi-wl-pprint
