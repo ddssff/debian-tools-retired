@@ -38,7 +38,9 @@ import Debian.Repo.Slice ( verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Types ( AptCache(aptArch, aptBaseSliceList, aptBinaryPackages, aptReleaseName, aptSourcePackages, globalCacheDir), SourcePackage(sourcePackageID),
                            sourcePackageName, BinaryPackage(packageID), binaryPackageName, PackageID(packageVersion), PackageIndex(..),
-                           Release(releaseName), Repo(repoReleaseInfo), EnvRoot(EnvRoot), Repository )
+                           Release(releaseName), EnvRoot(EnvRoot) )
+import Debian.Repo.Types.Repo (Repo(repoReleaseInfo))
+import Debian.Repo.Types.Repository (Repository)
 import Debian.URI ( URIAuth(uriPort, uriRegName, uriUserInfo), URI(uriAuthority, uriPath, uriScheme), escapeURIString )
 import System.Exit ( ExitCode(ExitSuccess) )
 import Extra.Files ( replaceFile )

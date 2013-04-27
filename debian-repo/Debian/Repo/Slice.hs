@@ -27,8 +27,10 @@ import Debian.Sources  ( SourceType(..), SliceName(SliceName), DebSource(..) )
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Repository ( prepareRepository' )
 import Debian.Repo.SourcesList ( parseSourceLine, parseSourcesList )
-import Debian.Repo.Types ( NamedSliceList(..), SliceList(..), Repository, EnvPath(..), EnvRoot(..), RepoKey(..) )
-import Debian.URI ( URI(uriScheme, uriPath), dirFromURI, fileFromURI )
+import Debian.Repo.Types (NamedSliceList(..), SliceList(..), EnvPath(..), EnvRoot(..))
+import Debian.Repo.Types.Repository (Repository)
+import Debian.Repo.Types.Repo (RepoKey(..))
+import Debian.URI (URI'(URI'), URI(uriScheme, uriPath), dirFromURI, fileFromURI )
 import Debian.UTF8 as Deb (decode)
 import System.FilePath ((</>))
 import Text.Regex ( mkRegex, splitRegex )
@@ -127,5 +129,5 @@ verifyDebSource chroot line =
       repo =
           case uriScheme (sourceUri line) of
             "file:" -> prepareRepository' (Local (EnvPath chroot' (uriPath (sourceUri line))))
-            _ -> prepareRepository' (Remote (sourceUri line))
+            _ -> prepareRepository' (Remote (URI' (sourceUri line)))
       chroot' = fromMaybe (EnvRoot "") chroot

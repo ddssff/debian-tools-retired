@@ -64,8 +64,9 @@ import Debian.Repo.SourceTree (SourceTreeC(..), DebianSourceTreeC(..),
                                findChanges, findOneDebianBuildTree, SourcePackageStatus(..))
 import Debian.Repo.Types (SourcePackage(sourceParagraph, sourcePackageID),
                           AptCache(rootDir, aptBinaryPackages), EnvRoot(rootPath),
-                          PackageID(packageVersion), LocalRepository, PkgVersion(..),
+                          PackageID(packageVersion), PkgVersion(..),
                           BinaryPackage(packageInfo), prettyPkgVersion)
+import Debian.Repo.Types.LocalRepository (LocalRepository)
 import Debian.Time(getCurrentLocalRFC822Time)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.VersionPolicy(parseTag, setTag)

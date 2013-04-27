@@ -23,7 +23,9 @@ import Debian.Repo (NamedSliceList(..), parseSourcesList, verifySourcesList, rep
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), setRepoMap)
 import Debian.Repo.Monads.Top (MonadTop(askTop), sub)
 import Debian.Repo.Types ( SliceList(..) )
-import Debian.URI ( parseURI )
+import Debian.Repo.Types.Repo (RepoKey(..))
+import Debian.Repo.Types.Repository (Repository)
+import Debian.URI (URI'(URI'),  parseURI)
 import System.Directory ( createDirectoryIfMissing, getPermissions, writable )
 import System.Environment ( getEnv )
 import System.Process.Progress (qPutStrLn)
@@ -59,12 +61,19 @@ loadRepoCache =
        qPutStrLn "Loading repo cache..."
        state <- getApt
        uris <- liftIO $ try (readFile repoCache) >>=
-               try . evaluate . either (\ (_ :: SomeException) -> []) read >>=
-               return . either (\ (_ :: SomeException) -> []) id
+                        try . evaluate . either (\ (_ :: SomeException) -> []) read >>=
+                        return . either (\ (_ :: SomeException) -> []) id
+{-
+       uris <- liftIO (try (readFile repoCache)) >>=
+               return . evaluate . either (\ (_ :: SomeException) -> []) read >>=
+               return . either (\ (_ :: SomeException) -> []) id :: IO [(URI', Repository)]
+-}
        qPutStrLn $ "Loaded " ++ show (length uris) ++ " entries from the repo cache."
        putApt (setRepoMap (fromList (map fixURI uris)) state)
     where
-      fixURI (s, x) = (fromJust (parseURI s), x)
+      -- fixURI (Remote s, x) = (fromJust (parseURI s), x)
+      fixURI :: (URI', a) -> (RepoKey, a)
+      fixURI (s, x) = (Remote s, x)
 
 -- Compute the top directory, try to create it, and then make sure it
 -- exists.  Then we can safely return it from topDir below.

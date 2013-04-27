@@ -39,9 +39,10 @@ import qualified Debian.Relation.Text as B ( ParseRelations(..), Relations )
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupSourcePackages, insertSourcePackages, lookupBinaryPackages, insertBinaryPackages, readParagraphs)
 import Debian.Release (releaseName', sectionName')
 import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..),
-                           BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..),
-                           Release(releaseName), repoURI, LocalRepository(repoRoot), Repository(LocalRepo),
-                           EnvRoot(rootPath), outsidePath )
+                           BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..), Release(releaseName), EnvRoot(rootPath), outsidePath )
+import Debian.Repo.Types.LocalRepository (LocalRepository(repoRoot))
+import Debian.Repo.Types.Repo (repoURI)
+import Debian.Repo.Types.Repository (Repository(LocalRepo))
 import Debian.URI ( fileFromURIStrict )
 import Debian.Version ( parseDebianVersion, DebianVersion )
 import qualified Debian.Version as V ( buildDebianVersion, epoch, revision, version )

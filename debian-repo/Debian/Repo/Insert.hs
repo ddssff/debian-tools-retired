@@ -41,7 +41,9 @@ import Debian.Release (SubSection(section), Section(..), ReleaseName, parseSecti
 import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, binaryPackageName, PackageIDLocal, SourcePackage(sourcePackageID), sourcePackageName,
                            BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
                            PackageVersion(pkgVersion), Release(releaseAliases, releaseComponents, releaseName),
-                           Layout(..), LocalRepository(LocalRepository, repoLayout, repoRoot), Repository(..), EnvPath, outsidePath, Release(..))
+                           EnvPath, outsidePath, Release(..))
+import Debian.Repo.Types.LocalRepository (Layout(..), LocalRepository(LocalRepository, repoLayout, repoRoot))
+import Debian.Repo.Types.Repository (Repository(..))
 import Debian.URI (URI'(..))
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Debian.Version.Text ()

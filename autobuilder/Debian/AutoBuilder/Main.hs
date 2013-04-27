@@ -45,12 +45,11 @@ import Debian.Repo.Release(prepareRelease)
 import Debian.Repo.Repository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Slice(appendSliceLists, inexactPathSlices, releaseSlices, repoSources)
 import Debian.Repo.Sync (rsync)
-import Debian.Repo.Types(EnvRoot(EnvRoot, rootPath), EnvPath(..),
-                         Layout(Flat), Release(releaseName),
-                         NamedSliceList(..), Repository(LocalRepo, VerifiedRepo),
-                         LocalRepository(LocalRepository), outsidePath,
-                         SliceList(slices))
-import Debian.URI(URIAuth(uriUserInfo, uriRegName, uriPort), URI(uriScheme, uriPath, uriAuthority), parseURI)
+import Debian.Repo.Types (EnvRoot(EnvRoot, rootPath), EnvPath(..), Release(releaseName), NamedSliceList(..), outsidePath, SliceList(slices))
+import Debian.Repo.Types.LocalRepository (LocalRepository(LocalRepository), Layout(Flat))
+import Debian.Repo.Types.Repo (RepoKey(Remote))
+import Debian.Repo.Types.Repository (Repository(LocalRepo, VerifiedRepo))
+import Debian.URI(URI'(URI'), URI(uriScheme, uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
@@ -264,13 +263,10 @@ runParameterSet defaultAtoms cache =
              repo <- prepareLocalRepository path (Just Flat) >>=
                      (if P.flushPool params then flushLocalRepository else return)
              qPutStrLn $ "Preparing release main in local repository at " ++ outsidePath path
-             (repo, release) <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
-             case repo of
-               LocalRepo repo' ->
-                   case P.cleanUp params of
-                     True -> deleteGarbage repo'
-                     False -> return repo'
-               _ -> error "Expected local repo"
+             release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
+             case P.cleanUp params of
+               True -> deleteGarbage repo
+               False -> return repo
       retrieveTargetList :: MonadDeb m => OSImage -> m [Either String Buildable]
       retrieveTargetList dependOS =
           retrieveTargetList' dependOS >>=
@@ -334,16 +330,12 @@ runParameterSet defaultAtoms cache =
              liftIO (removeLink path `IO.catch` (\e -> unless (isDoesNotExistError e) (ioError e))) >> liftIO (writeFile path merged)
              return ()
           where
-            isRemote (uri, _) = uriScheme uri /= "file:"
-            loadCache :: FilePath -> IO (Map.Map URI Repository)
+            isRemote uri = uriScheme uri /= "file:"
+            -- isRemote (uri, _) = uriScheme uri /= "file:"
+            loadCache :: FilePath -> IO (Map.Map RepoKey Repository)
             loadCache path =
-                do pairs <- readFile path `IO.catch` (\ (_ :: SomeException) -> return "[]") >>= 
-                            return . fromMaybe [] . maybeRead :: IO [(String, Repository)]
-                   let (pairs' :: [(URI, Repository)]) =
-                           catMaybes (map (\ (s, x) -> case parseURI s of
-                                                         Nothing -> Nothing
-                                                         Just uri -> Just (uri, x)) pairs)
-                   return . Map.fromList . filter isRemote $ pairs'
+                readFile path `IO.catch` (\ (_ :: SomeException) -> return "[]") >>=
+                return . Map.fromList . fromMaybe [] . maybeRead
 
 -- | Perform a list of tasks with log messages.
 countTasks' :: MonadIO m => [(String, m a)] -> m [a]

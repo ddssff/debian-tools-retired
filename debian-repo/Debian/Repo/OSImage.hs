@@ -33,8 +33,10 @@ import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types ( AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage,
                            NamedSliceList(sliceList, sliceListName), SliceList(..),
-                           repoURI, LocalRepository(repoRoot), Repository(LocalRepo),
                            EnvPath(EnvPath, envRoot), EnvRoot(rootPath), outsidePath )
+import Debian.Repo.Types.LocalRepository (LocalRepository(repoRoot))
+import Debian.Repo.Types.Repo (repoURI)
+import Debian.Repo.Types.Repository (Repository(LocalRepo))
 import Debian.URI ( uriToString', URI(uriScheme) )
 import Extra.Files ( replaceFile )
 import "Extra" Extra.List ( isSublistOf )
