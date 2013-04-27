@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses,
-             PackageImports, TypeSynonymInstances #-}
+             PackageImports, TypeSynonymInstances, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |AptIO is an instance of the RWS monad used to manage the global
 -- state and output style parameters of clients of the Apt library,
@@ -36,7 +36,7 @@ import Control.Exception ( try )
 import Control.Exception as E (Exception, tryJust)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO)
 import Control.Monad.Reader (ReaderT)
-import Control.Monad.State (get, put)
+import Control.Monad.State (get, put, modify)
 import Control.Monad.State ( MonadTrans(..), MonadIO(..), StateT(runStateT), mapStateT )
 import qualified Data.Map as Map (Map, insert, empty, lookup)
 import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), ControlFunctions(parseControlFromHandle) )
@@ -44,7 +44,7 @@ import Debian.Release (ReleaseName)
 import Debian.Sources (SliceName)
 import Debian.Repo.Types (AptImage, SourcePackage, BinaryPackage, Release)
 import Debian.Repo.Types.Repo (Repo(repoKey), RepoKey(..))
-import Debian.Repo.Types.Repository (Repository)
+import Debian.Repo.Types.Repository (Repository, MonadRepoCache(getRepoCache, putRepoCache))
 import qualified System.IO as IO ( IOMode(ReadMode), hClose, openBinaryFile )
 import System.Posix.Files ( FileStatus, deviceID, fileID, modificationTime )
 import System.Process.Progress (ePutStrLn)
@@ -190,3 +190,7 @@ instance (MonadIO m, Functor m, MonadCatchIO m) => MonadApt (AptIOT m) where
 instance MonadApt m => MonadApt (ReaderT s m) where
     getApt = lift getApt
     putApt = lift . putApt
+
+instance MonadApt m => MonadRepoCache m where
+    getRepoCache = getApt >>= return . repoMap
+    putRepoCache m = getApt >>= \ a -> putApt (a {repoMap = m})

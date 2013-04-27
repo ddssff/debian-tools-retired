@@ -21,9 +21,7 @@ import Debian.Control (ControlFunctions(stripWS))
 import Debian.Control (formatParagraph)
 import qualified Debian.Control.Text as B ( Field'(Field), Paragraph, Field, Control'(Control), ControlFunctions(lookupP), fieldValue )
 import qualified Debian.Relation.Text as B ( ParseRelations(..), Relations )
-import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..),
-                           BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..),
-                           Release(releaseName), EnvRoot(rootPath), outsidePath )
+import Debian.Repo.Types (SourceFileSpec(SourceFileSpec), SourceControl(..), SourcePackage(..), makeSourcePackageID, makeBinaryPackageID)
 import Debian.Repo.Types.Repo (repoURI)
 import Debian.Repo.Types.Repository (Repository(LocalRepo))
 import Debian.URI ( fileFromURIStrict )

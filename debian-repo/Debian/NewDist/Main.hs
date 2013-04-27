@@ -8,10 +8,10 @@ import		 Control.Monad.Trans
 import		 Debian.Repo (runAptIO, outsidePath, MonadApt, findReleases, scanIncoming, deleteTrumped, deleteGarbage, signReleases,
                               envPath, InstallResult, explainError, resultToProblems, prepareLocalRepository,
                               setRepositoryCompatibility, Release(..), prepareRelease,
-                              EnvPath(EnvPath), EnvRoot(EnvRoot), parseArchitectures,
+                              EnvPath(EnvPath), EnvRoot(EnvRoot),
                               showErrors, mergeReleases, deleteSourcePackages,
                               PackageID, makeBinaryPackageID, PackageIndex(PackageIndex))
-import Debian.Repo.Types.Repository (Repository(LocalRepo), LocalRepository, Layout(Pool, Flat), repoRoot)
+import Debian.Repo.Types.Repository (Repository(LocalRepo), LocalRepository, Layout(Pool, Flat), repoRoot, parseArchitectures)
 import		 Debian.Config (ParamDescr(..), option)
 import		 Control.Monad
 import		 Data.Maybe

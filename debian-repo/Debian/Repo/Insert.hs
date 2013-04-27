@@ -42,7 +42,7 @@ import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, binaryPackag
                            BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
                            PackageVersion(pkgVersion), Release(releaseAliases, releaseComponents, releaseName),
                            EnvPath, outsidePath, Release(..))
-import Debian.Repo.Types.Repository (Repository(..), Layout(..), LocalRepository(LocalRepository, repoLayout, repoRoot))
+import Debian.Repo.Types.Repository (Repository(..), Layout(..), LocalRepository(repoLayout, repoRoot))
 import Debian.URI (URI'(..))
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Debian.Version.Text ()
@@ -155,10 +155,10 @@ explainError other = show other
 -- | Find the .changes files in the incoming directory and try to 
 -- process each.
 scanIncoming :: MonadApt m => Bool -> Maybe PGPKey -> LocalRepository -> m ([ChangesFile], [(ChangesFile, InstallResult)])
-scanIncoming createSections keyname repo@(LocalRepository root _ _) =
-    (\ x -> qPutStrLn ("Uploading packages to " ++ outsidePath root ++ "/incoming") >> {-quieter 2-} x) $
+scanIncoming createSections keyname repo =
+    (\ x -> qPutStrLn ("Uploading packages to " ++ outsidePath (repoRoot repo) ++ "/incoming") >> {-quieter 2-} x) $
     do releases <- findReleases repo
-       changes <- liftIO (findChangesFiles (outsidePath root </> "incoming"))
+       changes <- liftIO (findChangesFiles (outsidePath (repoRoot repo) </> "incoming"))
        case changes of
          [] -> qPutStrLn "Nothing to install."
          _ -> qPutStrLn ("To install:\n  " ++ (intercalate "\n  " . List.map (show . pretty) $ changes))
@@ -192,17 +192,17 @@ installPackages :: MonadApt m =>
                 -> [Release]			-- ^ Releases in target repository
                 -> [ChangesFile]		-- ^ Package to be installed
                 -> m [InstallResult]	-- ^ Outcome of each source package
-installPackages createSections keyname repo@(LocalRepository root layout _) releases changeFileList =
+installPackages createSections keyname repo{-@(LocalRepository root layout _)-} releases changeFileList =
     do live <- findLive repo
-       (_, releases', results) <- foldM (installFiles root) (live, releases, []) changeFileList
+       (_, releases', results) <- foldM (installFiles (repoRoot repo)) (live, releases, []) changeFileList
        let results' = reverse results
-       results'' <- liftIO $ updateIndexes root releases' results'
+       results'' <- liftIO $ updateIndexes (repoRoot repo) releases' results'
        -- The install is done, now we will try to clean up incoming.
        case elem Ok results'' of
          False ->
              return results''
          True ->
-             mapM_ (liftIO . uncurry (finish root (maybe Flat id layout))) (zip changeFileList results'') >>
+             mapM_ (liftIO . uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'') >>
              mapM_ (liftIO . signRelease keyname . (LocalRepo repo,)) (catMaybes . List.map (findRelease releases) . nub . sort . List.map changeRelease $ changeFileList) >>
              return results''
     where
@@ -599,16 +599,18 @@ deleteGarbage repo =
 -- | Return a list of all the files in a release which are
 -- 'live', in the sense that they appear in some index files.
 findLive :: MonadApt m => LocalRepository -> m (Set Text)
-findLive (LocalRepository _ Nothing _) = return Set.empty	-- Repository is empty
-findLive repo@(LocalRepository root (Just layout) _) =
-    do !releases <- findReleases repo
-       !sourcePackages <- mapM (liftIO . DRP.releaseSourcePackages . (LocalRepo repo,)) releases >>= return . Set.unions
-       !binaryPackages <- mapM (liftIO . DRP.releaseBinaryPackages . (LocalRepo repo,)) releases >>= return . Set.unions
-       let sourceFiles = Set.map (T.pack (outsidePath root ++ "/") <>) . Set.map T.pack . Set.fold Set.union Set.empty . Set.map DRP.sourceFilePaths $ sourcePackages
-       let binaryFiles = Set.map (T.pack (outsidePath root ++ "/") <>) . Set.fold (\ mt s -> maybe s (`Set.insert` s) mt) Set.empty $ Set.map (B.fieldValue "Filename" . packageInfo) binaryPackages
-       let changesFiles = Set.map T.pack . Set.fold Set.union Set.empty $ Set.map (Set.fromList . changesFilePaths root layout releases) sourcePackages
-       let uploadFiles = Set.map T.pack . Set.fold Set.union Set.empty . Set.map (uploadFilePaths root releases) $ sourcePackages
-       return $ Set.unions [sourceFiles, binaryFiles, changesFiles, uploadFiles]
+findLive repo = {-(LocalRepository _ Nothing _)-}
+    case repoLayout repo of
+      Nothing -> return Set.empty	-- Repository is empty
+      Just layout ->
+          do !releases <- findReleases repo
+             !sourcePackages <- mapM (liftIO . DRP.releaseSourcePackages . (LocalRepo repo,)) releases >>= return . Set.unions
+             !binaryPackages <- mapM (liftIO . DRP.releaseBinaryPackages . (LocalRepo repo,)) releases >>= return . Set.unions
+             let sourceFiles = Set.map (T.pack (outsidePath (repoRoot repo) ++ "/") <>) . Set.map T.pack . Set.fold Set.union Set.empty . Set.map DRP.sourceFilePaths $ sourcePackages
+             let binaryFiles = Set.map (T.pack (outsidePath (repoRoot repo) ++ "/") <>) . Set.fold (\ mt s -> maybe s (`Set.insert` s) mt) Set.empty $ Set.map (B.fieldValue "Filename" . packageInfo) binaryPackages
+             let changesFiles = Set.map T.pack . Set.fold Set.union Set.empty $ Set.map (Set.fromList . changesFilePaths (repoRoot repo) layout releases) sourcePackages
+             let uploadFiles = Set.map T.pack . Set.fold Set.union Set.empty . Set.map (uploadFilePaths (repoRoot repo) releases) $ sourcePackages
+             return $ Set.unions [sourceFiles, binaryFiles, changesFiles, uploadFiles]
     where
       changesFilePaths root Flat releases package =
           List.map ((outsidePath root ++ "/") ++) . changesFileNames releases $ package

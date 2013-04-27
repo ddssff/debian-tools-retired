@@ -17,7 +17,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import qualified Data.Map as Map
 import Data.List as List (intercalate, null)
-import Data.Maybe(catMaybes, fromMaybe)
+import Data.Maybe(fromMaybe)
 import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildTarget (retrieve)
@@ -46,9 +46,9 @@ import Debian.Repo.Repository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Slice(appendSliceLists, inexactPathSlices, releaseSlices, repoSources)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types (EnvRoot(EnvRoot, rootPath), EnvPath(..), Release(releaseName), NamedSliceList(..), outsidePath, SliceList(slices))
-import Debian.Repo.Types.Repo (RepoKey(Remote))
-import Debian.Repo.Types.Repository (Repository(LocalRepo, VerifiedRepo), LocalRepository(LocalRepository), Layout(Flat))
-import Debian.URI(URI'(URI'), URI(uriScheme, uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
+import Debian.Repo.Types.Repo (RepoKey)
+import Debian.Repo.Types.Repository (Repository(VerifiedRepo), LocalRepository(repoRoot), Layout(Flat))
+import Debian.URI(URI(uriScheme, uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
@@ -176,11 +176,9 @@ runParameterSet defaultAtoms cache =
       globalBuildDeps <- liftIO $ buildEssential dependOS
       -- Get a list of all sources for the local repository.
       localSources <- (\ x -> qPutStrLn "Getting local sources" >> quieter 1 x) $
-          case localRepo of
-            LocalRepository path _ _ ->
-                case parseURI ("file://" ++ envPath path) of
-                  Nothing -> error $ "Invalid local repo root: " ++ show path
-                  Just uri -> repoSources (Just . envRoot $ path) uri
+          case parseURI ("file://" ++ envPath (repoRoot localRepo)) of
+            Nothing -> error $ "Invalid local repo root: " ++ show (repoRoot localRepo)
+            Just uri -> repoSources (Just . envRoot . repoRoot $ localRepo) uri
       -- Compute a list of sources for all the releases in the repository we will upload to,
       -- used to avoid creating package versions that already exist.  Also include the sources
       -- for the local repository to avoid collisions there as well.

@@ -22,10 +22,10 @@ import Debian.Arch (Arch(..), prettyArch)
 import qualified Debian.Control.Text as S ( Field'(Field), Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
 import Debian.Release (Section, ReleaseName, releaseName', sectionName')
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), findRelease, putRelease )
-import Debian.Repo.LocalRepository (prepareLocalRepository, parseComponents, parseArchitectures)
+import Debian.Repo.LocalRepository (prepareLocalRepository)
 import Debian.Repo.PackageIndex ( packageIndexName, packageIndexDir, releaseDir, packageIndexList )
 import Debian.Repo.Types ( PackageIndex(packageIndexArch, packageIndexComponent), Release(..), outsidePath )
-import Debian.Repo.Types.Repository (Repository(LocalRepo), LocalRepository(LocalRepository, repoLayout, repoRoot))
+import Debian.Repo.Types.Repository (Repository(LocalRepo), LocalRepository(repoLayout, repoRoot, repoReleaseInfoLocal), parseComponents, parseArchitectures)
 import qualified Extra.Files as EF ( maybeWriteFile, prepareSymbolicLink, writeAndZipFile )
 import qualified Extra.GPGSign as EG ( PGPKey, pgpSignFiles, cd )
 import qualified Extra.Time as ET ( formatDebianDate )
@@ -175,7 +175,7 @@ mergeReleases repo releases =
 
 -- | Find all the releases in a repository.
 findReleases :: MonadApt m => LocalRepository -> m [Release]
-findReleases repo@(LocalRepository _ _ releases) = mapM (findLocalRelease repo) releases
+findReleases repo = mapM (findLocalRelease repo) (repoReleaseInfoLocal repo)
 
 findLocalRelease :: MonadApt m => LocalRepository -> Release -> m Release
 findLocalRelease repo releaseInfo =
