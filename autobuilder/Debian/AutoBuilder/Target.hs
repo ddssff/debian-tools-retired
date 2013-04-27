@@ -66,7 +66,7 @@ import Debian.Repo.Types (SourcePackage(sourceParagraph, sourcePackageID),
                           AptCache(rootDir, aptBinaryPackages), EnvRoot(rootPath),
                           PackageID(packageVersion), PkgVersion(..),
                           BinaryPackage(packageInfo), prettyPkgVersion)
-import Debian.Repo.Types.LocalRepository (LocalRepository)
+import Debian.Repo.Types.Repository (LocalRepository)
 import Debian.Time(getCurrentLocalRFC822Time)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.VersionPolicy(parseTag, setTag)

@@ -10,7 +10,6 @@ import Debian.Repo.Monads.Apt (MonadApt, runAptT)
 --import Debian.Repo.PackageIndex
 import Debian.Repo.Release
 import Debian.Repo.Repository
-import Debian.Repo.Types
 import Debian.Repo.Types.Repo (repoReleaseInfo)
 import Debian.URI
 

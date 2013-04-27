@@ -62,7 +62,6 @@ Library
         Debian.Repo.Types,
         Debian.Repo.Types.AptImage,
         Debian.Repo.Types.EnvPath,
-        Debian.Repo.Types.LocalRepository,
         Debian.Repo.Types.PackageIndex,
         Debian.Repo.Types.Release,
         Debian.Repo.Types.Repository,

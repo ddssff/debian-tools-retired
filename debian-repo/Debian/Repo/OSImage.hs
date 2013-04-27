@@ -34,9 +34,8 @@ import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types ( AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage,
                            NamedSliceList(sliceList, sliceListName), SliceList(..),
                            EnvPath(EnvPath, envRoot), EnvRoot(rootPath), outsidePath )
-import Debian.Repo.Types.LocalRepository (LocalRepository(repoRoot))
 import Debian.Repo.Types.Repo (repoURI)
-import Debian.Repo.Types.Repository (Repository(LocalRepo))
+import Debian.Repo.Types.Repository (Repository(LocalRepo), LocalRepository(repoRoot))
 import Debian.URI ( uriToString', URI(uriScheme) )
 import Extra.Files ( replaceFile )
 import "Extra" Extra.List ( isSublistOf )

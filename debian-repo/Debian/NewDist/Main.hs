@@ -11,8 +11,7 @@ import		 Debian.Repo (runAptIO, outsidePath, MonadApt, findReleases, scanIncomin
                               EnvPath(EnvPath), EnvRoot(EnvRoot), parseArchitectures,
                               showErrors, mergeReleases, deleteSourcePackages,
                               PackageID, makeBinaryPackageID, PackageIndex(PackageIndex))
-import Debian.Repo.Types.LocalRepository (LocalRepository, Layout(Pool, Flat), repoRoot)
-import Debian.Repo.Types.Repository (Repository(LocalRepo))
+import Debian.Repo.Types.Repository (Repository(LocalRepo), LocalRepository, Layout(Pool, Flat), repoRoot)
 import		 Debian.Config (ParamDescr(..), option)
 import		 Control.Monad
 import		 Data.Maybe
