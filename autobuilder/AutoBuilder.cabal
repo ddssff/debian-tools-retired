@@ -126,3 +126,12 @@ Library
     Debian.AutoBuilder.Types.ParamRec
     Debian.AutoBuilder.Version
     Paths_AutoBuilder
+
+Executable autobuilder-tests
+  Main-Is: Test/Test.hs
+  ghc-options: -O2 -threaded -Wall
+  Build-Depends: HUnit
+  if flag(local-debian-repo)
+    Hs-Source-Dirs: ., ../debian-repo
+  else
+    Build-Depends: debian-repo

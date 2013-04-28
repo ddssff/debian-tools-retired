@@ -1,5 +1,3 @@
-module Test where
-
 import System.Exit
 import Test.HUnit
 import qualified Test.ParamRec

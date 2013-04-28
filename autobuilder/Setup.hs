@@ -11,5 +11,6 @@ main = defaultMainWithHooks simpleUserHooks {
        }
 
 runTestScript =
-    system "runhaskell Test/Test.hs" >>= \ code ->
+    -- system "runhaskell Test/Test.hs" >>= \ code ->
+    system "dist/build/autobuilder-tests/autobuilder-tests" >>= \ code ->
     if code == ExitSuccess then return () else error "Test Failure"
