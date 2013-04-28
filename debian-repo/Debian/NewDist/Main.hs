@@ -11,7 +11,8 @@ import		 Debian.Repo (runAptIO, outsidePath, MonadApt, findReleases, scanIncomin
                               EnvPath(EnvPath), EnvRoot(EnvRoot),
                               showErrors, mergeReleases, deleteSourcePackages,
                               PackageID, makeBinaryPackageID, PackageIndex(PackageIndex))
-import Debian.Repo.Types.Repository (Repository(LocalRepo), LocalRepository, Layout(Pool, Flat), repoRoot, parseArchitectures)
+import Debian.Repo.Types.Release (parseArchitectures)
+import Debian.Repo.Types.Repository (Repository(LocalRepo), LocalRepository, Layout(Pool, Flat), repoRoot)
 import		 Debian.Config (ParamDescr(..), option)
 import		 Control.Monad
 import		 Data.Maybe
@@ -254,7 +255,7 @@ runFlags flags =
        when (expire flags)  $ liftIO (deleteTrumped keyname repo releases) >> return ()
        when (cleanUp flags) $ deleteGarbage repo >> return ()
        -- This flag says sign even if nothing changed
-       when (signRepo flags) $ liftIO (signReleases keyname (map (LocalRepo repo,) releases))
+       when (signRepo flags) $ liftIO (signReleases keyname (map (repo,) releases))
     where
 {-
       findReleaseByName :: [Release] -> ReleaseName -> Maybe Release
