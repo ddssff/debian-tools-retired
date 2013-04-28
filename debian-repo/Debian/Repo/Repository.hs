@@ -24,14 +24,14 @@ import Debian.Arch (Arch, parseArch)
 import Debian.Changes ( ChangesFile(changeDir, changePackage, changeRelease, changeVersion) )
 import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), ControlFunctions(parseControl), fieldValue )
 import qualified Debian.Control.Text as S ( Paragraph', Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
+import Data.Map as Map (lookup, insert)
 import Debian.Relation (BinPkgName(..))
 import Debian.Release (ReleaseName(..), parseReleaseName, releaseName')
 import Debian.Repo.Changes ( findChangesFiles, key, path )
-import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), insertRepository, lookupRepository )
 import Debian.Repo.Types (PkgVersion(..), prettyPkgVersion, EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath)
 import Debian.Repo.Types.Release (Release(..), makeReleaseInfo)
 import Debian.Repo.Types.Repo (Repo(repoReleaseInfo), RepoKey(..))
-import Debian.Repo.Types.Repository (Repository(..), LocalRepository(repoRoot), prepareLocalRepository)
+import Debian.Repo.Types.Repository (Repository(..), LocalRepository(repoRoot), prepareLocalRepository, MonadRepoCache(getRepoCache, putRepoCache))
 import Debian.URI (URI'(..), URIAuth(uriPort, uriRegName, uriUserInfo), uriToString', URI(uriAuthority, uriScheme, uriPath), dirFromURI, fileFromURI)
 import Debian.UTF8 as Deb (decode)
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
@@ -67,7 +67,7 @@ prepareRepository' chroot uri =
           prepareRepository uri
 -}
 
-prepareRepository' :: MonadApt m => RepoKey -> m Repository
+prepareRepository' :: MonadRepoCache m => RepoKey -> m Repository
 prepareRepository' key =
     case key of
       Local path -> prepareLocalRepository path Nothing >>= return . LocalRepo
@@ -97,11 +97,11 @@ instance Eq UnverifiedRepo where
 
 -- | Prepare a repository, which may be remote or local depending on
 -- the URI.
-prepareRepository :: MonadApt m => URI -> m Repository
+prepareRepository :: MonadRepoCache m => URI -> m Repository
 prepareRepository uri =
-    do state <- getApt
-       repo <- maybe newRepo return (lookupRepository (Remote (URI' uri)) state)
-       putApt (insertRepository (Remote (URI' uri)) repo state)
+    do state <- getRepoCache
+       repo <- maybe newRepo return (Map.lookup (Remote (URI' uri)) state)
+       putRepoCache (Map.insert (Remote (URI' uri)) repo state)
        return repo
     where
       newRepo =
@@ -188,7 +188,7 @@ getReleaseInfoRemote uri =
       uncurry3 f (a, b, c) =  f a b c
 
 -- |Make sure we can access the upload uri without typing a password.
-verifyUploadURI :: MonadApt m => Bool -> URI -> m ()
+verifyUploadURI :: MonadRepoCache m => Bool -> URI -> m ()
 verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ show uri) >> quieter 2 x) $
     case doExport of
       True -> export
@@ -205,7 +205,7 @@ verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ sh
                Right () -> return ()
                Left s -> error $ "Unable to reach " ++ uriToString' uri ++ ": " ++ s
              mkdir
-      mkdir :: MonadApt m => m ()
+      mkdir :: MonadRepoCache m => m ()
       mkdir =
           case uriAuthority uri of
             Nothing -> error $ "Internal error 7"
