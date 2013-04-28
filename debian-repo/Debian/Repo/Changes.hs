@@ -22,7 +22,6 @@ module Debian.Repo.Changes
     , Debian.Repo.Changes.path
     , name
     --, poolDir			-- PackageIndex -> ChangesFile -> FilePath
-    , poolDir'			-- Release -> ChangesFile -> ChangedFileSpec -> FilePath
     , uploadLocal
     --, ChangesFile(..)
     --, changesFileName
@@ -38,8 +37,7 @@ import Data.Text (Text, pack, unpack)
 import Debian.Arch (Arch, prettyArch, parseArch)
 import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName, parseChanges )
 import qualified Debian.Control.Text as S ( Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue, modifyField )
-import Debian.Release (SubSection(section), parseReleaseName, parseSection)
-import Debian.Repo.LocalRepository ( poolDir )
+import Debian.Release (parseReleaseName, parseSection)
 import Debian.Repo.Types (outsidePath)
 import Debian.Repo.Types.Repository (LocalRepository(repoRoot))
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
@@ -303,14 +301,6 @@ showSHA1List files = mconcat (map (("\n " <>) . showSHA1) files)
 showSHA256List :: [ChangedFileSpec] -> Text
 showSHA256List files = mconcat (map (("\n " <>) . showSHA256) files)
     where showSHA256 x = pack $ changedFileSHA256sum x ++ " " ++ show (changedFileSize x) ++ " " ++ changedFileName x
-
--- | Return the subdirectory in the pool where a source package would be
--- installed.
-poolDir' :: LocalRepository -> ChangesFile -> ChangedFileSpec -> FilePath
-poolDir' repo changes file =
-    case S.fieldValue "Source" (changeInfo changes) of
-      Nothing -> error "No 'Source' field in .changes file"
-      Just source -> poolDir repo (section . changedFileSection $ file) (unpack source)
 
 -- | Move a build result into a local repository's 'incoming' directory.
 uploadLocal :: LocalRepository -> ChangesFile -> IO ()

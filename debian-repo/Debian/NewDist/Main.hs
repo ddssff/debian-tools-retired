@@ -6,13 +6,13 @@ module Main where
 import		 Prelude hiding (putStr, putStrLn, putChar)
 import		 Control.Monad.Trans
 import		 Debian.Repo (runAptIO, outsidePath, MonadApt, findReleases, scanIncoming, deleteTrumped, deleteGarbage, signReleases,
-                              envPath, InstallResult, explainError, resultToProblems, prepareLocalRepository,
-                              setRepositoryCompatibility, Release(..), prepareRelease,
+                              envPath, InstallResult, explainError, resultToProblems,
+                              Release(..), prepareRelease,
                               EnvPath(EnvPath), EnvRoot(EnvRoot),
                               showErrors, mergeReleases, deleteSourcePackages,
                               PackageID, makeBinaryPackageID, PackageIndex(PackageIndex))
 import Debian.Repo.Types.Release (parseArchitectures)
-import Debian.Repo.Types.Repository (Repository(LocalRepo), LocalRepository, Layout(Pool, Flat), repoRoot)
+import Debian.Repo.Types.Repository (Repository(LocalRepo), LocalRepository, Layout(Pool, Flat), repoRoot, prepareLocalRepository, setRepositoryCompatibility)
 import		 Debian.Config (ParamDescr(..), option)
 import		 Control.Monad
 import		 Data.Maybe

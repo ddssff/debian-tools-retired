@@ -31,7 +31,7 @@ import qualified Debian.Control.Text as B ( Field'(Field), Paragraph, Field, Con
                                                   appendFields, fieldValue, modifyField, raiseFields, renameField )
 import qualified Debian.Control.Text as S ( Control'(Control), ControlFunctions(parseControlFromFile) )
 import Debian.Relation (BinPkgName, PkgName)
-import Debian.Repo.Changes ( findChangesFiles, poolDir', name, path )
+import Debian.Repo.Changes ( findChangesFiles, name, path )
 import Debian.Repo.Monads.Apt (MonadApt)
 import qualified Debian.Repo.Package as DRP ( sourceFilePaths, toBinaryPackage, binaryPackageSourceID, getPackages, releaseSourcePackages, releaseBinaryPackages, putPackages )
 import Debian.Repo.PackageIndex ( packageIndexPath, packageIndexList, sourceIndexList )
@@ -42,7 +42,7 @@ import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, binaryPackag
                            BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
                            PackageVersion(pkgVersion), Release(releaseAliases, releaseComponents, releaseName),
                            EnvPath, outsidePath, Release(..))
-import Debian.Repo.Types.Repository (Repository(..), Layout(..), LocalRepository(repoLayout, repoRoot))
+import Debian.Repo.Types.Repository (Repository(..), Layout(..), LocalRepository(repoLayout, repoRoot), poolDir')
 import Debian.URI (URI'(..))
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Debian.Version.Text ()

@@ -45,7 +45,6 @@ Library
         Debian.Repo.Changes,
         Debian.Repo.Dependencies,
         Debian.Repo.Insert,
-        Debian.Repo.LocalRepository,
         Debian.Repo.Monads.Apt,
         Debian.Repo.Monads.Top,
         Debian.Repo.OSImage,

@@ -7,11 +7,11 @@ import Data.Either (partitionEithers)
 import Data.List as List (intercalate, map)
 import Data.Set as Set (Set, unions, fromList, size)
 import Debian.Arch (Arch(..))
-import Debian.Repo (runAptIO, prepareLocalRepository, findReleases)
+import Debian.Repo (runAptIO, findReleases)
 import Debian.Repo.PackageIndex ( packageIndexPath, sourceIndexList, binaryIndexList )
 import Debian.Repo.Types (rootEnvPath, Release, PackageIndex(packageIndexArch),
                           BinaryPackage(..), SourcePackage)
-import Debian.Repo.Types.Repository (Layout(Pool))
+import Debian.Repo.Types.Repository (Layout(Pool), prepareLocalRepository)
 import System.IO (hPutStrLn, stderr)
 
 import Control.Exception as E ( SomeException(..), try, ErrorCall(..) )

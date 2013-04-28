@@ -7,7 +7,6 @@ module Debian.Repo
     , module Debian.Repo.Changes
     , module Debian.Repo.Dependencies
     , module Debian.Repo.Insert
-    , module Debian.Repo.LocalRepository
     , module Debian.Repo.Monads.Apt
     , module Debian.Repo.Monads.Top
     , module Debian.Repo.OSImage
@@ -27,7 +26,6 @@ import Debian.Repo.Cache
 import Debian.Repo.Changes
 import Debian.Repo.Dependencies
 import Debian.Repo.Insert
-import Debian.Repo.LocalRepository
 import Debian.Repo.Monads.Apt
 import Debian.Repo.Monads.Top
 import Debian.Repo.OSImage

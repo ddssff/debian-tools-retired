@@ -6,24 +6,35 @@ module Debian.Repo.Types.Repository
     , Layout(..)
     , MonadRepoCache(..)
     , readLocalRepo
+    , prepareLocalRepository
+    , setRepositoryCompatibility
+    , flushLocalRepository
+    , poolDir'
     ) where
 
 import Control.Applicative.Error (Failing(Success, Failure))
+import Control.Monad ( filterM, when )
 import Control.Monad.Trans (MonadIO, liftIO)
-import Data.List (groupBy, partition, sort)
+import Data.List (groupBy, partition, sort, isPrefixOf)
 import Data.Map (Map, insertWith)
-import Data.Text (Text)
-import qualified Debian.Control.Text as T (ControlFunctions(parseControl), Control'(Control))
-import Debian.Release (ReleaseName, releaseName', parseReleaseName)
+import Data.Maybe ( catMaybes )
+import Data.Text (Text, unpack)
+import Debian.Changes (ChangesFile(changeInfo), ChangedFileSpec(changedFileSection))
+import qualified Debian.Control.Text as T (ControlFunctions(parseControl), Control'(Control), fieldValue)
+import Debian.Release (ReleaseName, releaseName', Section, sectionName', parseReleaseName, SubSection(section))
 import Debian.Repo.Types.EnvPath (EnvPath(..), outsidePath)
 import Debian.Repo.Types.Release (Release, makeReleaseInfo)
-import Debian.Repo.Types.Repo (Repo(..), RepoKey(..))
+import Debian.Repo.Types.Repo (Repo(..), RepoKey(..), compatibilityFile, libraryCompatibilityLevel)
 import Debian.URI (URI')
-import Extra.List ( partitionM )
-import System.Directory (getDirectoryContents)
+import Extra.Files (maybeWriteFile)
+import Extra.List (partitionM)
+import System.Directory (getDirectoryContents, createDirectoryIfMissing, doesDirectoryExist)
 import System.FilePath ((</>))
-import qualified System.Posix.Files as F (getSymbolicLinkStatus, isSymbolicLink, readSymbolicLink)
+import qualified System.Posix.Files as F (getSymbolicLinkStatus, isSymbolicLink, readSymbolicLink,
+                                          fileMode, getFileStatus, setFileMode)
+import System.Unix.Directory (removeRecursiveSafely)
 import qualified Tmp.File as F ( File(..), readFile )
+import Text.Regex (matchRegex, mkRegex)
 
 --------------------- REPOSITORY -----------------------
 
@@ -116,3 +127,85 @@ parseRelease name aliases file =
             Left msg -> error $ "Failure parsing " ++ show (F.path file) ++ ": " ++ show msg
             Right (T.Control []) -> error $ "Empty release file: " ++ show (F.path file)
             Right (T.Control (info : _)) -> makeReleaseInfo (F.File {F.path = F.path file, F.text = Success info}) name aliases
+
+-- | Create or verify the existance of the directories which will hold
+-- a repository on the local machine.  Verify the index files for each of
+-- its existing releases.
+prepareLocalRepository :: MonadRepoCache m => EnvPath -> Maybe Layout -> m LocalRepository
+prepareLocalRepository root layout =
+    do mapM_ (liftIO . initDir)
+                 [(".", 0o40755),
+                  ("dists", 0o40755),
+                  ("incoming", 0o41755),
+                  ("removed", 0o40750),
+                  ("reject", 0o40750)]
+       layout' <- liftIO (computeLayout (outsidePath root)) >>= return . maybe layout Just
+                  -- >>= return . maybe (maybe (error "No layout specified for new repository") id layout) id
+       mapM_ (liftIO . initDir)
+                 (case layout' of
+                    Just Pool -> [("pool", 0o40755), ("installed", 0o40755)]
+                    Just Flat -> []
+                    Nothing -> [])
+       readLocalRepo root layout'
+    where
+      initDir (name, mode) = 
+          do let path = outsidePath root </> name
+             filterM (\ f -> doesDirectoryExist f >>= return . not) [path] >>=
+                     mapM_ (\ f -> createDirectoryIfMissing True f)
+             actualMode <- F.getFileStatus path >>= return . F.fileMode
+             when (mode /= actualMode) (F.setFileMode path mode)
+{-      notSymbolicLink root name =
+          getSymbolicLinkStatus (root ++ "/dists/" ++ name) >>= return . not . isSymbolicLink
+      hasReleaseFile root name =
+          doesFileExist (root ++ "/dists/" ++ name ++ "/Release") -}
+
+-- |Try to determine a repository's layout.
+computeLayout :: FilePath -> IO (Maybe Layout)
+computeLayout root =
+    do
+      -- If there are already .dsc files in the root directory
+      -- the repository layout is Flat.
+      isFlat <- getDirectoryContents root >>= return . (/= []) . catMaybes . map (matchRegex (mkRegex "\\.dsc$"))
+      -- If the pool directory already exists the repository layout is
+      -- Pool.
+      isPool <- doesDirectoryExist (root ++ "/pool")
+      case (isFlat, isPool) of
+        (True, _) -> return (Just Flat)
+        (False, True) -> return (Just Pool)
+        _ -> return Nothing
+
+-- | Create or update the compatibility level file for a repository.
+setRepositoryCompatibility :: LocalRepository -> IO ()
+setRepositoryCompatibility r =
+    maybeWriteFile path text
+    where text = show libraryCompatibilityLevel ++ "\n"
+          path = outsidePath (repoRoot r) </> compatibilityFile
+
+-- | Return the subdirectory where a source package with the given
+-- section and name would be installed given the layout of the
+-- repository.
+poolDir :: LocalRepository -> Section -> String -> FilePath
+poolDir r section source =
+    case repoLayout r of
+      Just Pool ->
+          "pool/" ++ sectionName' section </> prefixDir </> source
+              where prefixDir =
+                        if isPrefixOf "lib" source
+                        then take (min 4 (length source)) source
+                        else take (min 1 (length source)) source
+      _ -> ""
+
+-- | Return the subdirectory in the pool where a source package would be
+-- installed.
+poolDir' :: LocalRepository -> ChangesFile -> ChangedFileSpec -> FilePath
+poolDir' repo changes file =
+    case T.fieldValue "Source" (changeInfo changes) of
+      Nothing -> error "No 'Source' field in .changes file"
+      Just source -> poolDir repo (section . changedFileSection $ file) (unpack source)
+
+-- | Remove all the packages from the repository and then re-create
+-- the empty releases.
+flushLocalRepository :: MonadRepoCache m => LocalRepository -> m LocalRepository
+flushLocalRepository r {-(LocalRepository path layout _)-} =
+    do liftIO $ removeRecursiveSafely (outsidePath (repoRoot r))
+       prepareLocalRepository (repoRoot r) (repoLayout r)
