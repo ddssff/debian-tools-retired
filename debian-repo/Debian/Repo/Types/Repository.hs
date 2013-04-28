@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, StandaloneDeriving, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types.Repository
     ( Repository(..)
@@ -7,6 +7,8 @@ module Debian.Repo.Types.Repository
     , MonadRepoCache(..)
     , readLocalRepo
     , prepareLocalRepository
+    , prepareRepository'
+    , prepareRepository
     , setRepositoryCompatibility
     , flushLocalRepository
     , poolDir'
@@ -22,7 +24,7 @@ import Data.Text (Text, unpack)
 import Debian.Changes (ChangesFile(changeInfo), ChangedFileSpec(changedFileSection))
 import qualified Debian.Control.Text as T (ControlFunctions(parseControl), Control'(Control), fieldValue)
 import Debian.Release (ReleaseName, releaseName', Section, sectionName', parseReleaseName, SubSection(section))
-import Debian.Repo.Types.EnvPath (EnvPath(..), outsidePath)
+import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath)
 import Debian.Repo.Types.Release (Release, makeReleaseInfo)
 import Debian.Repo.Types.Repo (Repo(..), RepoKey(..), compatibilityFile, libraryCompatibilityLevel)
 import Debian.URI (URI')
@@ -35,6 +37,22 @@ import qualified System.Posix.Files as F (getSymbolicLinkStatus, isSymbolicLink,
 import System.Unix.Directory (removeRecursiveSafely)
 import qualified Tmp.File as F ( File(..), readFile )
 import Text.Regex (matchRegex, mkRegex)
+
+import Control.Exception ( ErrorCall(..), toException )
+import Data.List (intercalate)
+import Data.Text as T (unpack)
+import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), ControlFunctions(parseControl), fieldValue )
+import qualified Debian.Control.Text as S (Paragraph')
+import Data.Map as Map (lookup, insert)
+import Debian.Release (ReleaseName(..))
+import Debian.URI (URI'(..), uriToString', URI(uriScheme, uriPath), dirFromURI, fileFromURI)
+import Debian.UTF8 as Deb (decode)
+--import System.Cmd ( system )
+import System.IO.Unsafe ( unsafeInterleaveIO )
+--import System.Unix.LazyProcess (Output)
+--import System.Unix.Outputs (checkResult)
+import System.Process.Progress (quieter, qPutStr)
+import qualified Tmp.File as F (Source(RemotePath))
 
 --------------------- REPOSITORY -----------------------
 
@@ -209,3 +227,134 @@ flushLocalRepository :: MonadRepoCache m => LocalRepository -> m LocalRepository
 flushLocalRepository r {-(LocalRepository path layout _)-} =
     do liftIO $ removeRecursiveSafely (outsidePath (repoRoot r))
        prepareLocalRepository (repoRoot r) (repoLayout r)
+
+{-
+prepareRepository' :: MonadApt m => Maybe EnvRoot -> URI -> m Repository
+prepareRepository' chroot uri =
+    case uriScheme uri of
+      "file:" ->
+          let dir = EnvPath (maybe (EnvRoot "") id chroot) (uriPath uri) in
+          prepareLocalRepository dir Nothing >>= return . LocalRepo
+      _ ->
+          prepareRepository uri
+-}
+
+prepareRepository' :: MonadRepoCache m => RepoKey -> m Repository
+prepareRepository' key =
+    case key of
+      Local path -> prepareLocalRepository path Nothing >>= return . LocalRepo
+      Remote (URI' uri) -> prepareRepository uri
+
+-- |This is a remote repository which we have queried to find out the
+-- names, sections, and supported architectures of its releases.
+--data VerifiedRepo = VerifiedRepo URI [ReleaseInfo]
+
+{- instance Show VerifiedRepo where
+    show (VerifiedRepo uri _) = "Verified Repository " ++ show uri -- ++ " " ++ show dists
+instance Ord VerifiedRepo where
+    compare a b = compare (repoURI a) (repoURI b)
+instance Eq VerifiedRepo where
+    a == b = compare a b == EQ -}
+
+-- |This is a repository whose structure we haven't examined 
+-- to determine what release it contains.
+--data UnverifiedRepo = UnverifiedRepo URI
+
+{- instance Show UnverifiedRepo where
+    show (UnverifiedRepo uri) = "Unverified Repository " ++ show uri -- ++ " (unverified)"
+instance Ord UnverifiedRepo where
+    compare a b = compare (repoURI a) (repoURI b)
+instance Eq UnverifiedRepo where
+    a == b = compare a b == EQ -}
+
+-- | Prepare a repository, which may be remote or local depending on
+-- the URI.
+prepareRepository :: MonadRepoCache m => URI -> m Repository
+prepareRepository uri =
+    do state <- getRepoCache
+       repo <- maybe newRepo return (Map.lookup (Remote (URI' uri)) state)
+       putRepoCache (Map.insert (Remote (URI' uri)) repo state)
+       return repo
+    where
+      newRepo =
+             case uriScheme uri of
+               "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
+               -- FIXME: We only want to verifyRepository on demand.
+               _ -> verifyRepository (UnverifiedRepo (URI' uri))
+               -- _ -> return . Repository . UnverifiedRepo $ uri
+
+{-# NOINLINE verifyRepository #-}
+verifyRepository :: MonadIO m => Repository -> m Repository
+verifyRepository (UnverifiedRepo uri) =
+    do --tio (vHPutStrBl IO.stderr 0 $ "Verifying repository " ++ show uri ++ "...")
+       -- Use unsafeInterleaveIO to avoid querying the repository
+       -- until the value is actually needed.
+       -- qPutStrLn $ "verifyRepository " ++ uri
+       releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . unURI $ uri
+       {- tio (vHPutStrLn IO.stderr 0 $ "\n" {- -> VerifiedRepo " ++ show uri ++ " " ++ show releaseInfo -} ) -}
+       return $ VerifiedRepo uri releaseInfo
+verifyRepository x = return x
+
+-- Nice code to do caching, but I figured out how to fix the old code.
+
+--instance Read URI where
+--    readsPrec _ s = [(fromJust (parseURI s), "")]
+--
+---- |Get the list of releases of a remote repository.
+--getReleaseInfo :: FilePath
+--               -> Bool     -- ^ If False don't look at existing cache
+--               -> URI
+--               -> IO [ReleaseInfo]
+--getReleaseInfo top tryCache uri =
+--    readCache >>= \ cache ->
+--    return (lookup uri cache) >>=
+--    maybe (updateCache cache) return
+--    where
+--      cachePath = top ++ "/repoCache"
+--      readCache :: IO [(URI, [ReleaseInfo])]
+--      readCache = if tryCache
+--                  then try (readFile cachePath >>= return . read) >>= return . either (\ (_ :: SomeException) -> []) id
+--                  else return []
+--      updateCache :: [(URI, [ReleaseInfo])] -> IO [ReleaseInfo]
+--      updateCache pairs = getReleaseInfoRemote uri >>= \ info ->
+--                          writeCache ((uri, info) : pairs) >> return info
+--      writeCache :: [(URI, [ReleaseInfo])] -> IO ()
+--      writeCache pairs = writeFile (show pairs) cachePath
+
+-- |Get the list of releases of a remote repository.
+getReleaseInfoRemote :: URI -> IO [Release]
+getReleaseInfoRemote uri =
+    qPutStr ("(verifying " ++ uriToString' uri ++ ".") >>
+    quieter 2 (dirFromURI distsURI) >>=
+    quieter 2 . either (error . show) verify >>=
+    return . catMaybes >>= 
+    (\ result -> qPutStr ")\n" >> return result)
+    where
+      distsURI = uri {uriPath = uriPath uri </> "dists/"}
+      verify names =
+          do let dists = map parseReleaseName names
+             (releaseFiles :: [F.File (S.Paragraph' Text)]) <- mapM getReleaseFile dists
+             let releasePairs = zip3 (map getSuite releaseFiles) releaseFiles dists
+             return $ map (uncurry3 getReleaseInfo) releasePairs
+      releaseNameField releaseFile = case fmap T.unpack (B.fieldValue "Origin" releaseFile) of Just "Debian" -> "Codename"; _ -> "Suite"
+      getReleaseInfo :: Maybe Text -> (F.File B.Paragraph) -> ReleaseName -> Maybe Release
+      getReleaseInfo Nothing _ _ = Nothing
+      getReleaseInfo (Just dist) _ relname | (parseReleaseName (T.unpack dist)) /= relname = Nothing
+      getReleaseInfo (Just dist) info _ = Just $ makeReleaseInfo info (parseReleaseName (T.unpack dist)) []
+      getSuite :: F.File (S.Paragraph' Text) -> Maybe Text
+      getSuite (F.File {F.text = Success releaseFile}) = B.fieldValue (releaseNameField releaseFile) releaseFile
+      getSuite (F.File {F.text = Failure msgs}) = fail (intercalate "\n" msgs)
+      getReleaseFile :: ReleaseName -> IO (F.File (S.Paragraph' Text))
+      -- getReleaseFile :: ReleaseName -> IO (S.Paragraph' B.ByteString)
+      getReleaseFile distName =
+          do qPutStr "."
+             release <- fileFromURI releaseURI
+             let control = either Left (either (Left . toException . ErrorCall . show) Right . B.parseControl (show releaseURI) . Deb.decode) release
+             case control of
+               Right (B.Control [info :: S.Paragraph' Text]) -> return $ F.File {F.path = F.RemotePath releaseURI, F.text = Success info}
+               _ -> error ("Failed to get release info from dist " ++ show (relName distName) ++ ", uri " ++ show releaseURI)
+          where
+            releaseURI = distURI {uriPath = uriPath distURI </> "Release"}
+            distURI = distsURI {uriPath = uriPath distsURI </> releaseName' distName}
+      uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
+      uncurry3 f (a, b, c) =  f a b c
