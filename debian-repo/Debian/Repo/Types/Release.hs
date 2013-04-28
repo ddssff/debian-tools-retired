@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types.Release
-    ( Release(..)
+    ( Release(Release, releaseName, releaseAliases, releaseArchitectures, releaseComponents)
     , makeReleaseInfo
     , parseComponents
     , parseArchitectures

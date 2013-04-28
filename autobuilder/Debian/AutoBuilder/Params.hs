@@ -20,10 +20,10 @@ import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Release ( ReleaseName(relName), releaseName' )
 import Debian.Sources ( SliceName(..) )
 import Debian.Repo (verifySourcesList, repoSources)
-import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), setRepoMap)
+import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Monads.Top (MonadTop(askTop), sub)
 import Debian.Repo.Types.Repo (RepoKey(..))
-import Debian.Repo.Types.Repository (NamedSliceList(..), SliceList(..))
+import Debian.Repo.Types.Repository (NamedSliceList(..), SliceList(..), loadRepoCache)
 import Debian.URI (URI')
 import System.Directory ( createDirectoryIfMissing, getPermissions, writable )
 import System.Environment ( getEnv )
@@ -53,26 +53,6 @@ buildCache params =
 -- |Make a ('ParamClass', 'CacheClass') pair an instance ParamClass,
 -- CacheClass, and RunClass.
 -- instance (ParamClass p) => RunClass (p, Cache)
-
-loadRepoCache :: (MonadApt m, MonadTop m) => m ()
-loadRepoCache =
-    do repoCache <- sub "repoCache"
-       qPutStrLn "Loading repo cache..."
-       state <- getApt
-       uris <- liftIO $ try (readFile repoCache) >>=
-                        try . evaluate . either (\ (_ :: SomeException) -> []) read >>=
-                        return . either (\ (_ :: SomeException) -> []) id
-{-
-       uris <- liftIO (try (readFile repoCache)) >>=
-               return . evaluate . either (\ (_ :: SomeException) -> []) read >>=
-               return . either (\ (_ :: SomeException) -> []) id :: IO [(URI', Repository)]
--}
-       qPutStrLn $ "Loaded " ++ show (length uris) ++ " entries from the repo cache."
-       putApt (setRepoMap (fromList (map fixURI uris)) state)
-    where
-      -- fixURI (Remote s, x) = (fromJust (parseURI s), x)
-      fixURI :: (URI', a) -> (RepoKey, a)
-      fixURI (s, x) = (Remote s, x)
 
 -- Compute the top directory, try to create it, and then make sure it
 -- exists.  Then we can safely return it from topDir below.

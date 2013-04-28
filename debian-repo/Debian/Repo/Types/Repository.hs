@@ -1,10 +1,12 @@
-{-# LANGUAGE FlexibleInstances, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances, PackageImports, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types.Repository
     ( Repository
     , LocalRepository(repoRoot, repoLayout, repoReleaseInfoLocal)
     , Layout(..)
     , MonadRepoCache(..)
+    , loadRepoCache
+    , saveRepoCache
     , fromLocalRepository
     , readLocalRepo
     , prepareLocalRepository
@@ -15,51 +17,43 @@ module Debian.Repo.Types.Repository
     , poolDir'
     , SliceList(..)
     , NamedSliceList(..)
-    , sliceReleaseNames
+    -- , sliceReleaseNames
+    , repoReleaseNames
     ) where
 
-import Control.Applicative.Error (Failing(Success, Failure))
-import Control.Monad ( filterM, when )
+import Control.Applicative.Error (Failing(Success, Failure), maybeRead)
+import Control.Exception (ErrorCall(..), SomeException, toException, try, evaluate)
+import Control.Monad (filterM, when, unless)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
 import Control.Monad.Trans (MonadIO, liftIO)
-import Data.List (groupBy, partition, sort, isPrefixOf)
-import Data.Map (Map, insertWith)
-import Data.Maybe ( catMaybes )
-import Data.Text (Text, unpack)
+import Data.List (groupBy, partition, sort, isPrefixOf, intercalate)
+import Data.Map as Map (Map, insertWith, lookup, insert, fromList, toList, union)
+import Data.Maybe (catMaybes, fromMaybe)
+import Data.Text as T (Text, unpack)
 import Debian.Changes (ChangesFile(changeInfo), ChangedFileSpec(changedFileSection))
-import qualified Debian.Control.Text as T (ControlFunctions(parseControl), Control'(Control), fieldValue)
-import Debian.Release (ReleaseName, releaseName', Section, sectionName', parseReleaseName, SubSection(section))
+import qualified Debian.Control.Text as T (ControlFunctions(parseControl), Control'(Control), fieldValue, Paragraph, Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph')
+import Debian.Release (ReleaseName(..), releaseName', Section, sectionName', parseReleaseName, SubSection(section))
+import Debian.Repo.Monads.Top (MonadTop, sub)
 import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath)
 import Debian.Repo.Types.Release (Release(releaseName), makeReleaseInfo)
 import Debian.Repo.Types.Repo (Repo(..), RepoKey(..), compatibilityFile, libraryCompatibilityLevel)
 import Debian.Sources ( SliceName(..), DebSource(..), SourceType(..) )
-import Debian.URI (URI')
+import Debian.URI (URI'(..), uriToString', URI(uriScheme, uriPath), dirFromURI, fileFromURI)
+import Debian.UTF8 as Deb (decode)
 import Extra.Files (maybeWriteFile)
 import Extra.List (partitionM)
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, doesDirectoryExist)
 import System.FilePath ((</>))
-import qualified System.Posix.Files as F (getSymbolicLinkStatus, isSymbolicLink, readSymbolicLink,
-                                          fileMode, getFileStatus, setFileMode)
-import System.Unix.Directory (removeRecursiveSafely)
-import qualified Tmp.File as F ( File(..), readFile )
-import Text.PrettyPrint.ANSI.Leijen (vcat, Pretty(pretty))
-import Text.Regex (matchRegex, mkRegex)
-
-import Control.Exception ( ErrorCall(..), toException )
-import Data.List (intercalate)
-import Data.Text as T (unpack)
-import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), ControlFunctions(parseControl), fieldValue )
-import qualified Debian.Control.Text as S (Paragraph')
-import Data.Map as Map (lookup, insert)
-import Debian.Release (ReleaseName(..))
-import Debian.URI (URI'(..), uriToString', URI(uriScheme, uriPath), dirFromURI, fileFromURI)
-import Debian.UTF8 as Deb (decode)
---import System.Cmd ( system )
+import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe ( unsafeInterleaveIO )
---import System.Unix.LazyProcess (Output)
---import System.Unix.Outputs (checkResult)
-import System.Process.Progress (quieter, qPutStr)
+import qualified System.Posix.Files as F (getSymbolicLinkStatus, isSymbolicLink, readSymbolicLink,
+                                          fileMode, getFileStatus, setFileMode, removeLink)
+import System.Process.Progress (quieter, qPutStr, qPutStrLn)
+import System.Unix.Directory (removeRecursiveSafely)
 import qualified Text.Format as F (Pretty(..))
-import Text.PrettyPrint.ANSI.Leijen (text)
+import qualified Tmp.File as F ( File(..), readFile )
+import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat, text)
+import Text.Regex (matchRegex, mkRegex)
 import qualified Tmp.File as F (Source(RemotePath))
 
 --------------------- REPOSITORY -----------------------
@@ -117,6 +111,46 @@ class MonadIO m => MonadRepoCache m where
 
 fromLocalRepository :: LocalRepository -> Repository
 fromLocalRepository = LocalRepo
+
+-- | Load the value of the repo cache map from a file as a substitute for
+-- downloading information from the remote repositories.  These values may
+-- go out of date, as when a new release is added to a repository.  When this
+-- happens some ugly errors will occur and the cache will have to be flushed.
+loadRepoCache :: (MonadRepoCache m, MonadTop m) => m ()
+loadRepoCache =
+    do repoCache <- sub "repoCache"
+       qPutStrLn "Loading repo cache..."
+       uris <- liftIO $ try (readFile repoCache) >>=
+                        try . evaluate . either (\ (_ :: SomeException) -> []) read >>=
+                        return . either (\ (_ :: SomeException) -> []) id
+{-
+       uris <- liftIO (try (readFile repoCache)) >>=
+               return . evaluate . either (\ (_ :: SomeException) -> []) read >>=
+               return . either (\ (_ :: SomeException) -> []) id :: IO [(URI', Repository)]
+-}
+       qPutStrLn $ "Loaded " ++ show (length uris) ++ " entries from the repo cache."
+       putRepoCache (fromList (map fixURI uris))
+    where
+      -- fixURI (Remote s, x) = (fromJust (parseURI s), x)
+      fixURI :: (URI', a) -> (RepoKey, a)
+      fixURI (s, x) = (Remote s, x)
+
+-- | Write the repo cache map into a file.
+saveRepoCache :: (MonadIO m, MonadTop m, MonadRepoCache m) => m ()
+saveRepoCache =
+          do path <- sub "repoCache"
+             live <- getRepoCache
+             repoCache <- liftIO $ loadCache path
+             let merged = show . map (\ (uri, x) -> (show uri, x)) . Map.toList $ Map.union live repoCache
+             liftIO (F.removeLink path `IO.catch` (\e -> unless (isDoesNotExistError e) (ioError e))) >> liftIO (writeFile path merged)
+             return ()
+          where
+            -- isRemote uri = uriScheme uri /= "file:"
+            -- isRemote (uri, _) = uriScheme uri /= "file:"
+            loadCache :: FilePath -> IO (Map.Map RepoKey Repository)
+            loadCache path =
+                readFile path `IO.catch` (\ (_ :: SomeException) -> return "[]") >>=
+                return . Map.fromList . fromMaybe [] . maybeRead
 
 readLocalRepo :: MonadRepoCache m => EnvPath -> Maybe Layout -> m LocalRepository
 readLocalRepo root layout =
@@ -353,25 +387,25 @@ getReleaseInfoRemote uri =
       distsURI = uri {uriPath = uriPath uri </> "dists/"}
       verify names =
           do let dists = map parseReleaseName names
-             (releaseFiles :: [F.File (S.Paragraph' Text)]) <- mapM getReleaseFile dists
+             (releaseFiles :: [F.File (T.Paragraph' Text)]) <- mapM getReleaseFile dists
              let releasePairs = zip3 (map getSuite releaseFiles) releaseFiles dists
              return $ map (uncurry3 getReleaseInfo) releasePairs
-      releaseNameField releaseFile = case fmap T.unpack (B.fieldValue "Origin" releaseFile) of Just "Debian" -> "Codename"; _ -> "Suite"
-      getReleaseInfo :: Maybe Text -> (F.File B.Paragraph) -> ReleaseName -> Maybe Release
+      releaseNameField releaseFile = case fmap T.unpack (T.fieldValue "Origin" releaseFile) of Just "Debian" -> "Codename"; _ -> "Suite"
+      getReleaseInfo :: Maybe Text -> (F.File T.Paragraph) -> ReleaseName -> Maybe Release
       getReleaseInfo Nothing _ _ = Nothing
       getReleaseInfo (Just dist) _ relname | (parseReleaseName (T.unpack dist)) /= relname = Nothing
       getReleaseInfo (Just dist) info _ = Just $ makeReleaseInfo info (parseReleaseName (T.unpack dist)) []
-      getSuite :: F.File (S.Paragraph' Text) -> Maybe Text
-      getSuite (F.File {F.text = Success releaseFile}) = B.fieldValue (releaseNameField releaseFile) releaseFile
+      getSuite :: F.File (T.Paragraph' Text) -> Maybe Text
+      getSuite (F.File {F.text = Success releaseFile}) = T.fieldValue (releaseNameField releaseFile) releaseFile
       getSuite (F.File {F.text = Failure msgs}) = fail (intercalate "\n" msgs)
-      getReleaseFile :: ReleaseName -> IO (F.File (S.Paragraph' Text))
-      -- getReleaseFile :: ReleaseName -> IO (S.Paragraph' B.ByteString)
+      getReleaseFile :: ReleaseName -> IO (F.File (T.Paragraph' Text))
+      -- getReleaseFile :: ReleaseName -> IO (T.Paragraph' T.ByteString)
       getReleaseFile distName =
           do qPutStr "."
              release <- fileFromURI releaseURI
-             let control = either Left (either (Left . toException . ErrorCall . show) Right . B.parseControl (show releaseURI) . Deb.decode) release
+             let control = either Left (either (Left . toException . ErrorCall . show) Right . T.parseControl (show releaseURI) . Deb.decode) release
              case control of
-               Right (B.Control [info :: S.Paragraph' Text]) -> return $ F.File {F.path = F.RemotePath releaseURI, F.text = Success info}
+               Right (T.Control [info :: T.Paragraph' Text]) -> return $ F.File {F.path = F.RemotePath releaseURI, F.text = Success info}
                _ -> error ("Failed to get release info from dist " ++ show (relName distName) ++ ", uri " ++ show releaseURI)
           where
             releaseURI = distURI {uriPath = uriPath distURI </> "Release"}
@@ -393,8 +427,6 @@ instance Pretty SliceList where
 deriving instance Show SourceType
 deriving instance Show DebSource
 
-sliceReleaseNames :: Repository -> DebSource -> [ReleaseName]
-sliceReleaseNames repo slice =
-    case repo of
-      (VerifiedRepo _ rels) -> map releaseName rels
-      _ -> []
+repoReleaseNames :: Repository -> [ReleaseName]
+repoReleaseNames (VerifiedRepo _ rels) = map releaseName rels
+repoReleaseNames _ = []

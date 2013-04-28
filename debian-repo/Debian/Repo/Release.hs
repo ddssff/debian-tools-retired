@@ -158,15 +158,13 @@ pad padchar padlen s = replicate p padchar ++ s
     where p = padlen - length s
 
 -- Merge a list of releases so each dist only appears once
-mergeReleases :: Repository -> [Release] -> [Release]
+mergeReleases :: Repository -> [Release] -> Release
 mergeReleases repo releases =
-    map merge releases
+    Release { releaseName = (releaseName . head $ releases)
+            , releaseAliases = aliases
+            , releaseComponents = components
+            , releaseArchitectures = architectures }
     where
-      merge release =
-          Release { releaseName = (releaseName . head $ releases)
-                  , releaseAliases = aliases
-                  , releaseComponents = components
-                  , releaseArchitectures = architectures }
       aliases = map head . group . sort . concat . map releaseAliases $ releases
       components = map head . group . sort . concat . map releaseComponents $ releases
       architectures = map head . group . sort . concat . map releaseArchitectures $ releases

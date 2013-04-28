@@ -37,7 +37,7 @@ import Debian.Sources (SliceName(..))
 import Debian.Repo.AptImage(prepareAptEnv)
 import Debian.Repo.Cache(updateCacheSources)
 import Debian.Repo.Insert(deleteGarbage)
-import Debian.Repo.Monads.Apt (MonadApt(getApt), runAptT, getRepoMap)
+import Debian.Repo.Monads.Apt (MonadApt, runAptT)
 import Debian.Repo.Monads.Top (MonadTop(askTop), sub, runTopT)
 import Debian.Repo.OSImage(OSImage, buildEssential, prepareEnv, chrootEnv)
 import Debian.Repo.Release(prepareRelease)
@@ -46,8 +46,8 @@ import Debian.Repo.Slice(appendSliceLists, inexactPathSlices, releaseSlices, rep
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types (EnvRoot(EnvRoot, rootPath), EnvPath(..), outsidePath)
 import Debian.Repo.Types.Repo (RepoKey)
-import Debian.Repo.Types.Repository (Repository, LocalRepository(repoRoot), Layout(Flat), prepareLocalRepository, flushLocalRepository, NamedSliceList(..), SliceList(slices), sliceReleaseNames)
-import Debian.URI(URI(uriScheme, uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
+import Debian.Repo.Types.Repository (Repository, LocalRepository(repoRoot), Layout(Flat), prepareLocalRepository, flushLocalRepository, NamedSliceList(..), SliceList(slices), repoReleaseNames, saveRepoCache)
+import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
@@ -190,7 +190,7 @@ runParameterSet defaultAtoms cache =
       buildResult <- buildTargets cache dependOS globalBuildDeps localRepo poolOS targets
       -- If all targets succeed they may be uploaded to a remote repo
       result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))
-      updateRepoCache
+      saveRepoCache
       return result
     where
       params = C.params cache
@@ -216,7 +216,7 @@ runParameterSet defaultAtoms cache =
 
       doVerifyBuildRepo :: IO ()
       doVerifyBuildRepo =
-          when (not (any (== (P.buildRelease params)) (concatMap (uncurry sliceReleaseNames) (slices (C.buildRepoSources cache)))))
+          when (not (any (== (P.buildRelease params)) (concatMap (repoReleaseNames . fst) . slices . C.buildRepoSources $ cache)))
                (case P.uploadURI params of
                   Just uri ->
                       let ssh = case uriAuthority uri of
@@ -311,21 +311,6 @@ runParameterSet defaultAtoms cache =
                              try (timeTask (runProcessF (shell cmd) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                 _ -> error "Missing Upload-URI parameter"
           | True = return (Success ([], (fromInteger 0)))
-      updateRepoCache :: MonadDeb m => m ()
-      updateRepoCache =
-          do path <- sub "repoCache"
-             live <- getApt >>= return . getRepoMap
-             repoCache <- liftIO $ loadCache path
-             let merged = show . map (\ (uri, x) -> (show uri, x)) . Map.toList $ Map.union live repoCache
-             liftIO (removeLink path `IO.catch` (\e -> unless (isDoesNotExistError e) (ioError e))) >> liftIO (writeFile path merged)
-             return ()
-          where
-            -- isRemote uri = uriScheme uri /= "file:"
-            -- isRemote (uri, _) = uriScheme uri /= "file:"
-            loadCache :: FilePath -> IO (Map.Map RepoKey Repository)
-            loadCache path =
-                readFile path `IO.catch` (\ (_ :: SomeException) -> return "[]") >>=
-                return . Map.fromList . fromMaybe [] . maybeRead
 
 -- | Perform a list of tasks with log messages.
 countTasks' :: MonadIO m => [(String, m a)] -> m [a]
