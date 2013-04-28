@@ -41,7 +41,7 @@ import qualified Debian.Control.Text as S ( Paragraph'(..), Control'(Control), C
 import Debian.Release (SubSection(section), parseReleaseName, parseSection)
 import Debian.Repo.LocalRepository ( poolDir )
 import Debian.Repo.Types (outsidePath)
-import Debian.Repo.Types.Repository (Repository(LocalRepo), LocalRepository(repoRoot))
+import Debian.Repo.Types.Repository (LocalRepository(repoRoot))
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Extra.Files ( replaceFile )
 import System.FilePath ( splitFileName, (</>) )
@@ -306,14 +306,11 @@ showSHA256List files = mconcat (map (("\n " <>) . showSHA256) files)
 
 -- | Return the subdirectory in the pool where a source package would be
 -- installed.
-poolDir' :: Repository -> ChangesFile -> ChangedFileSpec -> FilePath
+poolDir' :: LocalRepository -> ChangesFile -> ChangedFileSpec -> FilePath
 poolDir' repo changes file =
     case S.fieldValue "Source" (changeInfo changes) of
       Nothing -> error "No 'Source' field in .changes file"
-      Just source ->
-          case repo of
-             LocalRepo repo' -> poolDir repo' (section . changedFileSection $ file) (unpack source)
-             x -> error $ "Unexpected repository passed to poolDir': " ++ show x
+      Just source -> poolDir repo (section . changedFileSection $ file) (unpack source)
 
 -- | Move a build result into a local repository's 'incoming' directory.
 uploadLocal :: LocalRepository -> ChangesFile -> IO ()

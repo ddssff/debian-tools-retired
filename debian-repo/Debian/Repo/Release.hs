@@ -83,11 +83,11 @@ ensureIndex path =
          False -> liftIO $ EF.writeAndZipFile path L.empty
          True -> return $ Right ()
 
-signReleases :: Maybe EG.PGPKey -> [(Repository, Release)] -> IO ()
-signReleases keyname releases = mapM_ (signRelease keyname) releases
+signReleases :: Maybe EG.PGPKey -> [(LocalRepository, Release)] -> IO ()
+signReleases keyname releases = mapM_ (uncurry (signRelease keyname)) releases
 
-signRelease :: Maybe EG.PGPKey -> (Repository, Release) -> IO ()
-signRelease keyname (LocalRepo repo, release) =
+signRelease :: Maybe EG.PGPKey -> LocalRepository -> Release -> IO ()
+signRelease keyname repo release =
     do let root = repoRoot repo
        files <- writeRelease (LocalRepo repo, release)
        case keyname of
@@ -97,7 +97,6 @@ signRelease keyname (LocalRepo repo, release) =
                         case failed of
                           [] -> return ()
                           files -> qPutStrLn ("Unable to sign:\n  " ++ Data.List.intercalate "\n  " files)
-signRelease _keyname _release = error $ "Attempt to sign non-local repository"
 
 -- |Write out the @Release@ files that describe a 'Release'.
 writeRelease :: (Repository, Release) -> IO [FilePath]

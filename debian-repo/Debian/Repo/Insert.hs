@@ -203,7 +203,7 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
              return results''
          True ->
              mapM_ (liftIO . uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'') >>
-             mapM_ (liftIO . signRelease keyname . (LocalRepo repo,)) (catMaybes . List.map (findRelease releases) . nub . sort . List.map changeRelease $ changeFileList) >>
+             mapM_ (liftIO . signRelease keyname repo) (catMaybes . List.map (findRelease releases) . nub . sort . List.map changeRelease $ changeFileList) >>
              return results''
     where
       -- Hard link the files of each package into the repository pool,
@@ -226,15 +226,15 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
                       return (live, releases, Failed [NoSuchSection (releaseName release) missing] : results)
             installFiles'' release' =
                 do let releases' = release' : filter ((/= (releaseName $ release')) . releaseName) releases
-                   result <- mapM (installFile root release') (changeFiles changes) >>= return . mergeResults
+                   result <- mapM (installFile root) (changeFiles changes) >>= return . mergeResults
                    let live' =
                            case result of
                              -- Add the successfully installed files to the live file set
-                             Ok -> foldr Set.insert live (List.map (T.pack . ((outsidePath root) </>) . poolDir' (LocalRepo repo) changes) (changeFiles changes))
+                             Ok -> foldr Set.insert live (List.map (T.pack . ((outsidePath root) </>) . poolDir' repo changes) (changeFiles changes))
                              _ -> live
                    return (live', releases', result : results)
-            installFile root release file =
-                do let dir = outsidePath root </> poolDir' (LocalRepo repo) changes file
+            installFile root file =
+                do let dir = outsidePath root </> poolDir' repo changes file
                    let src = outsidePath root </> "incoming" </> changedFileName file
                    let dst = dir </> changedFileName file
                    installed <- liftIO $ doesFileExist dst
@@ -291,7 +291,7 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
       buildInfo root releases changes Ok =
           do case findRelease releases (changeRelease changes) of
                Just release ->
-                   do (info :: [Either InstallResult B.Paragraph]) <- mapM (fileInfo root (LocalRepo repo, release)) indexFiles
+                   do (info :: [Either InstallResult B.Paragraph]) <- mapM (fileInfo root repo) indexFiles
                       case keepLeft info of
                         [] ->
                             let (pairs :: [([(Repository, Release, PackageIndexLocal)], Either InstallResult B.Paragraph)]) = zip (indexLists (LocalRepo repo) release) info in
@@ -315,8 +315,8 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
             -- (indepDebs, archDebs) = partition (isSuffixOf "_all.deb" . changedFileName) debs
             -- (dsc, other) = partition (isSuffixOf ".dsc" . changedFileName) nonDebs
             --fileIndex release file = List.map (PackageIndex release (section . changedFileSection $ file)) (archList release changes file)
-            fileInfo :: EnvPath -> (Repository, Release) -> ChangedFileSpec -> IO (Either InstallResult B.Paragraph)
-            fileInfo root release file =
+            fileInfo :: EnvPath -> LocalRepository -> ChangedFileSpec -> IO (Either InstallResult B.Paragraph)
+            fileInfo root repo file =
                 getControl >>= return . addFields
                 where
                   getControl :: IO (Either InstallResult B.Paragraph)
@@ -333,8 +333,8 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
                   addFields (Left result) = Left result
                   addFields (Right info) =
                       case isSuffixOf ".deb" . changedFileName $ file of
-                        True -> addDebFields release changes file info
-                        False -> addSourceFields release changes file info
+                        True -> addDebFields repo changes file info
+                        False -> addSourceFields repo changes file info
                   -- | Extract the control file from a binary .deb.
                   getDebControl :: FilePath -> IO (Either String B.Control)
                   getDebControl path =
@@ -410,8 +410,8 @@ keepRight xs = catMaybes $ List.map (either (const Nothing) Just) xs
 keepLeft :: [Either a b] -> [a]
 keepLeft xs = catMaybes $ List.map (either Just (const Nothing)) xs
 
-addDebFields :: (Repository, Release) -> ChangesFile -> ChangedFileSpec -> Paragraph' Text -> (Either InstallResult (Paragraph' Text))
-addDebFields (repo, release) changes file info =
+addDebFields :: LocalRepository -> ChangesFile -> ChangedFileSpec -> Paragraph' Text -> (Either InstallResult (Paragraph' Text))
+addDebFields repo changes file info =
     let (binaryVersion :: DebianVersion) =
             maybe (error $ "Missing 'Version' field") parseDebianVersion (B.fieldValue "Version" info) in
     let (newfields :: [B.Field]) =
@@ -427,8 +427,8 @@ addDebFields (repo, release) changes file info =
       sourceVersion = changeVersion changes
 
 
-addSourceFields :: (Repository, Release) -> ChangesFile -> ChangedFileSpec -> B.Paragraph -> (Either InstallResult B.Paragraph)
-addSourceFields (repo, release) changes file info =
+addSourceFields :: LocalRepository -> ChangesFile -> ChangedFileSpec -> B.Paragraph -> (Either InstallResult B.Paragraph)
+addSourceFields repo changes file info =
     Right . append . raise . modify . rename $ info
     where
       rename = B.renameField (T.pack "Source") (T.pack "Package")
@@ -540,12 +540,14 @@ findTrumped repo release =
       compareNames (_, _, a') (_, _, b') = compare (binaryPackageName a') (binaryPackageName b')
       newestFirst = sortBy (flip compareVersions)
       compareVersions (_, _, a') (_, _, b') = compare (pkgVersion a') (pkgVersion b')
+{-
       formatGroup :: [(Release, PackageIndex, BinaryPackage)] -> Maybe String
       formatGroup [] = Nothing
       formatGroup [_] = Nothing
       formatGroup ((release, index, newest) : other) =
           Just ("Trumped by " ++ show (F.pretty newest) ++ " in " ++ show (F.pretty (repo, release, index)) ++ ":\n " ++
                 intercalate "\n " (List.map (\ (_, _, x) -> show (F.pretty x)) other))
+-}
 
 -- | Collect files that no longer appear in any package index and move
 -- them to the removed directory.  The .changes files are treated
@@ -659,7 +661,7 @@ deleteSourcePackages keyname repo packages =
       putIndex' keyname release index entries =
           do let root = repoRoot repo
              _ <- putIndex root release index entries
-             signRelease keyname (LocalRepo repo, release)
+             signRelease keyname repo release
              return release
       putIndex :: EnvPath -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO (Either [String] ())
       putIndex root release index packages =
