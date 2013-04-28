@@ -3,7 +3,7 @@ module Debian.AutoBuilder.Types.CacheRec
     ) where
 
 import Debian.AutoBuilder.Types.ParamRec (ParamRec)
-import Debian.Repo.Types ( SliceList, NamedSliceList )
+import Debian.Repo.Types.Repository (SliceList, NamedSliceList)
 
 data CacheRec
     = CacheRec

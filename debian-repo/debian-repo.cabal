@@ -65,7 +65,6 @@ Library
         Debian.Repo.Types.Release,
         Debian.Repo.Types.Repository,
         Debian.Repo.Types.Repo,
-        Debian.Repo.Types.Slice,
         Debian.VersionPolicy,
         Extra.SSH,
         Text.Format,

@@ -32,8 +32,8 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (Atoms)
-import Debian.Release (ReleaseName, parseSection', releaseName')
-import Debian.Sources (SliceName(..), DebSource)
+import Debian.Release (parseSection', releaseName')
+import Debian.Sources (SliceName(..))
 import Debian.Repo.AptImage(prepareAptEnv)
 import Debian.Repo.Cache(updateCacheSources)
 import Debian.Repo.Insert(deleteGarbage)
@@ -44,9 +44,9 @@ import Debian.Repo.Release(prepareRelease)
 import Debian.Repo.Repository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Slice(appendSliceLists, inexactPathSlices, releaseSlices, repoSources)
 import Debian.Repo.Sync (rsync)
-import Debian.Repo.Types (EnvRoot(EnvRoot, rootPath), EnvPath(..), Release(releaseName), NamedSliceList(..), outsidePath, SliceList(slices))
+import Debian.Repo.Types (EnvRoot(EnvRoot, rootPath), EnvPath(..), outsidePath)
 import Debian.Repo.Types.Repo (RepoKey)
-import Debian.Repo.Types.Repository (Repository(VerifiedRepo), LocalRepository(repoRoot), Layout(Flat), prepareLocalRepository, flushLocalRepository)
+import Debian.Repo.Types.Repository (Repository, LocalRepository(repoRoot), Layout(Flat), prepareLocalRepository, flushLocalRepository, NamedSliceList(..), SliceList(slices), sliceReleaseNames)
 import Debian.URI(URI(uriScheme, uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
@@ -216,7 +216,7 @@ runParameterSet defaultAtoms cache =
 
       doVerifyBuildRepo :: IO ()
       doVerifyBuildRepo =
-          when (not (any (== (P.buildRelease params)) (concatMap info (slices (C.buildRepoSources cache)))))
+          when (not (any (== (P.buildRelease params)) (concatMap (uncurry sliceReleaseNames) (slices (C.buildRepoSources cache)))))
                (case P.uploadURI params of
                   Just uri ->
                       let ssh = case uriAuthority uri of
@@ -228,12 +228,6 @@ runParameterSet defaultAtoms cache =
                               "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-release=" ++ rel ++
                               "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-section=" ++ rel ++ ",main" ++
                               "\nYou will also need to remove the local file ~/.autobuilder/repoCache.")
-          where
-            info :: (Repository, DebSource) -> [ReleaseName]
-            info (repo, slice) =
-                case repo of
-                  (VerifiedRepo _ rels) -> map releaseName rels
-                  _ -> []
       doShowParams = ePutStr $ "Configuration parameters:\n" ++ P.prettyPrint params
       doShowSources =
           either (error . show) doShow (P.findSlice cache (SliceName (releaseName' (P.buildRelease params))))
@@ -326,7 +320,7 @@ runParameterSet defaultAtoms cache =
              liftIO (removeLink path `IO.catch` (\e -> unless (isDoesNotExistError e) (ioError e))) >> liftIO (writeFile path merged)
              return ()
           where
-            isRemote uri = uriScheme uri /= "file:"
+            -- isRemote uri = uriScheme uri /= "file:"
             -- isRemote (uri, _) = uriScheme uri /= "file:"
             loadCache :: FilePath -> IO (Map.Map RepoKey Repository)
             loadCache path =

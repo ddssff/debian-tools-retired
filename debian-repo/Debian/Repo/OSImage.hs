@@ -32,10 +32,10 @@ import Debian.Repo.Slice ( sourceSlices, binarySlices, verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types ( AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage,
-                           NamedSliceList(sliceList, sliceListName), SliceList(..),
                            EnvPath(EnvPath, envRoot), EnvRoot(rootPath), outsidePath )
 import Debian.Repo.Types.Repo (repoURI)
-import Debian.Repo.Types.Repository (Repository(LocalRepo), LocalRepository(repoRoot))
+import Debian.Repo.Types.Repository (LocalRepository(repoRoot), fromLocalRepository,
+                           NamedSliceList(sliceList, sliceListName), SliceList(..))
 import Debian.URI ( uriToString', URI(uriScheme) )
 import Extra.Files ( replaceFile )
 import "Extra" Extra.List ( isSublistOf )
@@ -124,7 +124,7 @@ localSources os =
           let name = relName (osReleaseName os) in
           let src = DebSource Deb (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
               bin = DebSource DebSrc (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"])) in
-          SliceList {slices = [(LocalRepo repo', src), (LocalRepo repo', bin)] }
+          SliceList {slices = [(fromLocalRepository repo', src), (fromLocalRepository repo', bin)] }
 
 -- |Change the root directory of a repository.  FIXME: This should
 -- also sync the repository to ensure consistency.

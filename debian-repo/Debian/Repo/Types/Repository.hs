@@ -1,10 +1,11 @@
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types.Repository
-    ( Repository(..)
+    ( Repository
     , LocalRepository(repoRoot, repoLayout, repoReleaseInfoLocal)
     , Layout(..)
     , MonadRepoCache(..)
+    , fromLocalRepository
     , readLocalRepo
     , prepareLocalRepository
     , prepareRepository'
@@ -12,6 +13,9 @@ module Debian.Repo.Types.Repository
     , setRepositoryCompatibility
     , flushLocalRepository
     , poolDir'
+    , SliceList(..)
+    , NamedSliceList(..)
+    , sliceReleaseNames
     ) where
 
 import Control.Applicative.Error (Failing(Success, Failure))
@@ -25,8 +29,9 @@ import Debian.Changes (ChangesFile(changeInfo), ChangedFileSpec(changedFileSecti
 import qualified Debian.Control.Text as T (ControlFunctions(parseControl), Control'(Control), fieldValue)
 import Debian.Release (ReleaseName, releaseName', Section, sectionName', parseReleaseName, SubSection(section))
 import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath)
-import Debian.Repo.Types.Release (Release, makeReleaseInfo)
+import Debian.Repo.Types.Release (Release(releaseName), makeReleaseInfo)
 import Debian.Repo.Types.Repo (Repo(..), RepoKey(..), compatibilityFile, libraryCompatibilityLevel)
+import Debian.Sources ( SliceName(..), DebSource(..), SourceType(..) )
 import Debian.URI (URI')
 import Extra.Files (maybeWriteFile)
 import Extra.List (partitionM)
@@ -36,6 +41,7 @@ import qualified System.Posix.Files as F (getSymbolicLinkStatus, isSymbolicLink,
                                           fileMode, getFileStatus, setFileMode)
 import System.Unix.Directory (removeRecursiveSafely)
 import qualified Tmp.File as F ( File(..), readFile )
+import Text.PrettyPrint.ANSI.Leijen (vcat, Pretty(pretty))
 import Text.Regex (matchRegex, mkRegex)
 
 import Control.Exception ( ErrorCall(..), toException )
@@ -52,6 +58,8 @@ import System.IO.Unsafe ( unsafeInterleaveIO )
 --import System.Unix.LazyProcess (Output)
 --import System.Unix.Outputs (checkResult)
 import System.Process.Progress (quieter, qPutStr)
+import qualified Text.Format as F (Pretty(..))
+import Text.PrettyPrint.ANSI.Leijen (text)
 import qualified Tmp.File as F (Source(RemotePath))
 
 --------------------- REPOSITORY -----------------------
@@ -70,6 +78,15 @@ instance Ord Repository where
 
 instance Eq Repository where
     a == b = compare a b == EQ
+
+-- | URI has a bogus show function, which we are using here.
+instance F.Pretty URI' where
+    pretty = text . show . unURI
+
+instance F.Pretty Repository where
+    pretty (LocalRepo r) = text $ outsidePath (repoRoot r)
+    pretty (VerifiedRepo s _) = F.pretty s
+    pretty (UnverifiedRepo s) = F.pretty s
 
 instance Repo Repository where
     repoKey (LocalRepo (LocalRepository path _ _)) = Local path -- fromJust . parseURI $ "file://" ++ envPath path
@@ -97,6 +114,9 @@ instance Repo LocalRepository where
 class MonadIO m => MonadRepoCache m where
     getRepoCache :: m (Map RepoKey Repository)
     putRepoCache :: Map RepoKey Repository -> m ()
+
+fromLocalRepository :: LocalRepository -> Repository
+fromLocalRepository = LocalRepo
 
 readLocalRepo :: MonadRepoCache m => EnvPath -> Maybe Layout -> m LocalRepository
 readLocalRepo root layout =
@@ -358,3 +378,23 @@ getReleaseInfoRemote uri =
             distURI = distsURI {uriPath = uriPath distsURI </> releaseName' distName}
       uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
       uncurry3 f (a, b, c) =  f a b c
+
+-- | Each line of the sources.list represents a slice of a repository
+data SliceList = SliceList {slices :: [(Repository, DebSource)]} deriving (Eq, Ord, Show)
+
+data NamedSliceList
+    = NamedSliceList { sliceList :: SliceList
+                     , sliceListName :: SliceName
+                     } deriving (Eq, Ord, Show)
+
+instance Pretty SliceList where
+    pretty = vcat . map (pretty . snd) . slices
+
+deriving instance Show SourceType
+deriving instance Show DebSource
+
+sliceReleaseNames :: Repository -> DebSource -> [ReleaseName]
+sliceReleaseNames repo slice =
+    case repo of
+      (VerifiedRepo _ rels) -> map releaseName rels
+      _ -> []

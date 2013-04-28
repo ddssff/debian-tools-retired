@@ -23,7 +23,7 @@ import qualified Debian.Control.Text as B ( Field'(Field), Paragraph, Field, Con
 import qualified Debian.Relation.Text as B ( ParseRelations(..), Relations )
 import Debian.Repo.Types (SourceFileSpec(SourceFileSpec), SourceControl(..), SourcePackage(..), makeSourcePackageID, makeBinaryPackageID)
 import Debian.Repo.Types.Repo (repoURI)
-import Debian.Repo.Types.Repository (Repository(LocalRepo))
+import Debian.Repo.Types.Repository (Repository, fromLocalRepository)
 import Debian.URI ( fileFromURIStrict )
 import Debian.Version (parseDebianVersion)
 import qualified Data.ByteString.Lazy.Char8 as L ( ByteString, fromChunks )
@@ -40,8 +40,8 @@ root = rootEnvPath "/srv/deb/ubuntu"
 main = runAptIO $
     do repo <- prepareLocalRepository root (Just Pool)
        releases <- findReleases repo
-       sources <- mapM (liftIO . releaseSourcePackages . (LocalRepo repo,)) releases >>= return . Set.unions
-       binaries <- mapM (liftIO . releaseBinaryPackages . (LocalRepo repo,)) releases >>= return . Set.unions
+       sources <- mapM (liftIO . releaseSourcePackages . (fromLocalRepository repo,)) releases >>= return . Set.unions
+       binaries <- mapM (liftIO . releaseBinaryPackages . (fromLocalRepository repo,)) releases >>= return . Set.unions
        -- requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
        -- return $ mergeReleases (existingReleases ++ requiredReleases)
        liftIO (hPutStrLn stderr ("rels:\n " ++ intercalate "\n " (List.map show releases) ++ "\n\n" ++

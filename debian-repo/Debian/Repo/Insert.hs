@@ -42,8 +42,7 @@ import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, binaryPackag
                            BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
                            PackageVersion(pkgVersion), Release(releaseAliases, releaseComponents, releaseName),
                            EnvPath, outsidePath, Release(..))
-import Debian.Repo.Types.Repository (Repository(..), Layout(..), LocalRepository(repoLayout, repoRoot), poolDir')
-import Debian.URI (URI'(..))
+import Debian.Repo.Types.Repository (Repository, Layout(..), LocalRepository(repoLayout, repoRoot), poolDir', fromLocalRepository)
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Debian.Version.Text ()
 import Extra.GPGSign ( PGPKey )
@@ -275,7 +274,7 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
       -- do this all at once, rather than one package at a time
       updateIndexes :: EnvPath -> [Release] -> [InstallResult] -> IO [InstallResult]
       updateIndexes root releases results =
-          do (pairLists :: [Either InstallResult [((Repository, Release, PackageIndexLocal), B.Paragraph)]]) <-
+          do (pairLists :: [Either InstallResult [((LocalRepository, Release, PackageIndexLocal), B.Paragraph)]]) <-
                  mapM (uncurry $ buildInfo root releases) (zip changeFileList results)
              let sortedByIndex = sortBy compareIndex (concat (keepRight pairLists))
              let groupedByIndex = undistribute (groupBy (\ a b -> compareIndex a b == EQ) sortedByIndex)
@@ -284,27 +283,27 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
                Ok -> return $ List.map (either id (const Ok)) pairLists
                problem -> return $ List.map (const problem) results
           where
-            compareIndex :: ((Repository, Release, PackageIndexLocal), B.Paragraph) -> ((Repository, Release, PackageIndexLocal), B.Paragraph) -> Ordering
+            compareIndex :: ((LocalRepository, Release, PackageIndexLocal), B.Paragraph) -> ((LocalRepository, Release, PackageIndexLocal), B.Paragraph) -> Ordering
             compareIndex (a, _) (b, _) = compare a b
       -- Build the control information to be added to the package indexes.
-      buildInfo :: EnvPath -> [Release] -> ChangesFile -> InstallResult -> IO (Either InstallResult [((Repository, Release, PackageIndexLocal), B.Paragraph)])
+      buildInfo :: EnvPath -> [Release] -> ChangesFile -> InstallResult -> IO (Either InstallResult [((LocalRepository, Release, PackageIndexLocal), B.Paragraph)])
       buildInfo root releases changes Ok =
           do case findRelease releases (changeRelease changes) of
                Just release ->
                    do (info :: [Either InstallResult B.Paragraph]) <- mapM (fileInfo root repo) indexFiles
                       case keepLeft info of
                         [] ->
-                            let (pairs :: [([(Repository, Release, PackageIndexLocal)], Either InstallResult B.Paragraph)]) = zip (indexLists (LocalRepo repo) release) info in
-                            let (pairs' :: [([(Repository, Release, PackageIndexLocal)], B.Paragraph)]) =
+                            let (pairs :: [([(LocalRepository, Release, PackageIndexLocal)], Either InstallResult B.Paragraph)]) = zip (indexLists repo release) info in
+                            let (pairs' :: [([(LocalRepository, Release, PackageIndexLocal)], B.Paragraph)]) =
                                     catMaybes $ List.map (\ (a, b) -> either (const Nothing) (\ b' -> Just (a, b')) b) pairs in
-                            let (pairs'' :: [((Repository, Release, PackageIndexLocal), B.Paragraph)]) = concat (List.map distribute pairs') in
+                            let (pairs'' :: [((LocalRepository, Release, PackageIndexLocal), B.Paragraph)]) = concat (List.map distribute pairs') in
                             return (Right pairs'')
                         results -> return (Left (mergeResults results))
                Nothing -> return . Left . Failed $ [NoSuchRelease (changeRelease changes)]
           where
-            indexLists :: Repository -> Release -> [[(Repository, Release, PackageIndexLocal)]]
+            indexLists :: LocalRepository -> Release -> [[(LocalRepository, Release, PackageIndexLocal)]]
             indexLists repo release = List.map (indexes repo release) indexFiles
-            indexes :: Repository -> Release -> ChangedFileSpec -> [(Repository, Release, PackageIndexLocal)]
+            indexes :: LocalRepository -> Release -> ChangedFileSpec -> [(LocalRepository, Release, PackageIndexLocal)]
             indexes repo release file = List.map (\ arch -> (repo, release, PackageIndex (section . changedFileSection $ file) arch)) (archList release changes file)
             indexFiles = dsc ++ debs
             (debs :: [ChangedFileSpec]) = filter f files
@@ -467,9 +466,9 @@ moveFile src dst =
 
 -- |Add control information to several package indexes, making sure
 -- that that no duplicate package ids are inserted.
-addPackagesToIndexes :: [((Repository, Release, PackageIndexLocal), [B.Paragraph])] -> IO InstallResult
+addPackagesToIndexes :: [((LocalRepository, Release, PackageIndexLocal), [B.Paragraph])] -> IO InstallResult
 addPackagesToIndexes pairs =
-    do oldPackageLists <- mapM (\ (repo, release, index) -> DRP.getPackages (repo, release) index) (List.map fst pairs)
+    do oldPackageLists <- mapM (\ (repo, release, index) -> DRP.getPackages (fromLocalRepository repo, release) index) (List.map fst pairs)
        case partitionEithers oldPackageLists of
          ([], _) -> 
              do let (oldPackageLists' :: [[BinaryPackageLocal]]) = rights oldPackageLists
@@ -481,7 +480,7 @@ addPackagesToIndexes pairs =
                   dupes -> return $ Failed [OtherProblem ("Duplicate packages: " ++ intercalate " " (List.map (show . prettyBinaryPackage) dupes))]
          (bad, _) -> return $ Failed (List.map (OtherProblem . show) bad)
     where
-      updateIndex ((repo, release, index), oldPackages, newPackages) = DRP.putPackages (repo, release) index (oldPackages ++ newPackages)
+      updateIndex ((repo, release, index), oldPackages, newPackages) = DRP.putPackages repo release index (oldPackages ++ newPackages)
       indexes = List.map fst pairs
       indexMemberFn :: [BinaryPackageLocal] -> BinaryPackageLocal -> Bool
       indexMemberFn packages =
@@ -497,7 +496,7 @@ addPackagesToIndexes pairs =
 deleteTrumped :: Maybe PGPKey -> LocalRepository -> [Release] -> IO [Release]
 deleteTrumped _ _ [] = error "deleteTrumped called with empty release list"
 deleteTrumped keyname repo releases =
-    mapM (findTrumped (LocalRepo repo)) releases >>=
+    mapM (findTrumped (fromLocalRepository repo)) releases >>=
     return . partitionEithers >>=
     \ (bad, good) ->
         case bad of
@@ -606,8 +605,8 @@ findLive repo = {-(LocalRepository _ Nothing _)-}
       Nothing -> return Set.empty	-- Repository is empty
       Just layout ->
           do !releases <- findReleases repo
-             !sourcePackages <- mapM (liftIO . DRP.releaseSourcePackages . (LocalRepo repo,)) releases >>= return . Set.unions
-             !binaryPackages <- mapM (liftIO . DRP.releaseBinaryPackages . (LocalRepo repo,)) releases >>= return . Set.unions
+             !sourcePackages <- mapM (liftIO . DRP.releaseSourcePackages . (fromLocalRepository repo,)) releases >>= return . Set.unions
+             !binaryPackages <- mapM (liftIO . DRP.releaseBinaryPackages . (fromLocalRepository repo,)) releases >>= return . Set.unions
              let sourceFiles = Set.map (T.pack (outsidePath (repoRoot repo) ++ "/") <>) . Set.map T.pack . Set.fold Set.union Set.empty . Set.map DRP.sourceFilePaths $ sourcePackages
              let binaryFiles = Set.map (T.pack (outsidePath (repoRoot repo) ++ "/") <>) . Set.fold (\ mt s -> maybe s (`Set.insert` s) mt) Set.empty $ Set.map (B.fieldValue "Filename" . packageInfo) binaryPackages
              let changesFiles = Set.map T.pack . Set.fold Set.union Set.empty $ Set.map (Set.fromList . changesFilePaths (repoRoot repo) layout releases) sourcePackages
@@ -639,7 +638,7 @@ deleteSourcePackages keyname repo packages =
       doIndex (release, index) = getEntries release index >>= put release index . List.partition (victim release index)
       put :: Release -> PackageIndex -> ([BinaryPackage], [BinaryPackage]) -> IO Release
       put release index (junk, keep) =
-          when (junk /= []) (qPutStrLn ("Removing packages from " ++ show (F.pretty (LocalRepo repo, release, index)) ++ ": " ++ intercalate " " (List.map (show . F.pretty . packageID) junk))) >>
+          when (junk /= []) (qPutStrLn ("Removing packages from " ++ show (F.pretty (fromLocalRepository repo, release, index)) ++ ": " ++ intercalate " " (List.map (show . F.pretty . packageID) junk))) >>
           putIndex' keyname release index keep
       indexes' = Set.fold Set.union Set.empty (Set.map (\ (r, _) -> Set.fromList (List.map (r,) (packageIndexList r))) indexes) -- concatMap allIndexes (Set.toList indexes)
       (indexes, invalid) = Set.partition (\ (_, i) -> packageIndexArch i == Source) (Set.fromList (List.map (\ (r, i, _) -> (r, i)) packages))
@@ -656,7 +655,7 @@ deleteSourcePackages keyname repo packages =
             Source -> packageID entry
             _ -> DRP.binaryPackageSourceID index entry
       getEntries :: Release -> PackageIndex -> IO [BinaryPackage]
-      getEntries release index = DRP.getPackages (LocalRepo repo, release) index >>= return . either (error . show) id
+      getEntries release index = DRP.getPackages (fromLocalRepository repo, release) index >>= return . either (error . show) id
       putIndex' :: Maybe PGPKey -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO Release
       putIndex' keyname release index entries =
           do let root = repoRoot repo
@@ -681,15 +680,6 @@ instance F.Pretty (Repository, Release, PackageIndex) where
 
 instance F.Pretty (Repository, Release) where
     pretty (repo, r) = cat [F.pretty repo, text " ", F.pretty r]
-
--- | URI has a bogus show function
-instance F.Pretty URI' where
-    pretty = text . show . unURI
-
-instance F.Pretty Repository where
-    pretty (LocalRepo r) = text $ outsidePath (repoRoot r)
-    pretty (VerifiedRepo s _) = F.pretty s
-    pretty (UnverifiedRepo s) = F.pretty s
 
 instance F.Pretty Release where
     pretty r = text $ intercalate " " (releaseName' (releaseName r) : List.map (show . F.pretty) (releaseComponents r))
