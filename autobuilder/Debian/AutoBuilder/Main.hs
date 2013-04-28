@@ -8,16 +8,14 @@ module Debian.AutoBuilder.Main
 
 import Control.Arrow (first)
 import Control.Applicative ((<$>))
-import Control.Applicative.Error (Failing(..), maybeRead)
+import Control.Applicative.Error (Failing(..))
 import Control.Exception(SomeException, try, AsyncException(UserInterrupt), fromException, toException)
-import Control.Monad(foldM, when, unless)
+import Control.Monad(foldM, when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
 import Control.Monad.State(MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
-import qualified Data.Map as Map
 import Data.List as List (intercalate, null)
-import Data.Maybe(fromMaybe)
 import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildTarget (retrieve)
@@ -38,15 +36,14 @@ import Debian.Repo.AptImage(prepareAptEnv)
 import Debian.Repo.Cache(updateCacheSources)
 import Debian.Repo.Insert(deleteGarbage)
 import Debian.Repo.Monads.Apt (MonadApt, runAptT)
-import Debian.Repo.Monads.Top (MonadTop(askTop), sub, runTopT)
+import Debian.Repo.Monads.Top (MonadTop(askTop), runTopT)
 import Debian.Repo.OSImage(OSImage, buildEssential, prepareEnv, chrootEnv)
 import Debian.Repo.Release(prepareRelease)
 import Debian.Repo.Repository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Slice(appendSliceLists, inexactPathSlices, releaseSlices, repoSources)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types (EnvRoot(EnvRoot, rootPath), EnvPath(..), outsidePath)
-import Debian.Repo.Types.Repo (RepoKey)
-import Debian.Repo.Types.Repository (Repository, LocalRepository(repoRoot), Layout(Flat), prepareLocalRepository, flushLocalRepository, NamedSliceList(..), SliceList(slices), repoReleaseNames, saveRepoCache)
+import Debian.Repo.Types.Repository (LocalRepository(repoRoot), Layout(Flat), prepareLocalRepository, flushLocalRepository, NamedSliceList(..), SliceList(slices), repoReleaseNames, saveRepoCache)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
@@ -54,10 +51,8 @@ import Extra.Misc(checkSuperUser)
 import Prelude hiding (null)
 import System.Environment (getArgs, getEnv)
 import System.Directory(createDirectoryIfMissing, doesDirectoryExist)
-import System.Posix.Files(removeLink)
 import System.Exit(ExitCode(..), exitWith)
 import qualified System.IO as IO
-import System.IO.Error(isDoesNotExistError)
 import System.Process (shell)
 import System.Process.Progress (Output, timeTask, defaultVerbosity, runProcessF, withModifiedVerbosity, quieter, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
 import System.Unix.Directory(removeRecursiveSafely)
@@ -131,7 +126,7 @@ doParameterSet defaultAtoms results params =
       allTargetNames :: Set P.TargetName
       allTargetNames = P.foldPackages (\ name _ _ result -> insert name result) (P.buildPackages params) empty
 
-prepareDependOS :: MonadDeb m => P.ParamRec -> NamedSliceList -> LocalRepository -> m OSImage
+prepareDependOS :: (MonadTop m, MonadApt m) => P.ParamRec -> NamedSliceList -> LocalRepository -> m OSImage
 prepareDependOS params buildRelease localRepo =
     do dependRoot <- dependEnv (P.buildRelease params)
        exists <- liftIO $ doesDirectoryExist (rootPath dependRoot)
@@ -156,18 +151,33 @@ prepareDependOS params buildRelease localRepo =
                   (P.excludePackages params)
                   (P.components params)
 
+prepareLocalRepo :: (MonadTop m, MonadApt m) => C.CacheRec -> m LocalRepository
+prepareLocalRepo cache =
+    P.localPoolDir cache >>= \ dir ->
+    (\ x -> qPutStrLn ("Preparing local repository " ++ dir) >> quieter 1 x) $
+    do let path = EnvPath (EnvRoot "") dir
+       repo <- prepareLocalRepository path (Just Flat) >>=
+               (if P.flushPool params then flushLocalRepository else return)
+       qPutStrLn $ "Preparing release main in local repository at " ++ outsidePath path
+       release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
+       case P.cleanUp params of
+         True -> deleteGarbage repo
+         False -> return repo
+    where
+      params = C.params cache
+
 runParameterSet :: MonadDeb m => Atoms -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet defaultAtoms cache =
     do
       top <- askTop
       liftIO doRequiredVersion
-      liftIO doVerifyBuildRepo
+      liftIO $ doVerifyBuildRepo cache
       when (P.showParams params) (withModifiedVerbosity (const defaultVerbosity) (liftIO doShowParams))
       when (P.showSources params) (withModifiedVerbosity (const defaultVerbosity) (liftIO doShowSources))
       when (P.flushAll params) (liftIO $ doFlush top)
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
-      localRepo <- prepareLocalRepo			-- Prepare the local repository for initial uploads
+      localRepo <- prepareLocalRepo cache			-- Prepare the local repository for initial uploads
       dependOS <- prepareDependOS params buildRelease localRepo
       _ <- updateCacheSources (P.ifSourcesChanged params) dependOS
       -- Compute the essential and build essential packages, they will all
@@ -185,7 +195,7 @@ runParameterSet defaultAtoms cache =
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
       -- Build an apt-get environment which we can use to retrieve all the package lists
       poolOS <-prepareAptEnv top (P.ifSourcesChanged params) poolSources
-      (failures, targets) <- retrieveTargetList dependOS >>= return . partitionEithers
+      (failures, targets) <- retrieveTargetList defaultAtoms cache dependOS >>= return . partitionEithers
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
       buildResult <- buildTargets cache dependOS globalBuildDeps localRepo poolOS targets
       -- If all targets succeed they may be uploaded to a remote repo
@@ -213,21 +223,6 @@ runParameterSet defaultAtoms cache =
             printReason :: (DebianVersion, Maybe String) -> IO ()
             printReason (v, s) =
                 ePutStr (" Version >= " ++ show (prettyDebianVersion v) ++ " is required" ++ maybe "" ((++) ":") s)
-
-      doVerifyBuildRepo :: IO ()
-      doVerifyBuildRepo =
-          when (not (any (== (P.buildRelease params)) (concatMap (repoReleaseNames . fst) . slices . C.buildRepoSources $ cache)))
-               (case P.uploadURI params of
-                  Just uri ->
-                      let ssh = case uriAuthority uri of
-                                  Just auth -> uriUserInfo auth ++ uriRegName auth ++ uriPort auth
-                                  Nothing -> "user@hostname"
-                          rel = releaseName' (P.buildRelease params)
-                          top = uriPath uri in -- "/home/autobuilder/deb-private/debian"
-                      error $ "Build repository does not exist on remote server: " ++ rel ++ "\nUse newdist there to create it:" ++
-                              "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-release=" ++ rel ++
-                              "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-section=" ++ rel ++ ",main" ++
-                              "\nYou will also need to remove the local file ~/.autobuilder/repoCache.")
       doShowParams = ePutStr $ "Configuration parameters:\n" ++ P.prettyPrint params
       doShowSources =
           either (error . show) doShow (P.findSlice cache (SliceName (releaseName' (P.buildRelease params))))
@@ -246,39 +241,6 @@ runParameterSet defaultAtoms cache =
                True -> return ()
                False -> do qPutStr "You must be superuser to run the autobuilder (to use chroot environments.)"
                            liftIO $ exitWith (ExitFailure 1)
-      prepareLocalRepo =
-          P.localPoolDir cache >>= \ dir ->
-          (\ x -> qPutStrLn ("Preparing local repository " ++ dir) >> quieter 1 x) $
-          do let path = EnvPath (EnvRoot "") dir
-             repo <- prepareLocalRepository path (Just Flat) >>=
-                     (if P.flushPool params then flushLocalRepository else return)
-             qPutStrLn $ "Preparing release main in local repository at " ++ outsidePath path
-             release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
-             case P.cleanUp params of
-               True -> deleteGarbage repo
-               False -> return repo
-      retrieveTargetList :: MonadDeb m => OSImage -> m [Either String Buildable]
-      retrieveTargetList dependOS =
-          retrieveTargetList' dependOS >>=
-          mapM (either (return . Left) (\ download -> liftIO (try (asBuildable download)) >>= return. either (\ (e :: SomeException) -> Left (show e)) Right))
-      retrieveTargetList' :: MonadDeb m => OSImage -> m [Either String Download]
-      retrieveTargetList' dependOS =
-          do qPutStr ("\n" ++ showTargets allTargets ++ "\n")
-             buildOS <- chrootEnv dependOS <$> buildEnv (P.buildRelease (C.params cache))
-             when (P.report params) (ePutStrLn . doReport $ allTargets)
-             qPutStrLn "Retrieving all source code:\n"
-             countTasks' (map (\ (target :: P.Packages) ->
-                                   (show (P.spec target), (Right <$> retrieve defaultAtoms buildOS cache target) `IO.catch` handleRetrieveException target))
-                              (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
-          where
-            allTargets = P.buildPackages (C.params cache)
-            handleRetrieveException :: MonadDeb m => P.Packages -> SomeException -> m (Either String Download)
-            handleRetrieveException target e =
-                case (fromException (toException e) :: Maybe AsyncException) of
-                  Just UserInterrupt ->
-                      throw e -- break out of loop
-                  _ -> let message = ("Failure retrieving " ++ show (P.spec target) ++ ":\n  " ++ show e) in
-                       liftIO (IO.hPutStrLn IO.stderr message) >> return (Left message)
       upload :: MonadApt m => (LocalRepository, [Target]) -> m [Failing ([Output L.ByteString], NominalDiffTime)]
       upload (repo, [])
           | P.doUpload params =
@@ -311,6 +273,50 @@ runParameterSet defaultAtoms cache =
                              try (timeTask (runProcessF (shell cmd) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                 _ -> error "Missing Upload-URI parameter"
           | True = return (Success ([], (fromInteger 0)))
+
+
+-- doVerifyBuildRepo :: IO ()
+doVerifyBuildRepo :: C.CacheRec -> IO ()
+doVerifyBuildRepo cache =
+    when (not (any (== (P.buildRelease params)) (concatMap (repoReleaseNames . fst) . slices . C.buildRepoSources $ cache)))
+         (case P.uploadURI params of
+            Just uri ->
+                let ssh = case uriAuthority uri of
+                            Just auth -> uriUserInfo auth ++ uriRegName auth ++ uriPort auth
+                            Nothing -> "user@hostname"
+                    rel = releaseName' (P.buildRelease params)
+                    top = uriPath uri in -- "/home/autobuilder/deb-private/debian"
+                error $ "Build repository does not exist on remote server: " ++ rel ++ "\nUse newdist there to create it:" ++
+                        "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-release=" ++ rel ++
+                        "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-section=" ++ rel ++ ",main" ++
+                        "\nYou will also need to remove the local file ~/.autobuilder/repoCache.")
+    where
+      params = C.params cache
+
+retrieveTargetList :: MonadDeb m => Atoms -> C.CacheRec -> OSImage -> m [Either String Buildable]
+retrieveTargetList defaultAtoms cache dependOS =
+          retrieveTargetList' dependOS >>=
+          mapM (either (return . Left) (\ download -> liftIO (try (asBuildable download)) >>= return. either (\ (e :: SomeException) -> Left (show e)) Right))
+    where
+      params = C.params cache
+      -- retrieveTargetList' :: MonadDeb m => OSImage -> m [Either String Download]
+      retrieveTargetList' dependOS =
+          do qPutStr ("\n" ++ showTargets allTargets ++ "\n")
+             buildOS <- chrootEnv dependOS <$> buildEnv (P.buildRelease (C.params cache))
+             when (P.report params) (ePutStrLn . doReport $ allTargets)
+             qPutStrLn "Retrieving all source code:\n"
+             countTasks' (map (\ (target :: P.Packages) ->
+                                   (show (P.spec target), (Right <$> retrieve defaultAtoms buildOS cache target) `IO.catch` handleRetrieveException target))
+                              (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
+          where
+            allTargets = P.buildPackages (C.params cache)
+            handleRetrieveException :: MonadDeb m => P.Packages -> SomeException -> m (Either String Download)
+            handleRetrieveException target e =
+                case (fromException (toException e) :: Maybe AsyncException) of
+                  Just UserInterrupt ->
+                      throw e -- break out of loop
+                  _ -> let message = ("Failure retrieving " ++ show (P.spec target) ++ ":\n  " ++ show e) in
+                       liftIO (IO.hPutStrLn IO.stderr message) >> return (Left message)
 
 -- | Perform a list of tasks with log messages.
 countTasks' :: MonadIO m => [(String, m a)] -> m [a]
