@@ -402,7 +402,7 @@ updateEnv os =
                _ -> return $ Right os
       root = osRoot os
       remoteOnly :: SliceList -> SliceList
-      remoteOnly x = x {slices = filter r (slices x)} where r y = (uriScheme . sourceUri . snd $ y) == "file:"
+      remoteOnly x = x {slices = filter r (slices x)} where r y = (uriScheme . sourceUri . snd $ y) /= "file:"
 
 chrootEnv :: OSImage -> EnvRoot -> OSImage
 chrootEnv os dst = os {osRoot=dst}
