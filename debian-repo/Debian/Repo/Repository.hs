@@ -1,7 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables, PackageImports #-}
 module Debian.Repo.Repository
-    ( UploadFile(..)
-    , repoArchList
+    ( repoArchList
     , readPkgVersion
     , showPkgVersion
     , verifyUploadURI
