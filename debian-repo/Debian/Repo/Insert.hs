@@ -230,11 +230,11 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
                    let live' =
                            case result of
                              -- Add the successfully installed files to the live file set
-                             Ok -> foldr Set.insert live (List.map (T.pack . ((outsidePath root) </>) . poolDir' (LocalRepo repo, release') changes) (changeFiles changes))
+                             Ok -> foldr Set.insert live (List.map (T.pack . ((outsidePath root) </>) . poolDir' (LocalRepo repo) changes) (changeFiles changes))
                              _ -> live
                    return (live', releases', result : results)
             installFile root release file =
-                do let dir = outsidePath root </> poolDir' (LocalRepo repo, release) changes file
+                do let dir = outsidePath root </> poolDir' (LocalRepo repo) changes file
                    let src = outsidePath root </> "incoming" </> changedFileName file
                    let dst = dir </> changedFileName file
                    installed <- liftIO $ doesFileExist dst
@@ -411,12 +411,12 @@ keepLeft :: [Either a b] -> [a]
 keepLeft xs = catMaybes $ List.map (either Just (const Nothing)) xs
 
 addDebFields :: (Repository, Release) -> ChangesFile -> ChangedFileSpec -> Paragraph' Text -> (Either InstallResult (Paragraph' Text))
-addDebFields release changes file info =
+addDebFields (repo, release) changes file info =
     let (binaryVersion :: DebianVersion) =
             maybe (error $ "Missing 'Version' field") parseDebianVersion (B.fieldValue "Version" info) in
     let (newfields :: [B.Field]) =
             [B.Field (T.pack "Source", " " <> source <> T.pack (versionSuffix binaryVersion)),
-             B.Field (T.pack "Filename", T.pack (" " ++ poolDir' release changes file </> changedFileName file)),
+             B.Field (T.pack "Filename", T.pack (" " ++ poolDir' repo changes file </> changedFileName file)),
              B.Field (T.pack "Size", T.pack (" " ++ show (changedFileSize file))),
              B.Field (T.pack "MD5sum", T.pack (" " ++ changedFileMD5sum file))] in
     Right $ B.appendFields newfields info
@@ -428,7 +428,7 @@ addDebFields release changes file info =
 
 
 addSourceFields :: (Repository, Release) -> ChangesFile -> ChangedFileSpec -> B.Paragraph -> (Either InstallResult B.Paragraph)
-addSourceFields release changes file info =
+addSourceFields (repo, release) changes file info =
     Right . append . raise . modify . rename $ info
     where
       rename = B.renameField (T.pack "Source") (T.pack "Package")
@@ -439,7 +439,7 @@ addSourceFields release changes file info =
       append = B.appendFields $ 
                [B.Field (T.pack "Priority", T.pack (" " ++ changedFilePriority file)),
                 B.Field (T.pack "Section", T.pack  (" " ++ (sectionName (changedFileSection file)))),
-                B.Field (T.pack "Directory", T.pack (" " ++ poolDir' release changes file))] ++
+                B.Field (T.pack "Directory", T.pack (" " ++ poolDir' repo changes file))] ++
                maybe [] (\ s -> [B.Field (T.pack "Build-Info", " " <> s)]) (B.fieldValue "Build-Info" (changeInfo changes))
       filesLine file = changedFileMD5sum file ++ " "  ++ show (changedFileSize file) ++ " " ++ changedFileName file
       sha1Line file = changedFileSHA1sum file ++ " "  ++ show (changedFileSize file) ++ " " ++ changedFileName file
