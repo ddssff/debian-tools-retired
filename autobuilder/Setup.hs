@@ -2,15 +2,17 @@
 
 import Control.Exception (SomeException)
 import Distribution.Simple
-import System.Cmd
-import System.Exit
+import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
+import System.Cmd (system)
+import System.Exit (ExitCode(ExitSuccess))
+import System.FilePath ((</>))
 
 main = defaultMainWithHooks simpleUserHooks {
-         postBuild = \ _ _ _ _ -> runTestScript
-       , runTests = \ _ _ _ _ -> runTestScript
+         postBuild = \ _ _ _ lbi -> runTestScript lbi
+       , runTests = \ _ _ _ lbi -> runTestScript lbi
        }
 
-runTestScript =
+runTestScript lbi =
     -- system "runhaskell Test/Test.hs" >>= \ code ->
-    system "dist/build/autobuilder-tests/autobuilder-tests" >>= \ code ->
+    system (buildDir lbi </> "autobuilder-tests/autobuilder-tests") >>= \ code ->
     if code == ExitSuccess then return () else error "Test Failure"
