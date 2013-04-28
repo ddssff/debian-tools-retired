@@ -12,15 +12,13 @@ import Control.Exception ( throw )
 import Data.Char ( isDigit )
 import Data.Maybe ( fromJust )
 import Data.Text (unpack)
-import Debian.URI ( URI(uriPath), fileFromURI, parseURI )
+import Debian.URI (fileFromURI)
 import qualified Debian.UTF8 as Deb
 import Debian.Repo.Types.EnvPath (EnvPath(..))
 import Debian.Repo.Types.Release (Release)
-import Debian.URI (URI'(URI'))
+import Debian.URI (URI', fromURI')
+import Network.URI (URI(uriPath), parseURI)
 import System.FilePath ( (</>) )
-
-deriving instance Eq URI'
-deriving instance Ord URI'
 
 data RepoKey
     = Remote URI'
@@ -35,7 +33,7 @@ class (Ord t, Eq t) => Repo t where
         where
           uri' = uri {uriPath = uriPath uri </> compatibilityFile}
           uri = case repoKey r of
-                  Remote (URI' x) -> x
+                  Remote x -> fromURI' x
                   Local x -> fromJust . parseURI $ "file://" ++ envPath x
           parse :: String -> Maybe Int
           parse s = case takeWhile isDigit s of
@@ -71,4 +69,4 @@ repoURI :: Repo r => r -> URI
 repoURI r =
     case repoKey r of
       Local path -> fromJust . parseURI $ "file://" ++ envPath path
-      Remote (URI' uri) -> uri
+      Remote uri -> fromURI' uri

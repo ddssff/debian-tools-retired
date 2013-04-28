@@ -9,9 +9,9 @@ module Debian.Repo.SourcesList
     )
     where
 
-import Debian.URI ( parseURI, unEscapeString )
 import Debian.Release (parseReleaseName, parseSection')
 import Debian.Sources (SourceType(..), DebSource(..))
+import Network.URI ( parseURI, unEscapeString )
 
 {-
 

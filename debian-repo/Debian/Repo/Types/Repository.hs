@@ -38,7 +38,7 @@ import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePat
 import Debian.Repo.Types.Release (Release(releaseName), makeReleaseInfo)
 import Debian.Repo.Types.Repo (Repo(..), RepoKey(..), compatibilityFile, libraryCompatibilityLevel)
 import Debian.Sources ( SliceName(..), DebSource(..), SourceType(..) )
-import Debian.URI (URI'(..), uriToString', URI(uriScheme, uriPath), dirFromURI, fileFromURI)
+import Debian.URI (URI'(..), fromURI', toURI', uriToString', URI(uriScheme, uriPath), dirFromURI, fileFromURI)
 import Debian.UTF8 as Deb (decode)
 import Extra.Files (maybeWriteFile)
 import Extra.List (partitionM)
@@ -74,7 +74,7 @@ instance Eq Repository where
 
 -- | URI has a bogus show function, which we are using here.
 instance F.Pretty URI' where
-    pretty = text . show . unURI
+    pretty = text . show . fromURI'
 
 instance F.Pretty Repository where
     pretty (LocalRepo r) = text $ outsidePath (repoRoot r)
@@ -278,29 +278,29 @@ prepareRepository' :: MonadRepoCache m => RepoKey -> m Repository
 prepareRepository' key =
     case key of
       Local path -> prepareLocalRepository path Nothing >>= return . LocalRepo
-      Remote (URI' uri) -> prepareRepository uri
+      Remote uri -> prepareRepository (fromURI' uri)
 
 -- | Prepare a repository, which may be remote or local depending on
 -- the URI.
 prepareRepository :: MonadRepoCache m => URI -> m Repository
 prepareRepository uri =
     do state <- getRepoCache
-       repo <- maybe newRepo return (Map.lookup (Remote (URI' uri)) state)
-       putRepoCache (Map.insert (Remote (URI' uri)) repo state)
+       repo <- maybe newRepo return (Map.lookup (Remote (toURI' uri)) state)
+       putRepoCache (Map.insert (Remote (toURI' uri)) repo state)
        return repo
     where
       newRepo =
              case uriScheme uri of
                "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
                -- FIXME: We only want to verifyRepository on demand.
-               _ -> verifyRepository (URI' uri)
+               _ -> verifyRepository (toURI' uri)
 
 -- |To create a RemoteRepo we must query it to find out the
 -- names, sections, and supported architectures of its releases.
 {-# NOINLINE verifyRepository #-}
 verifyRepository :: MonadIO m => URI' -> m Repository
 verifyRepository uri =
-    do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . unURI $ uri
+    do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . fromURI' $ uri
        return $ RemoteRepo uri releaseInfo
 
 -- Nice code to do caching, but I figured out how to fix the old code.
