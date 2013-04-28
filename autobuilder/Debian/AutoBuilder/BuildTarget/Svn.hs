@@ -15,7 +15,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
-import Debian.URI
+import Network.URI (URI(..), URIAuth(..), parseURI, unEscapeString)
 import System.Directory
 import System.Exit
 import System.FilePath (splitFileName, (</>))
