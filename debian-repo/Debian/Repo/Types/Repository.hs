@@ -4,7 +4,7 @@ module Debian.Repo.Types.Repository
     ( Repository
     , LocalRepository(repoRoot, repoLayout, repoReleaseInfoLocal)
     , Layout(..)
-    , MonadRepoCache(..)
+    , MonadRepoCache(getRepoCache, putRepoCache)
     , loadRepoCache
     , saveRepoCache
     , fromLocalRepository
@@ -24,7 +24,7 @@ module Debian.Repo.Types.Repository
 import Control.Applicative.Error (Failing(Success, Failure), maybeRead)
 import Control.Exception (ErrorCall(..), SomeException, toException, try, evaluate)
 import Control.Monad (filterM, when, unless)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (groupBy, partition, sort, isPrefixOf, intercalate)
 import Data.Map as Map (Map, insertWith, lookup, insert, fromList, toList, union)
@@ -63,8 +63,7 @@ import qualified Tmp.File as F (Source(RemotePath))
 --data Repository = forall a. (Repo a) => Repository a
 data Repository
     = LocalRepo LocalRepository
-    | VerifiedRepo URI' [Release]
-    | UnverifiedRepo URI'
+    | RemoteRepo URI' [Release]
     deriving (Show, Read)
 
 instance Ord Repository where
@@ -79,16 +78,13 @@ instance F.Pretty URI' where
 
 instance F.Pretty Repository where
     pretty (LocalRepo r) = text $ outsidePath (repoRoot r)
-    pretty (VerifiedRepo s _) = F.pretty s
-    pretty (UnverifiedRepo s) = F.pretty s
+    pretty (RemoteRepo s _) = F.pretty s
 
 instance Repo Repository where
     repoKey (LocalRepo (LocalRepository path _ _)) = Local path -- fromJust . parseURI $ "file://" ++ envPath path
-    repoKey (VerifiedRepo uri _) = Remote uri
-    repoKey (UnverifiedRepo uri) = Remote uri
+    repoKey (RemoteRepo uri _) = Remote uri
     repoReleaseInfo (LocalRepo (LocalRepository _ _ info)) = info
-    repoReleaseInfo (VerifiedRepo _ info) = info
-    repoReleaseInfo (UnverifiedRepo _uri) = error "No release info for unverified repository"
+    repoReleaseInfo (RemoteRepo _ info) = info
 
 data LocalRepository
     = LocalRepository
@@ -185,10 +181,6 @@ isSymLink path = F.getSymbolicLinkStatus path >>= return . F.isSymbolicLink
 parseReleaseFile :: FilePath -> ReleaseName -> [ReleaseName] -> IO Release
 parseReleaseFile path dist aliases =
     liftIO (F.readFile path) >>= return . parseRelease dist aliases
-{-
-    do text <- liftIO (B.readFile path)
-       return $ parseRelease path text dist aliases
--}
 
 parseRelease :: ReleaseName -> [ReleaseName] -> F.File Text -> Release
 parseRelease name aliases file =
@@ -278,48 +270,15 @@ poolDir' repo changes file =
 -- | Remove all the packages from the repository and then re-create
 -- the empty releases.
 flushLocalRepository :: MonadRepoCache m => LocalRepository -> m LocalRepository
-flushLocalRepository r {-(LocalRepository path layout _)-} =
+flushLocalRepository r =
     do liftIO $ removeRecursiveSafely (outsidePath (repoRoot r))
        prepareLocalRepository (repoRoot r) (repoLayout r)
-
-{-
-prepareRepository' :: MonadApt m => Maybe EnvRoot -> URI -> m Repository
-prepareRepository' chroot uri =
-    case uriScheme uri of
-      "file:" ->
-          let dir = EnvPath (maybe (EnvRoot "") id chroot) (uriPath uri) in
-          prepareLocalRepository dir Nothing >>= return . LocalRepo
-      _ ->
-          prepareRepository uri
--}
 
 prepareRepository' :: MonadRepoCache m => RepoKey -> m Repository
 prepareRepository' key =
     case key of
       Local path -> prepareLocalRepository path Nothing >>= return . LocalRepo
       Remote (URI' uri) -> prepareRepository uri
-
--- |This is a remote repository which we have queried to find out the
--- names, sections, and supported architectures of its releases.
---data VerifiedRepo = VerifiedRepo URI [ReleaseInfo]
-
-{- instance Show VerifiedRepo where
-    show (VerifiedRepo uri _) = "Verified Repository " ++ show uri -- ++ " " ++ show dists
-instance Ord VerifiedRepo where
-    compare a b = compare (repoURI a) (repoURI b)
-instance Eq VerifiedRepo where
-    a == b = compare a b == EQ -}
-
--- |This is a repository whose structure we haven't examined 
--- to determine what release it contains.
---data UnverifiedRepo = UnverifiedRepo URI
-
-{- instance Show UnverifiedRepo where
-    show (UnverifiedRepo uri) = "Unverified Repository " ++ show uri -- ++ " (unverified)"
-instance Ord UnverifiedRepo where
-    compare a b = compare (repoURI a) (repoURI b)
-instance Eq UnverifiedRepo where
-    a == b = compare a b == EQ -}
 
 -- | Prepare a repository, which may be remote or local depending on
 -- the URI.
@@ -334,20 +293,15 @@ prepareRepository uri =
              case uriScheme uri of
                "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
                -- FIXME: We only want to verifyRepository on demand.
-               _ -> verifyRepository (UnverifiedRepo (URI' uri))
-               -- _ -> return . Repository . UnverifiedRepo $ uri
+               _ -> verifyRepository (URI' uri)
 
+-- |To create a RemoteRepo we must query it to find out the
+-- names, sections, and supported architectures of its releases.
 {-# NOINLINE verifyRepository #-}
-verifyRepository :: MonadIO m => Repository -> m Repository
-verifyRepository (UnverifiedRepo uri) =
-    do --tio (vHPutStrBl IO.stderr 0 $ "Verifying repository " ++ show uri ++ "...")
-       -- Use unsafeInterleaveIO to avoid querying the repository
-       -- until the value is actually needed.
-       -- qPutStrLn $ "verifyRepository " ++ uri
-       releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . unURI $ uri
-       {- tio (vHPutStrLn IO.stderr 0 $ "\n" {- -> VerifiedRepo " ++ show uri ++ " " ++ show releaseInfo -} ) -}
-       return $ VerifiedRepo uri releaseInfo
-verifyRepository x = return x
+verifyRepository :: MonadIO m => URI' -> m Repository
+verifyRepository uri =
+    do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . unURI $ uri
+       return $ RemoteRepo uri releaseInfo
 
 -- Nice code to do caching, but I figured out how to fix the old code.
 
@@ -399,7 +353,6 @@ getReleaseInfoRemote uri =
       getSuite (F.File {F.text = Success releaseFile}) = T.fieldValue (releaseNameField releaseFile) releaseFile
       getSuite (F.File {F.text = Failure msgs}) = fail (intercalate "\n" msgs)
       getReleaseFile :: ReleaseName -> IO (F.File (T.Paragraph' Text))
-      -- getReleaseFile :: ReleaseName -> IO (T.Paragraph' T.ByteString)
       getReleaseFile distName =
           do qPutStr "."
              release <- fileFromURI releaseURI
@@ -428,5 +381,5 @@ deriving instance Show SourceType
 deriving instance Show DebSource
 
 repoReleaseNames :: Repository -> [ReleaseName]
-repoReleaseNames (VerifiedRepo _ rels) = map releaseName rels
+repoReleaseNames (RemoteRepo _ rels) = map releaseName rels
 repoReleaseNames _ = []
