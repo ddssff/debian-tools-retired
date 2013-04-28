@@ -23,7 +23,7 @@ import Debian.Repo.Changes ( findChangesFiles, key, path )
 import Debian.Repo.Types (PkgVersion(..), prettyPkgVersion, outsidePath)
 import Debian.Repo.Types.Release (Release(..))
 import Debian.Repo.Types.Repo (Repo(repoReleaseInfo))
-import Debian.Repo.Types.Repository (LocalRepository(repoRoot), MonadRepoCache)
+import Debian.Repo.Types.Repository (LocalRepository(repoRoot))
 import Debian.URI (URIAuth(uriPort, uriRegName, uriUserInfo), uriToString', URI(uriAuthority, uriPath))
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Extra.Bool ( cond )
@@ -46,7 +46,7 @@ import Text.Regex ( matchRegex, mkRegex )
 data UploadFile = Upload FilePath String DebianVersion Arch
 
 -- |Make sure we can access the upload uri without typing a password.
-verifyUploadURI :: MonadRepoCache m => Bool -> URI -> m ()
+verifyUploadURI :: MonadIO m => Bool -> URI -> m ()
 verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ show uri) >> quieter 2 x) $
     case doExport of
       True -> export
@@ -63,7 +63,6 @@ verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ sh
                Right () -> return ()
                Left s -> error $ "Unable to reach " ++ uriToString' uri ++ ": " ++ s
              mkdir
-      mkdir :: MonadRepoCache m => m ()
       mkdir =
           case uriAuthority uri of
             Nothing -> error $ "Internal error 7"
