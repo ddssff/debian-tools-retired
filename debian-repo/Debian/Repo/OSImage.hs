@@ -127,12 +127,12 @@ osFullDistro os =
 
 getSourcePackages :: MonadApt m => OSImage -> m [SourcePackage]
 getSourcePackages os =
-    mapM (uncurry (sourcePackagesOfIndex' os)) indexes >>= return . concat
+    mapM (\ ((repo, rel), index) -> sourcePackagesOfIndex' os repo rel index) indexes >>= return . concat
     where indexes = concat . map (sliceIndexes os) . slices . sourceSlices . aptSliceList $ os
 
 getBinaryPackages :: MonadApt m => OSImage -> m [BinaryPackage]
 getBinaryPackages os =
-    mapM (uncurry (binaryPackagesOfIndex' os)) indexes >>= return . concat
+    mapM (\ ((repo, rel), index) -> binaryPackagesOfIndex' os repo rel index) indexes >>= return . concat
     where indexes = concat . map (sliceIndexes os) . slices . binarySlices . aptSliceList $ os
 
 data UpdateError

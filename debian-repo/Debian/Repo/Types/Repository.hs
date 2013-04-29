@@ -11,7 +11,6 @@ module Debian.Repo.Types.Repository
     , readLocalRepo
     , prepareLocalRepository
     , copyLocalRepo -- repoCD
-    , prepareRepository'
     , prepareRepository
     , setRepositoryCompatibility
     , flushLocalRepository
@@ -23,7 +22,7 @@ module Debian.Repo.Types.Repository
     ) where
 
 import Control.Applicative.Error (Failing(Success, Failure), maybeRead)
-import Control.Exception (ErrorCall(..), SomeException, toException, try, evaluate)
+import Control.Exception (ErrorCall(..), SomeException, toException)
 import Control.Monad (filterM, when, unless)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
 import Control.Monad.Trans (MonadIO, liftIO)
@@ -311,16 +310,16 @@ flushLocalRepository r =
     do liftIO $ removeRecursiveSafely (outsidePath (repoRoot r))
        prepareLocalRepository (repoRoot r) (repoLayout r)
 
-prepareRepository' :: MonadRepoCache m => RepoKey -> m Repository
-prepareRepository' key =
+prepareRepository :: MonadRepoCache m => RepoKey -> m Repository
+prepareRepository key =
     case key of
       Local path -> prepareLocalRepository path Nothing >>= return . LocalRepo
-      Remote uri -> prepareRepository (fromURI' uri)
+      Remote uri -> prepareRepository' (fromURI' uri)
 
 -- | Prepare a repository, which may be remote or local depending on
 -- the URI.
-prepareRepository :: MonadRepoCache m => URI -> m Repository
-prepareRepository uri =
+prepareRepository' :: MonadRepoCache m => URI -> m Repository
+prepareRepository' uri =
     do state <- getRepoCache
        repo <- maybe newRepo return (Map.lookup (Remote (toURI' uri)) state)
        putRepoCache (Map.insert (Remote (toURI' uri)) repo state)

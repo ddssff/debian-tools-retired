@@ -27,7 +27,7 @@ import Debian.Sources  ( SourceType(..), SliceName(SliceName), DebSource(..) )
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.SourcesList ( parseSourceLine, parseSourcesList )
 import Debian.Repo.Types (EnvPath(..), EnvRoot(..))
-import Debian.Repo.Types.Repository (Repository, prepareRepository', NamedSliceList(..), SliceList(..))
+import Debian.Repo.Types.Repository (Repository, prepareRepository, NamedSliceList(..), SliceList(..))
 import Debian.Repo.Types.Repo (RepoKey(..))
 import Debian.URI (toURI', dirFromURI, fileFromURI)
 import Debian.UTF8 as Deb (decode)
@@ -117,17 +117,12 @@ verifySourcesList chroot list =
 verifySourceLine :: MonadApt m => Maybe EnvRoot -> String -> m (Repository, DebSource)
 verifySourceLine chroot str = verifyDebSource chroot (parseSourceLine str)
 
-{-
-verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m (Repository, DebSource)
-verifyDebSource chroot line =
-    prepareRepository' chroot (sourceUri line) >>= \ repo -> return (repo, line)
--}
 verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m (Repository, DebSource)
 verifyDebSource chroot line =
     repo >>= return . (, line)
     where
       repo =
           case uriScheme (sourceUri line) of
-            "file:" -> prepareRepository' (Local (EnvPath chroot' (uriPath (sourceUri line))))
-            _ -> prepareRepository' (Remote (toURI' (sourceUri line)))
+            "file:" -> prepareRepository (Local (EnvPath chroot' (uriPath (sourceUri line))))
+            _ -> prepareRepository (Remote (toURI' (sourceUri line)))
       chroot' = fromMaybe (EnvRoot "") chroot

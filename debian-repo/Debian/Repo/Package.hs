@@ -213,8 +213,8 @@ sourcePackageBinaryIDs arch sourceIndex package =
       info = sourceParagraph package
 
 -- | Get the contents of a package index
-getPackages :: (Repository, Release) -> PackageIndex -> IO (Either SomeException [BinaryPackage])
-getPackages (repo, release) index =
+getPackages :: Repository -> Release -> PackageIndex -> IO (Either SomeException [BinaryPackage])
+getPackages repo release index =
     fileFromURIStrict uri' >>= return . either (Left . SomeException) Right >>= {- showStream >>= -} readControl
     where
       readControl :: Either SomeException L.ByteString -> IO (Either SomeException [BinaryPackage])
@@ -232,22 +232,22 @@ getPackages (repo, release) index =
       --showStream x@(Right s) = hPutStrLn stderr (show uri' ++ " - stream length: " ++ show (L.length s)) >> return x
 
 -- | Get the contents of a package index
-binaryPackagesOfIndex :: (Repository, Release) -> PackageIndex -> IO (Either SomeException [BinaryPackage])
-binaryPackagesOfIndex (repo, release) index =
+binaryPackagesOfIndex :: Repository -> Release -> PackageIndex -> IO (Either SomeException [BinaryPackage])
+binaryPackagesOfIndex repo release index =
     case packageIndexArch index of
       Source -> return (Right [])
-      _ -> getPackages (repo, release) index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
+      _ -> getPackages repo release index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
 
 -- | Get the contents of a package index
-sourcePackagesOfIndex :: (Repository, Release) -> PackageIndex -> IO (Either SomeException [SourcePackage])
-sourcePackagesOfIndex (repo, release) index =
+sourcePackagesOfIndex :: Repository -> Release -> PackageIndex -> IO (Either SomeException [SourcePackage])
+sourcePackagesOfIndex repo release index =
     case packageIndexArch index of
-      Source -> getPackages (repo, release) index >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
+      Source -> getPackages repo release index >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
       _ -> return (Right [])
 
 -- FIXME: assuming the index is part of the cache
-sourcePackagesOfIndex' :: (AptCache a, MonadApt m) => a -> (Repository, Release) -> PackageIndex -> m [SourcePackage]
-sourcePackagesOfIndex' cache (repo, release) index =
+sourcePackagesOfIndex' :: (AptCache a, MonadApt m) => a -> Repository -> Release -> PackageIndex -> m [SourcePackage]
+sourcePackagesOfIndex' cache repo release index =
     do state <- getApt
        let cached = lookupSourcePackages path state
        status <- liftIO $ getFileStatus path `E.catch` (\ (_ :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory (rootPath (rootDir cache)) ++ " and try again - sorry about that.")
@@ -258,17 +258,17 @@ sourcePackagesOfIndex' cache (repo, release) index =
                  putApt (insertSourcePackages path (status, packages) state)
                  return packages
     where
-      path = rootPath (rootDir cache) ++ indexCacheFile cache (repo, release) index
+      path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
 
-indexCacheFile :: (AptCache a) => a -> (Repository, Release) -> PackageIndex -> FilePath
-indexCacheFile apt (repo, release) index =
+indexCacheFile :: (AptCache a) => a -> Repository -> Release -> PackageIndex -> FilePath
+indexCacheFile apt repo release index =
     case (aptArch apt, packageIndexArch index) of
-      (Binary _ _, Source) -> indexPrefix (repo, release) index ++ "_source_Sources"
-      (Binary _ _, arch@(Binary _ _)) -> indexPrefix (repo, release) index ++ "_binary-" ++ show (prettyArch arch) ++ "_Packages"
+      (Binary _ _, Source) -> indexPrefix repo release index ++ "_source_Sources"
+      (Binary _ _, arch@(Binary _ _)) -> indexPrefix repo release index ++ "_binary-" ++ show (prettyArch arch) ++ "_Packages"
       (x, _) -> error "Invalid build architecture: " ++ show x
 
-indexPrefix :: (Repository, Release) -> PackageIndex -> FilePath
-indexPrefix (repo, release) index =
+indexPrefix :: Repository -> Release -> PackageIndex -> FilePath
+indexPrefix repo release index =
     (escapeURIString (/= '@') ("/var/lib/apt/lists/" ++ uriText +?+ "dists_") ++
      releaseName' distro ++ "_" ++ (sectionName' $ section))
     where
@@ -318,8 +318,8 @@ indexPrefix (repo, release) index =
       _ -> a ++ "_" ++ b
 
 -- FIXME: assuming the index is part of the cache 
-binaryPackagesOfIndex' :: (MonadApt m, AptCache a) => a -> (Repository, Release) -> PackageIndex -> m [BinaryPackage]
-binaryPackagesOfIndex' cache (repo, release) index =
+binaryPackagesOfIndex' :: (MonadApt m, AptCache a) => a -> Repository -> Release -> PackageIndex -> m [BinaryPackage]
+binaryPackagesOfIndex' cache repo release index =
     do state <- getApt
        let cached = lookupBinaryPackages path state
        status <- liftIO $ getFileStatus path
@@ -330,12 +330,12 @@ binaryPackagesOfIndex' cache (repo, release) index =
                  putApt (insertBinaryPackages path (status, packages) state)
                  return packages
     where
-      path = rootPath (rootDir cache) ++ indexCacheFile cache (repo, release) index
+      path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
 
 -- | Return a list of all source packages.
-releaseSourcePackages :: (Repository, Release) -> IO (Set SourcePackage)
-releaseSourcePackages (repo, release) =
-    mapM (sourcePackagesOfIndex (repo, release)) (sourceIndexList release) >>= return . test
+releaseSourcePackages :: Repository -> Release -> IO (Set SourcePackage)
+releaseSourcePackages repo release =
+    mapM (sourcePackagesOfIndex repo release) (sourceIndexList release) >>= return . test
     where
       test :: [Either SomeException [SourcePackage]] -> Set SourcePackage
       test xs = case partitionEithers xs of
@@ -343,9 +343,9 @@ releaseSourcePackages (repo, release) =
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Return a list of all the binary packages for all supported architectures.
-releaseBinaryPackages :: (Repository, Release) -> IO (Set BinaryPackage)
-releaseBinaryPackages (repo, release) =
-    mapM (binaryPackagesOfIndex (repo, release)) (binaryIndexList release) >>= return . test
+releaseBinaryPackages :: Repository -> Release -> IO (Set BinaryPackage)
+releaseBinaryPackages repo release =
+    mapM (binaryPackagesOfIndex repo release) (binaryIndexList release) >>= return . test
     where
       test xs = case partitionEithers xs of
                   ([], ok) -> Set.unions (List.map Set.fromList ok)

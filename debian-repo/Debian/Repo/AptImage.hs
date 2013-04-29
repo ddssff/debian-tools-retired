@@ -122,14 +122,14 @@ updateAptEnv os =
 getSourcePackages :: MonadApt m => AptImage -> m [SourcePackage]
 getSourcePackages os =
     qPutStrLn "AptImage.getSourcePackages" >>
-    mapM (uncurry (sourcePackagesOfIndex' os)) indexes >>= return . concat
+    mapM (\ ((repo, rel), index) -> sourcePackagesOfIndex' os repo rel index) indexes >>= return . concat
     where
       indexes = concat . map (sliceIndexes os) . slices . sourceSlices . aptImageSliceList $ os
 
 getBinaryPackages :: MonadApt m => AptImage -> m [BinaryPackage]
 getBinaryPackages os =
     qPutStrLn "AptImage.getBinaryPackages" >>
-    mapM (uncurry (binaryPackagesOfIndex' os)) indexes >>= return . concat
+    mapM (\ ((repo, rel), index) -> binaryPackagesOfIndex' os repo rel index) indexes >>= return . concat
     where
       indexes = concat . map (sliceIndexes os) . slices . binarySlices . aptImageSliceList $ os
 

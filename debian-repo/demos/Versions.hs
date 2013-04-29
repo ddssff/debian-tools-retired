@@ -9,7 +9,7 @@ import Debian.Arch (Arch(Binary), ArchCPU(..), ArchOS(..))
 import Debian.Repo.Monads.Apt (MonadApt, runAptT)
 --import Debian.Repo.PackageIndex
 import Debian.Repo.Release
-import Debian.Repo.Types.Repo (repoReleaseInfo)
+import Debian.Repo.Types.Repo (RepoKey(Remote), repoReleaseInfo)
 import Debian.Repo.Types.Repository (prepareRepository)
 import Debian.URI
 
@@ -18,7 +18,7 @@ main = runAptT main'
 
 main' :: MonadApt m => m ()
 main' =
-    do repo <- prepareRepository (fromJust (parseURI uri))
+    do repo <- prepareRepository (Remote (fromJust (readURI' uri)))
        releases <- mapM (insertRelease repo) (repoReleaseInfo repo)
        -- let binaryIndexes = map (filter (\ i -> packageIndexArch i == arch)) (map binaryIndexList releases)
        -- _binaryPackages <- mapM (packageLists release) binaryIndexes
