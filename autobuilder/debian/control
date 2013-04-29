@@ -229,6 +229,7 @@ Depends: ${shlibs:Depends}
          , curl
          , darcs
          , debootstrap
+         , debian-archive-keyring
          , dupload
          , ghc
          , git
@@ -236,8 +237,10 @@ Depends: ${shlibs:Depends}
          , mercurial
          , quilt
          , rsync
+         , seereason-keyring
          , subversion
          , tla
+         , ubuntu-keyring
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
