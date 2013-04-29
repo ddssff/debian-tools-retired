@@ -37,13 +37,13 @@ import Debian.Repo.Cache(updateCacheSources)
 import Debian.Repo.Insert(deleteGarbage)
 import Debian.Repo.Monads.Apt (MonadApt, runAptT)
 import Debian.Repo.Monads.Top (MonadTop(askTop), runTopT)
-import Debian.Repo.OSImage(OSImage, buildEssential, prepareEnv, chrootEnv)
+import Debian.Repo.OSImage(OSImage(osLocalCopy), buildEssential, prepareEnv, chrootEnv)
 import Debian.Repo.Release(prepareRelease)
 import Debian.Repo.Repository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Slice(appendSliceLists, inexactPathSlices, releaseSlices, repoSources)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types (EnvRoot(EnvRoot, rootPath), EnvPath(..), outsidePath)
-import Debian.Repo.Types.Repository (LocalRepository(repoRoot), Layout(Flat), prepareLocalRepository, flushLocalRepository, NamedSliceList(..), SliceList(slices), repoReleaseNames, saveRepoCache)
+import Debian.Repo.Types.Repository (LocalRepository, repoRoot, Layout(Flat), prepareLocalRepository, flushLocalRepository, NamedSliceList(..), SliceList(slices), repoReleaseNames, saveRepoCache)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
@@ -126,7 +126,7 @@ doParameterSet defaultAtoms results params =
       allTargetNames :: Set P.TargetName
       allTargetNames = P.foldPackages (\ name _ _ result -> insert name result) (P.buildPackages params) empty
 
-prepareDependOS :: (MonadTop m, MonadApt m) => P.ParamRec -> NamedSliceList -> LocalRepository -> m OSImage
+prepareDependOS :: (MonadTop m, MonadApt m) => P.ParamRec -> NamedSliceList -> FilePath -> m OSImage
 prepareDependOS params buildRelease localRepo =
     do dependRoot <- dependEnv (P.buildRelease params)
        exists <- liftIO $ doesDirectoryExist (rootPath dependRoot)
@@ -134,7 +134,7 @@ prepareDependOS params buildRelease localRepo =
             (do cleanRoot <- cleanEnv (P.buildRelease params)
                 _ <- prepareEnv cleanRoot
                                 buildRelease
-                                (Just localRepo)
+                                localRepo
                                 (P.flushRoot params)
                                 (P.ifSourcesChanged params)
                                 (P.includePackages params)
@@ -144,7 +144,7 @@ prepareDependOS params buildRelease localRepo =
                 return ())
        prepareEnv dependRoot
                   buildRelease
-                  (Just localRepo)
+                  localRepo
                   False
                   (P.ifSourcesChanged params)
                   (P.includePackages params)
@@ -177,8 +177,10 @@ runParameterSet defaultAtoms cache =
       when (P.flushAll params) (liftIO $ doFlush top)
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
-      localRepo <- prepareLocalRepo cache			-- Prepare the local repository for initial uploads
-      dependOS <- prepareDependOS params buildRelease localRepo
+      -- localRepo <- prepareLocalRepo cache			-- Prepare the local repository for initial uploads
+      -- qPutStrLn $ "runParameterSet localRepo: " ++ show localRepo
+      dependOS <- P.localPoolDir cache >>= prepareDependOS params buildRelease
+      let localRepo = osLocalCopy dependOS
       _ <- updateCacheSources (P.ifSourcesChanged params) dependOS
       -- Compute the essential and build essential packages, they will all
       -- be implicit build dependencies.

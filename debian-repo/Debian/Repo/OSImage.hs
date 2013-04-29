@@ -1,4 +1,5 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wall #-}
 module Debian.Repo.OSImage 
     ( OSImage(..)
     , prepareEnv
@@ -31,11 +32,11 @@ import Debian.Relation (ParseRelations(..), Relations)
 import Debian.Repo.Slice ( sourceSlices, binarySlices, verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Sync (rsync)
-import Debian.Repo.Types ( AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage,
-                           EnvPath(EnvPath, envRoot, envPath), EnvRoot(rootPath), outsidePath )
+import Debian.Repo.Types (AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage,
+                          EnvPath(EnvPath, envRoot, envPath), EnvRoot(rootPath), outsidePath, rootEnvPath)
 import Debian.Repo.Types.Repo (repoURI)
-import Debian.Repo.Types.Repository (LocalRepository(repoRoot), fromLocalRepository,
-                           NamedSliceList(sliceList, sliceListName), SliceList(..))
+import Debian.Repo.Types.Repository (LocalRepository, fromLocalRepository, prepareLocalRepository,
+                                     NamedSliceList(sliceList, sliceListName), SliceList(..), copyLocalRepo, MonadRepoCache)
 import Debian.URI ( uriToString', URI(uriScheme) )
 import Extra.Files ( replaceFile )
 import "Extra" Extra.List ( isSublistOf )
@@ -71,11 +72,11 @@ data OSImage
          , osArch :: Arch
 	 -- | The associated local repository, where packages we
          -- build inside this image are first uploaded to.
-         , osLocalRepoMaster :: Maybe LocalRepository
-         -- |A copy of osLocalRepo which is inside the changeroot
-         --, osLocalRepoCopy :: Maybe LocalRepo
-         -- | Update and return a copy of the local repository
-         -- which is inside the changeroot.
+         , osLocalMaster :: LocalRepository
+	 -- | A copy of osLocalMaster located inside the os root
+	 -- environment.
+         , osLocalCopy :: LocalRepository
+         -- | A copy of osLocalMaster which is inside the changeroot
          , osSourcePackages :: [SourcePackage]
          , osBinaryPackages :: [BinaryPackage]
          }
@@ -85,7 +86,7 @@ instance Show OSImage where
                                rootPath (osRoot os),
                                relName (osReleaseName os),
                                show (osArch os),
-                               show (osLocalRepoMaster os)]
+                               show (osLocalCopy os)]
 
 instance Ord OSImage where
     compare a b = case compare (osRoot a) (osRoot b) of
@@ -113,31 +114,26 @@ instance AptBuildCache OSImage where
 -- |The sources.list is the list associated with the distro name, plus
 -- the local sources where we deposit newly built packages.
 osFullDistro :: OSImage -> SliceList
-osFullDistro os = SliceList { slices = slices (osBaseDistro os) ++ slices (localSources os) }
-
-localSources :: OSImage -> SliceList
-localSources os =
-    case osLocalRepoMaster os of
-      Nothing -> SliceList { slices = [] }
-      Just repo ->
-          let repo' = repoCD (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) repo in
-          let name = relName (osReleaseName os) in
-          let src = DebSource Deb (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
-              bin = DebSource DebSrc (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"])) in
-          SliceList {slices = [(fromLocalRepository repo', src), (fromLocalRepository repo', bin)] }
-
--- |Change the root directory of a repository.  FIXME: This should
--- also sync the repository to ensure consistency.
-repoCD :: EnvPath -> LocalRepository -> LocalRepository
-repoCD path repo = repo { repoRoot = path }
+osFullDistro os =
+    SliceList { slices = slices (osBaseDistro os) ++ slices localSources }
+    where
+      localSources :: SliceList
+      localSources = SliceList {slices = [(fromLocalRepository repo', src), (fromLocalRepository repo', bin)] }
+      src = DebSource Deb (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
+      bin = DebSource DebSrc (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
+      name = relName (osReleaseName os)
+      repo' = osLocalCopy os
+      -- repo' = repoCD (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) repo
 
 getSourcePackages :: MonadApt m => OSImage -> m [SourcePackage]
 getSourcePackages os =
+    qPutStrLn ("OSImage.getSourcePackages: " ++ show (osRoot os)) >>
     mapM (uncurry (sourcePackagesOfIndex' os)) indexes >>= return . concat
     where indexes = concat . map (sliceIndexes os) . slices . sourceSlices . aptSliceList $ os
 
 getBinaryPackages :: MonadApt m => OSImage -> m [BinaryPackage]
 getBinaryPackages os =
+    qPutStrLn "OSImage.getBinaryPackages" >>
     mapM (uncurry (binaryPackagesOfIndex' os)) indexes >>= return . concat
     where indexes = concat . map (sliceIndexes os) . slices . binarySlices . aptSliceList $ os
 
@@ -155,10 +151,7 @@ instance Show UpdateError where
 prepareEnv :: (MonadApt m, MonadTop m) =>
               EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list
-           -> Maybe LocalRepository	-- ^ The associated local repository, where newly
-					-- built packages are stored.  This repository is
-					-- periodically copied into the build environment
-					-- so apt can access the packages in it.
+           -> FilePath                  -- ^ The location of the local upload repository
            -> Bool			-- ^ If true, remove and rebuild the image
            -> SourcesChangedAction	-- ^ What to do if called with a sources.list that
 					-- differs from the previous call (unimplemented)
@@ -166,19 +159,22 @@ prepareEnv :: (MonadApt m, MonadTop m) =>
            -> [String]			-- ^ Packages to exclude
            -> [String]			-- ^ Components of the base repository
            -> m OSImage
-prepareEnv root distro repo flush ifSourcesChanged include exclude components =
+prepareEnv root distro local flush ifSourcesChanged include exclude components =
     do top <- askTop
-       ePutStrLn ("Preparing clean " ++ sliceName (sliceListName distro) ++ " build environment at " ++ rootPath root)
+       repo <- prepareLocalRepository (rootEnvPath local) Nothing
+       copy <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) repo
+       ePutStrLn ("Preparing clean " ++ sliceName (sliceListName distro) ++ " build environment at " ++ rootPath root ++ ", osLocalRepoMaster: " ++ show repo)
        arch <- liftIO buildArchOfRoot
        let os = OS { osGlobalCacheDir = top
                    , osRoot = root
                    , osBaseDistro = sliceList distro
                    , osReleaseName = ReleaseName . sliceName . sliceListName $ distro
                    , osArch = arch
-                   , osLocalRepoMaster = repo
+                   , osLocalMaster = repo
+                   , osLocalCopy = copy
                    , osSourcePackages = []
                    , osBinaryPackages = [] }
-       update os >>= recreate arch os >>= liftIO . syncPool
+       update os >>= recreate arch os >>= syncPool
     where
       update _ | flush = return (Left Flushed)
       update os = updateEnv os
@@ -198,9 +194,9 @@ prepareEnv root distro repo flush ifSourcesChanged include exclude components =
              -- ePutStrLn ("writeFile " ++ show (sourcesPath os) ++ " " ++ show (show . osBaseDistro $ os))
              liftIO (replaceFile (sourcesPath os) (show . pretty . osBaseDistro $ os))
              liftIO (try (getEnv "LANG") :: IO (Either SomeException String)) >>= \ localeName ->
-                 buildEnv root distro arch repo include exclude components >>=
+                 buildEnv root distro arch (osLocalMaster os) (osLocalCopy os) include exclude components >>=
                      liftIO . (localeGen (either (const "en_US.UTF-8") id localeName)) >>=
-                         liftIO . neuterEnv >>= liftIO . syncPool
+                         liftIO . neuterEnv >>= syncPool
 
 -- |Prepare a minimal \/dev directory
 {-# WARNING prepareDevs "This function should check all the result codes" #-}
@@ -230,12 +226,13 @@ _pbuilderBuild :: MonadApt m =>
          -> EnvRoot
          -> NamedSliceList
          -> Arch
-         -> Maybe LocalRepository
+         -> LocalRepository
+         -> LocalRepository
          -> [String]
          -> [String]
          -> [String]
          -> m OSImage
-_pbuilderBuild cacheDir root distro arch repo _extraEssential _omitEssential _extra =
+_pbuilderBuild cacheDir root distro arch repo copy _extraEssential _omitEssential _extra =
       -- We can't create the environment if the sources.list has any
       -- file:// URIs because they can't yet be visible inside the
       -- environment.  So we grep them out, create the environment, and
@@ -249,7 +246,8 @@ _pbuilderBuild cacheDir root distro arch repo _extraEssential _omitEssential _ex
                    , osBaseDistro = sliceList distro
                    , osReleaseName = ReleaseName . sliceName . sliceListName $ distro
                    , osArch = arch
-                   , osLocalRepoMaster = repo
+                   , osLocalMaster = repo
+                   , osLocalCopy = copy
                    , osSourcePackages = []
                    , osBinaryPackages = [] }
        let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
@@ -310,12 +308,13 @@ buildEnv :: (MonadApt m, MonadTop m) =>
             EnvRoot
          -> NamedSliceList
          -> Arch
-         -> Maybe LocalRepository
+         -> LocalRepository
+         -> LocalRepository
          -> [String]
          -> [String]
          -> [String]
          -> m OSImage
-buildEnv root distro arch repo include exclude components =
+buildEnv root distro arch repo copy include exclude components =
     quieter (-1) $
     do
       top <- askTop
@@ -334,7 +333,8 @@ buildEnv root distro arch repo include exclude components =
                   , osBaseDistro = sliceList distro
                   , osReleaseName = ReleaseName . sliceName . sliceListName $ distro
                   , osArch = arch
-                  , osLocalRepoMaster = repo
+                  , osLocalMaster = repo
+                  , osLocalCopy = copy
                   , osSourcePackages = []
                   , osBinaryPackages = [] }
       let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
@@ -372,13 +372,15 @@ buildEnv root distro arch repo include exclude components =
 -- and dist-upgrade.
 updateEnv :: MonadApt m => OSImage -> m (Either UpdateError OSImage)
 updateEnv os =
-    do liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc") >> readFile "/etc/resolv.conf" >>= writeFile (rootPath root ++ "/etc/resolv.conf")
+    do qPutStrLn $ "updateEnv " ++ show (osRoot os)
+       liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc") >> readFile "/etc/resolv.conf" >>= writeFile (rootPath root ++ "/etc/resolv.conf")
        verified <- verifySources
        case verified of
          Left x -> return $ Left x
          Right _ ->
              do liftIO $ prepareDevs (rootPath root)
-                os' <- liftIO $ syncPool os
+                os' <- syncPool os
+                qPutStrLn $ "os':" ++ show (osRoot os)
                 _ <- liftIO $ updateLists os'
                 _ <- liftIO $ sshCopy (rootPath root)
                 source <- getSourcePackages os'
@@ -579,16 +581,12 @@ removeEnv os =
 -- |Use rsync to synchronize the pool of locally built packages from
 -- outside the build environment to the location inside the environment
 -- where apt can see and install the packages.
-syncPool :: OSImage -> IO OSImage
+syncPool :: MonadRepoCache m => OSImage -> m OSImage
 syncPool os =
-    case osLocalRepoMaster os of
-      Nothing -> return os
-      Just repo ->
-          qPutStrLn ("Syncing local pool from " ++ outsidePath (repoRoot repo) ++ " -> " ++ rootPath root) >>
-          try (createDirectoryIfMissing True (rootPath root ++ "/work")) >>=
-          either (\ (e :: SomeException) -> return . Left . show $ e) (const (rsync' repo)) >>=
-          -- either (return . Left) (const (updateLists os)) >>=
-          either (error . show) (const (return os))
+    do qPutStrLn ("syncPool " ++ show (osRoot os))
+       repo' <- copyLocalRepo (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) (osLocalMaster os)
+       return (os {osLocalCopy = repo'})
+{-
     where
       rsync' repo =
           do result <- rsync [] (outsidePath (repoRoot repo)) (rootPath root ++ "/work/localpool")
@@ -596,6 +594,7 @@ syncPool os =
                ExitFailure n -> return (Left $ "*** FAILURE syncing local pool from " ++ outsidePath (repoRoot repo) ++ ": " ++ show n)
                _ -> return (Right ())
       root = osRoot os
+-}
 
 updateLists :: OSImage -> IO NominalDiffTime
 updateLists os =

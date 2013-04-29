@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types.Repository
     ( Repository
-    , LocalRepository(repoRoot, repoLayout, repoReleaseInfoLocal)
+    , LocalRepository, repoRoot, repoLayout, repoReleaseInfoLocal
     , Layout(..)
     , MonadRepoCache(getRepoCache, putRepoCache)
     , loadRepoCache
@@ -10,6 +10,7 @@ module Debian.Repo.Types.Repository
     , fromLocalRepository
     , readLocalRepo
     , prepareLocalRepository
+    , copyLocalRepo -- repoCD
     , prepareRepository'
     , prepareRepository
     , setRepositoryCompatibility
@@ -34,6 +35,7 @@ import Debian.Changes (ChangesFile(changeInfo), ChangedFileSpec(changedFileSecti
 import qualified Debian.Control.Text as T (ControlFunctions(parseControl), Control'(Control), fieldValue, Paragraph, Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph')
 import Debian.Release (ReleaseName(..), releaseName', Section, sectionName', parseReleaseName, SubSection(section))
 import Debian.Repo.Monads.Top (MonadTop, sub)
+import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath)
 import Debian.Repo.Types.Release (Release(releaseName), makeReleaseInfo)
 import Debian.Repo.Types.Repo (Repo(..), RepoKey(..), compatibilityFile, libraryCompatibilityLevel)
@@ -45,6 +47,7 @@ import Extra.List (partitionM)
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, doesDirectoryExist)
 import System.FilePath ((</>))
 import System.IO.Error (isDoesNotExistError)
+import System.Exit (ExitCode(ExitSuccess))
 import System.IO.Unsafe ( unsafeInterleaveIO )
 import qualified System.Posix.Files as F (getSymbolicLinkStatus, isSymbolicLink, readSymbolicLink,
                                           fileMode, getFileStatus, setFileMode, removeLink)
@@ -88,10 +91,19 @@ instance Repo Repository where
 
 data LocalRepository
     = LocalRepository
-      { repoRoot :: EnvPath
-      , repoLayout :: (Maybe Layout)
-      , repoReleaseInfoLocal :: [Release]
+      { repoRoot_ :: EnvPath
+      , repoLayout_ :: (Maybe Layout)
+      , repoReleaseInfoLocal_ :: [Release]
       } deriving (Read, Show, Ord, Eq)
+
+repoRoot :: LocalRepository -> EnvPath
+repoRoot = repoRoot_
+
+repoLayout :: LocalRepository -> Maybe Layout
+repoLayout = repoLayout_
+
+repoReleaseInfoLocal :: LocalRepository -> [Release]
+repoReleaseInfoLocal = repoReleaseInfoLocal_
 
 -- |The possible file arrangements for a repository.  An empty
 -- repository does not yet have either of these attributes.
@@ -104,6 +116,11 @@ instance Repo LocalRepository where
 class MonadIO m => MonadRepoCache m where
     getRepoCache :: m (Map RepoKey Repository)
     putRepoCache :: Map RepoKey Repository -> m ()
+
+modifyRepoCache :: MonadRepoCache m => (Map RepoKey Repository -> Map RepoKey Repository) -> m ()
+modifyRepoCache f = do
+    s <- getRepoCache
+    putRepoCache (f s)
 
 fromLocalRepository :: LocalRepository -> Repository
 fromLocalRepository = LocalRepo
@@ -150,21 +167,24 @@ saveRepoCache =
 
 readLocalRepo :: MonadRepoCache m => EnvPath -> Maybe Layout -> m LocalRepository
 readLocalRepo root layout =
-    do
-      state <- getRepoCache
-      names <- liftIO (getDirectoryContents distDir) >>=
-               return . filter (\ x -> not . elem x $ [".", ".."])
-      (links, dists) <- partitionM (liftIO . isSymLink . (distDir </>)) names
-      linkText <- mapM (liftIO . F.readSymbolicLink) (map (distDir </>) links)
-      let aliasPairs = zip linkText links ++ map (\ dist -> (dist, dist)) dists
-      let distGroups = groupBy fstEq . sort $ aliasPairs
-      let aliases = map (checkAliases  . partition (uncurry (==))) distGroups
-      releaseInfo <- mapM (liftIO . getReleaseInfo) aliases
-      let repo = LocalRepository { repoRoot = root
-                                 , repoLayout = layout
-                                 , repoReleaseInfoLocal = releaseInfo }
-      putRepoCache (insertWith (\ _ x -> x) (repoKey repo) (LocalRepo repo) state)
-      return repo
+    do state <- getRepoCache
+       case Map.lookup (Local root) state of
+         Just (RemoteRepo _ _) -> error "readLocalRepo: internal error" -- somehow a remote repo got associated with a Local RepoKey
+         Just (LocalRepo repo) -> return repo
+         Nothing ->
+             do names <- liftIO (getDirectoryContents distDir) >>= return . filter (\ x -> not . elem x $ [".", ".."])
+                (links, dists) <- partitionM (liftIO . isSymLink . (distDir </>)) names
+                linkText <- mapM (liftIO . F.readSymbolicLink) (map (distDir </>) links)
+                let aliasPairs = zip linkText links ++ map (\ dist -> (dist, dist)) dists
+                let distGroups = groupBy fstEq . sort $ aliasPairs
+                let aliases = map (checkAliases  . partition (uncurry (==))) distGroups
+                releaseInfo <- mapM (liftIO . getReleaseInfo) aliases
+                qPutStrLn ("LocalRepository releaseInfo " ++ show root ++ ": " ++ show releaseInfo)
+                let repo = LocalRepository { repoRoot_ = root
+                                           , repoLayout_ = layout
+                                           , repoReleaseInfoLocal_ = releaseInfo }
+                putRepoCache (insertWith (\ _ x -> x) (Local root) (LocalRepo repo) state)
+                return repo
     where
       fstEq (a, _) (b, _) = a == b
       checkAliases :: ([(String, String)], [(String, String)]) -> (ReleaseName, [ReleaseName])
@@ -212,7 +232,7 @@ prepareLocalRepository root layout =
                     Nothing -> [])
        readLocalRepo root layout'
     where
-      initDir (name, mode) = 
+      initDir (name, mode) =
           do let path = outsidePath root </> name
              filterM (\ f -> doesDirectoryExist f >>= return . not) [path] >>=
                      mapM_ (\ f -> createDirectoryIfMissing True f)
@@ -222,6 +242,26 @@ prepareLocalRepository root layout =
           getSymbolicLinkStatus (root ++ "/dists/" ++ name) >>= return . not . isSymbolicLink
       hasReleaseFile root name =
           doesFileExist (root ++ "/dists/" ++ name ++ "/Release") -}
+
+-- |Change the root directory of a repository.  FIXME: This should
+-- also sync the repository to ensure consistency.
+-- repoCD :: EnvPath -> LocalRepository -> LocalRepository
+-- repoCD path repo = repo { repoRoot_ = path }
+
+copyLocalRepo :: MonadRepoCache m => EnvPath -> LocalRepository -> m LocalRepository
+copyLocalRepo dest repo =
+    do qPutStrLn ("Syncing local repository from " ++ src ++ " -> " ++ dst)
+       liftIO $ createDirectoryIfMissing True (outsidePath dest)
+       result <- liftIO $ rsync [] (outsidePath (repoRoot repo)) (outsidePath dest)
+       case result of
+         ExitSuccess ->
+             do let repo' = repo {repoRoot_ = dest}
+                modifyRepoCache (Map.insert (Local dest) (LocalRepo repo'))
+                return repo'
+         code -> error $ "*** FAILURE syncing local repository " ++ src ++ " -> " ++ dst ++ ": " ++ show code
+    where
+      src = outsidePath (repoRoot repo)
+      dst = outsidePath dest
 
 -- |Try to determine a repository's layout.
 computeLayout :: FilePath -> IO (Maybe Layout)
@@ -298,10 +338,16 @@ prepareRepository uri =
 -- |To create a RemoteRepo we must query it to find out the
 -- names, sections, and supported architectures of its releases.
 {-# NOINLINE verifyRepository #-}
-verifyRepository :: MonadIO m => URI' -> m Repository
+verifyRepository :: MonadRepoCache m => URI' -> m Repository
 verifyRepository uri =
-    do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . fromURI' $ uri
-       return $ RemoteRepo uri releaseInfo
+    do state <- getRepoCache
+       case Map.lookup (Remote uri) state of
+         Just repo -> return repo
+         Nothing ->
+             do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . fromURI' $ uri
+                let repo = RemoteRepo uri releaseInfo
+                modifyRepoCache (Map.insert (Remote uri) repo)
+                return repo
 
 -- Nice code to do caching, but I figured out how to fix the old code.
 

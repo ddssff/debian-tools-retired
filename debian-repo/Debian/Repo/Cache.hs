@@ -39,7 +39,7 @@ import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Types ( AptCache(aptArch, aptBaseSliceList, aptBinaryPackages, aptReleaseName, aptSourcePackages, globalCacheDir), SourcePackage(sourcePackageID),
                            sourcePackageName, BinaryPackage(packageID), binaryPackageName, PackageID(packageVersion), PackageIndex(..),
                            Release(releaseName), EnvRoot(EnvRoot) )
-import Debian.Repo.Types.Repo (Repo(repoReleaseInfo))
+import Debian.Repo.Types.Repo (Repo(repoReleaseInfo), repoKey)
 import Debian.Repo.Types.Repository (Repository)
 import Extra.Files ( replaceFile )
 import Network.URI ( URIAuth(uriPort, uriRegName, uriUserInfo), URI(uriAuthority, uriPath, uriScheme), escapeURIString )
@@ -122,7 +122,10 @@ sliceIndexes cache (repo, slice) =
             [x] -> x
             [] -> error $ ("sliceIndexes: Invalid release name: " ++ releaseName' release ++
                            "\n  You may need to remove ~/.autobuilder/repoCache." ++
-                           "\n  Available: " ++ (show . map releaseName . repoReleaseInfo $ repo))
+                           "\n  Available: " ++ (show . map releaseName . repoReleaseInfo $ repo)) ++
+                           "\n repoKey: " ++ show (repoKey repo) ++
+                           "\n repoReleaseInfo: " ++ show (repoReleaseInfo repo) ++
+                           "\n slice: " ++ show slice
             xs -> error $ "Internal error 5 - multiple releases named " ++ releaseName' release ++ "\n" ++ show xs
 
 -- |Return the paths in the local cache of the index files of a slice list.

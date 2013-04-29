@@ -348,7 +348,7 @@ buildTarget ::
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
 buildTarget cache cleanOS globalBuildDeps repo poolOS !target =
     do
-      _cleanOS' <- liftIO (quieter 2 $ syncPool cleanOS)
+      _cleanOS' <- quieter 2 $ syncPool cleanOS
       -- Get the control file from the clean source and compute the
       -- build dependencies
       let debianControl = targetControl target

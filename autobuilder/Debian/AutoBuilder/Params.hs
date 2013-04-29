@@ -9,11 +9,9 @@ module Debian.AutoBuilder.Params
     , adjustVendorTag -- Export for testing
     ) where
 
-import Control.Exception ( SomeException, try, evaluate )
 import Control.Monad.Trans ( liftIO )
 import Data.List ( isSuffixOf )
 import Data.Maybe (catMaybes, fromMaybe)
-import Data.Map ( fromList )
 import Debian.AutoBuilder.Env ()
 import Debian.AutoBuilder.Types.CacheRec (CacheRec(..))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
@@ -22,9 +20,7 @@ import Debian.Sources ( SliceName(..) )
 import Debian.Repo (verifySourcesList, repoSources)
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Monads.Top (MonadTop(askTop), sub)
-import Debian.Repo.Types.Repo (RepoKey(..))
 import Debian.Repo.Types.Repository (NamedSliceList(..), SliceList(..), loadRepoCache)
-import Debian.URI (URI')
 import System.Directory ( createDirectoryIfMissing, getPermissions, writable )
 import System.Environment ( getEnv )
 import System.Process.Progress (qPutStrLn)

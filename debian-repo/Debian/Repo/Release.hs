@@ -25,7 +25,7 @@ import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), findRelease, putRelease
 import Debian.Repo.PackageIndex ( packageIndexName, packageIndexDir, releaseDir, packageIndexList )
 import Debian.Repo.Types ( PackageIndex(packageIndexArch, packageIndexComponent), Release(..), outsidePath )
 import Debian.Repo.Types.Release (parseComponents, parseArchitectures)
-import Debian.Repo.Types.Repository (Repository, LocalRepository(repoLayout, repoRoot, repoReleaseInfoLocal), prepareLocalRepository, fromLocalRepository)
+import Debian.Repo.Types.Repository (Repository, LocalRepository, repoLayout, repoRoot, repoReleaseInfoLocal, prepareLocalRepository, fromLocalRepository)
 import qualified Extra.Files as EF ( maybeWriteFile, prepareSymbolicLink, writeAndZipFile )
 import qualified Extra.GPGSign as EG ( PGPKey, pgpSignFiles, cd )
 import qualified Extra.Time as ET ( formatDebianDate )

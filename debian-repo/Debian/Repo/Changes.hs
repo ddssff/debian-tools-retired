@@ -39,7 +39,7 @@ import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName, p
 import qualified Debian.Control.Text as S ( Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue, modifyField )
 import Debian.Release (parseReleaseName, parseSection)
 import Debian.Repo.Types (outsidePath)
-import Debian.Repo.Types.Repository (LocalRepository(repoRoot))
+import Debian.Repo.Types.Repository (LocalRepository, repoRoot)
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Extra.Files ( replaceFile )
 import System.FilePath ( splitFileName, (</>) )

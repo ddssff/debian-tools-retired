@@ -42,7 +42,7 @@ import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, binaryPackag
                            BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
                            PackageVersion(pkgVersion), Release(releaseAliases, releaseComponents, releaseName),
                            EnvPath, outsidePath, Release(..))
-import Debian.Repo.Types.Repository (Repository, Layout(..), LocalRepository(repoLayout, repoRoot), poolDir', fromLocalRepository)
+import Debian.Repo.Types.Repository (Repository, Layout(..), LocalRepository, repoLayout, repoRoot, poolDir', fromLocalRepository)
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Debian.Version.Text ()
 import Extra.GPGSign ( PGPKey )

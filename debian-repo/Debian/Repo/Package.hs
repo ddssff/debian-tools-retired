@@ -45,7 +45,7 @@ import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, Sourc
                            BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..), Release(releaseName), EnvRoot(rootPath))
 import Debian.Repo.Types.EnvPath (outsidePath)
 import Debian.Repo.Types.Repo (repoURI)
-import Debian.Repo.Types.Repository (Repository, LocalRepository(repoRoot))
+import Debian.Repo.Types.Repository (Repository, LocalRepository, repoRoot)
 import Debian.URI ( fileFromURIStrict )
 import Debian.Version ( parseDebianVersion, DebianVersion )
 import qualified Debian.Version as V ( buildDebianVersion, epoch, revision, version )
