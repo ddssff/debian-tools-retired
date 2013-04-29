@@ -28,7 +28,7 @@ import Control.Monad (filterM, when, unless)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (groupBy, partition, sort, isPrefixOf, intercalate)
-import Data.Map as Map (Map, insertWith, lookup, insert, fromList, toList, union)
+import Data.Map as Map (Map, insertWith, lookup, insert, fromList, toList, union, empty)
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text as T (Text, unpack)
 import Debian.Changes (ChangesFile(changeInfo), ChangedFileSpec(changedFileSection))
@@ -131,22 +131,19 @@ fromLocalRepository = LocalRepo
 -- happens some ugly errors will occur and the cache will have to be flushed.
 loadRepoCache :: (MonadRepoCache m, MonadTop m) => m ()
 loadRepoCache =
-    do repoCache <- sub "repoCache"
-       qPutStrLn "Loading repo cache..."
-       uris <- liftIO $ try (readFile repoCache) >>=
-                        try . evaluate . either (\ (_ :: SomeException) -> []) read >>=
-                        return . either (\ (_ :: SomeException) -> []) id
-{-
-       uris <- liftIO (try (readFile repoCache)) >>=
-               return . evaluate . either (\ (_ :: SomeException) -> []) read >>=
-               return . either (\ (_ :: SomeException) -> []) id :: IO [(URI', Repository)]
--}
-       qPutStrLn $ "Loaded " ++ show (length uris) ++ " entries from the repo cache."
-       putRepoCache (fromList (map fixURI uris))
+    do dir <- sub "repoCache"
+       liftIO (loadRepoCache' dir `catch` (\ (e :: SomeException) -> qPutStrLn (show e) >> return Map.empty)) >>= putRepoCache
     where
-      -- fixURI (Remote s, x) = (fromJust (parseURI s), x)
-      fixURI :: (URI', a) -> (RepoKey, a)
-      fixURI (s, x) = (Remote s, x)
+      loadRepoCache' :: FilePath -> IO (Map RepoKey Repository)
+      loadRepoCache' repoCache =
+          do qPutStrLn "Loading repo cache..."
+             file <- readFile repoCache
+             case maybeRead file of
+               Nothing ->
+                   error ("Ignoring invalid repoCache: " ++ show file)
+               Just pairs ->
+                   qPutStrLn ("Loaded " ++ show (length pairs) ++ " entries from the repo cache.") >>
+                   return (fromList pairs)
 
 -- | Write the repo cache map into a file.
 saveRepoCache :: (MonadIO m, MonadTop m, MonadRepoCache m) => m ()
@@ -154,7 +151,7 @@ saveRepoCache =
           do path <- sub "repoCache"
              live <- getRepoCache
              repoCache <- liftIO $ loadCache path
-             let merged = show . map (\ (uri, x) -> (show uri, x)) . Map.toList $ Map.union live repoCache
+             let merged = show . Map.toList $ Map.union live repoCache
              liftIO (F.removeLink path `IO.catch` (\e -> unless (isDoesNotExistError e) (ioError e))) >> liftIO (writeFile path merged)
              return ()
           where
