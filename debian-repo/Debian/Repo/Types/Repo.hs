@@ -4,6 +4,7 @@ module Debian.Repo.Types.Repo
     ( Repo(..)
     , RepoKey(..)
     , repoURI
+    , repoKeyURI
     , libraryCompatibilityLevel
     , compatibilityFile
     ) where
@@ -66,7 +67,8 @@ libraryCompatibilityLevel :: Int
 libraryCompatibilityLevel = 2
 
 repoURI :: Repo r => r -> URI
-repoURI r =
-    case repoKey r of
-      Local path -> fromJust . parseURI $ "file://" ++ envPath path
-      Remote uri -> fromURI' uri
+repoURI = repoKeyURI . repoKey
+
+repoKeyURI :: RepoKey -> URI
+repoKeyURI (Local path) = fromJust . parseURI $ "file://" ++ envPath path
+repoKeyURI (Remote uri) = fromURI' uri

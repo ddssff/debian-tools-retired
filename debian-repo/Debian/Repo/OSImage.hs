@@ -34,9 +34,9 @@ import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types (AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage,
                           EnvPath(EnvPath, envRoot, envPath), EnvRoot(rootPath), outsidePath, rootEnvPath)
-import Debian.Repo.Types.Repo (repoURI)
+import Debian.Repo.Types.Repo (repoURI, repoKey)
 import Debian.Repo.Types.Repository (LocalRepository, fromLocalRepository, prepareLocalRepository,
-                                     NamedSliceList(sliceList, sliceListName), SliceList(..), copyLocalRepo, MonadRepoCache)
+                                     NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..), copyLocalRepo, MonadRepoCache)
 import Debian.URI ( uriToString', URI(uriScheme) )
 import Extra.Files ( replaceFile )
 import "Extra" Extra.List ( isSublistOf )
@@ -118,7 +118,8 @@ osFullDistro os =
     SliceList { slices = slices (osBaseDistro os) ++ slices localSources }
     where
       localSources :: SliceList
-      localSources = SliceList {slices = [(fromLocalRepository repo', src), (fromLocalRepository repo', bin)] }
+      localSources = SliceList {slices = [Slice {sliceRepoKey = repoKey (fromLocalRepository repo'), sliceSource = src},
+                                          Slice {sliceRepoKey = repoKey (fromLocalRepository repo'), sliceSource = bin}]}
       src = DebSource Deb (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
       bin = DebSource DebSrc (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
       name = relName (osReleaseName os)
@@ -127,13 +128,13 @@ osFullDistro os =
 
 getSourcePackages :: MonadApt m => OSImage -> m [SourcePackage]
 getSourcePackages os =
-    mapM (\ ((repo, rel), index) -> sourcePackagesOfIndex' os repo rel index) indexes >>= return . concat
-    where indexes = concat . map (sliceIndexes os) . slices . sourceSlices . aptSliceList $ os
+    do indexes <- mapM (sliceIndexes os) (slices . sourceSlices . aptSliceList $ os) >>= return . concat
+       mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' os repo rel index) indexes >>= return . concat
 
 getBinaryPackages :: MonadApt m => OSImage -> m [BinaryPackage]
 getBinaryPackages os =
-    mapM (\ ((repo, rel), index) -> binaryPackagesOfIndex' os repo rel index) indexes >>= return . concat
-    where indexes = concat . map (sliceIndexes os) . slices . binarySlices . aptSliceList $ os
+    do indexes <- mapM (sliceIndexes os) (slices . binarySlices . aptSliceList $ os) >>= return . concat
+       mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' os repo rel index) indexes >>= return . concat
 
 data UpdateError
     = Changed ReleaseName FilePath SliceList SliceList
@@ -348,8 +349,8 @@ buildEnv root distro arch repo copy include exclude components =
 
       woot = rootPath root
       wootNew = woot ++ ".new"
-      baseDist = either id (relName . fst) . sourceDist . snd . head . slices . sliceList $ distro
-      mirror = uriToString' . sourceUri . snd . head . slices . sliceList $ distro
+      baseDist = either id (relName . fst) . sourceDist . sliceSource . head . slices . sliceList $ distro
+      mirror = uriToString' . sourceUri . sliceSource . head . slices . sliceList $ distro
       cmd = intercalate " && "
               ["set -x",
                "rm -rf " ++ wootNew,
@@ -400,7 +401,7 @@ updateEnv os =
                _ -> return $ Right os
       root = osRoot os
       remoteOnly :: SliceList -> SliceList
-      remoteOnly x = x {slices = filter r (slices x)} where r y = (uriScheme . sourceUri . snd $ y) /= "file:"
+      remoteOnly x = x {slices = filter r (slices x)} where r y = (uriScheme . sourceUri . sliceSource $ y) /= "file:"
 
 chrootEnv :: OSImage -> EnvRoot -> OSImage
 chrootEnv os dst = os {osRoot=dst}

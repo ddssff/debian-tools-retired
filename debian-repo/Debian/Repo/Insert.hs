@@ -42,6 +42,7 @@ import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, binaryPackag
                            BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
                            PackageVersion(pkgVersion), Release(releaseAliases, releaseComponents, releaseName),
                            EnvPath, outsidePath, Release(..))
+import Debian.Repo.Types.Repo (repoKey)
 import Debian.Repo.Types.Repository (Repository, Layout(..), LocalRepository, repoLayout, repoRoot, poolDir', fromLocalRepository)
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Debian.Version.Text ()
@@ -468,7 +469,7 @@ moveFile src dst =
 -- that that no duplicate package ids are inserted.
 addPackagesToIndexes :: [((LocalRepository, Release, PackageIndexLocal), [B.Paragraph])] -> IO InstallResult
 addPackagesToIndexes pairs =
-    do oldPackageLists <- mapM (\ (repo, release, index) -> DRP.getPackages (fromLocalRepository repo) release index) (List.map fst pairs)
+    do oldPackageLists <- mapM (\ (repo, release, index) -> DRP.getPackages (repoKey repo) release index) (List.map fst pairs)
        case partitionEithers oldPackageLists of
          ([], _) -> 
              do let (oldPackageLists' :: [[BinaryPackageLocal]]) = rights oldPackageLists
@@ -496,7 +497,7 @@ addPackagesToIndexes pairs =
 deleteTrumped :: Maybe PGPKey -> LocalRepository -> [Release] -> IO [Release]
 deleteTrumped _ _ [] = error "deleteTrumped called with empty release list"
 deleteTrumped keyname repo releases =
-    mapM (findTrumped (fromLocalRepository repo)) releases >>=
+    mapM (findTrumped repo) releases >>=
     return . partitionEithers >>=
     \ (bad, good) ->
         case bad of
@@ -511,12 +512,12 @@ deleteTrumped keyname repo releases =
 
 -- | Return a list of packages in a release which are trumped by some
 -- newer version.
-findTrumped :: Repository -> Release -> IO (Either String [(Release, PackageIndex, BinaryPackage)])
+findTrumped :: LocalRepository -> Release -> IO (Either String [(Release, PackageIndex, BinaryPackage)])
 findTrumped repo release =
     do
       mapM doIndex (sourceIndexList release) >>= return . merge
     where
-      doIndex index = DRP.getPackages repo release index >>= return . either Left (Right . (List.map (\ b -> (release, index, b))))
+      doIndex index = DRP.getPackages (repoKey repo) release index >>= return . either Left (Right . (List.map (\ b -> (release, index, b))))
       merge :: [Either SomeException [(Release, PackageIndex, BinaryPackage)]] -> Either String [(Release, PackageIndex, BinaryPackage)]
       merge packages =
           case partitionEithers packages of
@@ -604,8 +605,8 @@ findLive repo = {-(LocalRepository _ Nothing _)-}
       Nothing -> return Set.empty	-- Repository is empty
       Just layout ->
           do !releases <- findReleases repo
-             !sourcePackages <- mapM (liftIO . DRP.releaseSourcePackages (fromLocalRepository repo)) releases >>= return . Set.unions
-             !binaryPackages <- mapM (liftIO . DRP.releaseBinaryPackages (fromLocalRepository repo)) releases >>= return . Set.unions
+             !sourcePackages <- mapM (DRP.releaseSourcePackages (repoKey repo)) releases >>= return . Set.unions
+             !binaryPackages <- mapM (DRP.releaseBinaryPackages (repoKey repo)) releases >>= return . Set.unions
              let sourceFiles = Set.map (T.pack (outsidePath (repoRoot repo) ++ "/") <>) . Set.map T.pack . Set.fold Set.union Set.empty . Set.map DRP.sourceFilePaths $ sourcePackages
              let binaryFiles = Set.map (T.pack (outsidePath (repoRoot repo) ++ "/") <>) . Set.fold (\ mt s -> maybe s (`Set.insert` s) mt) Set.empty $ Set.map (B.fieldValue "Filename" . packageInfo) binaryPackages
              let changesFiles = Set.map T.pack . Set.fold Set.union Set.empty $ Set.map (Set.fromList . changesFilePaths (repoRoot repo) layout releases) sourcePackages
@@ -654,7 +655,7 @@ deleteSourcePackages keyname repo packages =
             Source -> packageID entry
             _ -> DRP.binaryPackageSourceID index entry
       getEntries :: Release -> PackageIndex -> IO [BinaryPackage]
-      getEntries release index = DRP.getPackages (fromLocalRepository repo) release index >>= return . either (error . show) id
+      getEntries release index = DRP.getPackages (repoKey repo) release index >>= return . either (error . show) id
       putIndex' :: Maybe PGPKey -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO Release
       putIndex' keyname release index entries =
           do let root = repoRoot repo

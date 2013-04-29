@@ -27,8 +27,8 @@ import Debian.Sources  ( SourceType(..), SliceName(SliceName), DebSource(..) )
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.SourcesList ( parseSourceLine, parseSourcesList )
 import Debian.Repo.Types (EnvPath(..), EnvRoot(..))
-import Debian.Repo.Types.Repository (Repository, prepareRepository, NamedSliceList(..), SliceList(..))
-import Debian.Repo.Types.Repo (RepoKey(..))
+import Debian.Repo.Types.Repository (prepareRepository, NamedSliceList(..), SliceList(..), Slice(..))
+import Debian.Repo.Types.Repo (RepoKey(..), repoKey)
 import Debian.URI (toURI', dirFromURI, fileFromURI)
 import Debian.UTF8 as Deb (decode)
 import Network.URI (URI(uriScheme, uriPath))
@@ -36,17 +36,17 @@ import System.FilePath ((</>))
 import Text.Regex ( mkRegex, splitRegex )
 
 sourceSlices :: SliceList -> SliceList
-sourceSlices = SliceList . filter ((== DebSrc) . sourceType . snd) . slices
+sourceSlices = SliceList . filter ((== DebSrc) . sourceType . sliceSource) . slices
 
 binarySlices :: SliceList -> SliceList
-binarySlices = SliceList . filter ((== Deb) . sourceType . snd) . slices
+binarySlices = SliceList . filter ((== Deb) . sourceType . sliceSource) . slices
 
 inexactPathSlices :: SliceList -> SliceList
-inexactPathSlices = SliceList . filter (either (const False) (const True) . sourceDist . snd) . slices
+inexactPathSlices = SliceList . filter (either (const False) (const True) . sourceDist . sliceSource) . slices
 
 releaseSlices :: ReleaseName -> SliceList -> SliceList
 releaseSlices release list =
-    SliceList . filter (isRelease . sourceDist . snd) $ (slices list)
+    SliceList . filter (isRelease . sourceDist . sliceSource) $ (slices list)
     where isRelease = either (const False) (\ (x, _) -> x == release)
 
 appendSliceLists :: [SliceList] -> SliceList
@@ -114,12 +114,12 @@ verifySourcesList chroot list =
     mapM (verifyDebSource chroot) list >>=
     (\ xs -> return $ SliceList { slices = xs })
 
-verifySourceLine :: MonadApt m => Maybe EnvRoot -> String -> m (Repository, DebSource)
+verifySourceLine :: MonadApt m => Maybe EnvRoot -> String -> m Slice
 verifySourceLine chroot str = verifyDebSource chroot (parseSourceLine str)
 
-verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m (Repository, DebSource)
+verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m Slice
 verifyDebSource chroot line =
-    repo >>= return . (, line)
+    repo >>= \ repo' -> return $ Slice {sliceRepoKey = repoKey repo', sliceSource = line}
     where
       repo =
           case uriScheme (sourceUri line) of

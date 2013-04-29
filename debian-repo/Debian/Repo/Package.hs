@@ -44,8 +44,8 @@ import Debian.Release (releaseName', sectionName')
 import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..),
                            BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..), Release(releaseName), EnvRoot(rootPath))
 import Debian.Repo.Types.EnvPath (outsidePath)
-import Debian.Repo.Types.Repo (repoURI)
-import Debian.Repo.Types.Repository (Repository, LocalRepository, repoRoot)
+import Debian.Repo.Types.Repo (RepoKey, repoKeyURI)
+import Debian.Repo.Types.Repository (LocalRepository, repoRoot, MonadRepoCache)
 import Debian.URI ( fileFromURIStrict )
 import Debian.Version ( parseDebianVersion, DebianVersion )
 import qualified Debian.Version as V ( buildDebianVersion, epoch, revision, version )
@@ -213,9 +213,9 @@ sourcePackageBinaryIDs arch sourceIndex package =
       info = sourceParagraph package
 
 -- | Get the contents of a package index
-getPackages :: Repository -> Release -> PackageIndex -> IO (Either SomeException [BinaryPackage])
+getPackages :: RepoKey -> Release -> PackageIndex -> IO (Either SomeException [BinaryPackage])
 getPackages repo release index =
-    fileFromURIStrict uri' >>= return . either (Left . SomeException) Right >>= {- showStream >>= -} readControl
+    fileFromURIStrict uri' >>= readControl . either (Left . SomeException) Right
     where
       readControl :: Either SomeException L.ByteString -> IO (Either SomeException [BinaryPackage])
       readControl (Left e) = return (Left e)
@@ -225,28 +225,28 @@ getPackages repo release index =
                  Right (B.Control control) -> return (Right $ List.map (toBinaryPackage release index) control)) >>=
           return . either (\ (e :: SomeException) -> Left . SomeException . ErrorCall . ((show uri' ++ ":") ++) . show $ e) id
       uri' = uri {uriPath = uriPath uri </> packageIndexPath release index}
-      uri = repoURI repo
+      uri = repoKeyURI repo
       --toLazy s = L.fromChunks [s]
       --showStream :: Either Exception L.ByteString -> IO (Either Exception L.ByteString)
       --showStream x@(Left e) = hPutStrLn stderr (show uri' ++ " - exception: " ++ show e) >> return x
       --showStream x@(Right s) = hPutStrLn stderr (show uri' ++ " - stream length: " ++ show (L.length s)) >> return x
 
 -- | Get the contents of a package index
-binaryPackagesOfIndex :: Repository -> Release -> PackageIndex -> IO (Either SomeException [BinaryPackage])
+binaryPackagesOfIndex :: MonadRepoCache m => RepoKey -> Release -> PackageIndex -> m (Either SomeException [BinaryPackage])
 binaryPackagesOfIndex repo release index =
     case packageIndexArch index of
       Source -> return (Right [])
-      _ -> getPackages repo release index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
+      _ -> liftIO $ getPackages repo release index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
 
 -- | Get the contents of a package index
-sourcePackagesOfIndex :: Repository -> Release -> PackageIndex -> IO (Either SomeException [SourcePackage])
+sourcePackagesOfIndex :: MonadRepoCache m => RepoKey -> Release -> PackageIndex -> m (Either SomeException [SourcePackage])
 sourcePackagesOfIndex repo release index =
     case packageIndexArch index of
-      Source -> getPackages repo release index >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
+      Source -> liftIO (getPackages repo release index) >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
       _ -> return (Right [])
 
 -- FIXME: assuming the index is part of the cache
-sourcePackagesOfIndex' :: (AptCache a, MonadApt m) => a -> Repository -> Release -> PackageIndex -> m [SourcePackage]
+sourcePackagesOfIndex' :: (AptCache a, MonadApt m) => a -> RepoKey -> Release -> PackageIndex -> m [SourcePackage]
 sourcePackagesOfIndex' cache repo release index =
     do state <- getApt
        let cached = lookupSourcePackages path state
@@ -260,20 +260,20 @@ sourcePackagesOfIndex' cache repo release index =
     where
       path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
 
-indexCacheFile :: (AptCache a) => a -> Repository -> Release -> PackageIndex -> FilePath
+indexCacheFile :: (AptCache a) => a -> RepoKey -> Release -> PackageIndex -> FilePath
 indexCacheFile apt repo release index =
     case (aptArch apt, packageIndexArch index) of
       (Binary _ _, Source) -> indexPrefix repo release index ++ "_source_Sources"
       (Binary _ _, arch@(Binary _ _)) -> indexPrefix repo release index ++ "_binary-" ++ show (prettyArch arch) ++ "_Packages"
       (x, _) -> error "Invalid build architecture: " ++ show x
 
-indexPrefix :: Repository -> Release -> PackageIndex -> FilePath
+indexPrefix :: RepoKey -> Release -> PackageIndex -> FilePath
 indexPrefix repo release index =
     (escapeURIString (/= '@') ("/var/lib/apt/lists/" ++ uriText +?+ "dists_") ++
      releaseName' distro ++ "_" ++ (sectionName' $ section))
     where
       section = packageIndexComponent index
-      uri = repoURI repo
+      uri = repoKeyURI repo
       distro = releaseName $ release
       scheme = uriScheme uri
       auth = uriAuthority uri
@@ -299,7 +299,7 @@ indexPrefix repo release index =
           user ++ host ++ port ++ escape path
       prefix "ssh" _ _ (Just host) port path =
           host ++ port ++ escape path
-      prefix _ _ _ _ _ _ = error ("invalid repo URI: " ++ (uriToString' . repoURI $ repo))
+      prefix _ _ _ _ _ _ = error ("invalid repo URI: " ++ (uriToString' . repoKeyURI $ repo))
       maybeOfString "" = Nothing
       maybeOfString s = Just s
       escape s = intercalate "_" (wordsBy (== '/') s)
@@ -318,7 +318,7 @@ indexPrefix repo release index =
       _ -> a ++ "_" ++ b
 
 -- FIXME: assuming the index is part of the cache 
-binaryPackagesOfIndex' :: (MonadApt m, AptCache a) => a -> Repository -> Release -> PackageIndex -> m [BinaryPackage]
+binaryPackagesOfIndex' :: (MonadApt m, AptCache a) => a -> RepoKey -> Release -> PackageIndex -> m [BinaryPackage]
 binaryPackagesOfIndex' cache repo release index =
     do state <- getApt
        let cached = lookupBinaryPackages path state
@@ -333,7 +333,7 @@ binaryPackagesOfIndex' cache repo release index =
       path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
 
 -- | Return a list of all source packages.
-releaseSourcePackages :: Repository -> Release -> IO (Set SourcePackage)
+releaseSourcePackages :: MonadRepoCache m => RepoKey -> Release -> m (Set SourcePackage)
 releaseSourcePackages repo release =
     mapM (sourcePackagesOfIndex repo release) (sourceIndexList release) >>= return . test
     where
@@ -343,7 +343,7 @@ releaseSourcePackages repo release =
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Return a list of all the binary packages for all supported architectures.
-releaseBinaryPackages :: Repository -> Release -> IO (Set BinaryPackage)
+releaseBinaryPackages :: MonadRepoCache m => RepoKey -> Release -> m (Set BinaryPackage)
 releaseBinaryPackages repo release =
     mapM (binaryPackagesOfIndex repo release) (binaryIndexList release) >>= return . test
     where

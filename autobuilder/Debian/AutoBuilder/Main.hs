@@ -42,8 +42,8 @@ import Debian.Repo.Release(prepareRelease)
 import Debian.Repo.Repository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Slice(appendSliceLists, inexactPathSlices, releaseSlices, repoSources)
 import Debian.Repo.Sync (rsync)
-import Debian.Repo.Types (EnvRoot(EnvRoot, rootPath), EnvPath(..), outsidePath, rootEnvPath)
-import Debian.Repo.Types.Repository (LocalRepository, repoRoot, Layout(Flat), prepareLocalRepository, flushLocalRepository, NamedSliceList(..), SliceList(slices), repoReleaseNames, saveRepoCache)
+import Debian.Repo.Types (EnvRoot(rootPath), EnvPath(..), rootEnvPath)
+import Debian.Repo.Types.Repository (LocalRepository, repoRoot, prepareLocalRepository, NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey), repoReleaseNames, saveRepoCache, prepareRepository)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
@@ -160,7 +160,7 @@ runParameterSet defaultAtoms cache =
     do
       top <- askTop
       liftIO doRequiredVersion
-      liftIO $ doVerifyBuildRepo cache
+      doVerifyBuildRepo cache
       when (P.showParams params) (withModifiedVerbosity (const defaultVerbosity) (liftIO doShowParams))
       when (P.showSources params) (withModifiedVerbosity (const defaultVerbosity) (liftIO doShowSources))
       when (P.flushAll params) (liftIO $ doFlush top)
@@ -266,20 +266,22 @@ runParameterSet defaultAtoms cache =
 
 
 -- doVerifyBuildRepo :: IO ()
-doVerifyBuildRepo :: C.CacheRec -> IO ()
+doVerifyBuildRepo :: MonadApt m => C.CacheRec -> m ()
 doVerifyBuildRepo cache =
-    when (not (any (== (P.buildRelease params)) (concatMap (repoReleaseNames . fst) . slices . C.buildRepoSources $ cache)))
-         (case P.uploadURI params of
-            Just uri ->
-                let ssh = case uriAuthority uri of
-                            Just auth -> uriUserInfo auth ++ uriRegName auth ++ uriPort auth
-                            Nothing -> "user@hostname"
-                    rel = releaseName' (P.buildRelease params)
-                    top = uriPath uri in -- "/home/autobuilder/deb-private/debian"
-                error $ "Build repository does not exist on remote server: " ++ rel ++ "\nUse newdist there to create it:" ++
-                        "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-release=" ++ rel ++
-                        "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-section=" ++ rel ++ ",main" ++
-                        "\nYou will also need to remove the local file ~/.autobuilder/repoCache.")
+    do repos <- mapM prepareRepository (map sliceRepoKey . slices . C.buildRepoSources $ cache)
+       let names = concatMap repoReleaseNames repos
+       when (not (any (== (P.buildRelease params)) names))
+            (case P.uploadURI params of
+               Just uri ->
+                   let ssh = case uriAuthority uri of
+                               Just auth -> uriUserInfo auth ++ uriRegName auth ++ uriPort auth
+                               Nothing -> "user@hostname"
+                       rel = releaseName' (P.buildRelease params)
+                       top = uriPath uri in -- "/home/autobuilder/deb-private/debian"
+                   error $ "Build repository does not exist on remote server: " ++ rel ++ "\nUse newdist there to create it:" ++
+                           "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-release=" ++ rel ++
+                           "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-section=" ++ rel ++ ",main" ++
+                           "\nYou will also need to remove the local file ~/.autobuilder/repoCache.")
     where
       params = C.params cache
 

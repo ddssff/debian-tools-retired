@@ -121,17 +121,15 @@ updateAptEnv os =
 
 getSourcePackages :: MonadApt m => AptImage -> m [SourcePackage]
 getSourcePackages os =
-    qPutStrLn "AptImage.getSourcePackages" >>
-    mapM (\ ((repo, rel), index) -> sourcePackagesOfIndex' os repo rel index) indexes >>= return . concat
-    where
-      indexes = concat . map (sliceIndexes os) . slices . sourceSlices . aptImageSliceList $ os
+    do qPutStrLn "AptImage.getSourcePackages"
+       indexes <- mapM (sliceIndexes os) (slices . sourceSlices . aptImageSliceList $ os) >>= return . concat
+       mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' os repo rel index) indexes >>= return . concat
 
 getBinaryPackages :: MonadApt m => AptImage -> m [BinaryPackage]
 getBinaryPackages os =
-    qPutStrLn "AptImage.getBinaryPackages" >>
-    mapM (\ ((repo, rel), index) -> binaryPackagesOfIndex' os repo rel index) indexes >>= return . concat
-    where
-      indexes = concat . map (sliceIndexes os) . slices . binarySlices . aptImageSliceList $ os
+    do qPutStrLn "AptImage.getBinaryPackages"
+       indexes <- mapM (sliceIndexes os) (slices . binarySlices . aptImageSliceList $ os) >>= return . concat
+       mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' os repo rel index) indexes >>= return . concat
 
 -- |Retrieve a source package via apt-get.
 aptGetSource :: (AptCache t)

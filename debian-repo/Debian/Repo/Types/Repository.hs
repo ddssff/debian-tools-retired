@@ -15,6 +15,7 @@ module Debian.Repo.Types.Repository
     , setRepositoryCompatibility
     , flushLocalRepository
     , poolDir'
+    , Slice(..)
     , SliceList(..)
     , NamedSliceList(..)
     -- , sliceReleaseNames
@@ -408,8 +409,10 @@ getReleaseInfoRemote uri =
       uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
       uncurry3 f (a, b, c) =  f a b c
 
+data Slice = Slice {sliceRepoKey :: RepoKey, sliceSource :: DebSource} deriving (Eq, Ord, Show)
+
 -- | Each line of the sources.list represents a slice of a repository
-data SliceList = SliceList {slices :: [(Repository, DebSource)]} deriving (Eq, Ord, Show)
+data SliceList = SliceList {slices :: [Slice]} deriving (Eq, Ord, Show)
 
 data NamedSliceList
     = NamedSliceList { sliceList :: SliceList
@@ -417,7 +420,7 @@ data NamedSliceList
                      } deriving (Eq, Ord, Show)
 
 instance Pretty SliceList where
-    pretty = vcat . map (pretty . snd) . slices
+    pretty = vcat . map (pretty . sliceSource) . slices
 
 deriving instance Show SourceType
 deriving instance Show DebSource

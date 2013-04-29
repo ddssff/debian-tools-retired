@@ -39,8 +39,8 @@ import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Types ( AptCache(aptArch, aptBaseSliceList, aptBinaryPackages, aptReleaseName, aptSourcePackages, globalCacheDir), SourcePackage(sourcePackageID),
                            sourcePackageName, BinaryPackage(packageID), binaryPackageName, PackageID(packageVersion), PackageIndex(..),
                            Release(releaseName), EnvRoot(EnvRoot) )
-import Debian.Repo.Types.Repo (Repo(repoReleaseInfo), repoKey)
-import Debian.Repo.Types.Repository (Repository)
+import Debian.Repo.Types.Repo (Repo(repoReleaseInfo), RepoKey, repoKey)
+import Debian.Repo.Types.Repository (MonadRepoCache, Slice(..), prepareRepository)
 import Extra.Files ( replaceFile )
 import Network.URI ( URIAuth(uriPort, uriRegName, uriUserInfo), URI(uriAuthority, uriPath, uriScheme), escapeURIString )
 import System.Directory ( createDirectoryIfMissing, doesFileExist, removeFile )
@@ -105,19 +105,21 @@ aptSourcePackagesSorted os names =
 
 -- |Return a list of the index files that contain the packages of a
 -- slice.
-sliceIndexes :: AptCache a => a -> (Repository, DebSource) -> [((Repository, Release), PackageIndex)]
-sliceIndexes cache (repo, slice) =
-    case (sourceDist slice) of
+sliceIndexes :: (MonadRepoCache m, AptCache a) => a -> Slice -> m [(RepoKey, Release, PackageIndex)]
+sliceIndexes cache slice =
+    prepareRepository (sliceRepoKey slice) >>= \ repo -> 
+    case (sourceDist (sliceSource slice)) of
       Left exact -> error $ "Can't handle exact path in sources.list: " ++ exact
-      Right (release, sections) -> map (makeIndex release) sections
+      Right (release, sections) -> return $ map (makeIndex repo release) sections
     where
-      makeIndex release section =
-          ((repo, findReleaseInfo release),
+      makeIndex repo release section =
+          (repoKey repo,
+           findReleaseInfo repo release,
            PackageIndex { packageIndexComponent = section
-                        , packageIndexArch = case (sourceType slice) of
+                        , packageIndexArch = case (sourceType (sliceSource slice)) of
                                                DebSrc -> Source
                                                Deb -> aptArch cache })
-      findReleaseInfo release =
+      findReleaseInfo repo release =
           case filter ((==) release . releaseName) (repoReleaseInfo repo) of
             [x] -> x
             [] -> error $ ("sliceIndexes: Invalid release name: " ++ releaseName' release ++
