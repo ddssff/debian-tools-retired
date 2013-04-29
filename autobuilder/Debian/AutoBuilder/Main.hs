@@ -37,12 +37,12 @@ import Debian.Repo.Cache(updateCacheSources)
 import Debian.Repo.Insert(deleteGarbage)
 import Debian.Repo.Monads.Apt (MonadApt, runAptT)
 import Debian.Repo.Monads.Top (MonadTop(askTop), runTopT)
-import Debian.Repo.OSImage(OSImage(osLocalCopy), buildEssential, prepareEnv, chrootEnv)
+import Debian.Repo.OSImage(OSImage(osLocalMaster, osLocalCopy), buildEssential, prepareEnv, chrootEnv)
 import Debian.Repo.Release(prepareRelease)
 import Debian.Repo.Repository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Slice(appendSliceLists, inexactPathSlices, releaseSlices, repoSources)
 import Debian.Repo.Sync (rsync)
-import Debian.Repo.Types (EnvRoot(EnvRoot, rootPath), EnvPath(..), outsidePath)
+import Debian.Repo.Types (EnvRoot(EnvRoot, rootPath), EnvPath(..), outsidePath, rootEnvPath)
 import Debian.Repo.Types.Repository (LocalRepository, repoRoot, Layout(Flat), prepareLocalRepository, flushLocalRepository, NamedSliceList(..), SliceList(slices), repoReleaseNames, saveRepoCache)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
@@ -128,7 +128,11 @@ doParameterSet defaultAtoms results params =
 
 prepareDependOS :: (MonadTop m, MonadApt m) => P.ParamRec -> NamedSliceList -> FilePath -> m OSImage
 prepareDependOS params buildRelease localRepo =
-    do dependRoot <- dependEnv (P.buildRelease params)
+    do when (P.flushPool params) (liftIO (removeRecursiveSafely localRepo))
+       repo <- prepareLocalRepository (rootEnvPath localRepo) Nothing
+       release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
+       when (P.cleanUp params) (deleteGarbage repo)
+       dependRoot <- dependEnv (P.buildRelease params)
        exists <- liftIO $ doesDirectoryExist (rootPath dependRoot)
        when (not exists || P.flushDepends params)
             (do cleanRoot <- cleanEnv (P.buildRelease params)
@@ -151,21 +155,6 @@ prepareDependOS params buildRelease localRepo =
                   (P.excludePackages params)
                   (P.components params)
 
-prepareLocalRepo :: (MonadTop m, MonadApt m) => C.CacheRec -> m LocalRepository
-prepareLocalRepo cache =
-    P.localPoolDir cache >>= \ dir ->
-    (\ x -> qPutStrLn ("Preparing local repository " ++ dir) >> quieter 1 x) $
-    do let path = EnvPath (EnvRoot "") dir
-       repo <- prepareLocalRepository path (Just Flat) >>=
-               (if P.flushPool params then flushLocalRepository else return)
-       qPutStrLn $ "Preparing release main in local repository at " ++ outsidePath path
-       release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
-       case P.cleanUp params of
-         True -> deleteGarbage repo
-         False -> return repo
-    where
-      params = C.params cache
-
 runParameterSet :: MonadDeb m => Atoms -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet defaultAtoms cache =
     do
@@ -180,16 +169,15 @@ runParameterSet defaultAtoms cache =
       -- localRepo <- prepareLocalRepo cache			-- Prepare the local repository for initial uploads
       -- qPutStrLn $ "runParameterSet localRepo: " ++ show localRepo
       dependOS <- P.localPoolDir cache >>= prepareDependOS params buildRelease
-      let localRepo = osLocalCopy dependOS
       _ <- updateCacheSources (P.ifSourcesChanged params) dependOS
       -- Compute the essential and build essential packages, they will all
       -- be implicit build dependencies.
       globalBuildDeps <- liftIO $ buildEssential dependOS
       -- Get a list of all sources for the local repository.
       localSources <- (\ x -> qPutStrLn "Getting local sources" >> quieter 1 x) $
-          case parseURI ("file://" ++ envPath (repoRoot localRepo)) of
-            Nothing -> error $ "Invalid local repo root: " ++ show (repoRoot localRepo)
-            Just uri -> repoSources (Just . envRoot . repoRoot $ localRepo) uri
+          case parseURI ("file://" ++ envPath (repoRoot (osLocalCopy dependOS))) of
+            Nothing -> error $ "Invalid local repo root: " ++ show (repoRoot (osLocalCopy dependOS))
+            Just uri -> repoSources (Just . envRoot . repoRoot . osLocalCopy $ dependOS) uri
       -- Compute a list of sources for all the releases in the repository we will upload to,
       -- used to avoid creating package versions that already exist.  Also include the sources
       -- for the local repository to avoid collisions there as well.
@@ -199,7 +187,7 @@ runParameterSet defaultAtoms cache =
       poolOS <-prepareAptEnv top (P.ifSourcesChanged params) poolSources
       (failures, targets) <- retrieveTargetList defaultAtoms cache dependOS >>= return . partitionEithers
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
-      buildResult <- buildTargets cache dependOS globalBuildDeps localRepo poolOS targets
+      buildResult <- buildTargets cache dependOS globalBuildDeps (osLocalMaster dependOS) poolOS targets
       -- If all targets succeed they may be uploaded to a remote repo
       result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))
       saveRepoCache

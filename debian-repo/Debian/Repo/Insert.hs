@@ -552,7 +552,7 @@ findTrumped repo release =
 -- them to the removed directory.  The .changes files are treated
 -- specially: they don't appear in any index files, but the package
 -- they belong to can be constructed from their name.
-deleteGarbage :: MonadApt m => LocalRepository -> m LocalRepository
+deleteGarbage :: MonadApt m => LocalRepository -> m ()
 deleteGarbage repo =
     case repoLayout repo of
       Just layout ->
@@ -567,7 +567,6 @@ deleteGarbage repo =
             let deadFiles = Set.difference (Set.map T.pack (Set.fromList allFiles)) liveFiles
             qPutStrLn ("Removing:\n  " ++ intercalate "\n  " (Set.toAscList (Set.map T.unpack deadFiles)) ++ "\n")
             mapM_ (liftIO . moveToRemoved root . T.unpack) (Set.toList deadFiles)
-            return repo
       _ -> error "Cannot remove files from an empty repository"
     where
       root = repoRoot repo
