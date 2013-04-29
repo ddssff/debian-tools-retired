@@ -23,10 +23,14 @@ module Debian.Repo.Package
     ) where
 
 import Control.Exception as E ( SomeException(..), catch, try, ErrorCall(..) )
+import "mtl" Control.Monad.Trans ( MonadIO(..) )
+import qualified Data.ByteString.Lazy.Char8 as L (ByteString, fromChunks)
 import Data.Either ( partitionEithers )
-import Data.List as List (map)
+import Data.List as List (map, intercalate, intersperse, partition)
+import Data.Maybe ( catMaybes )
 import Data.Set as Set (Set, unions, fromList, map)
-import qualified Data.Text as T (Text, unpack)
+import qualified Data.Text as T (Text, unpack, concat, pack)
+import Data.Text.Encoding (encodeUtf8)
 import Debian.Apt.Index ( Compression(..), controlFromIndex )
 import Debian.Arch (Arch(..), prettyArch)
 import Debian.Control ( Paragraph', ControlFunctions(asString, stripWS))
@@ -39,15 +43,13 @@ import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupSourcePackages, i
 import Debian.Release (releaseName', sectionName')
 import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..),
                            BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..), Release(releaseName), EnvRoot(rootPath))
+import Debian.Repo.Types.EnvPath (outsidePath)
 import Debian.Repo.Types.Repo (repoURI)
-import Debian.Repo.Types.Repository (Repository, LocalRepository)
+import Debian.Repo.Types.Repository (Repository, LocalRepository(repoRoot))
 import Debian.URI ( fileFromURIStrict )
 import Debian.Version ( parseDebianVersion, DebianVersion )
 import qualified Debian.Version as V ( buildDebianVersion, epoch, revision, version )
-import "mtl" Control.Monad.Trans ( MonadIO(..) )
-import qualified Data.ByteString.Lazy.Char8 as L (ByteString)
-import Data.List (intercalate, partition)
-import Data.Maybe ( catMaybes )
+import Extra.Files ( writeAndZipFileWithBackup )
 import Network.URI ( URI(..), URIAuth(..), escapeURIString, uriToString )
 import System.FilePath ((</>), takeDirectory)
 import System.IO.Unsafe ( unsafeInterleaveIO )
@@ -351,11 +353,7 @@ releaseBinaryPackages (repo, release) =
 
 -- | Write a set of packages into a package index.
 putPackages :: LocalRepository -> Release -> PackageIndexLocal ->  [BinaryPackageLocal] -> IO ()
-putPackages repo' release index packages = undefined
-{-
-    case repo' of
-      LocalRepo repo ->  EF.writeAndZipFileWithBackup (outsidePath (repoRoot repo) </> packageIndexPath release index) (L.fromChunks [encodeUtf8 text]) >>= either (fail . intercalate "\n") return
-      x -> fail $ "Package.putPackages: Expected local repository, found " ++ show x
+putPackages repo release index packages =
+    writeAndZipFileWithBackup (outsidePath (repoRoot repo) </> packageIndexPath release index) (L.fromChunks [encodeUtf8 text]) >>= either (fail . intercalate "\n") return
     where
       text = T.concat (intersperse (T.pack "\n") . List.map formatParagraph . List.map packageInfo $ packages)
--}
