@@ -127,13 +127,11 @@ osFullDistro os =
 
 getSourcePackages :: MonadApt m => OSImage -> m [SourcePackage]
 getSourcePackages os =
-    qPutStrLn ("OSImage.getSourcePackages: " ++ show (osRoot os)) >>
     mapM (uncurry (sourcePackagesOfIndex' os)) indexes >>= return . concat
     where indexes = concat . map (sliceIndexes os) . slices . sourceSlices . aptSliceList $ os
 
 getBinaryPackages :: MonadApt m => OSImage -> m [BinaryPackage]
 getBinaryPackages os =
-    qPutStrLn "OSImage.getBinaryPackages" >>
     mapM (uncurry (binaryPackagesOfIndex' os)) indexes >>= return . concat
     where indexes = concat . map (sliceIndexes os) . slices . binarySlices . aptSliceList $ os
 
@@ -372,15 +370,13 @@ buildEnv root distro arch repo copy include exclude components =
 -- and dist-upgrade.
 updateEnv :: MonadApt m => OSImage -> m (Either UpdateError OSImage)
 updateEnv os =
-    do qPutStrLn $ "updateEnv " ++ show (osRoot os)
-       liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc") >> readFile "/etc/resolv.conf" >>= writeFile (rootPath root ++ "/etc/resolv.conf")
+    do liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc") >> readFile "/etc/resolv.conf" >>= writeFile (rootPath root ++ "/etc/resolv.conf")
        verified <- verifySources
        case verified of
          Left x -> return $ Left x
          Right _ ->
              do liftIO $ prepareDevs (rootPath root)
                 os' <- syncPool os
-                qPutStrLn $ "os':" ++ show (osRoot os)
                 _ <- liftIO $ updateLists os'
                 _ <- liftIO $ sshCopy (rootPath root)
                 source <- getSourcePackages os'
@@ -583,8 +579,7 @@ removeEnv os =
 -- where apt can see and install the packages.
 syncPool :: MonadRepoCache m => OSImage -> m OSImage
 syncPool os =
-    do qPutStrLn ("syncPool " ++ show (osRoot os))
-       repo' <- copyLocalRepo (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) (osLocalMaster os)
+    do repo' <- copyLocalRepo (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) (osLocalMaster os)
        return (os {osLocalCopy = repo'})
 {-
     where
