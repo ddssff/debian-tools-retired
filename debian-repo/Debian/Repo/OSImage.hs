@@ -32,7 +32,7 @@ import Debian.Repo.Slice ( sourceSlices, binarySlices, verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types ( AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage,
-                           EnvPath(EnvPath, envRoot), EnvRoot(rootPath), outsidePath )
+                           EnvPath(EnvPath, envRoot, envPath), EnvRoot(rootPath), outsidePath )
 import Debian.Repo.Types.Repo (repoURI)
 import Debian.Repo.Types.Repository (LocalRepository(repoRoot), fromLocalRepository,
                            NamedSliceList(sliceList, sliceListName), SliceList(..))
@@ -120,7 +120,7 @@ localSources os =
     case osLocalRepoMaster os of
       Nothing -> SliceList { slices = [] }
       Just repo ->
-          let repo' = repoCD (EnvPath (envRoot (repoRoot repo)) "/work/localpool") repo in
+          let repo' = repoCD (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) repo in
           let name = relName (osReleaseName os) in
           let src = DebSource Deb (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
               bin = DebSource DebSrc (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"])) in
