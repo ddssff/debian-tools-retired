@@ -258,7 +258,7 @@ runParameterSet defaultAtoms cache =
                              qPutStrLn "Running newdist on remote repository" >>
                              try (timeTask (runProcessF (shell cmd) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                          Nothing ->
-                             let cmd = "newdist --root " ++ uriPath uri in
+                             let cmd = "newdist --sign --root " ++ uriPath uri in
                              qPutStr "Running newdist on a local repository" >>
                              try (timeTask (runProcessF (shell cmd) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                 _ -> error "Missing Upload-URI parameter"
