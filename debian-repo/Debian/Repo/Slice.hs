@@ -18,10 +18,13 @@ module Debian.Repo.Slice
 
 import Control.Exception ( throw )
 import Control.Monad.Trans (liftIO)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List ( nubBy )
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text as T (Text, pack, unpack)
-import Debian.Control ( Control'(Control), Paragraph', ControlFunctions(parseControl), fieldValue )
+import Debian.Control (Control'(Control), Paragraph', ControlFunctions(parseControl), fieldValue)
+import Debian.Control.Text (decodeParagraph)
 import Debian.Release ( ReleaseName, parseReleaseName, parseSection')
 import Debian.Sources  ( SourceType(..), SliceName(SliceName), DebSource(..) )
 import Debian.Repo.Monads.Apt (MonadApt)
@@ -90,8 +93,8 @@ readRelease uri name =
     do output <- liftIO (fileFromURI uri')
        case output of
          Left e -> throw e
-         Right s -> case parseControl (show uri') (Deb.decode s) of
-                      Right (Control [paragraph]) -> return (Just paragraph)
+         Right s -> case parseControl (show uri') (B.concat . L.toChunks $ s) of
+                      Right (Control [paragraph]) -> return (Just (decodeParagraph paragraph))
                       _ -> return Nothing
     where
       uri' = uri {uriPath = uriPath uri </> "dists" </> unpack name </> "Release"}

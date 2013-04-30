@@ -93,3 +93,11 @@ Executable speedtest
     Hs-Source-Dirs: ., ../../haskell-debian
   else
     Build-Depends: debian >= 3.78
+
+Executable speedtest2
+  Main-is: Test/Speed2.hs
+  ghc-options: -O2 -threaded -Wall -rtsopts
+  if flag(local-debian)
+    Hs-Source-Dirs: ., ../../haskell-debian
+  else
+    Build-Depends: debian >= 3.78

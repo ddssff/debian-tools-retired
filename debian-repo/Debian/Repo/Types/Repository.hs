@@ -32,7 +32,7 @@ import Data.Map as Map (Map, insertWith, lookup, insert, fromList, toList, union
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text as T (Text, unpack)
 import Debian.Changes (ChangesFile(changeInfo), ChangedFileSpec(changedFileSection))
-import qualified Debian.Control.Text as T (ControlFunctions(parseControl), Control'(Control), fieldValue, Paragraph, Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph')
+import qualified Debian.Control.Text as T (ControlFunctions(parseControl), Control'(Control), fieldValue, Paragraph, Paragraph')
 import Debian.Release (ReleaseName(..), releaseName', Section, sectionName', parseReleaseName, SubSection(section))
 import Debian.Repo.Monads.Top (MonadTop, sub)
 import Debian.Repo.Sync (rsync)

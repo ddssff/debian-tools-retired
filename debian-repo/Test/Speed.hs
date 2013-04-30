@@ -1,8 +1,11 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, StandaloneDeriving, TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
 
+import Control.DeepSeq (force)
 import Control.Exception (SomeException)
 import Control.Monad.Trans (liftIO)
+import qualified Data.ByteString.Lazy.Char8 as L
+import qualified Data.ByteString.Char8 as B
 import Data.Either (partitionEithers)
 import Data.List as List (intercalate, map)
 import Data.Set as Set (Set, unions, fromList, size)
@@ -24,20 +27,27 @@ import qualified Debian.Relation.Text as B ( ParseRelations(..), Relations )
 import Debian.Repo.Types (SourceFileSpec(SourceFileSpec), SourceControl(..), SourcePackage(..), makeSourcePackageID, makeBinaryPackageID)
 import Debian.Repo.Types.Repo (repoURI)
 import Debian.Repo.Types.Repository (Repository, fromLocalRepository)
-import Debian.URI ( fileFromURIStrict )
 import Debian.Version (parseDebianVersion)
 import qualified Data.ByteString.Lazy.Char8 as L ( ByteString, fromChunks )
 import Data.List (partition)
 import Data.Maybe ( catMaybes )
-import Network.URI (URI(..))
+import GHC.IO.Exception (IOErrorType(UserError), IOException)
+import Network.URI (URI(..), URIAuth(..), uriToString)
+import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
+import System.IO.Error (mkIOError)
+import System.Process.ByteString.Lazy (readProcessWithExitCode)
+import System.Process.Progress (quieter, qPutStrLn)
+
+uriToString' :: URI -> String
+uriToString' uri = uriToString id uri ""
 
 deriving instance Show BinaryPackage
 
 -- | How long to parse the files in a repository?
 root = rootEnvPath "/srv/deb/ubuntu"
 
-main = runAptIO $
+main = runAptIO $ quieter (- 3) $
     do repo <- prepareLocalRepository root (Just Pool)
        releases <- findReleases repo
        sources <- mapM (liftIO . releaseSourcePackages . (fromLocalRepository repo,)) releases >>= return . Set.unions
@@ -84,21 +94,18 @@ binaryPackagesOfIndex (repo, release) index =
 -- | Get the contents of a package index
 getPackages :: (Repository, Release) -> PackageIndex -> IO (Either SomeException [BinaryPackage])
 getPackages (repo, release) index =
+    qPutStrLn ("fileFromURIStrict " ++ show uri') >>
     fileFromURIStrict uri' >>= return . either (Left . SomeException) Right >>= {- showStream >>= -} readControl
     where
       readControl :: Either SomeException L.ByteString -> IO (Either SomeException [BinaryPackage])
       readControl (Left e) = return (Left e)
       readControl (Right s) =
-          try (case controlFromIndex Uncompressed (show uri') s of
+          try (case controlFromIndex Uncompressed (show uri') (force s) of
                  Left e -> return $ Left (SomeException (ErrorCall (show uri' ++ ": " ++ show e)))
                  Right (B.Control control) -> return (Right $ List.map (toBinaryPackage (repo, release) index) control)) >>=
           return . either (\ (e :: SomeException) -> Left . SomeException . ErrorCall . ((show uri' ++ ":") ++) . show $ e) id
       uri' = uri {uriPath = uriPath uri </> packageIndexPath release index}
       uri = repoURI repo
-      toLazy s = L.fromChunks [s]
-      --showStream :: Either Exception L.ByteString -> IO (Either Exception L.ByteString)
-      --showStream x@(Left e) = hPutStrLn stderr (show uri' ++ " - exception: " ++ show e) >> return x
-      --showStream x@(Right s) = hPutStrLn stderr (show uri' ++ " - stream length: " ++ show (L.length s)) >> return x
 
 toSourcePackage :: PackageIndex -> B.Paragraph -> SourcePackage
 toSourcePackage index package =
@@ -171,3 +178,17 @@ toBinaryPackage (repo, release) index p =
 tryParseRel :: Maybe B.Field -> B.Relations
 tryParseRel (Just (B.Field (_, relStr))) = either (error . show) id (B.parseRelations relStr)
 tryParseRel _ = []
+
+fileFromURIStrict :: URI -> IO (Either IOException L.ByteString)
+fileFromURIStrict uri =
+    case uriScheme uri of
+      "file:" -> try (L.readFile (uriPath uri))
+      _ ->
+          let (cmd, args) = case (uriScheme uri, uriAuthority uri) of
+                              ("ssh:", Just auth) -> ("ssh", [uriUserInfo auth ++ uriRegName auth ++ uriPort auth, "cat", uriPath uri])
+                              _ -> ("curl", ["-s", "-g", uriToString' uri]) in
+          do result <- try (readProcessWithExitCode cmd args L.empty)
+             case result of
+               Left e -> return (Left e)
+               Right (ExitSuccess, out, _) -> return (Right out)
+               Right (ExitFailure _, _, err) -> return (Left (mkIOError UserError (L.unpack err) Nothing Nothing))

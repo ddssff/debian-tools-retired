@@ -24,7 +24,7 @@ module Debian.Repo.Types.PackageIndex
 
 import Data.Text (Text)
 import Debian.Arch (Arch(..))
-import qualified Debian.Control.Text as B
+import qualified Debian.Control.Text as T
 import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Release (Section(..))
@@ -33,10 +33,10 @@ import System.Posix.Types ( FileOffset )
 --import System.Unix.QIO (quieter, qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), Pretty(pretty))
 
-deriving instance Show (B.Field' Text)
-deriving instance Ord (B.Field' Text)
-deriving instance Show B.Paragraph
-deriving instance Ord B.Paragraph
+deriving instance Show (T.Field' Text)
+deriving instance Ord (T.Field' Text)
+deriving instance Show T.Paragraph
+deriving instance Ord T.Paragraph
 
 class (Eq a, Ord a) => PackageVersion a where
     pkgName :: a -> BinPkgName
@@ -106,7 +106,7 @@ prettyPackageID p = pretty (packageName p) <> text "=" <> prettyDebianVersion (p
 data BinaryPackage
     = BinaryPackage
       { packageID :: PackageID BinPkgName
-      , packageInfo :: B.Paragraph
+      , packageInfo :: T.Paragraph
       , pDepends :: B.Relations
       , pPreDepends :: B.Relations
       , pConflicts ::B.Relations
@@ -123,7 +123,7 @@ instance Eq BinaryPackage where
 data SourcePackage
     = SourcePackage
       { sourcePackageID :: PackageID SrcPkgName
-      , sourceParagraph :: B.Paragraph
+      , sourceParagraph :: T.Paragraph
       , sourceControl :: SourceControl
       , sourceDirectory :: String
       , sourcePackageFiles :: [SourceFileSpec]
