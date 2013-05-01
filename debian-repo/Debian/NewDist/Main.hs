@@ -35,11 +35,160 @@ import		 Text.Regex
 import           Debian.NewDist.Version (myVersion)
 import		 Extra.Email
 
-appName = "newdist"
-defaultRoot = "/var/www/" ++ appName
---defaultComponent = Component "main"
--- owner = "root"
--- group = "root"
+main :: IO ()
+main =
+    do args <- getArgs
+       home <- getEnv "HOME"
+       runAptIO
+               (do (flags, _) <-
+                           case getOpt Permute (map option optSpecs) args of
+                             (o, n, []) -> return (foldl (flip id) (initialParams home) o, n)
+                             (_, _, errs) -> error (concat errs ++ usageInfo "Usage:" (map option optSpecs))
+                   quieter 1 (qPutStrLn ("Flags:\n  " ++ (show flags)))
+                   let lockPath = outsidePath (root flags) ++ "/newdist.lock"
+                   liftIO $ createDirectoryIfMissing True (outsidePath (root flags))
+                   case printVersion flags of
+                     False -> withLock lockPath (runFlags flags)
+                     True -> liftIO (IO.putStrLn myVersion) >>
+                             liftIO (exitWith ExitSuccess))
+
+-- dry :: ParamRec -> IO () -> IO ()
+-- dry params action = if dryRun params then return () else action
+
+runFlags :: MonadApt m => ParamRec -> m ()
+runFlags flags =
+    do createReleases flags
+       repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
+       rels <- findReleases repo
+       _ <- liftIO (deletePackages repo rels flags keyname)
+       liftIO $ setRepositoryCompatibility repo
+       when (install flags)
+                ((scanIncoming False keyname repo) >>=
+                     \ (ok, errors) -> (liftIO (sendEmails senderAddr emailAddrs (map (successEmail repo) ok)) >>
+                                        liftIO (sendEmails senderAddr emailAddrs (map (\ (changes, e) -> failureEmail changes e) errors)) >>
+                                        liftIO (exitOnError (map snd errors))))
+       when (expire flags)  $ liftIO (deleteTrumped keyname repo rels) >> return ()
+       when (cleanUp flags) $ deleteGarbage repo >> return ()
+       when (signRepo flags) $ liftIO (signReleases keyname (map (repo,) rels))
+    where
+      emailAddrs :: [(String, String)]
+      emailAddrs =
+          catMaybes . map parseEmail . concat . map (splitRegex (mkRegex "[ \t]*,[ \t]*")) . notifyEmail $ flags
+      senderAddr :: (String, String)
+      senderAddr = maybe ("autobuilder", "somewhere") id . maybe Nothing parseEmail . senderEmail $ flags
+      successEmail :: LocalRepository -> ChangesFile -> (String, [String])
+      successEmail repo changesFile =
+          let subject = ("newdist: " ++ changePackage changesFile ++ "-" ++ show (prettyDebianVersion (changeVersion changesFile)) ++ 
+                         " now available in " ++ releaseName' (changeRelease changesFile) ++
+                         " (" ++ show (prettyArch (changeArch changesFile)) ++")")
+              body = ("Repository " ++ envPath (repoRoot repo)) : [] : (lines $ show $ pretty $ changeInfo changesFile) in
+    	  (subject, body)
+      failureEmail :: ChangesFile -> InstallResult -> (String, [String])
+      failureEmail changesFile e =
+          let subject = ("newdist failure: " ++ changePackage changesFile ++ "-" ++ show (prettyDebianVersion (changeVersion changesFile)) ++ 
+                         " failed to install in " ++ releaseName' (changeRelease changesFile))
+              body = concat (map (lines . explainError) (resultToProblems e)) in
+          (subject, body)
+      keyname =
+          case (keyName flags, signRepo flags) of
+            (Just "none", _) -> Nothing
+            (_, False) -> Nothing
+            (Nothing, True) -> Just Extra.GPGSign.Default
+            (Just x, True) -> Just (Extra.GPGSign.Key x)
+      parseEmail s = case break (== '@') s of
+                       (user, ('@' : host)) -> Just (user, host)
+                       _ -> Nothing
+
+createReleases flags =
+    do repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
+       rels <- findReleases repo
+       mapM_ (createRelease repo (archList flags)) (map parseReleaseName . releases $ flags)
+       mapM_ (createAlias repo) (aliases flags)
+       mapM_ (createSectionOfRelease repo rels) (sections flags)
+    where
+      createSectionOfRelease repo rels arg =
+          case break (== ',') arg of
+            (rel, ',' : sectName) ->
+                case filter (\ release -> releaseName release == parseReleaseName rel) rels of
+                  [release] -> createSection repo release (parseSection' sectName)
+                  [] -> error $ "createReleases: Invalid release name: " ++ rel
+                  _ -> error "Internal error 1"
+            _ ->
+                error $ "Invalid argument to --create-section: " ++ arg
+      createSection :: MonadApt m => LocalRepository -> Release -> Section -> m Release
+      createSection repo release section' =
+          case filter ((==) section') (releaseComponents release) of
+            [] -> prepareRelease repo (releaseName release) (releaseAliases release)
+                    (releaseComponents release ++ [section'])  (releaseArchitectures release)
+            _ -> return release
+
+root flags = EnvPath (EnvRoot "") (rootParam flags)
+
+archList flags = maybe defaultArchitectures (parseArchitectures . pack) $ architectures flags
+
+defaultArchitectures = [Binary (ArchOS "linux") (ArchCPU "i386"), Binary (ArchOS "linux") (ArchCPU "amd64")]
+
+createRelease :: MonadApt m => LocalRepository -> [Arch] -> ReleaseName -> m Release
+createRelease repo archList' name =
+    do rels <- findReleases repo
+       case filter (\ release -> elem name (releaseName release : releaseAliases release)) rels of
+         [] -> prepareRelease repo name [] [parseSection' "main"] archList'
+         [release] -> return release
+         _ -> error "Internal error 2"
+
+createAlias :: MonadApt m => LocalRepository -> String -> m Release
+createAlias repo arg =
+    case break (== '=') arg of
+      (rel, ('=' : alias)) ->
+          do rels <- findReleases repo
+             case filter ((==) (parseReleaseName rel) . releaseName) rels of
+               [] -> error $ "Attempt to create alias in non-existant release: " ++ rel
+               [release] -> 
+                   case elem (parseReleaseName alias) (releaseAliases release) of
+                     False -> prepareRelease repo (parseReleaseName rel) (releaseAliases release ++ [parseReleaseName alias])
+                               (releaseComponents release) (releaseArchitectures release)
+                     True -> return release
+               _ -> error $ "Internal error 3"
+      _ -> error $ "Invalid argument to --create-alias: " ++ arg
+
+exitOnError :: [InstallResult] -> IO ()
+exitOnError [] = return ()
+exitOnError errors =
+    do qPutStrLn (showErrors errors)
+       liftIO $ IO.hFlush IO.stderr
+       liftIO $ exitWith (ExitFailure 1)
+
+-- |Return the list of releases in the repository at root, creating
+-- the ones in the dists list with the given components and
+-- architectures.
+getReleases root' layout' dists section' archList' =
+    do repo <- prepareLocalRepository root' layout'
+       existingReleases <- findReleases repo
+       requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
+       return $ mergeReleases (fromLocalRepository repo) (existingReleases ++ requiredReleases)
+
+deletePackages repo rels flags keyname =
+    deleteSourcePackages keyname repo toRemove
+    where
+      toRemove :: [(Release, PackageIndex, PackageID BinPkgName)]
+      toRemove = map parsePackage $ removePackages flags
+      parsePackage :: String -> (Release, PackageIndex, PackageID BinPkgName)
+      -- Parse a string in the form <dist>,<packagename>=<versionnumber>
+      parsePackage s =
+          case splitRegex (mkRegex "[,=]") s of
+            [dist, component, name, ver] ->
+                maybe (error ("Can't find release: " ++ dist))
+                      (\ release -> (release,
+                                     PackageIndex (parseSection' component) Source,
+                                     makeBinaryPackageID name (parseDebianVersion ver)))
+                      (findReleaseByName (parseReleaseName dist)) 
+            x -> error ("Invalid remove spec: " ++ show x)
+      findReleaseByName :: ReleaseName -> Maybe Release
+      findReleaseByName dist =
+          case filter (\ rel -> releaseName rel == dist) rels of
+            [] -> Nothing
+            [release] -> (Just release)
+            _ -> error ("Multiple releases with name " ++ releaseName' dist)
 
 data ParamRec
     = ParamRec
@@ -64,7 +213,7 @@ data ParamRec
       , signRepo :: Bool
       , architectures :: Maybe String
       , keyName :: Maybe String -- "Name of the pgp key with which to sign the repository."
-      }
+      } deriving Show
 
 initialParams :: FilePath -> ParamRec
 initialParams home =
@@ -74,6 +223,7 @@ initialParams home =
     , uploadSection = Nothing
     , expire = False
     , cleanUp = False
+    -- , dryRun = False
     , removePackages = []
     , install = True
     , releases = []
@@ -103,8 +253,7 @@ optSpecs =
 		 "Remove all packages trumped by newer versions from the package lists."
     , Param [] ["clean-up"] ["Clean-Up"] (NoArg (\ p -> p {cleanUp = True}))
 		 "Move all unreferenced files in the repository to the removed directory."
-{-  , Param ['n'] ["dry-run"] ["Dry-Run"]	(NoArg (Value "Dry-Run" "yes"))
-		 "Test run, don't modify the repository." -}
+    -- , Param ['n'] ["dry-run"] ["Dry-Run"] (NoArg (\ p -> p {dryRun = True})) "Test run, don't modify the repository."
     , Param [] ["remove"] ["Remove"] (ReqArg (\ s p -> p {removePackages = removePackages p ++ [s]}) "DIST,SECTION,PACKAGE=VERSION")
                  "remove a particular version of a package (may be repeated.)"
     , Param ['i'] ["install"] ["Install"] (NoArg (\ p -> p {install = True}))
@@ -155,242 +304,3 @@ optSpecs =
        "remove any package which is not part of any dist."])
 -}
     ]
-
-{-
-defaultStyles :: IOStyle
-defaultStyles = (setFinish (Just "done.") .
-                 setError (Just "failed.") .
-                 setEcho False .
-                 setElapsed False .
-                 setDots IO.stdout 1024 '.' .
-                 setDots IO.stderr 1024 ',') (Debian.IO.defStyle 0)
--}
-
-defaultArchitectures = [Binary (ArchOS "linux") (ArchCPU "i386"), Binary (ArchOS "linux") (ArchCPU "amd64")]
-
-{-
-style :: [Flag] -> TStyle -> TStyle
-style flags = foldl (.) id . map readStyle $ findValues flags "Style"
-
-readStyle :: String -> TStyle -> TStyle
-readStyle text =
-    case (mapSnd tail . break (== '=')) text of
-      --("Start", message) -> setStart . Just $ message
-      --("Finish", message) -> setFinish . Just $ message
-      --("Error", message) -> setError . Just $ message
-      --("Output", "Indented") -> addPrefixes "" ""
-      --("Output", "Dots") -> dotStyle IO.stdout . dotStyle IO.stderr
-      --("Output", "Quiet") -> quietStyle IO.stderr . quietStyle IO.stdout
-      --("Echo", flag) -> setEcho (readFlag flag)
-      --("Elapsed", flag) -> setElapsed (readFlag flag)
-      ("Verbosity", value) -> setVerbosity (read value)
-      --("Indent", prefix) -> addPrefixes prefix prefix
-      _ -> id
-    where
-      readFlag "yes" = True
-      readFlag "no" = False
-      readFlag "true" = True
-      readFlag "false" = True
-      readFlag text = error ("Unrecognized bool: " ++ text)
-      mapSnd f (a, b) = (a, f b)
--}
-
-main :: IO ()
-main =
-    do args <- getArgs
-       home <- getEnv "HOME"
-       let verbosity = length $ filter (flip elem ["-v", "--verbose"]) args
-       -- runTIO defStyle { verbosity = verbosity }
-       runAptIO
-               (do -- Compute configuration options
-                   let flags' = initialParams home
-                   (flags, _) <-
-                           case getOpt Permute (map option optSpecs) args of
-                             (o, n, []) -> return (foldl (flip id) (initialParams home) o, n)
-                             (_, _, errs) -> error (concat errs ++ usageInfo "Usage:" (map option optSpecs))
-                   -- flags <- liftIO (computeConfig verbosity appName flags' nameFirstSection) >>= return . concat
-                   -- quieter 1 (qPutStrLn ("Flags:\n  " ++ concat (intersperse "\n  " (map show flags))))
-                   let lockPath = outsidePath (root flags) ++ "/newdist.lock"
-                   liftIO (createDirectoryIfMissing True (outsidePath (root flags)))
-                   case printVersion flags of
-                     False -> withLock lockPath (runFlags flags)
-                     True -> liftIO (IO.putStrLn myVersion) >>
-                             liftIO (exitWith ExitSuccess))
-    where
-{-
-      nameFirstSection (flags : more) = nameSection "Main" flags : more
-      nameFirstSection [] = []
-      nameSection name' flags =
-          case any isName flags of
-            False -> (Name name' : flags)
-            True -> flags
-      isName (Name _) = True
-      isName _ = False
-      useMain flags =
-          case any isUse flags of
-            False -> (Use ["Main"] : flags)
-            True -> flags
-      isUse (Use _) = True
-      isUse _ = False
--}
-
-runFlags :: MonadApt m => ParamRec -> m ()
-runFlags flags =
-    do createReleases flags
-       repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
-       -- Get a list of the Release objects in the repository at Root
-       releases <- findReleases repo
-       -- Get the Repository object, this will certainly be a singleton list.
-       --let repos = nub $ map releaseRepo releases
-       _ <- liftIO (deletePackages repo releases flags keyname)
-       --vPutStrBl 1 IO.stderr $ "newdist " ++ show (root flags)
-       --vPutStrBl 1 IO.stderr $ "signRepository=" ++ show signRepository
-       --io $ exitWith ExitSuccess
-       liftIO $ setRepositoryCompatibility repo
-       when (install flags)
-                ((scanIncoming False keyname repo) >>=
-                     \ (ok, errors) -> (liftIO (sendEmails senderAddr emailAddrs (map (successEmail repo) ok)) >>
-                                        liftIO (sendEmails senderAddr emailAddrs (map (\ (changes, e) -> failureEmail changes e) errors)) >>
-                                        liftIO (exitOnError (map snd errors))))
-       when (expire flags)  $ liftIO (deleteTrumped keyname repo releases) >> return ()
-       when (cleanUp flags) $ deleteGarbage repo >> return ()
-       -- This flag says sign even if nothing changed
-       when (signRepo flags) $ liftIO (signReleases keyname (map (repo,) releases))
-    where
-{-
-      findReleaseByName :: [Release] -> ReleaseName -> Maybe Release
-      findReleaseByName releases dist =
-          case filter (\ release -> releaseName release == dist) releases of
-            [] -> Nothing
-            [release] -> (Just release)
-            _ -> error ("Multiple releases with name " ++ show dist)
--}
-      --section = Component $ maybe "main" id $ findValue flags "Section"
-      --runStyle = (cond Debian.IO.dryRun Debian.IO.realRun dryRun) . setVerbosity verbose . (style flags)
-      --dryRun = findBool flags "Dry-Run"
-      --verbose = maybe 0 read (findValue flags "Verbose")
-      remove = removePackages flags
-      emailAddrs :: [(String, String)]
-      emailAddrs =
-          catMaybes . map parseEmail . concat . map (splitRegex (mkRegex "[ \t]*,[ \t]*")) . notifyEmail $ flags
-      senderAddr :: (String, String)
-      senderAddr = maybe ("autobuilder", "somewhere") id . maybe Nothing parseEmail . senderEmail $ flags
-      successEmail :: LocalRepository -> ChangesFile -> (String, [String])
-      successEmail repo changesFile =
-          let subject = ("newdist: " ++ changePackage changesFile ++ "-" ++ show (prettyDebianVersion (changeVersion changesFile)) ++ 
-                         " now available in " ++ releaseName' (changeRelease changesFile) ++
-                         " (" ++ show (prettyArch (changeArch changesFile)) ++")")
-              body = ("Repository " ++ envPath (repoRoot repo)) : [] : (lines $ show $ pretty $ changeInfo changesFile) in
-    	  (subject, body)
-      failureEmail :: ChangesFile -> InstallResult -> (String, [String])
-      failureEmail changesFile e =
-          let subject = ("newdist failure: " ++ changePackage changesFile ++ "-" ++ show (prettyDebianVersion (changeVersion changesFile)) ++ 
-                         " failed to install in " ++ releaseName' (changeRelease changesFile))
-              body = concat (map (lines . explainError) (resultToProblems e)) in
-          (subject, body)
-      --dists = map ReleaseName $ findValues flags "Create"
-      -- expire = findBool flags "Expire"
-      -- cleanUp = findBool flags "Clean-Up"
-      -- install = findBool flags "Install" || (remove == [] && cleanUp == False)
-      --replace = findBool flags "Replace"
-      --verify = findBool flags "Verify"
-      -- signRepository = sign flags
-      keyname =
-          case (keyName flags, signRepo flags) of
-            (Just "none", _) -> Nothing
-            (_, False) -> Nothing
-            (Nothing, True) -> Just Extra.GPGSign.Default
-            (Just x, True) -> Just (Extra.GPGSign.Key x)
-      parseEmail s = case break (== '@') s of
-                       (user, ('@' : host)) -> Just (user, host)
-                       _ -> Nothing
-
-
-createReleases flags =
-    do repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
-       rels <- findReleases repo
-       mapM_ (createRelease repo (archList flags)) (map parseReleaseName . releases $ flags)
-       mapM_ (createAlias repo) (aliases flags)
-       mapM_ (createSectionOfRelease repo rels) (sections flags)
-    where
-      createSectionOfRelease repo releases arg =
-          case break (== ',') arg of
-            (rel, ',' : sectName) ->
-                case filter (\ release -> releaseName release == parseReleaseName rel) releases of
-                  [release] -> createSection repo release (parseSection' sectName)
-                  [] -> error $ "createReleases: Invalid release name: " ++ rel
-                  _ -> error "Internal error 1"
-            _ ->
-                error $ "Invalid argument to --create-section: " ++ arg
-      createSection :: MonadApt m => LocalRepository -> Release -> Section -> m Release
-      createSection repo release section' =
-          case filter ((==) section') (releaseComponents release) of
-            [] -> prepareRelease repo (releaseName release) (releaseAliases release)
-                    (releaseComponents release ++ [section'])  (releaseArchitectures release)
-            _ -> return release
-
-root flags = EnvPath (EnvRoot "") (rootParam flags)
-
-archList flags = maybe defaultArchitectures (parseArchitectures . pack) $ architectures flags
-
-createRelease :: MonadApt m => LocalRepository -> [Arch] -> ReleaseName -> m Release
-createRelease repo archList' name =
-    do releases <- findReleases repo
-       case filter (\ release -> elem name (releaseName release : releaseAliases release)) releases of
-         [] -> prepareRelease repo name [] [parseSection' "main"] archList'
-         [release] -> return release
-         _ -> error "Internal error 2"
-
-createAlias :: MonadApt m => LocalRepository -> String -> m Release
-createAlias repo arg =
-    case break (== '=') arg of
-      (rel, ('=' : alias)) ->
-          do releases <- findReleases repo
-             case filter ((==) (parseReleaseName rel) . releaseName) releases of
-               [] -> error $ "Attempt to create alias in non-existant release: " ++ rel
-               [release] -> 
-                   case elem (parseReleaseName alias) (releaseAliases release) of
-                     False -> prepareRelease repo (parseReleaseName rel) (releaseAliases release ++ [parseReleaseName alias])
-                               (releaseComponents release) (releaseArchitectures release)
-                     True -> return release
-               _ -> error $ "Internal error 3"
-      _ -> error $ "Invalid argument to --create-alias: " ++ arg
-
-exitOnError :: [InstallResult] -> IO ()
-exitOnError [] = return ()
-exitOnError errors =
-    do qPutStrLn (showErrors errors)
-       liftIO $ IO.hFlush IO.stderr
-       liftIO $ exitWith (ExitFailure 1)
-
--- |Return the list of releases in the repository at root, creating
--- the ones in the dists list with the given components and
--- architectures.
-getReleases root' layout' dists section' archList' =
-    do repo <- prepareLocalRepository root' layout'
-       existingReleases <- findReleases repo
-       requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
-       return $ mergeReleases (fromLocalRepository repo) (existingReleases ++ requiredReleases)
-
-deletePackages repo releases flags keyname =
-    deleteSourcePackages keyname repo toRemove
-    where
-      toRemove :: [(Release, PackageIndex, PackageID BinPkgName)]
-      toRemove = map parsePackage $ removePackages flags
-      parsePackage :: String -> (Release, PackageIndex, PackageID BinPkgName)
-      -- Parse a string in the form <dist>,<packagename>=<versionnumber>
-      parsePackage s =
-          case splitRegex (mkRegex "[,=]") s of
-            [dist, component, name, ver] ->
-                maybe (error ("Can't find release: " ++ dist))
-                      (\ release -> (release,
-                                     PackageIndex (parseSection' component) Source,
-                                     makeBinaryPackageID name (parseDebianVersion ver)))
-                      (findReleaseByName (parseReleaseName dist)) 
-            x -> error ("Invalid remove spec: " ++ show x)
-      findReleaseByName :: ReleaseName -> Maybe Release
-      findReleaseByName dist =
-          case filter (\ release -> releaseName release == dist) releases of
-            [] -> Nothing
-            [release] -> (Just release)
-            _ -> error ("Multiple releases with name " ++ releaseName' dist)

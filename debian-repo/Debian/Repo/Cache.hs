@@ -107,7 +107,7 @@ aptSourcePackagesSorted os names =
 -- slice.
 sliceIndexes :: (MonadRepoCache m, AptCache a) => a -> Slice -> m [(RepoKey, Release, PackageIndex)]
 sliceIndexes cache slice =
-    prepareRepository (sliceRepoKey slice) >>= \ repo -> 
+    prepareRepository (sliceRepoKey slice) >>= \ repo ->
     case (sourceDist (sliceSource slice)) of
       Left exact -> error $ "Can't handle exact path in sources.list: " ++ exact
       Right (release, sections) -> return $ map (makeIndex repo release) sections
