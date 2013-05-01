@@ -53,7 +53,7 @@ import System.Environment (getArgs, getEnv)
 import System.Directory(createDirectoryIfMissing, doesDirectoryExist)
 import System.Exit(ExitCode(..), exitWith)
 import qualified System.IO as IO
-import System.Process (shell)
+import System.Process (proc)
 import System.Process.Progress (Output, timeTask, defaultVerbosity, runProcessF, withModifiedVerbosity, quieter, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
@@ -252,15 +252,17 @@ runParameterSet defaultAtoms cache =
                 Just uri ->
                     case uriAuthority uri of
                          Just auth ->
-                             let cmd = ("ssh " ++ uriUserInfo auth ++ uriRegName auth ++
-                                        " " ++ P.newDistProgram params ++ " --root " ++ uriPath uri ++
-                                        (concat . map (" --create " ++) . P.createRelease $ params)) in
+                             let cmd = "ssh"
+                                 args = [uriUserInfo auth ++ uriRegName auth, P.newDistProgram params,
+                                         "--sign", "--root", uriPath uri] ++
+                                        (concat . map (\ rel -> ["--create", rel]) . P.createRelease $ params) in
                              qPutStrLn "Running newdist on remote repository" >>
-                             try (timeTask (runProcessF (shell cmd) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
+                             try (timeTask (runProcessF (proc cmd args) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                          Nothing ->
-                             let cmd = "newdist --sign --root " ++ uriPath uri in
+                             let cmd = P.newDistProgram params
+                                 args = ["--sign", "--root", uriPath uri] in
                              qPutStr "Running newdist on a local repository" >>
-                             try (timeTask (runProcessF (shell cmd) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
+                             try (timeTask (runProcessF (proc cmd args) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                 _ -> error "Missing Upload-URI parameter"
           | True = return (Success ([], (fromInteger 0)))
 
