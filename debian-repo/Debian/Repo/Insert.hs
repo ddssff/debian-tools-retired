@@ -629,6 +629,7 @@ findLive repo = {-(LocalRepository _ Nothing _)-}
       architectures releases = List.map head . group . sort . List.map releaseArchitectures $ releases
 
 deleteSourcePackages :: Maybe PGPKey -> LocalRepository -> [(Release, PackageIndex, PackageIDLocal BinPkgName)] -> IO [Release]
+deleteSourcePackages keyname repo [] = return []
 deleteSourcePackages keyname repo packages =
     if Set.null invalid
     then qPutStrLn (unlines ("Removing packages:" : List.map (show . F.pretty . (\ (_, _, x) -> x)) packages)) >>

@@ -1,56 +1,52 @@
 {-# LANGUAGE TupleSections #-}
-{-# OPTIONS_GHC -Wall -fno-warn-missing-signatures #-}
--- |Replacement for debpool.  
+{-# OPTIONS_GHC -Wall #-}
+-- | Replacement for debpool.
 module Main where
 
-import		 Prelude hiding (putStr, putStrLn, putChar)
-import		 Control.Monad.Trans
-import		 Debian.Repo (runAptIO, outsidePath, MonadApt, findReleases, scanIncoming, deleteTrumped, deleteGarbage, signReleases,
-                              envPath, InstallResult, explainError, resultToProblems,
-                              Release(..), prepareRelease,
-                              EnvPath(EnvPath), EnvRoot(EnvRoot),
-                              showErrors, mergeReleases, deleteSourcePackages,
-                              PackageID, makeBinaryPackageID, PackageIndex(PackageIndex))
-import Debian.Repo.Types.Release (parseArchitectures)
+import Control.Monad (when)
+import Control.Monad.Trans (liftIO)
+import Data.Maybe (catMaybes)
+import Data.Text (pack)
+import Debian.Arch (Arch(Binary, Source), ArchCPU(..), ArchOS(..), prettyArch)
+import Debian.Changes (ChangesFile(..))
+import Debian.Config (ParamDescr(..), option)
+import Debian.NewDist.Version (myVersion)
+import Debian.Relation (BinPkgName)
+import Debian.Release (ReleaseName, releaseName', parseReleaseName, Section, parseSection')
+import Debian.Repo.Insert (scanIncoming, deleteSourcePackages, InstallResult, deleteTrumped, deleteGarbage, explainError, resultToProblems, showErrors)
+import Debian.Repo.Monads.Apt (MonadApt, runAptIO)
+import Debian.Repo.Release (findReleases, prepareRelease, signReleases, mergeReleases)
+import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath, envPath)
+import Debian.Repo.Types.PackageIndex (PackageIndex(PackageIndex), PackageID, makeBinaryPackageID)
+import Debian.Repo.Types.Release (Release, parseArchitectures, releaseName, releaseAliases, releaseComponents, releaseArchitectures)
 import Debian.Repo.Types.Repository (LocalRepository, Layout(Pool, Flat), repoRoot, prepareLocalRepository, setRepositoryCompatibility, fromLocalRepository)
-import		 Debian.Config (ParamDescr(..), option)
-import		 Control.Monad
-import		 Data.Maybe
-import           Data.Text (pack)
-import		 Extra.GPGSign
-import		 Extra.Lock
-import           Debian.Arch (Arch(Binary, Source), ArchCPU(..), ArchOS(..), prettyArch)
-import           Debian.Changes (ChangesFile(..))
-import           Debian.Relation (BinPkgName)
-import           Debian.Release
-import		 Debian.Version
-import		 System.Console.GetOpt
-import           System.Directory (createDirectoryIfMissing)
-import		 System.Environment
-import		 System.Exit
-import qualified System.IO as IO
-import           System.Process.Progress (quieter, qPutStrLn)
-import           Text.PrettyPrint.ANSI.Leijen (pretty)
-import		 Text.Regex
-import           Debian.NewDist.Version (myVersion)
-import		 Extra.Email
+import Debian.Version (parseDebianVersion, prettyDebianVersion)
+import Extra.Email (sendEmails)
+import Extra.GPGSign (PGPKey(Default, Key))
+import Extra.Lock (withLock)
+import Prelude hiding (putStr, putStrLn, putChar)
+import System.Console.GetOpt (ArgDescr(NoArg, ReqArg), ArgOrder(Permute), getOpt, usageInfo)
+import System.Directory (createDirectoryIfMissing)
+import System.Environment (getArgs, getEnv)
+import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
+import System.IO as IO (putStrLn, hFlush, stderr)
+import System.Process.Progress (quieter, qPutStrLn)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
+import Text.Regex (mkRegex, splitRegex)
 
 main :: IO ()
 main =
     do args <- getArgs
        home <- getEnv "HOME"
-       runAptIO
-               (do (flags, _) <-
-                           case getOpt Permute (map option optSpecs) args of
-                             (o, n, []) -> return (foldl (flip id) (initialParams home) o, n)
-                             (_, _, errs) -> error (concat errs ++ usageInfo "Usage:" (map option optSpecs))
-                   quieter 1 (qPutStrLn ("Flags:\n  " ++ (show flags)))
-                   let lockPath = outsidePath (root flags) ++ "/newdist.lock"
-                   liftIO $ createDirectoryIfMissing True (outsidePath (root flags))
-                   case printVersion flags of
-                     False -> withLock lockPath (runFlags flags)
-                     True -> liftIO (IO.putStrLn myVersion) >>
-                             liftIO (exitWith ExitSuccess))
+       flags <- case getOpt Permute (map option optSpecs) args of
+                  (o, _n, []) -> return $ foldl (flip id) (initialParams home) o
+                  (_, _, errs) -> error (concat errs ++ usageInfo "Usage:" (map option optSpecs))
+       quieter 1 (qPutStrLn ("Flags:\n  " ++ (show flags)))
+       let lockPath = outsidePath (root flags) ++ "/newdist.lock"
+       liftIO $ createDirectoryIfMissing True (outsidePath (root flags))
+       case printVersion flags of
+         False -> withLock lockPath (runAptIO (runFlags flags))
+         True -> IO.putStrLn myVersion >> exitWith ExitSuccess
 
 -- dry :: ParamRec -> IO () -> IO ()
 -- dry params action = if dryRun params then return () else action
@@ -64,9 +60,9 @@ runFlags flags =
        liftIO $ setRepositoryCompatibility repo
        when (install flags)
                 ((scanIncoming False keyname repo) >>=
-                     \ (ok, errors) -> (liftIO (sendEmails senderAddr emailAddrs (map (successEmail repo) ok)) >>
-                                        liftIO (sendEmails senderAddr emailAddrs (map (\ (changes, e) -> failureEmail changes e) errors)) >>
-                                        liftIO (exitOnError (map snd errors))))
+                     \ (ok, errors) -> (liftIO (sendEmails senderAddr emailAddrs (map (successEmail repo) ok) >>
+                                                sendEmails senderAddr emailAddrs (map (\ (changes, e) -> failureEmail changes e) errors) >>
+                                                exitOnError (map snd errors))))
        when (expire flags)  $ liftIO (deleteTrumped keyname repo rels) >> return ()
        when (cleanUp flags) $ deleteGarbage repo >> return ()
        when (signRepo flags) $ liftIO (signReleases keyname (map (repo,) rels))
@@ -99,6 +95,7 @@ runFlags flags =
                        (user, ('@' : host)) -> Just (user, host)
                        _ -> Nothing
 
+createReleases :: MonadApt m => ParamRec -> m ()
 createReleases flags =
     do repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
        rels <- findReleases repo
@@ -122,10 +119,13 @@ createReleases flags =
                     (releaseComponents release ++ [section'])  (releaseArchitectures release)
             _ -> return release
 
+root :: ParamRec -> EnvPath
 root flags = EnvPath (EnvRoot "") (rootParam flags)
 
+archList :: ParamRec -> [Arch]
 archList flags = maybe defaultArchitectures (parseArchitectures . pack) $ architectures flags
 
+defaultArchitectures :: [Arch]
 defaultArchitectures = [Binary (ArchOS "linux") (ArchCPU "i386"), Binary (ArchOS "linux") (ArchCPU "amd64")]
 
 createRelease :: MonadApt m => LocalRepository -> [Arch] -> ReleaseName -> m Release
@@ -161,12 +161,14 @@ exitOnError errors =
 -- |Return the list of releases in the repository at root, creating
 -- the ones in the dists list with the given components and
 -- architectures.
+getReleases :: MonadApt m => EnvPath -> Maybe Layout -> [ReleaseName] -> [Section] -> [Arch] -> m Release
 getReleases root' layout' dists section' archList' =
     do repo <- prepareLocalRepository root' layout'
        existingReleases <- findReleases repo
        requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
        return $ mergeReleases (fromLocalRepository repo) (existingReleases ++ requiredReleases)
 
+deletePackages :: LocalRepository -> [Release] -> ParamRec -> Maybe PGPKey -> IO [Release]
 deletePackages repo rels flags keyname =
     deleteSourcePackages keyname repo toRemove
     where
