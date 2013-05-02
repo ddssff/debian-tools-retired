@@ -350,13 +350,13 @@ optSpecs =
     , Option [] ["flush-repo-cache"] (NoArg (Right (\ p -> p {useRepoCache = False})))
       (unlines [ "Ignore the existing cached information about the remote repositories,"
                , "instead rebuild it from scratch and save the new result" ])
-    , Option [] ["flush-pool"] (NoArg (Right (\ p -> p {flushPool = True})))
+    , Option [] ["flush-pool"] (NoArg (Right (\ p -> p {flushPool = True, flushDepends = True})))
       "Flush the local repository before building."
     , Option [] ["flush-root"] (NoArg (Right (\ p -> p {flushRoot = True})))
       "Discard and recreate the clean and build environments."
     , Option [] ["flush-source"] (NoArg (Right (\ p -> p {flushSource = True})))
       "Discard and re-download all source code."
-    , Option [] ["flush-depends"] (NoArg (Right (\ p -> p {flushDepends = True})))
+    , Option [] ["flush-depends"] (NoArg (Right (\ p -> p {flushPool = True, flushDepends = True})))
       "Flush all the installed build dependencies from the build environment."
     , Option [] ["flush-all"] (NoArg (Right (\ p -> p {flushAll = True})))
       "Remove and re-create the entire autobuilder working directory."
