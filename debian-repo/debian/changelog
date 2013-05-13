@@ -1,3 +1,9 @@
+haskell-debian-repo (5.44) unstable; urgency=low
+
+  * Bump version past failed version 5.43.
+
+ -- David Fox <dsf@seereason.com>  Mon, 13 May 2013 16:10:25 -0700
+
 haskell-debian-repo (5.42) unstable; urgency=low
 
   * Switch from String based control files to Text, for debian-3.74.
