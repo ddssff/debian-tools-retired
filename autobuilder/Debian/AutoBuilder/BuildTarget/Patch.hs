@@ -17,7 +17,7 @@ import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
 import System.Process (proc, CreateProcess(cwd), showCommandForUser)
-import System.Process.Read (readModifiedProcessWithExitCode)
+import System.Process.Read (readCreateProcessWithExitCode)
 
 {-
 -- |Scan the flag list for Patch flag, and apply the patches
@@ -49,7 +49,7 @@ prepare package _buildOS patch base =
        liftIO $ createDirectoryIfMissing True copyDir
        tree <- liftIO $ copySourceTree baseTree copyDir
        subDir <- liftIO $ findSource (P.spec package) copyDir
-       (res, out, err) <- liftIO $ readModifiedProcessWithExitCode ((proc cmd args) {cwd = Just subDir}) patch
+       (res, out, err) <- liftIO $ readCreateProcessWithExitCode ((proc cmd args) {cwd = Just subDir}) patch
        case res of
          ExitFailure _ -> error (showCommandForUser cmd args ++ " -> " ++ show res ++
                                  "\ncwd:" ++ subDir ++
