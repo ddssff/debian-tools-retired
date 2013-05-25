@@ -1,3 +1,9 @@
+haskell-process-progress (0.5.1) unstable; urgency=low
+
+  * Switch dependency from process-extras to process-listlike.
+
+ -- David Fox <dsf@seereason.com>  Sat, 25 May 2013 08:22:42 -0700
+
 haskell-process-progress (0.5) unstable; urgency=low
 
   * Changes for process-extras-0.6.

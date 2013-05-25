@@ -9,7 +9,7 @@ Description:
   The autobuilder program is now shipped as a haskell source file
   which uses the autobuilder library.  To configure it make a copy of
   @\/usr\/bin\/AutoBuilder.hs@ to somewhere such as @~\/AutoBuilder.hs@, edit
-  the parameters in that file, and then use the command 
+  the parameters in that file, and then use the command
   @
     sudo runhaskell ~\/AutoBuilder.hs
   @
@@ -78,7 +78,7 @@ Library
       , old-time
       , parsec
       , process
-      , process-extras >= 0.6
+      , process-listlike >= 0.6
       , process-progress >= 0.5
       , pureMD5
       , regex-compat

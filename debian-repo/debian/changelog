@@ -1,3 +1,9 @@
+haskell-debian-repo (5.44.1) unstable; urgency=low
+
+  * Switch dependency from process-extras to process-listlike.
+
+ -- David Fox <dsf@seereason.com>  Sat, 25 May 2013 08:23:27 -0700
+
 haskell-debian-repo (5.44) unstable; urgency=low
 
   * Bump version past failed version 5.43.

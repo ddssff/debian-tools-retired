@@ -1,5 +1,5 @@
 Name:               process-progress
-Version:            0.5
+Version:            0.5.1
 Synopsis:           Run a process and do reportsing on its progress.
 Description:        Function to run a process and wrappers to provide different
                     types of feedback while it executes.
@@ -32,7 +32,7 @@ Library
   Build-depends:
     base >= 4 && < 5,
     process,
-    process-extras >= 0.6,
+    process-listlike >= 0.6,
     bytestring,
     deepseq,
     HUnit,
