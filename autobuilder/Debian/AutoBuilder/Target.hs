@@ -82,7 +82,7 @@ import System.Unix.Chroot (useEnv)
 import System.Process (proc, shell, CreateProcess(cwd), readProcessWithExitCode, showCommandForUser, readProcess)
 import System.Process.Progress (mergeToStdout, keepStdout, keepResult, collectOutputs,
                                 keepResult, runProcessF, runProcess, quieter, noisier, qPutStrLn, ePutStr, ePutStrLn)
-import System.Process.Read (readModifiedProcess)
+import System.Process.Read (readCreateProcess)
 import Text.PrettyPrint.ANSI.Leijen (Doc, text, pretty)
 import Text.Printf(printf)
 import Text.Regex(matchRegex, mkRegex)
@@ -439,7 +439,7 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint !target stat
             doDpkgSource True =
                 doDpkgSource' >>
                 return ()
-            doDpkgSource' = readModifiedProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
+            doDpkgSource' = readCreateProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
             path' = fromJust (dropPrefix root path)
             path = debdir buildTree
             root = rootPath (rootDir buildOS)
