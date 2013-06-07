@@ -47,8 +47,6 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-filepath-prof | ghc-prof
                , libghc-happstack-util-dev
                , libghc-happstack-util-prof
-               , libghc-listlike-instances-dev
-               , libghc-listlike-instances-prof
                , libghc-magic-dev
                , libghc-magic-prof
                , libghc-mtl-dev
@@ -110,7 +108,6 @@ Build-Depends-Indep: ghc-doc
                      , libghc-file-embed-doc
                      , libghc-filepath-doc | ghc-doc
                      , libghc-happstack-util-doc
-                     , libghc-listlike-instances-doc
                      , libghc-magic-doc
                      , libghc-mtl-doc
                      , libghc-network-doc

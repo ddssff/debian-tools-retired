@@ -67,8 +67,7 @@ Library
       , filepath
       , happstack-util
       , HaXml >= 1.22.5
-      , ListLike
-      , listlike-instances
+      , ListLike >= 4.0
       , magic
       , MIME >= 1.1
       , mtl
