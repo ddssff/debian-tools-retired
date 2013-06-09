@@ -90,29 +90,28 @@ Executable cabal-debian
    containers,
    data-lens
 
-if flag (tests)
-  Executable cabal-debian-tests
-   Main-Is: src/Tests.hs
-   GHC-Options: -Wall -O2 -threaded -rtsopts
-   Build-Depends:
-     ansi-wl-pprint,
-     base,
-     Cabal,
-     cabal-debian,
-     containers,
-     data-lens,
-     debian,
-     Diff,
-     directory,
-     filepath,
-     hsemail,
-     HUnit,
-     mtl,
-     parsec,
-     process,
-     pureMD5,
-     regex-tdfa,
-     syb,
-     text,
-     unix,
-     utf8-string
+-- Executable cabal-debian-tests
+--  Main-Is: src/Tests.hs
+--  GHC-Options: -Wall -O2 -threaded -rtsopts
+--  Build-Depends:
+--    ansi-wl-pprint,
+--    base,
+--    Cabal,
+--    cabal-debian,
+--    containers,
+--    data-lens,
+--    debian,
+--    Diff,
+--    directory,
+--    filepath,
+--    hsemail,
+--    HUnit,
+--    mtl,
+--    parsec,
+--    process,
+--    pureMD5,
+--    regex-tdfa,
+--    syb,
+--    text,
+--    unix,
+--    utf8-string
