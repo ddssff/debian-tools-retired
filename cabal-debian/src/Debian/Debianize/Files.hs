@@ -191,8 +191,8 @@ relFields rels =
     depField "Pre-Depends" (preDepends rels) ++
     depField "Breaks" (breaks rels) ++
     depField "Conflicts" (conflicts rels) ++
-    depField "Provides" (provides rels) ++
-    depField "Replaces" (replaces rels) ++
+    depField "Provides" (provides_ rels) ++
+    depField "Replaces" (replaces_ rels) ++
     depField "Built-Using" (builtUsing rels)
 
 depField :: [Char] -> Relations -> [Field' [Char]]

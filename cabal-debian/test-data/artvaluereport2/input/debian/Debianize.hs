@@ -2,6 +2,7 @@
 import Debian.Debianize
 import Data.Lens.Lazy
 import Debian.Debianize.Atoms as Atoms (depends, description)
+import Debian.Debianize.Details (seereasonDefaultAtoms)
 import Debian.Debianize.Types (Top(Top))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(..), Relation(Rel), VersionReq(SLT))
@@ -51,6 +52,7 @@ main =
                doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"}) .
                modL installCabalExec (Map.insertWith Set.union (BinPkgName "appraisalscope") (singleton ("lookatareport", "usr/bin"))) .
                setL changelog (Just log))
+              seereasonDefaultAtoms
        old <- inputDebianization (Top "test-data/artvaluereport2/output")
        -- The newest log entry gets modified when the Debianization is
        -- generated, it won't match so drop it for the comparison.

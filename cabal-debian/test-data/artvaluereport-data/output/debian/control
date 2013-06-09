@@ -175,6 +175,7 @@ Depends: ${shlibs:Depends}
          , ${misc:Depends}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Description: Data structures used by the fine art appraisal application
@@ -194,6 +195,7 @@ Depends: ${shlibs:Depends}
          , ${misc:Depends}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Description: Data structures used by the fine art appraisal application
@@ -214,6 +216,7 @@ Depends: ${shlibs:Depends}
          , ${misc:Depends}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Description: Data structures used by the fine art appraisal application

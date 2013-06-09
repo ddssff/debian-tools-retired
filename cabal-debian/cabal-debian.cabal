@@ -1,5 +1,5 @@
 Name:           cabal-debian
-Version:        3.3.2
+Version:        3.4
 License:        BSD3
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>
@@ -16,6 +16,11 @@ Description:
  Tool for creating debianizations of Haskell packages based on the .cabal
  file.  If apt-file is installed it will use it to discover what is the
  debian package name of a C library.
+
+Flag tests
+  Description: enable the unit test executable (disabled by default because it has a lot of wacky dependencies.)
+  Default: False
+  Manual: True
 
 Source-Repository head
   type: darcs
@@ -85,11 +90,29 @@ Executable cabal-debian
    containers,
    data-lens
 
-Executable cabal-debian-tests
- Main-Is: src/Tests.hs
- GHC-Options: -Wall -O2 -threaded -rtsopts
- Build-Depends:
-   base,
-   cabal-debian,
-   Diff,
-   HUnit
+if flag (tests)
+  Executable cabal-debian-tests
+   Main-Is: src/Tests.hs
+   GHC-Options: -Wall -O2 -threaded -rtsopts
+   Build-Depends:
+     ansi-wl-pprint,
+     base,
+     Cabal,
+     cabal-debian,
+     containers,
+     data-lens,
+     debian,
+     Diff,
+     directory,
+     filepath,
+     hsemail,
+     HUnit,
+     mtl,
+     parsec,
+     process,
+     pureMD5,
+     regex-tdfa,
+     syb,
+     text,
+     unix,
+     utf8-string

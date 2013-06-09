@@ -163,8 +163,8 @@ data PackageRelations
       , preDepends :: Relations
       , breaks :: Relations
       , conflicts :: Relations
-      , provides :: Relations
-      , replaces :: Relations
+      , provides_ :: Relations
+      , replaces_ :: Relations
       , builtUsing :: Relations
       } deriving (Eq, Ord, Read, Show, Data, Typeable)
 
@@ -177,8 +177,8 @@ newPackageRelations =
       , preDepends = []
       , breaks = []
       , conflicts = []
-      , provides = []
-      , replaces = []
+      , provides_ = []
+      , replaces_ = []
       , builtUsing = [] }
 
 -- ^ The different types of binary debs we can produce from a haskell package

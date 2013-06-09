@@ -33,8 +33,8 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-base-prof | ghc-prof
                , libghc-binary-dev | ghc
                , libghc-binary-prof | ghc-prof
-               , libghc-blaze-html-dev
-               , libghc-blaze-html-prof
+               , libghc-blaze-html-dev (>= 0.6) | libghc-blaze-html-5-dev (<< 0.6)
+               , libghc-blaze-html-prof (>= 0.6) | libghc-blaze-html-5-prof (<< 0.6)
                , libghc-blaze-markup-dev
                , libghc-blaze-markup-prof
                , libghc-bytestring-dev | ghc
@@ -65,8 +65,8 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-groom-prof
                , libghc-happstack-dev
                , libghc-happstack-prof
-               , libghc-happstack-authenticate-dev
-               , libghc-happstack-authenticate-prof
+               , libghc-happstack-authenticate-dev (>= 0.10) | libghc-happstack-authenticate-9-dev (<< 0.10)
+               , libghc-happstack-authenticate-prof (>= 0.10) | libghc-happstack-authenticate-9-prof (<< 0.10)
                , libghc-happstack-extra-dev
                , libghc-happstack-extra-prof
                , libghc-happstack-hsp-dev
@@ -174,7 +174,7 @@ Build-Depends-Indep: ghc-doc
                      , libghc-authenticate-doc
                      , libghc-base-doc | ghc-doc
                      , libghc-binary-doc | ghc-doc
-                     , libghc-blaze-html-doc
+                     , libghc-blaze-html-doc (>= 0.6) | libghc-blaze-html-5-doc (<< 0.6)
                      , libghc-blaze-markup-doc
                      , libghc-bytestring-doc | ghc-doc
                      , libghc-cereal-doc
@@ -190,7 +190,7 @@ Build-Depends-Indep: ghc-doc
                      , libghc-filepath-doc | ghc-doc
                      , libghc-groom-doc
                      , libghc-happstack-doc
-                     , libghc-happstack-authenticate-doc
+                     , libghc-happstack-authenticate-doc (>= 0.10)
                      , libghc-happstack-extra-doc
                      , libghc-happstack-hsp-doc
                      , libghc-happstack-scaffolding-doc (>= 0.23)
@@ -247,6 +247,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: Haskell modules for fine art appraisal applications
  Haskell modules for fine art appraisal applications
  .
@@ -263,6 +264,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: Haskell modules for fine art appraisal applications
  Haskell modules for fine art appraisal applications
  .
@@ -279,6 +281,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: Haskell modules for fine art appraisal applications
  Haskell modules for fine art appraisal applications
  .
@@ -295,6 +298,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: backup program for the appraisalreportonline.com site
   Install this somewhere other than where the server is running get
   automated backups of the database.
@@ -307,4 +311,5 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: Offline manipulation of appraisal database

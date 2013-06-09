@@ -93,6 +93,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: Create a debianization for a cabal package
  Tool for creating debianizations of Haskell packages based on the .cabal
  file.  If apt-file is installed it will use it to discover what is the
@@ -113,6 +114,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: Create a debianization for a cabal package
  Tool for creating debianizations of Haskell packages based on the .cabal
  file.  If apt-file is installed it will use it to discover what is the
@@ -134,6 +136,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: Create a debianization for a cabal package
  Tool for creating debianizations of Haskell packages based on the .cabal
  file.  If apt-file is installed it will use it to discover what is the
@@ -158,6 +161,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}, haskell-debian-utils (<< 3.59)
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: Create a debianization for a cabal package
  Tool for creating debianizations of Haskell packages based on the .cabal
  file.  If apt-file is installed it will use it to discover what is the

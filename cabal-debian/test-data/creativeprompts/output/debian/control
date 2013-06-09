@@ -180,6 +180,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description:  creativeprompts.com data files
   Static data files for creativeprompts.com
 
@@ -193,6 +194,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description:  Configuration for running the creativeprompts.com server
   Production version of the blog server, runs on port
   9021 with HTML validation turned off.
@@ -207,6 +209,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description:  Configuration for running the creativeprompts.com server
   Testing version of the blog server, runs on port
   8000 with HTML validation turned on.
@@ -222,6 +225,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: backup program for creativeprompts.com
   Install this somewhere other than creativeprompts.com to run automated
   backups of the database.

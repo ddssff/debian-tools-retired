@@ -6,6 +6,7 @@ import Data.Set as Set (insert, union, singleton)
 import Data.Text as Text (intercalate)
 import Debian.Debianize as Atoms
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
+import Debian.Debianize.Details (seereasonDefaultAtoms)
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), VersionReq(SLT))
 import Debian.Version (parseDebianVersion)
 import Prelude hiding (log)
@@ -13,7 +14,7 @@ import Prelude hiding (log)
 main :: IO ()
 main =
     do log <- inputChangeLog (Top ".")
-       new <- debianization (Top ".") (return . customize . setL changelog (Just log))
+       new <- debianization (Top ".") (return . customize . setL changelog (Just log)) seereasonDefaultAtoms
        old <- inputDebianization (Top ".")
        case compareDebianization old (copyFirstLogEntry old new) of
          "" -> return ()

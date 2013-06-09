@@ -48,6 +48,8 @@ module Debian.Debianize.Atoms
     , buildDepsIndep
     , depends
     , conflicts
+    , replaces
+    , provides
     , extraDevDeps
     -- * Debianization files and file fragments
     , rulesHead
@@ -228,6 +230,8 @@ data DebAtom
     | DHBackups String                            -- ^ Configure the executable to do incremental backups
     | Depends Relation				  -- ^ Says that the debian package should have this relation in Depends
     | Conflicts Relation			  -- ^ Says that the debian package should have this relation in Conflicts
+    | Provides Relation				  -- ^ Says that the debian package should have this relation in Provides
+    | Replaces Relation				  -- ^ Says that the debian package should have this relation in Replaces
     | DevDepends Relation			  -- ^ Limited version of Depends, put a dependency on the dev library package.  The only
                                                   -- reason to use this is because we don't yet know the name of the dev library package.
     deriving (Eq, Ord, Show, Typeable)
@@ -830,6 +834,34 @@ conflicts = lens g s
       s x atoms = Map.foldWithKey (\ b rels atoms' -> Set.fold (\ rel atoms'' -> insertAtom (Binary b) (Conflicts rel) atoms'') atoms' rels) (deleteAtoms p atoms) x
           where
             p (Binary _) (Conflicts _) = True
+            p _ _ = False
+
+-- | Map of extra install replaces for the package's binary debs.
+-- We should support all the other dependency fields - provides, replaces, etc.
+replaces :: Lens Atoms (Map BinPkgName (Set Relation))
+replaces = lens g s
+    where
+      g atoms = foldAtoms from Map.empty atoms
+          where
+            from (Binary b) (Replaces rel) x = Map.insertWith union b (singleton rel) x
+            from _ _ x = x
+      s x atoms = Map.foldWithKey (\ b rels atoms' -> Set.fold (\ rel atoms'' -> insertAtom (Binary b) (Replaces rel) atoms'') atoms' rels) (deleteAtoms p atoms) x
+          where
+            p (Binary _) (Replaces _) = True
+            p _ _ = False
+
+-- | Map of extra install provides for the package's binary debs.
+-- We should support all the other dependency fields - provides, replaces, etc.
+provides :: Lens Atoms (Map BinPkgName (Set Relation))
+provides = lens g s
+    where
+      g atoms = foldAtoms from Map.empty atoms
+          where
+            from (Binary b) (Provides rel) x = Map.insertWith union b (singleton rel) x
+            from _ _ x = x
+      s x atoms = Map.foldWithKey (\ b rels atoms' -> Set.fold (\ rel atoms'' -> insertAtom (Binary b) (Provides rel) atoms'') atoms' rels) (deleteAtoms p atoms) x
+          where
+            p (Binary _) (Provides _) = True
             p _ _ = False
 
 -- | Extra install dependencies for the devel library.  Redundant

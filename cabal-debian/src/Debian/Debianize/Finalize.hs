@@ -24,7 +24,7 @@ import Debian.Debianize.Atoms as Atoms
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                newBinaryDebDescription, modifyBinaryDeb,
                                                PackageType(Exec, Development, Profiling, Documentation, Utilities))
-import Debian.Debianize.Dependencies (debianName, binaryPackageDeps, binaryPackageConflicts, putBuildDeps)
+import Debian.Debianize.Dependencies (debianName, binaryPackageDeps, binaryPackageConflicts, binaryPackageProvides, binaryPackageReplaces, putBuildDeps)
 import Debian.Debianize.Goodies (describe, siteAtoms, serverAtoms, backupAtoms, execAtoms)
 import Debian.Debianize.Types (InstallFile(..))
 import Debian.Policy (PackageArchitectures(Any, All), Section(..))
@@ -87,8 +87,8 @@ binaryPackageRelations b typ deb =
     , preDepends = []
     , breaks = []
     , conflicts = [anyrel "${haskell:Conflicts}"] ++ binaryPackageConflicts b deb
-    , provides = [anyrel "${haskell:Provides}"]
-    , replaces = []
+    , provides_ = [anyrel "${haskell:Provides}"] ++ binaryPackageProvides b deb
+    , replaces_ = [anyrel "${haskell:Replaces}"] ++ binaryPackageReplaces b deb
     , builtUsing = []
     }
 

@@ -71,6 +71,10 @@ options =
              "Generalized --dev-dep - specify pairs A:B of debian binary package names, each A gets a Depends: B",
       Option "" ["conflicts"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL conflicts (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
              "Specify pairs A:B of debian binary package names, each A gets a Conflicts: B.  Note that B can have debian style version relations",
+      Option "" ["replaces"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL replaces (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
+             "Specify pairs A:B of debian binary package names, each A gets a Replaces: B.  Note that B can have debian style version relations",
+      Option "" ["provides"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL provides (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
+             "Specify pairs A:B of debian binary package names, each A gets a Provides: B.  Note that B can have debian style version relations",
       Option "" ["map-dep"] (ReqArg (\ pair atoms -> case break (== '=') pair of
                                                        (cab, (_ : deb)) -> modL extraLibMap (Map.insertWith Set.union cab (singleton (b deb))) atoms
                                                        (_, "") -> error "usage: --map-dep CABALNAME=DEBIANNAME") "CABALNAME=DEBIANNAME")

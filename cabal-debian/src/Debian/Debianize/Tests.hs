@@ -213,8 +213,8 @@ test3 =
                                                              , preDepends = []
                                                              , breaks = []
                                                              , Deb.conflicts = []
-                                                             , provides = []
-                                                             , replaces = []
+                                                             , provides_ = []
+                                                             , replaces_ = []
                                                              , builtUsing = [] }}]}) $
           (newDebianization log 7 (StandardsVersion 3 9 4 Nothing))
       log = ChangeLog [Entry { logPackage = "haskell-devscripts"
@@ -430,7 +430,7 @@ test7 :: Test
 test7 =
     TestLabel "test7" $
     TestCase (do new <- readProcessWithExitCode "runhaskell" ["-isrc", "debian/Debianize.hs"] ""
-                 assertEqual "test7" (ExitSuccess, "", "Ignored: ./debian/cabal-debian.manpages\nIgnored: ./debian/cabal-debian.1\n") new)
+                 assertEqual "test7" (ExitSuccess, "", "Ignored: ./debian/cabal-debian.1\nIgnored: ./debian/cabal-debian.manpages\n") new)
 
 test8 :: Test
 test8 =

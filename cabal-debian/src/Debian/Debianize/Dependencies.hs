@@ -14,6 +14,8 @@ module Debian.Debianize.Dependencies
     , filterMissing
     , binaryPackageDeps
     , binaryPackageConflicts
+    , binaryPackageProvides
+    , binaryPackageReplaces
     ) where
 
 import Data.Char (isSpace, toLower)
@@ -29,7 +31,7 @@ import Data.Version (showVersion)
 import Debian.Control
 import Debian.Debianize.Atoms (Atoms, packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary,
                                missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
-                               packageInfo, depends, conflicts, control)
+                               packageInfo, depends, conflicts, provides, replaces, control)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile as Debian (PackageType(..), SourceDebDescription(..))
 import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), DebType(..))
@@ -398,3 +400,9 @@ binaryPackageDeps b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (ge
 
 binaryPackageConflicts :: BinPkgName -> Atoms -> [[Relation]]
 binaryPackageConflicts b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL conflicts atoms))
+
+binaryPackageReplaces :: BinPkgName -> Atoms -> [[Relation]]
+binaryPackageReplaces b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL replaces atoms))
+
+binaryPackageProvides :: BinPkgName -> Atoms -> [[Relation]]
+binaryPackageProvides b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL provides atoms))

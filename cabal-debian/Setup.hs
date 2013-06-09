@@ -12,7 +12,7 @@ main = defaultMainWithHooks simpleUserHooks {
                  case buildDir lbi of
                    "dist-ghc/build" -> return ()
                    _ -> runTestScript lbi
-       , runTests = \ _ _ _ lbi -> runTestScript lbi
+       -- , runTests = \ _ _ _ lbi -> runTestScript lbi
        }
 
 runTestScript lbi =

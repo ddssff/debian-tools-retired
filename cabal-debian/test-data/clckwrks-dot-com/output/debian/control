@@ -85,6 +85,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: clckwrks.com
  .
  An executable built from the clckwrks-dot-com package.
@@ -100,6 +101,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: clckwrks.com
  .
  An executable built from the clckwrks-dot-com package.

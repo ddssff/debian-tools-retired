@@ -1,3 +1,9 @@
+haskell-cabal-debian (3.4) unstable; urgency=low
+
+  * Add support for modifying the Provides and Replaces fields.
+
+ -- David Fox <dsf@seereason.com>  Sun, 09 Jun 2013 14:18:39 -0700
+
 haskell-cabal-debian (3.3.2) unstable; urgency=low
 
   * Changes for debian-3.71
