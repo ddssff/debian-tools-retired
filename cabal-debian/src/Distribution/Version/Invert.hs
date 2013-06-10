@@ -7,6 +7,7 @@ module Distribution.Version.Invert
 import Distribution.Version (Version(Version, versionBranch, versionTags), VersionRange, fromVersionIntervals, asVersionIntervals, mkVersionIntervals,
                              LowerBound(LowerBound), UpperBound(UpperBound, NoUpperBound), Bound(InclusiveBound, ExclusiveBound))
 
+-- | This function belongs in Cabal, see http://hackage.haskell.org/trac/hackage/ticket/935.
 invertVersionRange :: VersionRange -> VersionRange
 invertVersionRange = fromVersionIntervals . maybe (error "invertVersionRange") id . mkVersionIntervals . invertVersionIntervals . asVersionIntervals
 

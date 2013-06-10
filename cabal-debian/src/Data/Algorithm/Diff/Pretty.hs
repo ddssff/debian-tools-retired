@@ -6,6 +6,8 @@ import Data.Algorithm.Diff (Diff(..))
 import Data.Monoid (mconcat, (<>))
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), Doc, text, empty)
 
+-- | Format the output of 'contextDiff' to look approximately like the
+-- output of the unix diff command.
 prettyDiff :: (Pretty a, Pretty b, Pretty c) => a -> b -> [[Diff [c]]] -> Doc
 prettyDiff _ _ [] = empty
 prettyDiff old new hunks =
