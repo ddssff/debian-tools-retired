@@ -1,3 +1,10 @@
+haskell-cabal-debian (3.4.1) unstable; urgency=low
+
+  * Remove call to test script in Setup.hs
+  * Remove unused dependencies
+
+ -- David Fox <dsf@seereason.com>  Mon, 10 Jun 2013 09:12:38 -0700
+
 haskell-cabal-debian (3.4) unstable; urgency=low
 
   * Add support for modifying the Provides and Replaces fields.

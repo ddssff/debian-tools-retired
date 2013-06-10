@@ -1,5 +1,5 @@
 Name:           cabal-debian
-Version:        3.4
+Version:        3.4.1
 License:        BSD3
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>
@@ -31,9 +31,7 @@ Library
  GHC-Options: -threaded -Wall -O2
  Build-Depends:
    ansi-wl-pprint,
-   applicative-extras,
    base < 5,
-   bytestring,
    Cabal >= 1.9,
    containers,
    data-lens,
@@ -44,7 +42,6 @@ Library
    hsemail,
    HUnit,
    mtl,
-   network,
    parsec >= 3,
    process,
    pureMD5,
@@ -52,7 +49,6 @@ Library
    syb,
    text,
    unix,
-   Unixutils >= 1.50,
    utf8-string
  Exposed-Modules:
    Data.Algorithm.Diff.Context
