@@ -157,6 +157,7 @@ Depends: ${shlibs:Depends}
 	 , ${misc:Depends}
 	 , apt-file
          , debian-policy
+         , debhelper
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}, haskell-debian-utils (<< 3.59)

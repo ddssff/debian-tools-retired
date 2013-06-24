@@ -33,7 +33,7 @@ import Debian.Debianize.Atoms as Atoms
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Types (Top(Top, unTop))
-import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe)
+import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read')
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer, haskellMaintainer)
@@ -115,7 +115,7 @@ parseSourceDebDescription (Paragraph fields) binaryParagraphs =
       readField (Field ("Vcs-Svn", s)) (desc, unrecognized) = (desc {vcsFields = insert (VCSSvn (pack s)) (vcsFields desc)}, unrecognized)
       readField field@(Field ('X' : fld, value)) (desc, unrecognized) =
           case span (`elem` "BCS") fld of
-            (xs, '-' : more) -> (desc {xFields = insert (XField (fromList (map (read' . (: [])) xs)) (pack more) (pack value)) (xFields desc)}, unrecognized)
+            (xs, '-' : more) -> (desc {xFields = insert (XField (fromList (map (read' (\ s -> error $ "parseSourceDebDescription: " ++ show s) . (: [])) xs)) (pack more) (pack value)) (xFields desc)}, unrecognized)
             _ -> (desc, field : unrecognized)
       readField field (desc, unrecognized) = (desc, field : unrecognized)
 
@@ -160,9 +160,6 @@ findMap field f fields =
       findMap' (Field (fld, val)) x = if fld == field then Just (f val) else x
       findMap' _ x = x
 
-read' :: Read a => String -> a
-read' s = trace ("read " ++ show s) (read s)
-
 stripField :: ControlFunctions a => Field' a -> Field' a
 stripField (Field (a, b)) = Field (a, stripWS b)
 stripField x = x
@@ -201,7 +198,7 @@ inputAtoms _ path xs | elem path ["control"] = return xs
 inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ (either (modL warning . Set.insert) (setL sourceFormat . Just) (readSourceFormat text)) xs
 inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ setL watch (Just text) xs
 inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> return $ setL rulesHead (Just text) xs
-inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> return $ setL compat (Just (read (unpack text))) xs
+inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> return $ setL compat (Just (read' (\ s -> error $ "compat: " ++ show s) (unpack text))) xs
 inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> return $ setL copyright (Just (Right text)) xs
 inputAtoms debian name@"changelog" xs =
     readFile (debian </> name) >>= return . parseChangeLog . unpack >>= \ log -> return $ setL changelog (Just log) xs

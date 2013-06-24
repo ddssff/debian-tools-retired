@@ -44,6 +44,7 @@ import Data.Generics (Data, Typeable)
 import Data.Maybe (mapMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text, pack, unpack, strip)
+import Debian.Debianize.Utility (read')
 import Debian.Relation (BinPkgName)
 import Debian.Version (DebianVersion, parseDebianVersion, version)
 import System.Environment (getEnvironment)
@@ -83,15 +84,19 @@ errorLogBaseName = "error.log"
 accessLogBaseName :: String
 accessLogBaseName = "access.log"
 
-debianPackageVersion :: String -> IO DebianVersion
+debianPackageVersion :: String -> IO (Maybe DebianVersion)
 debianPackageVersion name =
     readProcess "dpkg-query" ["--show", "--showformat=${version}", name] "" >>=
-    return . parseDebianVersion
+    return . parseDebianVersion'
+    where
+      -- This should maybe be the real parseDebianVersion
+      parseDebianVersion' "" = Nothing
+      parseDebianVersion' s = Just (parseDebianVersion s)
 
 -- | Assumes debhelper is installed
-getDebhelperCompatLevel :: IO Int
+getDebhelperCompatLevel :: IO (Maybe Int)
 getDebhelperCompatLevel =
-    debianPackageVersion "debhelper" >>= return . read . takeWhile (/= '.') . version
+    debianPackageVersion "debhelper" >>= return . fmap (read . takeWhile (/= '.') . version)
 
 data StandardsVersion = StandardsVersion Int Int Int (Maybe Int) deriving (Eq, Ord, Show, Data, Typeable)
 
@@ -100,14 +105,19 @@ instance Pretty StandardsVersion where
     pretty (StandardsVersion a b c Nothing) = text $ show a <> "." <> show b <> "." <> show c
 
 -- | Assumes debian-policy is installed
-getDebianStandardsVersion :: IO StandardsVersion
-getDebianStandardsVersion = debianPackageVersion "debian-policy" >>= \ v -> return (parseStandardsVersion (version v))
+getDebianStandardsVersion :: IO (Maybe StandardsVersion)
+getDebianStandardsVersion = debianPackageVersion "debian-policy" >>= return . fmap (parseStandardsVersion . version)
 
 parseStandardsVersion :: String -> StandardsVersion
 parseStandardsVersion s =
     case filter (/= ".") (groupBy (\ a b -> (a == '.') == (b == '.')) s) of
-      (a : b : c : d : _) -> StandardsVersion (read a) (read b) (read c) (Just (read d))
-      (a : b : c : _) -> StandardsVersion (read a) (read b) (read c) Nothing
+      (a : b : c : d : _) -> StandardsVersion (read' (\ s -> error $ "StandardsVersion" ++ show s) a)
+                                              (read' (\ s -> error $ "StandardsVersion" ++ show s) b)
+                                              (read' (\ s -> error $ "StandardsVersion" ++ show s) c)
+                                              (Just (read' (\ s -> error $ "StandardsVersion" ++ show s) d))
+      (a : b : c : _) -> StandardsVersion (read' (\ s -> error $ "StandardsVersion" ++ show s) a)
+                                          (read' (\ s -> error $ "StandardsVersion" ++ show s) b)
+                                          (read' (\ s -> error $ "StandardsVersion" ++ show s) c) Nothing
       _ -> error $ "Invalid Standards-Version string: " ++ show s
 
 data SourceFormat

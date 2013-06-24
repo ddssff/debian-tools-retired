@@ -11,6 +11,7 @@ import Data.Version (parseVersion)
 import Debian.Debianize.Atoms -- (Atoms, depends, conflicts)
 import Debian.Debianize.Goodies (doExecutable)
 import Debian.Debianize.Types (InstallFile(..), DebAction(..))
+import Debian.Debianize.Utility (read')
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relation(..))
@@ -34,7 +35,7 @@ compileArgs args atoms =
 -- | Options that modify other atoms.
 options :: [OptDescr (Atoms -> Atoms)]
 options =
-    [ Option "v" ["verbose"] (ReqArg (\ s atoms -> setL verbosity (read s) atoms) "n")
+    [ Option "v" ["verbose"] (ReqArg (\ s atoms -> setL verbosity (read' (\ s -> error $ "verbose: " ++ show s) s) atoms) "n")
              "Change build verbosity",
       Option "n" ["dry-run", "compare"] (NoArg (\ atoms -> setL dryRun True atoms))
              "Just compare the existing debianization to the one we would generate.",
@@ -42,7 +43,7 @@ options =
              "Show this help text",
       Option "" ["debianize"] (NoArg (\ atoms -> setL debAction Debianize atoms))
              "Generate a new debianization, replacing any existing one.  One of --debianize or --substvar is required.",
-      Option "" ["substvar"] (ReqArg (\ name atoms -> setL debAction (SubstVar (read name)) atoms) "Doc, Prof, or Dev")
+      Option "" ["substvar"] (ReqArg (\ name atoms -> setL debAction (SubstVar (read' (\ s -> error $ "substvar: " ++ show s) name)) atoms) "Doc, Prof, or Dev")
              (unlines ["Write out the list of dependencies required for the dev, prof or doc package depending",
                        "on the argument.  This value can be added to the appropriate substvars file."]),
       Option "" ["executable"] (ReqArg (\ path x -> executableOption path (\ bin e -> doExecutable bin e x)) "SOURCEPATH or SOURCEPATH:DESTDIR")

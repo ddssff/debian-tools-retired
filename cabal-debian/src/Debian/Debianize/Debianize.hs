@@ -42,7 +42,7 @@ import Debian.Debianize.Input (inputDebianization, inputCabalization, inputLicen
 import Debian.Debianize.Options (options, compileArgs)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types (DebAction(..), Top(Top, unTop))
-import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty, replaceFile, zipMaps, indent)
+import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty, replaceFile, zipMaps, indent, read')
 import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel)
 import Debian.Relation (SrcPkgName(..), BinPkgName(BinPkgName), Relation(Rel))
 import Debian.Release (parseReleaseName)
@@ -82,7 +82,7 @@ cabalDebian defaultAtoms =
 
 compileEnvironmentArgs :: Atoms -> IO Atoms
 compileEnvironmentArgs atoms0 =
-    (compileArgs <$> (read <$> getEnv "CABALDEBIAN") <*> pure atoms0) `catchIOError` const (return atoms0)
+    (compileArgs <$> (read' (\ s -> error $ "compileEnvrionmentArgs: " ++ show s) <$> getEnv "CABALDEBIAN") <*> pure atoms0) `catchIOError` const (return atoms0)
 
 compileCommandlineArgs :: Atoms -> IO Atoms
 compileCommandlineArgs atoms0 = compileArgs <$> getArgs <*> pure atoms0
@@ -161,13 +161,13 @@ debianization top customize defaultAtoms =
 debianization' :: String              -- ^ current date
                -> Maybe Text          -- ^ copyright
                -> NameAddr            -- ^ maintainer
-               -> Int		      -- ^ Default standards version
+               -> Maybe Int	      -- ^ Default standards version
                -> Maybe ChangeLog
                -> Atoms               -- ^ Debianization specification
                -> Atoms               -- ^ New debianization
 debianization' date copy maint level log deb =
     finalizeDebianization $
-    modL compat (maybe (Just level) Just) $
+    modL compat (maybe level Just) $
     modL changelog (maybe log Just) $
     setL sourcePriority (Just Optional) $
     setL sourceSection (Just (MainSection "haskell")) $

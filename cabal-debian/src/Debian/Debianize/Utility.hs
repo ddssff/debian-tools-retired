@@ -26,6 +26,8 @@ module Debian.Debianize.Utility
     , foldEmpty
     , maybeL
     , indent
+    , maybeRead
+    , read'
     ) where
 
 import Control.Applicative ((<$>))
@@ -36,7 +38,7 @@ import Data.Char (isSpace)
 import Data.List as List (isSuffixOf, intercalate, map, lines)
 import Data.Lens.Lazy (Lens, modL)
 import Data.Map as Map (Map, foldWithKey, empty, fromList, findWithDefault, insert, map, lookup)
-import Data.Maybe (catMaybes, mapMaybe)
+import Data.Maybe (catMaybes, mapMaybe, listToMaybe, fromMaybe)
 import Data.Set (Set, toList)
 import qualified Data.Set as Set
 import Data.Text as Text (Text, unpack, lines)
@@ -234,3 +236,12 @@ maybeL lens mb x = modL lens (maybe mb Just) x
 
 indent :: [Char] -> String -> String
 indent prefix text = unlines (List.map (prefix ++) (List.lines text))
+
+maybeRead :: Read a => String -> Maybe a
+maybeRead = fmap fst . listToMaybe . reads
+
+read' :: Read a => (String -> a) -> String -> a
+read' f s = fromMaybe (f s) (maybeRead s)
+
+-- read' :: Read a => String -> a
+-- read' s = trace ("read " ++ show s) (read s)

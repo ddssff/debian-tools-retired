@@ -60,21 +60,21 @@ defaultAtoms =
 -- | Create a Debianization based on a changelog entry and a license
 -- value.  Uses the currently installed versions of debhelper and
 -- debian-policy to set the compatibility levels.
-newDebianization :: ChangeLog -> Int -> StandardsVersion -> Atoms
+newDebianization :: ChangeLog -> Maybe Int -> Maybe StandardsVersion -> Atoms
 newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ = error "defaultDebianization: Invalid changelog entry"
 newDebianization (log@(ChangeLog (entry : _))) level standards =
     setL changelog (Just log) $
-    setL compat (Just level) $
+    setL compat level $
     modL control (\ x -> x { source = Just (SrcPkgName (logPackage entry))
                            , maintainer = (either error Just (parseMaintainer (logWho entry)))
-                           , standardsVersion = Just standards }) $
+                           , standardsVersion = standards }) $
     defaultAtoms
 newDebianization _ _ _ = error "Invalid changelog"
 
-newDebianization' :: Int -> StandardsVersion -> Atoms -> Atoms
+newDebianization' :: Maybe Int -> Maybe StandardsVersion -> Atoms -> Atoms
 newDebianization' level standards atoms =
-    setL compat (Just level) .
-    modL control (\ x -> x { standardsVersion = Just standards }) $ atoms
+    setL compat level .
+    modL control (\ x -> x { standardsVersion = standards }) $ atoms
 
 tests :: Test
 tests = TestLabel "Debianization Tests" (TestList [test1, test2, test3, test4, test5, test6, test7, test8, test9])
@@ -83,7 +83,7 @@ test1 :: Test
 test1 =
     TestLabel "test1" $
     TestCase (do level <- getDebhelperCompatLevel
-                 standards <- getDebianStandardsVersion
+                 standards <- getDebianStandardsVersion :: IO (Maybe StandardsVersion)
                  let deb = finalizeDebianization $ setL copyright (Just (Left BSD3)) $
                            newDebianization (ChangeLog [testEntry]) level standards
                  assertEqual "test1" [] (diffDebianizations testDeb1 deb))
@@ -108,7 +108,7 @@ test1 =
                                                   [Rel (BinPkgName "ghc-prof") Nothing Nothing]]
                         , buildDependsIndep = [[Rel (BinPkgName "ghc-doc") Nothing Nothing]]
                         }) $
-          (newDebianization log 9 (StandardsVersion 3 9 3 (Just 1)))
+          (newDebianization log (Just 9) (Just (StandardsVersion 3 9 3 (Just 1))))
       log = ChangeLog [Entry { logPackage = "haskell-cabal-debian"
                              , logVersion = buildDebianVersion Nothing "2.6.2" Nothing
                              , logDists = [ReleaseName {relName = "unstable"}]
@@ -145,7 +145,7 @@ test2 =
                                   [Rel (BinPkgName "ghc-prof") Nothing Nothing]],
                   buildDependsIndep = [[Rel (BinPkgName "ghc-doc") Nothing Nothing]]
                 }) $
-          (newDebianization log 9 (StandardsVersion 3 9 3 (Just 1)))
+          (newDebianization log (Just 9) (Just (StandardsVersion 3 9 3 (Just 1))))
       log = ChangeLog [Entry {logPackage = "haskell-cabal-debian",
                               logVersion = Debian.Version.parseDebianVersion ("2.6.2" :: String),
                               logDists = [ReleaseName {relName = "unstable"}],
@@ -216,7 +216,7 @@ test3 =
                                                              , provides_ = []
                                                              , replaces_ = []
                                                              , builtUsing = [] }}]}) $
-          (newDebianization log 7 (StandardsVersion 3 9 4 Nothing))
+          (newDebianization log (Just 7) (Just (StandardsVersion 3 9 4 Nothing)))
       log = ChangeLog [Entry { logPackage = "haskell-devscripts"
                              , logVersion = Debian.Version.parseDebianVersion ("0.8.13" :: String)
                              , logDists = [ReleaseName {relName = "experimental"}]
@@ -243,7 +243,7 @@ test4 =
       customize old atoms =
           inputCabalization (Top "test-data/clckwrks-dot-com/input") atoms >>=
           return .
-          newDebianization' 7 (StandardsVersion 3 9 4 Nothing) .
+          newDebianization' (Just 7) (Just (StandardsVersion 3 9 4 Nothing)) .
           modL control (\ y -> y {homepage = Just "http://www.clckwrks.com/"}) .
           setL sourceFormat (Just Native3) .
           modL missingDependencies (insert (BinPkgName "libghc-clckwrks-theme-clckwrks-doc")) .
@@ -333,8 +333,8 @@ test5 :: Test
 test5 =
     TestLabel "test5" $
     TestCase (do old <- inputDebianization (Top "test-data/creativeprompts/output")
-                 let standards = fromMaybe (error "test5") (standardsVersion (getL control old))
-                     level = fromMaybe (error "test5") (getL compat old)
+                 let standards = standardsVersion (getL control old)
+                     level = getL compat old
                  new <- debianization (Top "test-data/creativeprompts/input")
                           (return .
                            setL sourceFormat (Just Native3) .
@@ -443,7 +443,7 @@ test8 =
                             modL control (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) .
                             setL sourceFormat (Just Native3) .
                             setL changelog (Just log) .
-                            (newDebianization' 7 (StandardsVersion 3 9 3 Nothing)))
+                            (newDebianization' (Just 7) (Just (StandardsVersion 3 9 3 Nothing))))
                            defaultAtoms
                   assertEqual "test8" [] (diffDebianizations old (copyChangelog old new))
              )
@@ -475,7 +475,7 @@ test9 =
                                               , "AlexWrapper-posn"
                                               , "AlexWrapper-posn-bytestring"
                                               , "AlexWrapper-strict-bytestring"]) .
-                            newDebianization' 7 (StandardsVersion 3 9 3 Nothing))
+                            newDebianization' (Just 7) (Just (StandardsVersion 3 9 3 Nothing)))
                            defaultAtoms
                   assertEqual "test9" [] (diffDebianizations old (copyFirstLogEntry old new)))
 
