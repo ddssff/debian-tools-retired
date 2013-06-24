@@ -1,3 +1,10 @@
+haskell-cabal-debian (3.4.2) unstable; urgency=low
+
+  * Notify user when debhelper isn't installed.
+  * Avoid use of partial function read
+
+ -- David Fox <dsf@seereason.com>  Mon, 24 Jun 2013 13:51:51 -0700
+
 haskell-cabal-debian (3.4.1) unstable; urgency=low
 
   * Remove call to test script in Setup.hs
