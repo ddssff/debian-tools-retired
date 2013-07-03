@@ -4,6 +4,7 @@ module Debian.AutoBuilder.BuildTarget.DebDir
     , prepare
     ) where
 
+import Control.Exception as E (catch)
 import Control.Monad.Trans (liftIO)
 import Data.ByteString.Lazy.Char8 (pack)
 import Data.Digest.Pure.MD5 (md5)
@@ -13,9 +14,6 @@ import Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)
 import Debian.Version (version)
-#if __GLASGOW_HASKELL__ < 706
-import Prelude hiding (catch)
-#endif
 import Debian.Repo
 import System.Directory
 import System.FilePath ((</>))

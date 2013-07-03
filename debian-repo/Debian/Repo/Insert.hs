@@ -639,7 +639,7 @@ deleteSourcePackages keyname repo packages =
       doIndex (release, index) = getEntries release index >>= put release index . List.partition (victim release index)
       put :: Release -> PackageIndex -> ([BinaryPackage], [BinaryPackage]) -> IO Release
       put release index (junk, keep) =
-          when (junk /= []) (qPutStrLn ("Removing packages from " ++ show (F.pretty (fromLocalRepository repo, release, index)) ++ ": " ++ intercalate " " (List.map (show . F.pretty . packageID) junk))) >>
+          when (junk /= []) (qPutStrLn ("Removing packages from " ++ show (F.pretty (fromLocalRepository repo, release, index)) ++ ":\n  " ++ intercalate "\n  " (List.map (show . F.pretty . packageID) junk))) >>
           putIndex' keyname release index keep
       indexes' = Set.fold Set.union Set.empty (Set.map (\ (r, _) -> Set.fromList (List.map (r,) (packageIndexList r))) indexes) -- concatMap allIndexes (Set.toList indexes)
       (indexes, invalid) = Set.partition (\ (_, i) -> packageIndexArch i == Source) (Set.fromList (List.map (\ (r, i, _) -> (r, i)) packages))

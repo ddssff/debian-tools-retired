@@ -18,7 +18,7 @@ module Debian.Debianize.Debianize
     ) where
 
 import Control.Applicative ((<$>), (<*>), pure)
-import Control.Exception (catch, throw)
+import Control.Exception as E (catch, throw)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Lens.Lazy (getL, setL, modL)
@@ -51,11 +51,7 @@ import Debian.Time (getCurrentLocalRFC822Time)
 import Distribution.License (License(AllRightsReserved))
 import Distribution.Package (PackageIdentifier(..))
 import qualified Distribution.PackageDescription as Cabal
-#if __GLASGOW_HASKELL__ < 706
-import Prelude hiding (writeFile, unlines, catch)
-#else
 import Prelude hiding (writeFile, unlines)
-#endif
 import System.Console.GetOpt (usageInfo)
 import System.Directory (doesFileExist, Permissions(executable), getPermissions, setPermissions, createDirectoryIfMissing)
 import System.Environment (getArgs, getEnv, getProgName, withArgs)
@@ -150,7 +146,7 @@ debianization top customize defaultAtoms =
                 compileCommandlineArgs >>=
                 customize >>=
                 inputCabalization top
-       log <- (Just <$> inputChangeLog top) `catch` (\ (_ :: IOError) -> return Nothing)
+       log <- (Just <$> inputChangeLog top) `E.catch` (\ (_ :: IOError) -> return Nothing)
        date <- getCurrentLocalRFC822Time
        maint <- inputMaintainer atoms >>= maybe (error "Missing value for --maintainer") return
        level <- getDebhelperCompatLevel

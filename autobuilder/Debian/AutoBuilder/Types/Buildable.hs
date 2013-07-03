@@ -15,7 +15,7 @@ module Debian.AutoBuilder.Types.Buildable
     ) where
 
 import Control.Applicative.Error (Failing(Success, Failure), ErrorMsg)
-import Control.Exception (SomeException, try, catch, throw)
+import Control.Exception as E (SomeException, try, catch, throw)
 import Control.Monad(when)
 import Control.Monad.Trans (liftIO)
 import Data.List (intercalate)
@@ -39,9 +39,6 @@ import Debian.Repo.SourceTree (DebianBuildTree(..), control, entry, subdir, debd
                                DebianSourceTree(..), findSourceTree {-, SourceTree(dir')-})
 import Debian.Repo.Types (AptCache(rootDir), EnvRoot(rootPath))
 import qualified Debian.Version
-#if __GLASGOW_HASKELL__ < 706
-import Prelude hiding (catch)
-#endif
 import System.Directory(renameDirectory)
 import System.FilePath (takeExtension, (</>))
 import System.IO.Error (isAlreadyExistsError)
@@ -195,7 +192,7 @@ prepareBuild _cache os target =
 -- 'createSymbolicLink' raises EEXIST.
 forceLink :: FilePath -> FilePath -> IO ()
 forceLink target linkName =
-    createLink target linkName `catch`
+    createLink target linkName `E.catch`
       (\ e -> if isAlreadyExistsError e 
               then do removeLink linkName
                       createLink target linkName

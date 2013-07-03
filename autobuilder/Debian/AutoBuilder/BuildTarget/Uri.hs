@@ -10,7 +10,7 @@ module Debian.AutoBuilder.BuildTarget.Uri
 
 import Control.Exception (SomeException)
 import Control.Monad
-import "MonadCatchIO-mtl" Control.Monad.CatchIO (catch)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B (empty, readFile)
 import Data.Digest.Pure.MD5 (md5)
@@ -24,9 +24,6 @@ import qualified Debian.Repo as R
 import Debian.Repo.Monads.Top (sub)
 import Debian.URI
 import Magic
-#if __GLASGOW_HASKELL__ < 706
-import Prelude hiding (catch)
-#endif
 import System.FilePath (splitFileName, (</>))
 import System.Directory
 import System.Process (shell)
@@ -61,7 +58,7 @@ prepare c package u s =
                True ->
                    (liftIO (B.readFile tar >>= return . show . md5) >>= \ realSum ->
                     if realSum == s then return True else error "checksum mismatch")
-                     `catch` (\ (_ :: SomeException) -> liftIO (removeRecursiveSafely tar) >> return False)
+                     `IO.catch` (\ (_ :: SomeException) -> liftIO (removeRecursiveSafely tar) >> return False)
                False -> return False
 
       -- See if the file is already available in the checksum directory
@@ -86,15 +83,15 @@ prepare c package u s =
           (tarball u s) >>= \ tar ->
           (liftIO (B.readFile tar >>= return . show . md5) >>= \ realSum ->
            if realSum == s then return realSum else error ("Checksum mismatch for " ++ tar ++ ": expected " ++ s ++ ", saw " ++ realSum ++ "."))
-            `catch` (\ (e :: SomeException) -> error ("Checksum failure for " ++ tar ++ ": " ++ show e))
+            `IO.catch` (\ (e :: SomeException) -> error ("Checksum failure for " ++ tar ++ ": " ++ show e))
       unpackTarget :: MonadDeb m => String -> m (URI, FilePath, R.SourceTree)
       unpackTarget realSum =
           rmdir >> mkdir >> untar >>= read >>= search >>= verify
           where
-            rmdir = sourceDir s >>= \ src -> (liftIO (removeDirectoryRecursive src) `catch` (\ (_ :: SomeException) -> return ()))
+            rmdir = sourceDir s >>= \ src -> (liftIO (removeDirectoryRecursive src) `IO.catch` (\ (_ :: SomeException) -> return ()))
             -- Create the unpack directory
             mkdir = sourceDir s >>= \ src ->
-                    (liftIO (createDirectoryIfMissing True src) `catch` (\ (e :: SomeException) -> error ("Could not create " ++ src ++ ": " ++ show e)))
+                    (liftIO (createDirectoryIfMissing True src) `IO.catch` (\ (e :: SomeException) -> error ("Could not create " ++ src ++ ": " ++ show e)))
             untar =
                 do magic <- liftIO $ magicOpen []
                    liftIO $ magicLoadDefault magic
@@ -117,7 +114,7 @@ prepare c package u s =
             checkContents [] = error ("Empty tarball? " ++ show (mustParseURI u))
             checkContents [subdir] =
                 sourceDir s >>= \ src ->
-                (liftIO (R.findSourceTree (src </> subdir))) `catch` (\ (_ :: SomeException) -> liftIO (R.findSourceTree src))
+                (liftIO (R.findSourceTree (src </> subdir))) `IO.catch` (\ (_ :: SomeException) -> liftIO (R.findSourceTree src))
             checkContents _ = sourceDir s >>= \ src -> liftIO (R.findSourceTree src)
             verify tree = return (mustParseURI u, realSum, tree)
 
