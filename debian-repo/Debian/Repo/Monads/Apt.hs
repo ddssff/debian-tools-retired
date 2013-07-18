@@ -11,8 +11,6 @@ module Debian.Repo.Monads.Apt
     -- * AptIO Monad
     , runAptIO
     , runAptT
-    , tryAB
-    , tryJustAB
     -- * State
     , AptState
     , initState
@@ -84,32 +82,6 @@ runAptIO action = (runStateT action) initState >>= \ (a, _) -> return a
 
 runAptT :: Monad m => AptIOT m a -> m a
 runAptT action = (runStateT action) initState >>= return . fst
-
--- |Implementation of try for the AptIO monad.  If the task throws
--- an exception the initial state will be restored.
-tryAB :: Exception e => AptIO a -> AptIO (Either e a)
-tryAB task =
-    do state <- get
-       mapStateT (try' state) task
-    where
-      try' state task' =
-          do result <- try task'
-             case result of
-               Left e -> return (Left e, state)
-               Right (a, state') -> return (Right a, state')
-
--- |Implementation of try for the AptIO monad.  If the task throws
--- an exception the initial state will be restored.
-tryJustAB :: Exception e => (e -> Maybe b) -> AptIO a -> AptIO (Either b a)
-tryJustAB f task =
-    do state <- get
-       mapStateT (tryJust' state) task
-    where
-      tryJust' state task' =
-          do result <- tryJust f task'
-             case result of
-               Left b -> return (Left b, state)
-               Right (a, state') -> return (Right a, state')
 
 -- |The initial output state - at the beginning of the line, no special handle
 -- state information, no repositories in the repository map.
