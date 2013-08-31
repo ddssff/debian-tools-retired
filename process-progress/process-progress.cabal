@@ -1,5 +1,5 @@
 Name:               process-progress
-Version:            0.5.1
+Version:            0.5.2
 Synopsis:           Run a process and do reportsing on its progress.
 Description:        Function to run a process and wrappers to provide different
                     types of feedback while it executes.
@@ -15,7 +15,7 @@ Extra-source-files:
 
 source-repository head
   Type:             darcs
-  Location:         http://src.seereason.com/process-progress
+  Location:         http://src.seereason.com/debian-tools/process-progress
 
 Library
   ghc-options:      -Wall -O2 -threaded
