@@ -1,6 +1,7 @@
 haskell-debian-repo (5.44.1) unstable; urgency=low
 
   * Switch dependency from process-extras to process-listlike.
+  * Fix the repository location in the cabal file.
 
  -- David Fox <dsf@seereason.com>  Sat, 25 May 2013 08:23:27 -0700
 

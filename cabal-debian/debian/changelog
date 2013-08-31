@@ -1,3 +1,9 @@
+haskell-cabal-debian (3.4.3) unstable; urgency=low
+
+  * Fix the repository location in the cabal file.
+
+ -- David Fox <dsf@seereason.com>  Sat, 31 Aug 2013 07:57:15 -0700
+
 haskell-cabal-debian (3.4.2) unstable; urgency=low
 
   * Notify user when debhelper isn't installed.
