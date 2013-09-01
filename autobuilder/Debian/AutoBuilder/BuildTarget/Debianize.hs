@@ -18,8 +18,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Debianize (Atoms, compileArgs, Top(Top))
 import qualified Debian.Debianize as Cabal
-import Debian.Debianize.Atoms (Tmp(..))
-import Debian.Relation (BinPkgName(unBinPkgName), prettyRelations)
+import Debian.Relation (prettyRelations)
 import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
 import Distribution.Verbosity (normal)
@@ -119,7 +118,7 @@ asCabalFlags :: P.PackageFlag -> [String]
 asCabalFlags (P.Maintainer s) = ["--maintainer", s]
 asCabalFlags (P.BuildDep s) = ["--build-dep", s]
 asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
-asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ show (prettyRelations (unTmp d))]
+asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ show (prettyRelations d)]
 asCabalFlags (P.DebVersion s) = ["--deb-version", s]
 asCabalFlags (P.Revision s) = ["--revision", s]
 asCabalFlags (P.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]
