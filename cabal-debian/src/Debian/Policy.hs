@@ -111,13 +111,13 @@ getDebianStandardsVersion = debianPackageVersion "debian-policy" >>= return . fm
 parseStandardsVersion :: String -> StandardsVersion
 parseStandardsVersion s =
     case filter (/= ".") (groupBy (\ a b -> (a == '.') == (b == '.')) s) of
-      (a : b : c : d : _) -> StandardsVersion (read' (\ s -> error $ "StandardsVersion" ++ show s) a)
-                                              (read' (\ s -> error $ "StandardsVersion" ++ show s) b)
-                                              (read' (\ s -> error $ "StandardsVersion" ++ show s) c)
-                                              (Just (read' (\ s -> error $ "StandardsVersion" ++ show s) d))
-      (a : b : c : _) -> StandardsVersion (read' (\ s -> error $ "StandardsVersion" ++ show s) a)
-                                          (read' (\ s -> error $ "StandardsVersion" ++ show s) b)
-                                          (read' (\ s -> error $ "StandardsVersion" ++ show s) c) Nothing
+      (a : b : c : d : _) -> StandardsVersion (read' (error . ("StandardsVersion" ++) . show) a)
+                                              (read' (error . ("StandardsVersion" ++) . show) b)
+                                              (read' (error . ("StandardsVersion" ++) . show) c)
+                                              (Just (read' (error . ("StandardsVersion" ++) . show) d))
+      (a : b : c : _) -> StandardsVersion (read' (error . ("StandardsVersion" ++) . show) a)
+                                          (read' (error . ("StandardsVersion" ++) . show) b)
+                                          (read' (error . ("StandardsVersion" ++) . show) c) Nothing
       _ -> error $ "Invalid Standards-Version string: " ++ show s
 
 data SourceFormat

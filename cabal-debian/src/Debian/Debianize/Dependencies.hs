@@ -31,7 +31,7 @@ import Data.Version (showVersion)
 import Debian.Control
 import Debian.Debianize.Atoms (Atoms, packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary,
                                missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
-                               packageInfo, depends, conflicts, provides, replaces, control)
+                               packageInfo, depends, conflicts, provides, replaces, control, Tmp(..))
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile as Debian (PackageType(..), SourceDebDescription(..))
 import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), DebType(..))
@@ -56,7 +56,7 @@ data Dependency_
   = BuildDepends Dependency
   | BuildTools Dependency
   | PkgConfigDepends Dependency
-  | ExtraLibs D.BinPkgName
+  | ExtraLibs Tmp
     deriving (Eq, Show)
 
 -- | In cabal a self dependency probably means the library is needed
@@ -109,8 +109,10 @@ allBuildDepends atoms buildDepends buildTools pkgconfigDepends extraLibs =
           map PkgConfigDepends pkgconfigDepends ++
           map ExtraLibs (fixDeps extraLibs)
     where
-      fixDeps :: [String] -> [D.BinPkgName]
-      fixDeps xs = concatMap (\ cab -> maybe [D.BinPkgName ("lib" ++ cab ++ "-dev")] Set.toList (Map.lookup cab (getL extraLibMap atoms))) xs
+      fixDeps :: [String] -> [Tmp]
+      fixDeps xs = concatMap (\ cab -> maybe [Tmp (D.BinPkgName ("lib" ++ cab ++ "-dev"))]
+                                             Set.toList
+                                             (Map.lookup cab (getL extraLibMap atoms))) xs
 
 putBuildDeps :: Atoms -> Atoms
 putBuildDeps deb =
@@ -179,16 +181,16 @@ buildDependencies atoms dep =
       Nothing ->
           []
 
-dependency :: D.BinPkgName -> D.Relations
-dependency name = [[D.Rel name Nothing Nothing]]
+dependency :: Tmp -> D.Relations
+dependency name = [[D.Rel (unTmp name) Nothing Nothing]]
 
-adapt :: Map.Map String D.BinPkgName -> Dependency_ -> [D.BinPkgName]
+adapt :: Map.Map String Tmp -> Dependency_ -> [Tmp]
 adapt execMap (PkgConfigDepends (Dependency (PackageName pkg) _)) =
     maybe (aptFile pkg) (: []) (Map.lookup pkg execMap)
 adapt execMap (BuildTools (Dependency (PackageName pkg) _)) =
     maybe (aptFile pkg) (: []) (Map.lookup pkg execMap)
 adapt _flags (ExtraLibs x) = [x]
-adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [D.BinPkgName pkg]
+adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [Tmp (D.BinPkgName pkg)]
 
 -- There are two reasons this may not work, or may work
 -- incorrectly: (1) the build environment may be a different
@@ -197,7 +199,7 @@ adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [D.BinPkgName pkg
 -- environment might have different names, and (2) the package
 -- we are looking for may not be installed in the parent
 -- environment.
-aptFile :: String -> [D.BinPkgName] -- Maybe would probably be more correct
+aptFile :: String -> [Tmp] -- Maybe would probably be more correct
 aptFile pkg =
     unsafePerformIO $
     do ret <- readProcessWithExitCode "apt-file" ["-l", "search", pkg ++ ".pc"] ""
@@ -205,7 +207,7 @@ aptFile pkg =
                   (ExitSuccess, out, _) ->
                       case takeWhile (not . isSpace) out of
                         "" -> error $ "Unable to locate a package containing " ++ pkg ++ ", try using --exec-map " ++ pkg ++ "=<debname> or modL execMap (Map.insert (PackageName " ++ show pkg ++ ") (BinPkgName \"<debname>\")"
-                        s -> [D.BinPkgName s]
+                        s -> [Tmp (D.BinPkgName s)]
                   _ -> []
 
 anyrel :: String -> [D.Relation]

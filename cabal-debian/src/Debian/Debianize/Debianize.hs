@@ -32,7 +32,7 @@ import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Atoms (Atoms, packageDescription, compat, watch, control, copyright, changelog, comments,
                                sourcePriority, sourceSection, debAction, validate, dryRun, debVersion, revision,
-                               sourcePackageName, epochMap, extraLibMap)
+                               sourcePackageName, epochMap, extraLibMap, Tmp(..))
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Files (toFileMap)
@@ -251,12 +251,12 @@ addExtraLibDependencies deb =
       f bin = bin
       g :: Debian.PackageRelations -> Debian.PackageRelations
       g rels = rels { Debian.depends = Debian.depends rels ++
-                                map anyrel' (concatMap (\ cab -> maybe [BinPkgName ("lib" ++ cab ++ "-dev")] Set.toList (Map.lookup cab (getL extraLibMap deb)))
+                                map anyrel' (concatMap (\ cab -> maybe [Tmp (BinPkgName ("lib" ++ cab ++ "-dev"))] Set.toList (Map.lookup cab (getL extraLibMap deb)))
                                                        (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc)) }
       pkgDesc = fromMaybe (error "addExtraLibDependencies: no PackageDescription") $ getL packageDescription deb
 
-anyrel' :: BinPkgName -> [Relation]
-anyrel' x = [Rel x Nothing Nothing]
+anyrel' :: Tmp -> [Relation]
+anyrel' x = [Rel (unTmp x) Nothing Nothing]
 
 -- | Write the files of the debianization @d@ to the directory @top@.
 writeDebianization :: Top -> Atoms -> IO ()
