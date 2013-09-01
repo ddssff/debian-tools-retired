@@ -15,6 +15,7 @@ import Debian.Debianize.Utility (read')
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relation(..))
+import Debian.Relation.String (parseRelations)
 import Debian.Version (parseDebianVersion)
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
@@ -35,7 +36,7 @@ compileArgs args atoms =
 -- | Options that modify other atoms.
 options :: [OptDescr (Atoms -> Atoms)]
 options =
-    [ Option "v" ["verbose"] (ReqArg (\ s atoms -> setL verbosity (read' (\ s -> error $ "verbose: " ++ show s) s) atoms) "n")
+    [ Option "v" ["verbose"] (ReqArg (\ s atoms -> setL verbosity (read' (\ s' -> error $ "verbose: " ++ show s') s) atoms) "n")
              "Change build verbosity",
       Option "n" ["dry-run", "compare"] (NoArg (\ atoms -> setL dryRun True atoms))
              "Just compare the existing debianization to the one we would generate.",
@@ -62,7 +63,11 @@ options =
              "Set given flags in Cabal conditionals",
       Option "" ["maintainer"] (ReqArg (\ maint x -> setL maintainer (either (error ("Invalid maintainer string: " ++ show maint)) Just (parseMaintainer maint)) x) "Maintainer Name <email addr>")
              "Override the Maintainer name and email in $DEBEMAIL/$EMAIL/$DEBFULLNAME/$FULLNAME",
-      Option "" ["build-dep"] (ReqArg (\ name atoms -> modL buildDeps (Set.insert (Rel (BinPkgName name) Nothing Nothing)) atoms) "Debian binary package name")
+      Option "" ["build-dep"] (ReqArg (\ name atoms ->
+                                           modL buildDeps (case parseRelations name of
+                                                             Right [rels] -> Set.union (fromList rels)
+                                                             Right relss -> error ("cabal-debian option --build-dep " ++ show name ++ ": or relations not supported in --build-dep")
+                                                             Left err -> error ("cabal-debian option --build-dep " ++ show name ++ ": " ++ show err)) atoms) "Debian package relations")
              "Specify a package to add to the build dependency list for this source package, e.g. '--build-dep libglib2.0-dev'.",
       Option "" ["build-dep-indep"] (ReqArg (\ name atoms -> modL buildDepsIndep (Set.insert (Rel (BinPkgName name) Nothing Nothing)) atoms) "Debian binary package name")
              "Specify a package to add to the architecture independent build dependency list for this source package, e.g. '--build-dep-indep perl'.",

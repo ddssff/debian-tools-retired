@@ -1,3 +1,10 @@
+haskell-cabal-debian (3.5) unstable; urgency=low
+
+  * Allow full lists of debian relations to be passed to the --build-dep
+    argument, not just a single package name.
+
+ -- David Fox <dsf@seereason.com>  Sun, 01 Sep 2013 07:08:37 -0700
+
 haskell-cabal-debian (3.4.3) unstable; urgency=low
 
   * Fix the repository location in the cabal file.

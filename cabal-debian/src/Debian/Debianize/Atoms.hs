@@ -188,8 +188,8 @@ data DebAtom
                                                   -- actually does not, so omit all uses in resulting debianization.
     | ExtraLibMapping String BinPkgName		  -- ^ Map a cabal Extra-Library name to a debian binary package name,
                                                   -- e.g. @ExtraLibMapping extraLibMap "cryptopp" "libcrypto-dev"@ adds a
-                                                  -- build dependency on @libcrypto-dev@ to any package that has @cryptopp@
-                                                  -- in its cabal Extra-Library list.
+                                                  -- build dependency *and* a regular dependency on @libcrypto-dev@ to
+                                                  -- any package that has @cryptopp@ in its cabal Extra-Library list.
     | ExecMapping String BinPkgName		  -- ^ Map a cabal Build-Tool name to a debian binary package name,
                                                   -- e.g. @ExecMapping "trhsx" "haskell-hsx-utils"@ adds a build
                                                   -- dependency on @haskell-hsx-utils@ to any package that has @trhsx@ in its
