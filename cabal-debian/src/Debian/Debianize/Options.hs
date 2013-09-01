@@ -14,7 +14,7 @@ import Debian.Debianize.Types (InstallFile(..), DebAction(..))
 import Debian.Debianize.Utility (read')
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
-import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relation(..))
+import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relations, Relation(..))
 import Debian.Relation.String (parseRelations)
 import Debian.Version (parseDebianVersion)
 import Distribution.PackageDescription (FlagName(..))
@@ -63,14 +63,20 @@ options =
              "Set given flags in Cabal conditionals",
       Option "" ["maintainer"] (ReqArg (\ maint x -> setL maintainer (either (error ("Invalid maintainer string: " ++ show maint)) Just (parseMaintainer maint)) x) "Maintainer Name <email addr>")
              "Override the Maintainer name and email in $DEBEMAIL/$EMAIL/$DEBFULLNAME/$FULLNAME",
-      Option "" ["build-dep"] (ReqArg (\ name atoms ->
-                                           modL buildDeps (case parseRelations name of
-                                                             Right [rels] -> Set.union (fromList rels)
-                                                             Right relss -> error ("cabal-debian option --build-dep " ++ show name ++ ": or relations not supported in --build-dep")
-                                                             Left err -> error ("cabal-debian option --build-dep " ++ show name ++ ": " ++ show err)) atoms) "Debian package relations")
-             "Specify a package to add to the build dependency list for this source package, e.g. '--build-dep libglib2.0-dev'.",
-      Option "" ["build-dep-indep"] (ReqArg (\ name atoms -> modL buildDepsIndep (Set.insert (Rel (BinPkgName name) Nothing Nothing)) atoms) "Debian binary package name")
-             "Specify a package to add to the architecture independent build dependency list for this source package, e.g. '--build-dep-indep perl'.",
+      Option "" ["build-dep"]
+                 (ReqArg (\ name atoms ->
+                              modL buildDeps
+                                       (case parseRelations name of
+                                          Right rss -> Set.insert rss
+                                          Left err -> error ("cabal-debian option --build-dep " ++ show name ++ ": " ++ show err)) atoms) "Debian package relations")
+                 "Specify a package to add to the build dependency list for this source package, e.g. '--build-dep libglib2.0-dev'.",
+      Option "" ["build-dep-indep"]
+                 (ReqArg (\ name atoms ->
+                              modL buildDepsIndep
+                                       (case parseRelations name of
+                                          Right rss -> Set.insert rss
+                                          Left err -> error ("cabal-debian option --build-dep-indep " ++ show name ++ ": " ++ show err)) atoms) "Debian binary package name")
+                 "Specify a package to add to the architecture independent build dependency list for this source package, e.g. '--build-dep-indep perl'.",
       Option "" ["dev-dep"] (ReqArg (\ name atoms -> modL extraDevDeps (Set.insert (Rel (BinPkgName name) Nothing Nothing)) atoms) "Debian binary package name")
              "Specify a package to add to the Depends: list of the -dev package, e.g. '--dev-dep libncurses5-dev'.  It might be good if this implied --build-dep.",
       Option "" ["depends"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL depends (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
@@ -82,11 +88,8 @@ options =
       Option "" ["provides"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL provides (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
              "Specify pairs A:B of debian binary package names, each A gets a Provides: B.  Note that B can have debian style version relations",
       Option "" ["map-dep"] (ReqArg (\ pair atoms -> case break (== '=') pair of
-                                                       (cab, (_ : deb)) -> modL extraLibMap (Map.insertWith Set.union cab (singleton (Tmp (b deb)))) atoms
-{-                                                     (cab, (_ : deb)) -> modL extraLibMap (Map.insertWith Set.union cab (singleton (case parseRelations deb of
-                                                                                                                                        Right relss -> relss
-                                                                                                                                        _ -> error "usage: --map-dep CABALNAME=DEBIANNAME"))) atoms -}
-                                                       (_, "") -> error "usage: --map-dep CABALNAME=DEBIANNAME") "CABALNAME=DEBIANNAME")
+                                                       (cab, (_ : deb)) -> modL extraLibMap (Map.insertWith Set.union cab (singleton (Tmp (rels deb)))) atoms
+                                                       (_, "") -> error "usage: --map-dep CABALNAME=RELATIONS") "CABALNAME=RELATIONS")
              "Specify a mapping from the name appearing in the Extra-Library field of the cabal file to a debian binary package name, e.g. --dep-map cryptopp=libcrypto-dev",
       Option "" ["deb-version"] (ReqArg (\ version atoms -> setL debVersion (Just (parseDebianVersion version)) atoms) "VERSION")
              "Specify the version number for the debian package.  This will pin the version and should be considered dangerous.",
@@ -98,8 +101,8 @@ options =
                                                          _ -> error "usage: --epoch-map CABALNAME=DIGIT") "CABALNAME=DIGIT")
              "Specify a mapping from the cabal package name to a digit to use as the debian package epoch number, e.g. --epoch-map HTTP=1",
       Option "" ["exec-map"] (ReqArg (\ s atoms -> case break (== '=') s of
-                                                     (cab, (_ : deb)) -> modL execMap (Map.insertWith (flip const) cab (Tmp (b deb))) atoms
-                                                     _ -> error "usage: --exec-map CABALNAME=DEBNAME") "EXECNAME=DEBIANNAME")
+                                                     (cab, (_ : deb)) -> modL execMap (Map.insertWith (flip const) cab (Tmp (rels deb))) atoms
+                                                     _ -> error "usage: --exec-map EXECNAME=RELATIONS") "EXECNAME=RELATIONS")
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
       Option "" ["omit-lt-deps"] (NoArg (setL omitLTDeps True))
              "Don't generate the << dependency when we see a cabal equals dependency.",
@@ -146,3 +149,9 @@ flagList = map tagWithValue . words
 
 b :: String -> BinPkgName
 b = BinPkgName
+
+rels :: String -> Relations
+rels s =
+    case parseRelations s of
+      Right relss -> relss
+      _ -> error $ "Parse error in debian relations: " ++ show s

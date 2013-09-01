@@ -250,13 +250,14 @@ addExtraLibDependencies deb =
               = bin { relations = g (relations bin) }
       f bin = bin
       g :: Debian.PackageRelations -> Debian.PackageRelations
-      g rels = rels { Debian.depends = Debian.depends rels ++
-                                map anyrel' (concatMap (\ cab -> maybe [Tmp (BinPkgName ("lib" ++ cab ++ "-dev"))] Set.toList (Map.lookup cab (getL extraLibMap deb)))
-                                                       (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc)) }
+      g rels = rels { Debian.depends =
+                        concatMap unTmp $
+                          [Tmp (Debian.depends rels)] ++
+                          concatMap (\ cab -> maybe [Tmp [[Rel (BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]]
+                                                    Set.toList
+                                                    (Map.lookup cab (getL extraLibMap deb)))
+                                    (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc) }
       pkgDesc = fromMaybe (error "addExtraLibDependencies: no PackageDescription") $ getL packageDescription deb
-
-anyrel' :: Tmp -> [Relation]
-anyrel' x = [Rel (unTmp x) Nothing Nothing]
 
 -- | Write the files of the debianization @d@ to the directory @top@.
 writeDebianization :: Top -> Atoms -> IO ()

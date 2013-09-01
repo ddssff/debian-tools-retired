@@ -93,7 +93,7 @@ import Debian.Debianize.Types (PackageInfo(..), Site(..), Server(..), InstallFil
 import Debian.Debianize.Types.VersionSplits (VersionSplits)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, SourceFormat, PackagePriority, Section, StandardsVersion)
-import Debian.Relation (SrcPkgName, BinPkgName, Relation(..))
+import Debian.Relation (SrcPkgName, BinPkgName, Relations, Relation(..))
 import Debian.Version (DebianVersion)
 import Distribution.License (License)
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..))
@@ -103,7 +103,7 @@ import Prelude hiding (init, unlines, log)
 import System.FilePath ((</>))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
-newtype Tmp = Tmp {unTmp :: BinPkgName} deriving (Eq, Ord, Show, Typeable)
+newtype Tmp = Tmp {unTmp :: Relations} deriving (Eq, Ord, Show, Typeable)
 
 -- All the internals of this module is a steaming pile of poo, except
 -- for the stuff that is exported.
@@ -185,8 +185,8 @@ data DebAtom
                                                   -- the name is constructed from the cabal package name.  Note that
                                                   -- DebianNameMap could encode this information if we already knew
                                                   -- the cabal package name, but we can't assume that.
-    | BuildDep Relation				  -- ^ Add a build dependency
-    | BuildDepIndep Relation			  -- ^ Add an arch independent build dependency
+    | BuildDep Relations			  -- ^ Add build dependencies
+    | BuildDepIndep Relations			  -- ^ Add arch independent build dependencies
     | MissingDependency BinPkgName		  -- ^ Lets cabal-debian know that a package it might expect to exist
                                                   -- actually does not, so omit all uses in resulting debianization.
     | ExtraLibMapping String Tmp		  -- ^ Map a cabal Extra-Library name to a debian binary package name,
@@ -789,7 +789,7 @@ binarySections = lens g s
 -- | Build dependencies.  FIXME: This should be a Set (Set Relation)
 -- so we can build or relations, right now we just assume that each
 -- Relation is a singleton set.
-buildDeps :: Lens Atoms (Set Relation)
+buildDeps :: Lens Atoms (Set Relations)
 buildDeps = lens g s
     where
       g atoms = foldAtoms from Set.empty atoms
@@ -802,7 +802,7 @@ buildDeps = lens g s
             p _ _ = False
 
 -- | Architecture independent
-buildDepsIndep :: Lens Atoms (Set Relation)
+buildDepsIndep :: Lens Atoms (Set Relations)
 buildDepsIndep = lens g s
     where
       g atoms = foldAtoms from Set.empty atoms

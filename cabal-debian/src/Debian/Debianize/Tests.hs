@@ -358,7 +358,7 @@ test5 =
                                                                , "  Install this somewhere other than creativeprompts.com to run automated"
                                                                , "  backups of the database."])) .
                            modL Atoms.depends (Map.insertWith union (BinPkgName "creativeprompts-server") (singleton (anyrel (BinPkgName "markdown")))) .
-                           modL execMap (Map.insertWith (error "Conflict in execMap") "trhsx" (Tmp (BinPkgName "haskell-hsx-utils"))) .
+                           modL execMap (Map.insertWith (error "Conflict in execMap") "trhsx" (Tmp [[Rel (BinPkgName "haskell-hsx-utils") Nothing Nothing]])) .
                            doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" .
                            doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) .
                            doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production")) .
@@ -439,7 +439,7 @@ test8 =
                   log <- inputChangeLog (Top "test-data/artvaluereport-data/input")
                   new <- debianization (Top "test-data/artvaluereport-data/input")
                            (return .
-                            modL buildDeps (Set.insert (Rel (BinPkgName "haskell-hsx-utils") Nothing Nothing)) .
+                            modL buildDeps (Set.insert [[Rel (BinPkgName "haskell-hsx-utils") Nothing Nothing]]) .
                             modL control (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) .
                             setL sourceFormat (Just Native3) .
                             setL changelog (Just log) .
@@ -454,7 +454,7 @@ test9 =
     TestCase ( do old <- inputDebianization (Top "test-data/alex/output")
                   new <- debianization (Top "test-data/alex/input")
                            (return .
-                            modL buildDeps (Set.insert (Rel (BinPkgName "alex") Nothing Nothing)) .
+                            modL buildDeps (Set.insert [[Rel (BinPkgName "alex") Nothing Nothing]]) .
                             doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) .
                             setL debVersion (Just (parseDebianVersion ("3.0.2-1~hackage1" :: String))) .
                             setL sourceFormat (Just Native3) .

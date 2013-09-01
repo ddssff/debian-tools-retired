@@ -110,7 +110,7 @@ allBuildDepends atoms buildDepends buildTools pkgconfigDepends extraLibs =
           map ExtraLibs (fixDeps extraLibs)
     where
       fixDeps :: [String] -> [Tmp]
-      fixDeps xs = concatMap (\ cab -> maybe [Tmp (D.BinPkgName ("lib" ++ cab ++ "-dev"))]
+      fixDeps xs = concatMap (\ cab -> maybe [Tmp [[D.Rel (D.BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]]
                                              Set.toList
                                              (Map.lookup cab (getL extraLibMap atoms))) xs
 
@@ -127,7 +127,7 @@ debianBuildDeps deb =
            [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
            anyrel "cdbs",
            anyrel "ghc"] ++
-            (map (: []) (Set.toList (getL buildDeps deb))) ++
+            concat (Set.toList (getL buildDeps deb)) ++
             (if getL noProfilingLibrary deb then [] else [anyrel "ghc-prof"]) ++
             cabalDeps (getL packageDescription deb)
     where
@@ -146,7 +146,7 @@ debianBuildDepsIndep deb =
     if getL noDocumentationLibrary deb
     then []
     else nub $ [anyrel "ghc-doc"] ++
-               (map (: []) (Set.toList (getL buildDepsIndep deb))) ++
+               concat (Set.toList (getL buildDepsIndep deb)) ++
                cabalDeps (getL packageDescription deb)
     where
       cabalDeps Nothing = []
@@ -182,7 +182,7 @@ buildDependencies atoms dep =
           []
 
 dependency :: Tmp -> D.Relations
-dependency name = [[D.Rel (unTmp name) Nothing Nothing]]
+dependency name = unTmp name
 
 adapt :: Map.Map String Tmp -> Dependency_ -> [Tmp]
 adapt execMap (PkgConfigDepends (Dependency (PackageName pkg) _)) =
@@ -190,7 +190,7 @@ adapt execMap (PkgConfigDepends (Dependency (PackageName pkg) _)) =
 adapt execMap (BuildTools (Dependency (PackageName pkg) _)) =
     maybe (aptFile pkg) (: []) (Map.lookup pkg execMap)
 adapt _flags (ExtraLibs x) = [x]
-adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [Tmp (D.BinPkgName pkg)]
+adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [Tmp [[D.Rel (D.BinPkgName pkg) Nothing Nothing]]]
 
 -- There are two reasons this may not work, or may work
 -- incorrectly: (1) the build environment may be a different
@@ -207,7 +207,7 @@ aptFile pkg =
                   (ExitSuccess, out, _) ->
                       case takeWhile (not . isSpace) out of
                         "" -> error $ "Unable to locate a package containing " ++ pkg ++ ", try using --exec-map " ++ pkg ++ "=<debname> or modL execMap (Map.insert (PackageName " ++ show pkg ++ ") (BinPkgName \"<debname>\")"
-                        s -> [Tmp (D.BinPkgName s)]
+                        s -> [Tmp [[D.Rel (D.BinPkgName s) Nothing Nothing]]]
                   _ -> []
 
 anyrel :: String -> [D.Relation]
