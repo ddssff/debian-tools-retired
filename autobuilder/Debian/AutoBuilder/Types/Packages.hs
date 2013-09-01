@@ -45,8 +45,7 @@ import Data.Monoid (Monoid(mempty, mappend))
 import Data.Set (Set, empty, union)
 import Data.String (IsString(fromString))
 import qualified Debian.Debianize as CD
-import Debian.Debianize.Atoms (Tmp(..))
-import Debian.Relation (BinPkgName)
+import Debian.Relation (Relations)
 import Debian.Repo (DebianSourceTree, findDebianSourceTrees)
 import System.FilePath ((</>))
 
@@ -175,7 +174,7 @@ data PackageFlag
     -- ^ Pass some arbitrary arguments to cabal-debian
     | ModifyAtoms (CD.Atoms -> CD.Atoms)
     -- ^ Modify the cabal-debian configuration in a fully general way
-    | MapDep String Tmp
+    | MapDep String Relations
     -- ^ Tell cabal-debian to map the first argument (a name that
     -- appears in Extra-Libraries field of the cabal file) to the
     -- second argument (a debian binary package name) using the

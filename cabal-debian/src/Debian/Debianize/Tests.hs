@@ -21,7 +21,7 @@ import Debian.Debianize.Debianize (debianization)
 import Debian.Debianize.Atoms as Atoms
     (Atoms, rulesHead, compat, sourceFormat, changelog, control, missingDependencies, revision,
      binaryArchitectures, copyright, debVersion, execMap, buildDeps, utilsPackageName, description,
-     depends, installData, epochMap {-, sourcePackageName, install, buildDepsIndep-}, Tmp(..))
+     depends, installData, epochMap {-, sourcePackageName, install, buildDepsIndep-})
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
@@ -358,7 +358,7 @@ test5 =
                                                                , "  Install this somewhere other than creativeprompts.com to run automated"
                                                                , "  backups of the database."])) .
                            modL Atoms.depends (Map.insertWith union (BinPkgName "creativeprompts-server") (singleton (anyrel (BinPkgName "markdown")))) .
-                           modL execMap (Map.insertWith (error "Conflict in execMap") "trhsx" (Tmp [[Rel (BinPkgName "haskell-hsx-utils") Nothing Nothing]])) .
+                           modL execMap (Map.insertWith (error "Conflict in execMap") "trhsx" [[Rel (BinPkgName "haskell-hsx-utils") Nothing Nothing]]) .
                            doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" .
                            doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) .
                            doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production")) .

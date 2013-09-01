@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 module Debian.Debianize.Atoms
-    ( Tmp(..)
-    , Atoms
+    ( Atoms
     -- * Modes of operation
     , verbosity
     , dryRun
@@ -103,8 +102,6 @@ import Prelude hiding (init, unlines, log)
 import System.FilePath ((</>))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
-newtype Tmp = Tmp {unTmp :: Relations} deriving (Eq, Ord, Show, Typeable)
-
 -- All the internals of this module is a steaming pile of poo, except
 -- for the stuff that is exported.
 
@@ -189,11 +186,11 @@ data DebAtom
     | BuildDepIndep Relations			  -- ^ Add arch independent build dependencies
     | MissingDependency BinPkgName		  -- ^ Lets cabal-debian know that a package it might expect to exist
                                                   -- actually does not, so omit all uses in resulting debianization.
-    | ExtraLibMapping String Tmp		  -- ^ Map a cabal Extra-Library name to a debian binary package name,
+    | ExtraLibMapping String Relations		  -- ^ Map a cabal Extra-Library name to a debian binary package name,
                                                   -- e.g. @ExtraLibMapping extraLibMap "cryptopp" "libcrypto-dev"@ adds a
                                                   -- build dependency *and* a regular dependency on @libcrypto-dev@ to
                                                   -- any package that has @cryptopp@ in its cabal Extra-Library list.
-    | ExecMapping String Tmp			  -- ^ Map a cabal Build-Tool name to a debian binary package name,
+    | ExecMapping String Relations		  -- ^ Map a cabal Build-Tool name to a debian binary package name,
                                                   -- e.g. @ExecMapping "trhsx" "haskell-hsx-utils"@ adds a build
                                                   -- dependency on @haskell-hsx-utils@ to any package that has @trhsx@ in its
                                                   -- cabal build-tool list.
@@ -397,7 +394,7 @@ compiler = lens g s
             f _ _ = Nothing
 
 -- | Map from cabal Extra-Lib names to debian binary package names.
-extraLibMap :: Lens Atoms (Map String (Set Tmp))
+extraLibMap :: Lens Atoms (Map String (Set Relations))
 extraLibMap = lens g s
     where
       g atoms = foldAtoms from Map.empty atoms
@@ -410,16 +407,16 @@ extraLibMap = lens g s
             p _ _ = False
 
 -- | Map from cabal Build-Tool names to debian binary package names.
-execMap :: Lens Atoms (Map String Tmp)
+execMap :: Lens Atoms (Map String Relations)
 execMap = lens g s
     where
-      g :: Atoms -> Map String Tmp
+      g :: Atoms -> Map String Relations
       g atoms = foldAtoms from Map.empty atoms
           where
-            from :: DebAtomKey -> DebAtom -> Map String Tmp -> Map String Tmp
+            from :: DebAtomKey -> DebAtom -> Map String Relations -> Map String Relations
             from Source (ExecMapping cabal debian) x = Map.insertWith (error "Conflict in execMap") cabal debian x
             from _ _ x = x
-      s :: Map String Tmp -> Atoms -> Atoms
+      s :: Map String Relations -> Atoms -> Atoms
       s x atoms = Map.foldWithKey (\ cabal debian atoms' -> insertAtom Source (ExecMapping cabal debian) atoms') (deleteAtoms p atoms) x
           where
             p Source (ExecMapping _ _) = True

@@ -32,7 +32,7 @@ import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Atoms (Atoms, packageDescription, compat, watch, control, copyright, changelog, comments,
                                sourcePriority, sourceSection, debAction, validate, dryRun, debVersion, revision,
-                               sourcePackageName, epochMap, extraLibMap, Tmp(..))
+                               sourcePackageName, epochMap, extraLibMap)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Dependencies (debianName)
 import Debian.Debianize.Files (toFileMap)
@@ -251,9 +251,9 @@ addExtraLibDependencies deb =
       f bin = bin
       g :: Debian.PackageRelations -> Debian.PackageRelations
       g rels = rels { Debian.depends =
-                        concatMap unTmp $
-                          [Tmp (Debian.depends rels)] ++
-                          concatMap (\ cab -> maybe [Tmp [[Rel (BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]]
+                        concat $
+                          [Debian.depends rels] ++
+                          concatMap (\ cab -> maybe [[[Rel (BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]]
                                                     Set.toList
                                                     (Map.lookup cab (getL extraLibMap deb)))
                                     (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc) }

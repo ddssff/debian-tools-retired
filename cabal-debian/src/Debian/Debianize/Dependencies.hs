@@ -31,7 +31,7 @@ import Data.Version (showVersion)
 import Debian.Control
 import Debian.Debianize.Atoms (Atoms, packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary,
                                missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
-                               packageInfo, depends, conflicts, provides, replaces, control, Tmp(..))
+                               packageInfo, depends, conflicts, provides, replaces, control)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile as Debian (PackageType(..), SourceDebDescription(..))
 import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), DebType(..))
@@ -56,7 +56,7 @@ data Dependency_
   = BuildDepends Dependency
   | BuildTools Dependency
   | PkgConfigDepends Dependency
-  | ExtraLibs Tmp
+  | ExtraLibs Relations
     deriving (Eq, Show)
 
 -- | In cabal a self dependency probably means the library is needed
@@ -109,8 +109,8 @@ allBuildDepends atoms buildDepends buildTools pkgconfigDepends extraLibs =
           map PkgConfigDepends pkgconfigDepends ++
           map ExtraLibs (fixDeps extraLibs)
     where
-      fixDeps :: [String] -> [Tmp]
-      fixDeps xs = concatMap (\ cab -> maybe [Tmp [[D.Rel (D.BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]]
+      fixDeps :: [String] -> [Relations]
+      fixDeps xs = concatMap (\ cab -> maybe [[[D.Rel (D.BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]]
                                              Set.toList
                                              (Map.lookup cab (getL extraLibMap atoms))) xs
 
@@ -173,24 +173,21 @@ buildDependencies atoms (BuildDepends (Dependency name ranges)) =
     dependencies atoms Development name ranges ++
     dependencies atoms Profiling name ranges
 buildDependencies atoms dep@(ExtraLibs _) =
-    concat (map dependency $ adapt (getL execMap atoms) dep)
+    concat (adapt (getL execMap atoms) dep)
 buildDependencies atoms dep =
     case unboxDependency dep of
       Just (Dependency _name _ranges) ->
-          concat (map dependency $ adapt (getL execMap atoms) dep)
+          concat (adapt (getL execMap atoms) dep)
       Nothing ->
           []
 
-dependency :: Tmp -> D.Relations
-dependency name = unTmp name
-
-adapt :: Map.Map String Tmp -> Dependency_ -> [Tmp]
+adapt :: Map.Map String Relations -> Dependency_ -> [Relations]
 adapt execMap (PkgConfigDepends (Dependency (PackageName pkg) _)) =
     maybe (aptFile pkg) (: []) (Map.lookup pkg execMap)
 adapt execMap (BuildTools (Dependency (PackageName pkg) _)) =
     maybe (aptFile pkg) (: []) (Map.lookup pkg execMap)
 adapt _flags (ExtraLibs x) = [x]
-adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [Tmp [[D.Rel (D.BinPkgName pkg) Nothing Nothing]]]
+adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [[[D.Rel (D.BinPkgName pkg) Nothing Nothing]]]
 
 -- There are two reasons this may not work, or may work
 -- incorrectly: (1) the build environment may be a different
@@ -199,7 +196,7 @@ adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [Tmp [[D.Rel (D.B
 -- environment might have different names, and (2) the package
 -- we are looking for may not be installed in the parent
 -- environment.
-aptFile :: String -> [Tmp] -- Maybe would probably be more correct
+aptFile :: String -> [Relations] -- Maybe would probably be more correct
 aptFile pkg =
     unsafePerformIO $
     do ret <- readProcessWithExitCode "apt-file" ["-l", "search", pkg ++ ".pc"] ""
@@ -207,7 +204,7 @@ aptFile pkg =
                   (ExitSuccess, out, _) ->
                       case takeWhile (not . isSpace) out of
                         "" -> error $ "Unable to locate a package containing " ++ pkg ++ ", try using --exec-map " ++ pkg ++ "=<debname> or modL execMap (Map.insert (PackageName " ++ show pkg ++ ") (BinPkgName \"<debname>\")"
-                        s -> [Tmp [[D.Rel (D.BinPkgName s) Nothing Nothing]]]
+                        s -> [[[D.Rel (D.BinPkgName s) Nothing Nothing]]]
                   _ -> []
 
 anyrel :: String -> [D.Relation]

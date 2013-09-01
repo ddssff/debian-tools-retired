@@ -1,3 +1,11 @@
+autobuilder (6.55) unstable; urgency=low
+
+  * Allow full debian relations rather than just a package name as the
+    argument to several flags in cabal-debian and autobuilder: --map-dep,
+    --build-dep, --build-dep-indep, --exec-map
+
+ -- David Fox <dsf@seereason.com>  Sun, 01 Sep 2013 11:59:32 -0700
+
 autobuilder (6.54) unstable; urgency=low
 
   * Changes for debian-3.74

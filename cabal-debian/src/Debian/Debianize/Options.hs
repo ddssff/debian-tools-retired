@@ -88,7 +88,7 @@ options =
       Option "" ["provides"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL provides (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
              "Specify pairs A:B of debian binary package names, each A gets a Provides: B.  Note that B can have debian style version relations",
       Option "" ["map-dep"] (ReqArg (\ pair atoms -> case break (== '=') pair of
-                                                       (cab, (_ : deb)) -> modL extraLibMap (Map.insertWith Set.union cab (singleton (Tmp (rels deb)))) atoms
+                                                       (cab, (_ : deb)) -> modL extraLibMap (Map.insertWith Set.union cab (singleton (rels deb))) atoms
                                                        (_, "") -> error "usage: --map-dep CABALNAME=RELATIONS") "CABALNAME=RELATIONS")
              "Specify a mapping from the name appearing in the Extra-Library field of the cabal file to a debian binary package name, e.g. --dep-map cryptopp=libcrypto-dev",
       Option "" ["deb-version"] (ReqArg (\ version atoms -> setL debVersion (Just (parseDebianVersion version)) atoms) "VERSION")
@@ -101,7 +101,7 @@ options =
                                                          _ -> error "usage: --epoch-map CABALNAME=DIGIT") "CABALNAME=DIGIT")
              "Specify a mapping from the cabal package name to a digit to use as the debian package epoch number, e.g. --epoch-map HTTP=1",
       Option "" ["exec-map"] (ReqArg (\ s atoms -> case break (== '=') s of
-                                                     (cab, (_ : deb)) -> modL execMap (Map.insertWith (flip const) cab (Tmp (rels deb))) atoms
+                                                     (cab, (_ : deb)) -> modL execMap (Map.insertWith (flip const) cab (rels deb)) atoms
                                                      _ -> error "usage: --exec-map EXECNAME=RELATIONS") "EXECNAME=RELATIONS")
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
       Option "" ["omit-lt-deps"] (NoArg (setL omitLTDeps True))
