@@ -8,7 +8,7 @@ module Debian.Repo.Delete
     ) where
 
 import Control.Exception (SomeException)
-import Control.Monad (filterM, when)
+import Control.Monad (filterM)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as L (fromChunks)
 import Data.Either (partitionEithers)
@@ -152,7 +152,7 @@ deleteSourcePackages dry keyname repo packages =
     if Set.null invalid
     then qPutStrLn (unlines ("Removing packages:" : List.map (show . F.pretty . (\ (_, _, x) -> x)) packages)) >>
          mapM doIndex (Set.toList allIndexes)
-    else error $ "deleteSourcePackages: not a source index: " ++ show (F.pretty invalid)
+    else error $ "deleteSourcePackages: not a source index: " ++ show (List.map F.pretty (toList invalid))
     where
       doIndex (release, index) = getEntries release index >>= put release index . List.partition (victim release index)
       put :: Release -> PackageIndex -> ([BinaryPackage], [BinaryPackage]) -> IO Release

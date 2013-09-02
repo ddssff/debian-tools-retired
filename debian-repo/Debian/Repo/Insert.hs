@@ -528,6 +528,12 @@ instance F.Pretty (Repository, Release, PackageIndex) where
 		         show (F.pretty (packageIndexComponent i)),
                          show (prettyArch (packageIndexArch i))]
 
+instance F.Pretty (Release, PackageIndex) where
+    pretty (r, i) = text $
+        intercalate "/" [(releaseName' . releaseName $ r),
+		         show (F.pretty (packageIndexComponent i)),
+                         show (prettyArch (packageIndexArch i))]
+
 instance F.Pretty (Repository, Release) where
     pretty (repo, r) = cat [F.pretty repo, text " ", F.pretty r]
 
