@@ -1,3 +1,9 @@
+haskell-debian-repo (5.45) unstable; urgency=low
+
+  * Fix package removal in newdist.
+
+ -- David Fox <dsf@seereason.com>  Mon, 02 Sep 2013 11:04:34 -0700
+
 haskell-debian-repo (5.44.1) unstable; urgency=low
 
   * Switch dependency from process-extras to process-listlike.
