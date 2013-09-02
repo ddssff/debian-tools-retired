@@ -44,6 +44,7 @@ Library
         Debian.Repo.AptImage,
         Debian.Repo.Cache,
         Debian.Repo.Changes,
+        Debian.Repo.Delete,
         Debian.Repo.Dependencies,
         Debian.Repo.Insert,
         Debian.Repo.Monads.Apt,
