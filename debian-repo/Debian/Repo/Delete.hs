@@ -37,23 +37,23 @@ import Extra.GPGSign ( PGPKey )
 import Extra.Files ( writeAndZipFileWithBackup )
 import System.FilePath ( splitFileName, (</>) )
 import System.Directory (doesDirectoryExist, doesFileExist, getDirectoryContents, renameFile)
-import System.Process.Progress (qPutStr, qPutStrLn)
+import System.Process.Progress (qPutStr, qPutStrLn, ePutStrLn)
 import qualified Text.Format as F ( Pretty(..) )
 
 -- |Delete any packages from a dist which are trumped by newer
 -- packages.  These packages are not technically garbage because they
 -- can still be installed by explicitly giving their version number to
 -- apt, but it is not really a good idea to use them.
-deleteTrumped :: Maybe PGPKey -> LocalRepository -> [Release] -> IO [Release]
-deleteTrumped _ _ [] = error "deleteTrumped called with empty release list"
-deleteTrumped keyname repo releases =
+deleteTrumped :: Bool -> Maybe PGPKey -> LocalRepository -> [Release] -> IO [Release]
+deleteTrumped _ _ _ [] = error "deleteTrumped called with empty release list"
+deleteTrumped dry keyname repo releases =
     mapM (findTrumped repo) releases >>=
     return . partitionEithers >>=
     \ (bad, good) ->
         case bad of
           [] -> return (concat good) >>=
                 ifEmpty (qPutStr "deleteTrumped: nothing to delete") >>=
-                deleteSourcePackages keyname repo . (List.map (\ (r, i, p) -> (r, i, packageID p)))
+                deleteSourcePackages dry keyname repo . (List.map (\ (r, i, p) -> (r, i, packageID p)))
           _ -> error $ "Error reading package lists"
     where
       ifEmpty :: IO () -> [a] -> IO [a]
@@ -145,9 +145,9 @@ deleteGarbage repo =
       moveToRemoved root file =
           renameFile file (outsidePath root ++ "/removed/" ++ snd (splitFileName file))
 
-deleteSourcePackages :: Maybe PGPKey -> LocalRepository -> [(Release, PackageIndex, PackageIDLocal BinPkgName)] -> IO [Release]
-deleteSourcePackages _keyname _repo [] = return []
-deleteSourcePackages keyname repo packages =
+deleteSourcePackages :: Bool -> Maybe PGPKey -> LocalRepository -> [(Release, PackageIndex, PackageIDLocal BinPkgName)] -> IO [Release]
+deleteSourcePackages _ _ _ [] = return []
+deleteSourcePackages dry keyname repo packages =
     if Set.null invalid
     then qPutStrLn (unlines ("Removing packages:" : List.map (show . F.pretty . (\ (_, _, x) -> x)) packages)) >>
          mapM doIndex (Set.toList indexes')
@@ -177,8 +177,9 @@ deleteSourcePackages keyname repo packages =
       putIndex' :: Maybe PGPKey -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO Release
       putIndex' keyname release index entries =
           do let root = repoRoot repo
-             _ <- putIndex root release index entries
-             signRelease keyname repo release
+             case dry of
+               True -> ePutStrLn ("dry run: not changing " ++ show index)
+               False -> putIndex root release index entries >> signRelease keyname repo release
              return release
       putIndex :: EnvPath -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO (Either [String] ())
       putIndex root release index packages =

@@ -58,14 +58,14 @@ runFlags flags =
     do createReleases flags
        repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
        rels <- findReleases repo
-       _ <- liftIO (deletePackages repo rels flags keyname)
+       _ <- liftIO (deletePackages (dryRun flags) repo rels flags keyname)
        liftIO $ setRepositoryCompatibility repo
        when (install flags)
                 ((scanIncoming False keyname repo) >>=
                      \ (ok, errors) -> (liftIO (sendEmails senderAddr emailAddrs (map (successEmail repo) ok) >>
                                                 sendEmails senderAddr emailAddrs (map (\ (changes, e) -> failureEmail changes e) errors) >>
                                                 exitOnError (map snd errors))))
-       when (expire flags)  $ liftIO (deleteTrumped keyname repo rels) >> return ()
+       when (expire flags)  $ liftIO (deleteTrumped (dryRun flags) keyname repo rels) >> return ()
        when (cleanUp flags) $ deleteGarbage repo >> return ()
        when (signRepo flags) $ liftIO (signReleases keyname (map (repo,) rels))
     where
@@ -172,9 +172,9 @@ getReleases root' layout' dists section' archList' =
        requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
        return $ mergeReleases (fromLocalRepository repo) (existingReleases ++ requiredReleases)
 
-deletePackages :: LocalRepository -> [Release] -> Params -> Maybe PGPKey -> IO [Release]
-deletePackages repo rels flags keyname =
-    deleteSourcePackages keyname repo toRemove
+deletePackages :: Bool -> LocalRepository -> [Release] -> Params -> Maybe PGPKey -> IO [Release]
+deletePackages dry repo rels flags keyname =
+    deleteSourcePackages dry keyname repo toRemove
     where
       toRemove :: [(Release, PackageIndex, PackageID BinPkgName)]
       toRemove = map parsePackage $ removePackages flags

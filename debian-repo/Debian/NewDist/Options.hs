@@ -22,7 +22,7 @@ data Params
       , uploadSection :: Maybe FilePath
       , expire :: Bool
       , cleanUp :: Bool
-      -- , dryRun :: Bool
+      , dryRun :: Bool
       , removePackages :: [String]
       , install :: Bool
       , releases :: [String]
@@ -48,7 +48,7 @@ initialParams =
     , uploadSection = Nothing
     , expire = False
     , cleanUp = False
-    -- , dryRun = False
+    , dryRun = False
     , removePackages = []
     , install = True
     , releases = []
@@ -81,7 +81,7 @@ optSpecs =
 		 "Remove all packages trumped by newer versions from the package lists."
     , Param [] ["clean-up"] ["Clean-Up"] (NoArg (\ p -> p {cleanUp = True}))
 		 "Move all unreferenced files in the repository to the removed directory."
-    -- , Param ['n'] ["dry-run"] ["Dry-Run"] (NoArg (\ p -> p {dryRun = True})) "Test run, don't modify the repository."
+    , Param ['n'] ["dry-run"] ["Dry-Run"] (NoArg (\ p -> p {dryRun = True})) "Test run, don't modify the repository.  (ONLY IMPLEMENTED FOR REMOVE)"
     , Param [] ["remove"] ["Remove"] (ReqArg (\ s p -> p {removePackages = removePackages p ++ [s]}) "DIST,SECTION,PACKAGE=VERSION")
                  "remove a particular version of a package (may be repeated.)"
     , Param ['i'] ["install"] ["Install"] (NoArg (\ p -> p {install = True}))
