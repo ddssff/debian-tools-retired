@@ -26,6 +26,7 @@ flag local-debian
   Manual: True
 
 Library
+  Buildable: True
   ghc-options: -O2 -threaded -Wall
 
   if flag(local-debian)
@@ -71,6 +72,7 @@ Library
         Tmp.File
 
 Executable debian-versions
+  Buildable: True
   Main-is: demos/Versions.hs
   ghc-options: -O2 -threaded -Wall
   if flag(local-debian)
@@ -79,6 +81,7 @@ Executable debian-versions
     Build-Depends: debian >= 3.78
 
 Executable newdist
+  Buildable: True
   Main-is: Debian/NewDist/Main.hs
   ghc-options: -O2 -threaded -Wall -rtsopts
   if flag(local-debian)
@@ -87,6 +90,7 @@ Executable newdist
     Build-Depends: debian >= 3.78
 
 Executable speedtest
+  Buildable: True
   Main-is: Test/Speed.hs
   ghc-options: -O2 -threaded -Wall -rtsopts
   if flag(local-debian)
@@ -95,6 +99,7 @@ Executable speedtest
     Build-Depends: debian >= 3.78
 
 Executable speedtest2
+  Buildable: True
   Main-is: Test/Speed2.hs
   ghc-options: -O2 -threaded -Wall -rtsopts
   if flag(local-debian)

@@ -159,7 +159,7 @@ pad padchar padlen s = replicate p padchar ++ s
 
 -- Merge a list of releases so each dist only appears once
 mergeReleases :: Repository -> [Release] -> Release
-mergeReleases repo releases =
+mergeReleases _repo releases =
     Release { releaseName = (releaseName . head $ releases)
             , releaseAliases = aliases
             , releaseComponents = components

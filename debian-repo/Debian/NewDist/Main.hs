@@ -9,7 +9,8 @@ import Data.Maybe (catMaybes)
 import Data.Text (pack)
 import Debian.Arch (Arch(Binary, Source), ArchCPU(..), ArchOS(..), prettyArch)
 import Debian.Changes (ChangesFile(..))
-import Debian.Config (ParamDescr(..), option)
+import Debian.Config (option)
+import Debian.NewDist.Options (Params(..), homeParams, optSpecs)
 import Debian.NewDist.Version (myVersion)
 import Debian.Relation (BinPkgName)
 import Debian.Release (ReleaseName, releaseName', parseReleaseName, Section, parseSection')
@@ -19,15 +20,15 @@ import Debian.Repo.Release (findReleases, prepareRelease, signReleases, mergeRel
 import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath, envPath)
 import Debian.Repo.Types.PackageIndex (PackageIndex(PackageIndex), PackageID, makeBinaryPackageID)
 import Debian.Repo.Types.Release (Release, parseArchitectures, releaseName, releaseAliases, releaseComponents, releaseArchitectures)
-import Debian.Repo.Types.Repository (LocalRepository, Layout(Pool, Flat), repoRoot, prepareLocalRepository, setRepositoryCompatibility, fromLocalRepository)
+import Debian.Repo.Types.Repository (LocalRepository, Layout, repoRoot, prepareLocalRepository, setRepositoryCompatibility, fromLocalRepository)
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
 import Extra.Email (sendEmails)
 import Extra.GPGSign (PGPKey(Default, Key))
 import Extra.Lock (withLock)
 import Prelude hiding (putStr, putStrLn, putChar)
-import System.Console.GetOpt (ArgDescr(NoArg, ReqArg), ArgOrder(Permute), getOpt, usageInfo)
+import System.Console.GetOpt (ArgOrder(Permute), getOpt, usageInfo)
 import System.Directory (createDirectoryIfMissing)
-import System.Environment (getArgs, getEnv)
+import System.Environment (getArgs)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.IO as IO (putStrLn, hFlush, stderr)
 import System.Process.Progress (quieter, qPutStrLn)
@@ -37,9 +38,9 @@ import Text.Regex (mkRegex, splitRegex)
 main :: IO ()
 main =
     do args <- getArgs
-       home <- getEnv "HOME"
+       params <- homeParams
        flags <- case getOpt Permute (map option optSpecs) args of
-                  (o, _n, []) -> return $ foldl (flip id) (initialParams home) o
+                  (o, _n, []) -> return $ foldl (flip id) params o
                   (_, _, errs) -> error (concat errs ++ usageInfo "Usage:" (map option optSpecs))
        quieter 1 (qPutStrLn ("Flags:\n  " ++ (show flags)))
        let lockPath = outsidePath (root flags) ++ "/newdist.lock"
@@ -48,10 +49,10 @@ main =
          False -> withLock lockPath (runAptIO (runFlags flags))
          True -> IO.putStrLn myVersion >> exitWith ExitSuccess
 
--- dry :: ParamRec -> IO () -> IO ()
+-- dry :: Params -> IO () -> IO ()
 -- dry params action = if dryRun params then return () else action
 
-runFlags :: MonadApt m => ParamRec -> m ()
+runFlags :: MonadApt m => Params -> m ()
 runFlags flags =
     do createReleases flags
        repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
@@ -95,7 +96,9 @@ runFlags flags =
                        (user, ('@' : host)) -> Just (user, host)
                        _ -> Nothing
 
-createReleases :: MonadApt m => ParamRec -> m ()
+-- | Make sure the debian releases which are referenced by the command
+-- line flags exist.
+createReleases :: MonadApt m => Params -> m ()
 createReleases flags =
     do repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
        rels <- findReleases repo
@@ -119,10 +122,10 @@ createReleases flags =
                     (releaseComponents release ++ [section'])  (releaseArchitectures release)
             _ -> return release
 
-root :: ParamRec -> EnvPath
+root :: Params -> EnvPath
 root flags = EnvPath (EnvRoot "") (rootParam flags)
 
-archList :: ParamRec -> [Arch]
+archList :: Params -> [Arch]
 archList flags = maybe defaultArchitectures (parseArchitectures . pack) $ architectures flags
 
 defaultArchitectures :: [Arch]
@@ -168,7 +171,7 @@ getReleases root' layout' dists section' archList' =
        requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
        return $ mergeReleases (fromLocalRepository repo) (existingReleases ++ requiredReleases)
 
-deletePackages :: LocalRepository -> [Release] -> ParamRec -> Maybe PGPKey -> IO [Release]
+deletePackages :: LocalRepository -> [Release] -> Params -> Maybe PGPKey -> IO [Release]
 deletePackages repo rels flags keyname =
     deleteSourcePackages keyname repo toRemove
     where
@@ -191,118 +194,3 @@ deletePackages repo rels flags keyname =
             [] -> Nothing
             [release] -> (Just release)
             _ -> error ("Multiple releases with name " ++ releaseName' dist)
-
-data ParamRec
-    = ParamRec
-      { verbosity :: Int
-      , rootParam :: FilePath
-      , uploadSection :: Maybe FilePath
-      , expire :: Bool
-      , cleanUp :: Bool
-      -- , dryRun :: Bool
-      , removePackages :: [String]
-      , install :: Bool
-      , releases :: [String]
-      , aliases :: [String]
-      , sections :: [String]
-      , replace :: Bool
-      , notifyEmail :: [String]
-      , senderEmail :: Maybe String
-      , verify :: Bool
-      , rejectRevision :: Maybe String
-      , printVersion :: Bool
-      , layout :: Layout
-      , signRepo :: Bool
-      , architectures :: Maybe String
-      , keyName :: Maybe String -- "Name of the pgp key with which to sign the repository."
-      } deriving Show
-
-initialParams :: FilePath -> ParamRec
-initialParams home =
-    ParamRec
-    { verbosity = 0
-    , rootParam = home
-    , uploadSection = Nothing
-    , expire = False
-    , cleanUp = False
-    -- , dryRun = False
-    , removePackages = []
-    , install = True
-    , releases = []
-    , aliases = []
-    , sections = []
-    , replace = False
-    , notifyEmail = []
-    , senderEmail = Nothing
-    , verify = False
-    , rejectRevision = Nothing
-    , printVersion = False
-    , layout = Pool
-    , signRepo = False
-    , architectures = Nothing
-    , keyName = Nothing
-    }
-
-optSpecs :: [ParamDescr (ParamRec -> ParamRec)]
-optSpecs =
-    [ Param ['v'] ["verbose"] ["Verbose"] (NoArg (\ p -> p {verbosity = verbosity p + 1}))
-                 "Increase the amount of debugging output"
-    , Param [] ["root"] ["Root"] (ReqArg (\ s p -> p {rootParam = s}) "PATH")
-		 "Specify the root directory of the repository"
-    , Param [] ["section"] ["Section"] (ReqArg (\ s p -> p {uploadSection = Just s}) "PATH")
-		 "Force uploads to the specified section"
-    , Param [] ["expire"] ["Expire"] (NoArg (\ p -> p {expire = True}))
-		 "Remove all packages trumped by newer versions from the package lists."
-    , Param [] ["clean-up"] ["Clean-Up"] (NoArg (\ p -> p {cleanUp = True}))
-		 "Move all unreferenced files in the repository to the removed directory."
-    -- , Param ['n'] ["dry-run"] ["Dry-Run"] (NoArg (\ p -> p {dryRun = True})) "Test run, don't modify the repository."
-    , Param [] ["remove"] ["Remove"] (ReqArg (\ s p -> p {removePackages = removePackages p ++ [s]}) "DIST,SECTION,PACKAGE=VERSION")
-                 "remove a particular version of a package (may be repeated.)"
-    , Param ['i'] ["install"] ["Install"] (NoArg (\ p -> p {install = True}))
-                 ("Scan the incoming directory and install the packages found there.\n" ++
-                  "This option is automatically true if no --remove arguments are given.")
-    , Param [] ["create-release"] ["Create-Release"] (ReqArg (\ s p -> p {releases = releases p ++ [s]}) "NAME")
-		 ("Create any new releases and/or sections found in Distribution\n" ++
-                  "and Section fields of the uploaded .changes files.")
-    , Param [] ["create-alias"] ["Create-Alias"] (ReqArg (\ s p -> p {aliases = aliases p ++ [s]}) "ALIAS=RELEASE")
-		 "Create an alias for an existing release"
-    , Param [] ["create-section"] ["Create-Section"] (ReqArg (\ s p -> p {sections = sections p ++ [s]}) "RELEASE,SECTION")
-		 "Create a new section in the given release."
-    , Param [] ["replace"] ["Replace"]	(NoArg (\ p -> p {replace = True}))
-                 ("Permit uploading of a package whose version is already present.\n" ++
-                  "This is normally an error.")
-    , Param [] ["notify-email"] ["Notify-Email"] (ReqArg (\ s p -> p {notifyEmail = notifyEmail p ++ [s]}) "USER@HOST")
-                 "Email address to send notifications about success and failure of uploads."
-    , Param [] ["sender-email"] ["Sender-Email"] (ReqArg (\ s p -> p {senderEmail = Just s}) "USER@HOST")
-                 "Sender address for notifications."
-    , Param [] ["verify"] ["Verify"] (NoArg (\ p -> p {verify = True}))
-                "Verify the structure and contents of the repository."
-    , Param [] ["reject-revision"] ["Reject-Revision"] (ReqArg (\ s p -> p {rejectRevision = Just s}) "STRING")
-                 ("Disallow uploads of packages with this revision string.  The\n" ++
-                  "autobuilder gives 'dir' targets the revision string 'none', the\n" ++
-                  "option 'Reject-Revision: none' can be used to prohibit uploads of\n" ++
-                  "packages built from a 'dir' target.")
-    , Param [] ["version"] ["Version"] (NoArg (\ p -> p {printVersion = True}))
-                 "Print the version string and exit"
-    , Param [] ["layout"] ["Layout"] (ReqArg (\ s p -> p {layout = case s of
-                                                                     "pool" -> Pool
-                                                                     "flat" -> Flat
-                                                                     _ -> layout p}) "flat or pool")
-                 "Specify a default layout"
-    , Param [] ["no-sign"] ["No-Sign"] (NoArg (\ p -> p {signRepo = False}))
-                 "Do not attempt to cryptographically sign the repository."
-    , Param [] ["sign"] ["Sign"] (NoArg (\ p -> p {signRepo = True}))
-                 "Cryptographically sign the repository even if nothing changed."
-    , Param [] ["architectures"] ["Architectures"] (ReqArg (\ s p -> p {architectures = Just s}) "ARCH,ARCH,...")
-                 "Name of the pgp key with which to sign the repository."
-    , Param [] ["keyname"] ["Key-Name"] (ReqArg (\ s p -> p {keyName = Just s}) "STRING")
-                 "Name of the pgp key with which to sign the repository."
-{-
-     , Param [] ["rebuild"] ["Rebuild"]	(NoArg (Value "Rebuild" "yes"))
-     "(UNIMPLEMENTED) Reconstruct the package lists from scratch."
-     , Param [] ["obsolete"] ["Obsolete"]	(NoArg (Value "Obsolete" "yes"))
-     (My.consperse "\n"
-      ["(UNIMPLEMENTED) Remove any package for which newer versions exist,",
-       "remove any package which is not part of any dist."])
--}
-    ]

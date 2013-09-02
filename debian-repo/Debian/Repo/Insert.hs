@@ -56,7 +56,7 @@ import System.IO ()
 import qualified System.Posix.Files as F ( createLink, fileSize, getFileStatus )
 import System.Posix.Types ( FileOffset )
 import System.Process ( runInteractiveCommand, waitForProcess )
-import System.Process.Progress (quieter, qPutStr, qPutStrLn)
+import System.Process.Progress (qPutStr, qPutStrLn)
 import qualified Text.Format as F ( Pretty(..) )
 import Text.PrettyPrint.ANSI.Leijen (Pretty(..), text, cat, pretty)
 
@@ -488,7 +488,7 @@ addPackagesToIndexes pairs =
           let set = Set.fromList . List.map packageID $ packages
           in
             \package -> Set.member (packageID package) set
-      newPackageLists = List.map (\ ((repo, release, index), info) -> List.map (DRP.toBinaryPackage release index) info) pairs
+      newPackageLists = List.map (\ ((_repo, release, index), info) -> List.map (DRP.toBinaryPackage release index) info) pairs
 
 -- |Delete any packages from a dist which are trumped by newer
 -- packages.  These packages are not technically garbage because they
@@ -629,7 +629,7 @@ findLive repo = {-(LocalRepository _ Nothing _)-}
       architectures releases = List.map head . group . sort . List.map releaseArchitectures $ releases
 
 deleteSourcePackages :: Maybe PGPKey -> LocalRepository -> [(Release, PackageIndex, PackageIDLocal BinPkgName)] -> IO [Release]
-deleteSourcePackages keyname repo [] = return []
+deleteSourcePackages _keyname _repo [] = return []
 deleteSourcePackages keyname repo packages =
     if Set.null invalid
     then qPutStrLn (unlines ("Removing packages:" : List.map (show . F.pretty . (\ (_, _, x) -> x)) packages)) >>

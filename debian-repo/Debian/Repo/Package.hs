@@ -189,7 +189,7 @@ tryParseRel _ = []
 -- package if it differs from the version number of the binary
 -- package.
 binaryPackageSourceID :: PackageIndex -> BinaryPackage -> PackageID BinPkgName
-binaryPackageSourceID (PackageIndex component _) package =
+binaryPackageSourceID (PackageIndex _component _) package =
     case maybe Nothing (matchRegex re . T.unpack) (B.fieldValue "Source" (packageInfo package)) of
       Just [name, _, ""] -> makeBinaryPackageID name (packageVersion pid)
       Just [name, _, version] -> makeBinaryPackageID name (parseDebianVersion version)
@@ -201,7 +201,7 @@ binaryPackageSourceID (PackageIndex component _) package =
 
 sourcePackageBinaryIDs :: Arch -> PackageIndex -> SourcePackage -> [PackageID BinPkgName]
 sourcePackageBinaryIDs Source _ _ = error "invalid argument"
-sourcePackageBinaryIDs arch sourceIndex package =
+sourcePackageBinaryIDs _arch _sourceIndex package =
     case (B.fieldValue "Version" info, B.fieldValue "Binary" info) of
       (Just version, Just names) -> List.map (binaryID (parseDebianVersion (T.unpack version))) $ splitRegex (mkRegex "[ ,]+") (T.unpack names)
       _ -> error ("Source package info has no 'Binary' field:\n" ++ (T.unpack . formatParagraph $ info))

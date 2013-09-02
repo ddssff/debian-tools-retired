@@ -139,20 +139,20 @@ computeConfig :: Int			-- ^ Preliminary verbosity level, before we have obtained
               -> ([[Flag]] -> [[Flag]])	-- ^ Final preparation of the configuration file contents
               -> IO [[Flag]]		-- ^ The result is a list of flag lists.  See 'Use' for an explanation of how you would get
 					-- more than one flag list here.
-computeConfig verbosity appName commandLineFlags prepare =	
+computeConfig verbosity appName commandLineFlags prepare =
     do when (verbosity > 2) (hPutStrLn stderr $ "computeConfig: commandLineFlags=" ++ show commandLineFlags)
        -- Compute the configuration file path and then load and expand it.
        defaultIncludes <- defaultConfigPaths appName
        --hPutStrLn stderr $ "defaultIncludes " ++ show defaultIncludes
        configFlags <- configPath verbosity (commandLineFlags ++ defaultIncludes) >>=
-                      tryPaths . maybeToList >>= expandIncludes verbosity >>= return . prepare
+                      tryPaths . maybeToList >>= expandIncludes >>= return . prepare
        when (verbosity > 2) (hPutStrLn stderr $ "computeConfig: configFlags=" ++ show commandLineFlags)
        -- Expand the command line flags using the Use/Name mechanism, and then expand the lets.
        expandSections [commandLineFlags] configFlags >>= return . map (expandLets . checkLets)
     where
       -- Load a list of configuration files.
-      expandIncludes :: Int -> [[Flag]] -> IO [[Flag]]
-      expandIncludes verbosity flags =
+      expandIncludes :: [[Flag]] -> IO [[Flag]]
+      expandIncludes flags =
           do when (verbosity > 2) (hPutStrLn stderr $ "expandIncludes: flags=" ++ show flags)
              -- ePut ("flags: " ++ show flags)
              let paths = concat (map includes flags)
@@ -286,16 +286,16 @@ tryPaths paths = do
 expandSections :: [[Flag]] -> [[Flag]] -> IO [[Flag]]
 expandSections toExpand expansions =
     do
-      expanded <- mapM (expandSection [] expansions) toExpand
+      expanded <- mapM (expandSection []) toExpand
       return (concat expanded)
     where
-      expandSection :: [String] -> [[Flag]] -> [Flag] -> IO [[Flag]]
-      expandSection stack expansions toExpand =
+      expandSection :: [String] -> [Flag] -> IO [[Flag]]
+      expandSection stack xs =
           do
             -- ePut ("stack: " ++ show stack)
-            -- ePut ("toExpand: " ++ show toExpand)
+            -- ePut ("toExpand: " ++ show xs)
             -- ePut ("expansions: " ++ show expansions)
-            let (useFlags, otherFlags) = partition isUse toExpand
+            let (useFlags, otherFlags) = partition isUse xs
             -- ePut ("useFlags: " ++ show useFlags)
             let sequences = map getNames useFlags
             -- ePut ("sequences: " ++ show sequences)
@@ -319,11 +319,11 @@ expandSections toExpand expansions =
                   do
                     let sequence'' = map (otherFlags ++) (map concat sequence')
                     -- ePut ("sequence'': " ++ show sequence'')
-                    result <- mapM (expandSection newstack expansions) sequence''
+                    result <- mapM (expandSection newstack) sequence''
                     -- ePut ("result: " ++ show result)
                     return (concat result)
 
-      getNames (Use names) = names
+      getNames (Use xs) = xs
       getNames _ = []
 
       -- FIXME: use the stack to prevent infinite recursion
@@ -488,7 +488,8 @@ usageInfo header params = unlines (header:table)
          ls _ = 0
          table = map fmtLine (legend ++ xs)
          fmtLine (Text s) = "    " ++ s
-         fmtLine (Opt {long = ls, short = ss, param = ps}) =
+         fmtLine (Opt {long = ls, short = 
+ss, param = ps}) =
              "  " ++
              flushLeft lsl ls ++ "  " ++
              flushLeft ssl ss ++ "  " ++

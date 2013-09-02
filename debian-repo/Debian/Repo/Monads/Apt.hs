@@ -30,12 +30,10 @@ module Debian.Repo.Monads.Apt
     , countTasks
     ) where
 
-import Control.Exception ( try )
-import Control.Exception as E (Exception, tryJust)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.State (get, put)
-import Control.Monad.State ( MonadTrans(..), MonadIO(..), StateT(runStateT), mapStateT )
+import Control.Monad.State (MonadTrans(..), MonadIO(..), StateT(runStateT))
 import qualified Data.Map as Map (Map, insert, empty, lookup)
 import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), ControlFunctions(parseControlFromHandle) )
 import Debian.Release (ReleaseName)

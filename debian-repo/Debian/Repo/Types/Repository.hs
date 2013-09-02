@@ -107,7 +107,7 @@ repoReleaseInfoLocal = repoReleaseInfoLocal_
 
 -- |The possible file arrangements for a repository.  An empty
 -- repository does not yet have either of these attributes.
-data Layout = Flat | Pool deriving (Eq, Ord, Read, Show)
+data Layout = Flat | Pool deriving (Eq, Ord, Read, Show, Bounded, Enum)
 
 instance Repo LocalRepository where
     repoKey (LocalRepository path _ _) = Local path -- fromJust . parseURI $ "file://" ++ envPath path
@@ -203,8 +203,8 @@ parseRelease :: ReleaseName -> [ReleaseName] -> F.File Text -> Release
 parseRelease name aliases file =
     case F.text file of
       Failure msgs -> error $ "Could not read " ++ show (F.path file) ++ ": " ++ show msgs
-      Success text ->
-          case T.parseControl (show (F.path file)) text of
+      Success t ->
+          case T.parseControl (show (F.path file)) t of
             Left msg -> error $ "Failure parsing " ++ show (F.path file) ++ ": " ++ show msg
             Right (T.Control []) -> error $ "Empty release file: " ++ show (F.path file)
             Right (T.Control (info : _)) -> makeReleaseInfo (F.File {F.path = F.path file, F.text = Success info}) name aliases
@@ -278,9 +278,8 @@ computeLayout root =
 -- | Create or update the compatibility level file for a repository.
 setRepositoryCompatibility :: LocalRepository -> IO ()
 setRepositoryCompatibility r =
-    maybeWriteFile path text
-    where text = show libraryCompatibilityLevel ++ "\n"
-          path = outsidePath (repoRoot r) </> compatibilityFile
+    maybeWriteFile path (show libraryCompatibilityLevel ++ "\n")
+    where path = outsidePath (repoRoot r) </> compatibilityFile
 
 -- | Return the subdirectory where a source package with the given
 -- section and name would be installed given the layout of the
