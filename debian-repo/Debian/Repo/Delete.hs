@@ -145,24 +145,29 @@ deleteGarbage repo =
       moveToRemoved root file =
           renameFile file (outsidePath root ++ "/removed/" ++ snd (splitFileName file))
 
+-- | Delete specific source packages and their associated binary packages.
 deleteSourcePackages :: Bool -> Maybe PGPKey -> LocalRepository -> [(Release, PackageIndex, PackageIDLocal BinPkgName)] -> IO [Release]
 deleteSourcePackages _ _ _ [] = return []
 deleteSourcePackages dry keyname repo packages =
     if Set.null invalid
     then qPutStrLn (unlines ("Removing packages:" : List.map (show . F.pretty . (\ (_, _, x) -> x)) packages)) >>
-         mapM doIndex (Set.toList indexes')
-    else error "deleteSourcePackages: not a source index"
+         mapM doIndex (Set.toList allIndexes)
+    else error $ "deleteSourcePackages: not a source index: " ++ show (F.pretty invalid)
     where
       doIndex (release, index) = getEntries release index >>= put release index . List.partition (victim release index)
       put :: Release -> PackageIndex -> ([BinaryPackage], [BinaryPackage]) -> IO Release
+      put release index ([], _) =
+          qPutStrLn ("Nothing to remove from " ++ show index) >>
+          return release
       put release index (junk, keep) =
-          when (junk /= []) (qPutStrLn ("Removing packages from " ++ show (F.pretty (fromLocalRepository repo, release, index)) ++ ":\n  " ++ intercalate "\n  " (List.map (show . F.pretty . packageID) junk))) >>
+          qPutStrLn ("Removing packages from " ++ show (F.pretty (fromLocalRepository repo, release, index)) ++ ":\n  " ++ intercalate "\n  " (List.map (show . F.pretty . packageID) junk)) >>
           putIndex' keyname release index keep
-      indexes' = Set.fold Set.union Set.empty (Set.map (\ (r, _) -> Set.fromList (List.map (r,) (packageIndexList r))) indexes) -- concatMap allIndexes (Set.toList indexes)
+      allIndexes = Set.fold Set.union Set.empty (Set.map (\ (r, _) -> Set.fromList (List.map (r,) (packageIndexList r))) indexes) -- concatMap allIndexes (Set.toList indexes)
       (indexes, invalid) = Set.partition (\ (_, i) -> packageIndexArch i == Source) (Set.fromList (List.map (\ (r, i, _) -> (r, i)) packages))
       -- (source, invalid) = Set.partition (\ (r, i, b) -> packageIndexArch i == Source) (Set.fromList packages)
       -- (indexes, invalid) = Set.partition (\ index -> packageIndexArch index == Source) (Set.fromList (List.map fst packages))
       -- allIndexes (release, sourceIndex) = packageIndexList release
+
       -- Compute the id of the source package this entry is from, and see if
       -- it is one of the packages we are deleting.
       victim :: Release -> PackageIndex -> BinaryPackage -> Bool

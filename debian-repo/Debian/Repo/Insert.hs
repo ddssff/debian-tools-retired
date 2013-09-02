@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-name-shadowing -fno-warn-missing-signatures #-}
--- |Insert packages into a release, remove packages from a release.
+-- |Insert packages into a release.
 module Debian.Repo.Insert
     ( scanIncoming
     , InstallResult(..)
