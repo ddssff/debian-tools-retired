@@ -21,6 +21,7 @@ data Params
       , rootParam :: FilePath
       , uploadSection :: Maybe FilePath
       , expire :: Bool
+      , binaryOrphans :: Bool
       , cleanUp :: Bool
       , dryRun :: Bool
       , removePackages :: [String]
@@ -47,6 +48,7 @@ initialParams =
     , rootParam = "."
     , uploadSection = Nothing
     , expire = False
+    , binaryOrphans = False
     , cleanUp = False
     , dryRun = False
     , removePackages = []
@@ -79,6 +81,8 @@ optSpecs =
 		 "Force uploads to the specified section"
     , Param [] ["expire"] ["Expire"] (NoArg (\ p -> p {expire = True}))
 		 "Remove all packages trumped by newer versions from the package lists."
+    , Param [] ["binary-orphans"] ["Binary-Orphans"] (NoArg (\ p -> p {binaryOrphans = True}))
+		 "Remove all binary packages that have no corresponding source package."
     , Param [] ["clean-up"] ["Clean-Up"] (NoArg (\ p -> p {cleanUp = True}))
 		 "Move all unreferenced files in the repository to the removed directory."
     , Param ['n'] ["dry-run"] ["Dry-Run"] (NoArg (\ p -> p {dryRun = True})) "Test run, don't modify the repository.  (ONLY IMPLEMENTED FOR REMOVE)"

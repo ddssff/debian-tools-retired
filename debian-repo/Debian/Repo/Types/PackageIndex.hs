@@ -3,7 +3,7 @@
 module Debian.Repo.Types.PackageIndex
     ( PackageIndex(..)
     , PackageIndexLocal
-    , PackageID(packageVersion)
+    , PackageID(packageVersion, packageName)
     , prettyPackageID
     , BinaryPackage(..)
     , binaryPackageName

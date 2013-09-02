@@ -26,7 +26,7 @@ import Debian.Control (Paragraph')
 import qualified Debian.Control.Text as B ( Field'(Field), Paragraph, Field, ControlFunctions(parseControlFromHandle), Control,
                                                   appendFields, fieldValue, modifyField, raiseFields, renameField )
 import qualified Debian.Control.Text as S ( Control'(Control), ControlFunctions(parseControlFromFile) )
-import Debian.Relation (PkgName)
+import Debian.Relation (PkgName, BinPkgName)
 import Debian.Repo.Changes ( findChangesFiles, name, path )
 import Debian.Repo.Monads.Apt (MonadApt)
 import qualified Debian.Repo.Package as DRP ( sourceFilePaths, toBinaryPackage, getPackages, releaseSourcePackages, releaseBinaryPackages, putPackages )
@@ -527,6 +527,13 @@ instance F.Pretty (Repository, Release, PackageIndex) where
 		         (releaseName' . releaseName $ r),
 		         show (F.pretty (packageIndexComponent i)),
                          show (prettyArch (packageIndexArch i))]
+
+instance F.Pretty (Release, PackageIndex, PackageID BinPkgName) where
+    pretty (r, i, b) = text $
+        intercalate "/" [(releaseName' . releaseName $ r),
+		         show (F.pretty (packageIndexComponent i)),
+                         show (prettyArch (packageIndexArch i)),
+                         show (F.pretty b)]
 
 instance F.Pretty (Release, PackageIndex) where
     pretty (r, i) = text $

@@ -199,9 +199,8 @@ binaryPackageSourceID (PackageIndex _component _) package =
       pid = packageID package
       re = mkRegex "^[ ]*([^ (]*)[ ]*(\\([ ]*([^ )]*)\\))?[ ]*$"
 
-sourcePackageBinaryIDs :: Arch -> PackageIndex -> SourcePackage -> [PackageID BinPkgName]
-sourcePackageBinaryIDs Source _ _ = error "invalid argument"
-sourcePackageBinaryIDs _arch _sourceIndex package =
+sourcePackageBinaryIDs :: SourcePackage -> [PackageID BinPkgName]
+sourcePackageBinaryIDs package =
     case (B.fieldValue "Version" info, B.fieldValue "Binary" info) of
       (Just version, Just names) -> List.map (binaryID (parseDebianVersion (T.unpack version))) $ splitRegex (mkRegex "[ ,]+") (T.unpack names)
       _ -> error ("Source package info has no 'Binary' field:\n" ++ (T.unpack . formatParagraph $ info))

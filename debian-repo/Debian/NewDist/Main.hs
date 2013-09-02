@@ -14,7 +14,7 @@ import Debian.NewDist.Options (Params(..), homeParams, optSpecs)
 import Debian.NewDist.Version (myVersion)
 import Debian.Relation (BinPkgName)
 import Debian.Release (ReleaseName, releaseName', parseReleaseName, Section, parseSection')
-import Debian.Repo.Delete (deleteSourcePackages, deleteTrumped, deleteGarbage)
+import Debian.Repo.Delete (deleteSourcePackages, deleteTrumped, deleteBinaryOrphans, deleteGarbage)
 import Debian.Repo.Insert (scanIncoming, InstallResult, explainError, resultToProblems, showErrors)
 import Debian.Repo.Monads.Apt (MonadApt, runAptIO)
 import Debian.Repo.Release (findReleases, prepareRelease, signReleases, mergeReleases)
@@ -66,6 +66,7 @@ runFlags flags =
                                                 sendEmails senderAddr emailAddrs (map (\ (changes, e) -> failureEmail changes e) errors) >>
                                                 exitOnError (map snd errors))))
        when (expire flags)  $ liftIO (deleteTrumped (dryRun flags) keyname repo rels) >> return ()
+       when (binaryOrphans flags)  $ deleteBinaryOrphans (dryRun flags) keyname repo rels >> return ()
        when (cleanUp flags) $ deleteGarbage repo >> return ()
        when (signRepo flags) $ liftIO (signReleases keyname (map (repo,) rels))
     where

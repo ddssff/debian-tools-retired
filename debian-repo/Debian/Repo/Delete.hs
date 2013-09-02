@@ -3,35 +3,38 @@
 -- | Remove packages from a release.
 module Debian.Repo.Delete
     ( deleteTrumped
+    , deleteBinaryOrphans
     , deleteGarbage
     , deleteSourcePackages
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Exception (SomeException)
 import Control.Monad (filterM)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as L (fromChunks)
 import Data.Either (partitionEithers)
-import Data.List as List (intercalate, sortBy, groupBy, isSuffixOf, partition, map)
+import Data.List as List (intercalate, sortBy, groupBy, isSuffixOf, partition, map, isInfixOf, filter)
 import Data.Monoid (mconcat)
-import Data.Set as Set (fromList, member, toList, difference, empty, null, partition, map, union, fold, toAscList)
+import Data.Set as Set (Set, size, fromList, member, toList, difference, empty, null, partition, map, union, fold, toAscList, filter)
 import Data.Text as T (pack, unpack)
 import Data.Text.Encoding (encodeUtf8)
 import Debian.Arch (Arch(..))
 import Debian.Control (formatControl)
 import qualified Debian.Control.Text as B (Control'(Control))
-import Debian.Relation (BinPkgName)
+import Debian.Relation (BinPkgName(unBinPkgName))
 import Debian.Repo.Insert (findLive)
 import Debian.Repo.Monads.Apt (MonadApt)
-import qualified Debian.Repo.Package as DRP (binaryPackageSourceID, getPackages)
-import Debian.Repo.PackageIndex ( packageIndexPath, packageIndexList, sourceIndexList )
+import qualified Debian.Repo.Package as DRP (binaryPackageSourceID, sourcePackageBinaryIDs, getPackages, sourcePackagesOfIndex)
+import Debian.Repo.PackageIndex (packageIndexPath, packageIndexList, sourceIndexList, binaryIndexList)
 import Debian.Repo.Release (signRelease)
 import Debian.Repo.Types ( BinaryPackageLocal, binaryPackageName, PackageIDLocal,
-                           BinaryPackage(packageID, packageInfo), PackageID, PackageIndexLocal, PackageIndex(..),
+                           BinaryPackage(packageID, packageInfo), PackageID(packageName), PackageIndexLocal, PackageIndex(..),
+                           SourcePackage(sourcePackageID),
                            PackageVersion(pkgVersion), Release,
                            EnvPath, outsidePath, Release(..))
 import Debian.Repo.Types.Repo (repoKey)
-import Debian.Repo.Types.Repository (Layout(..), LocalRepository, repoLayout, repoRoot, fromLocalRepository)
+import Debian.Repo.Types.Repository (Layout(..), LocalRepository, repoLayout, repoRoot, fromLocalRepository, repoReleaseInfoLocal)
 import Debian.Version.Text ()
 import Extra.GPGSign ( PGPKey )
 import Extra.Files ( writeAndZipFileWithBackup )
@@ -68,36 +71,92 @@ findTrumped repo release =
       mapM doIndex (sourceIndexList release) >>= return . merge
     where
       doIndex index = DRP.getPackages (repoKey repo) release index >>= return . either Left (Right . (List.map (\ b -> (release, index, b))))
-      merge :: [Either SomeException [(Release, PackageIndex, BinaryPackage)]] -> Either String [(Release, PackageIndex, BinaryPackage)]
-      merge packages =
-          case partitionEithers packages of
-            ([], packages') -> Right . concat . List.map tail . List.map newestFirst . groupByName . concat $ packages'
-            (bad, _) -> Left $ "Error(s) reading source indexes: " ++ intercalate ", " (List.map show bad)
+
+-- |Delete any packages from a dist which are trumped by newer
+-- packages.  These packages are not technically garbage because they
+-- can still be installed by explicitly giving their version number to
+-- apt, but it is not really a good idea to use them.
+deleteBinaryOrphans :: forall m. (MonadApt m) => Bool -> Maybe PGPKey -> LocalRepository -> [Release] -> m ()
+deleteBinaryOrphans _ _ _ [] = error "deleteBinaryOrphans called with empty release list"
+deleteBinaryOrphans dry keyname repo releases =
+    do -- All the source packages in the repository
+       ((exns1, sourcePackages) :: ([[SomeException]], [[[(Release, PackageIndex, SourcePackage)]]])) <- unzip <$> mapM (\ release -> partitionEithers <$> mapM (sourcePackagesOfIndex' (repoKey repo) release) (sourceIndexList release)) releases
+       -- All the binary packages in the repository
+       ((exns2, binaryPackages) :: ([[SomeException]], [[[(Release, PackageIndex, BinaryPackage)]]])) <- unzip <$> mapM (\ release -> partitionEithers <$> mapM (liftIO . getPackages' (repoKey repo) release) (binaryIndexList release)) releases
+       case (concat exns1, concat exns2, concat (concat sourcePackages), concat (concat binaryPackages)) of
+         ([], [], sps, bps) ->
+             do let bps' = Set.fromList (List.map (\ (r, i, b) -> (r, i, packageID b)) bps)
+                qPutStrLn ("Number of source packages: " ++ show (length sps))
+                qPutStrLn ("Number of binary packages: " ++ show (size bps'))
+                let -- The binary packages which are associated with
+                    -- some source package.  These need to have their
+                    -- architecture set from the release architecture
+                    -- list and the source package architecture
+                    goodBps :: Set (Release, PackageIndex, PackageID BinPkgName)
+                    goodBps =
+                        Set.fromList (concatMap f sps)
+                        where
+                          f (r, i, p) = concatMap (g r i) (DRP.sourcePackageBinaryIDs p)
+                          g r i p' = List.map (h r i p') (releaseArchitectures r)
+                          h r i p' a = (r, i {packageIndexArch = a}, p')
 {-
-      --ePutStr ("findTrumped " ++ show release)
-      packages <- mapM DRP.getPackages (sourceIndexList release)
-      case partitionEithers packages of
-        ([], packages') ->
-            do let groups = List.map newestFirst . groupByName . concat $ packages'
-               mapM_ (qPutStrLn) (catMaybes . List.map formatGroup $ groups)
-               return . Right . concat . List.map tail $ groups
-        (bad, _) -> return (Left $ "Error reading source indexes: " ++ intercalate ", " (List.map show bad))
+                        Set.fromList (concatMap (\ (r, i, p) -> Set.fromList (concatMap (\ bid -> map (\ a -> (r, i {packageindexArch = a}, bid)) (releaseArchitectures r)) (DRP.sourcePackageBinaryIDs p)) in
+
+                        Set.fromList (concatMap (\ (r, i, p) -> List.map (\ (a, p') -> (r, (i {packageIndexArch = a}), p')) (concatMap (\ a -> (a, DRP.sourcePackageBinaryIDs p)) (releaseArchitectures r))) sps)
+-}
+                    badBps :: Set (Release, PackageIndex, PackageID BinPkgName)
+                    badBps = Set.difference bps' goodBps
+                qPutStrLn ("deleteBinaryOrphans - keeping " ++ show (Set.size goodBps) ++ " packages.")
+                qPutStrLn ("deleteBinaryOrphans - discarding " ++ show (Set.size badBps) ++ " packages.")
+                liftIO $ deleteBinaryPackages dry keyname repo badBps
+         (exns1', exns2', _, _) -> error $ "Failure(s) loading package indexes:\n " ++ intercalate "\n " (List.map show (exns1' ++ exns2'))
+    where
+      p :: (Release, PackageIndex, PackageID BinPkgName) -> Bool
+      p (_, _, pid) = isInfixOf "fay" (unBinPkgName . packageName $ pid)
+      getPackages' repo release index = either Left (Right . List.map (\ p -> (release, index, p))) <$> DRP.getPackages repo release index
+      sourcePackagesOfIndex' repo release index = either Left (Right . List.map (\ p -> (release, index, p))) <$> DRP.sourcePackagesOfIndex repo release index
+{-
+         (Right sourcePackages', Right binaryPackages') ->
+             do 
+    mapM (findBinaryOrphans repo) releases >>=
+    return . partitionEithers >>=
+    \ (bad, good) ->
+        case bad of
+          [] -> return (concat good) >>=
+                ifEmpty (qPutStr "deleteBinaryOrphans: nothing to delete") >>=
+                deleteBinaryPackages dry keyname repo . (List.map (\ (r, i, p) -> (r, i, packageID p)))
+          _ -> error $ "Error reading package lists"
+    where
+      ifEmpty :: IO () -> [a] -> IO [a]
+      ifEmpty action [] = do action; return []
+      ifEmpty _ x = return x
 -}
 
+-- | Return a list of binary packages in a release which have no
+-- corresponding source package.  This never ought to happen, but due
+-- to a broken newdist it did.
+{-
+findBinaryOrphans :: LocalRepository -> Release -> IO (Either String [(Release, PackageIndex, BinaryPackage)])
+findBinaryOrphans repo release =
+    mapM (doIndex (sourceIndexList release)) (binaryIndexList release) >>= return . merge
+    where
+      doIndex sourceIndexes binaryIndex =
+          DRP.getPackages (repoKey repo) release binaryIndex >>=
+          return . either Left (Right . (List.map (\ b -> (release, binaryIndex, b))))
+-}
+
+merge :: [Either SomeException [(Release, PackageIndex, BinaryPackage)]] -> Either String [(Release, PackageIndex, BinaryPackage)]
+merge packages =
+    case partitionEithers packages of
+      ([], packages') -> Right . concat . List.map tail . List.map newestFirst . groupByName . concat $ packages'
+      (bad, _) -> Left $ "Error(s) reading source indexes: " ++ intercalate ", " (List.map show bad)
+    where
       groupByName :: [(Release, PackageIndex, BinaryPackage)] -> [[(Release, PackageIndex, BinaryPackage)]]
       groupByName = groupBy equalNames . sortBy compareNames
       equalNames (_, _, a') (_, _, b') = binaryPackageName a' == binaryPackageName b'
       compareNames (_, _, a') (_, _, b') = compare (binaryPackageName a') (binaryPackageName b')
       newestFirst = sortBy (flip compareVersions)
       compareVersions (_, _, a') (_, _, b') = compare (pkgVersion a') (pkgVersion b')
-{-
-      formatGroup :: [(Release, PackageIndex, BinaryPackage)] -> Maybe String
-      formatGroup [] = Nothing
-      formatGroup [_] = Nothing
-      formatGroup ((release, index, newest) : other) =
-          Just ("Trumped by " ++ show (F.pretty newest) ++ " in " ++ show (F.pretty (repo, release, index)) ++ ":\n " ++
-                intercalate "\n " (List.map (\ (_, _, x) -> show (F.pretty x)) other))
--}
 
 -- | Collect files that no longer appear in any package index and move
 -- them to the removed directory.  The .changes files are treated
@@ -130,14 +189,14 @@ deleteGarbage repo =
           mapM getSubPaths >>= return . concat
       changesFileList root Pool = getDirectoryPaths (outsidePath root ++ "/installed")
       -- In this case we already got the .changes files from the top directory
-      changesFileList root Flat = getDirectoryPaths (outsidePath root) >>= return . filter (isSuffixOf ".changes")
+      changesFileList root Flat = getDirectoryPaths (outsidePath root) >>= return . List.filter (isSuffixOf ".changes")
       getSubPaths path = 
           do
             isDir <- doesDirectoryExist path
             case isDir of
               False -> return [path]
               True -> getDirectoryPaths path
-      getDirectoryPaths dir = getDirectoryContents dir >>= return . filter filterDots >>= return . List.map ((dir ++ "/") ++)
+      getDirectoryPaths dir = getDirectoryContents dir >>= return . List.filter filterDots >>= return . List.map ((dir ++ "/") ++)
       filterDots "." = False
       filterDots ".." = False
       filterDots _ = True
@@ -149,21 +208,19 @@ deleteGarbage repo =
 deleteSourcePackages :: Bool -> Maybe PGPKey -> LocalRepository -> [(Release, PackageIndex, PackageIDLocal BinPkgName)] -> IO [Release]
 deleteSourcePackages _ _ _ [] = return []
 deleteSourcePackages dry keyname repo packages =
-    if Set.null invalid
-    then qPutStrLn (unlines ("Removing packages:" : List.map (show . F.pretty . (\ (_, _, x) -> x)) packages)) >>
-         mapM doIndex (Set.toList allIndexes)
-    else error $ "deleteSourcePackages: not a source index: " ++ show (List.map F.pretty (toList invalid))
+    do qPutStrLn ("deleteSourcePackages:\n " ++ intercalate"\n " (List.map (show . F.pretty . (\ (_, _, x) -> x)) packages))
+       mapM doIndex (Set.toList allIndexes)
     where
       doIndex (release, index) = getEntries release index >>= put release index . List.partition (victim release index)
       put :: Release -> PackageIndex -> ([BinaryPackage], [BinaryPackage]) -> IO Release
       put release index ([], _) =
-          qPutStrLn ("Nothing to remove from " ++ show index) >>
+          qPutStrLn ("deleteSourcePackages - nothing to remove from " ++ show index) >>
           return release
       put release index (junk, keep) =
-          qPutStrLn ("Removing packages from " ++ show (F.pretty (fromLocalRepository repo, release, index)) ++ ":\n  " ++ intercalate "\n  " (List.map (show . F.pretty . packageID) junk)) >>
+          qPutStrLn ("deleteSourcePackages  - Removing packages from " ++ show (F.pretty (fromLocalRepository repo, release, index)) ++ ":\n  " ++ intercalate "\n " (List.map (show . F.pretty . packageID) junk)) >>
           putIndex' keyname release index keep
-      allIndexes = Set.fold Set.union Set.empty (Set.map (\ (r, _) -> Set.fromList (List.map (r,) (packageIndexList r))) indexes) -- concatMap allIndexes (Set.toList indexes)
-      (indexes, invalid) = Set.partition (\ (_, i) -> packageIndexArch i == Source) (Set.fromList (List.map (\ (r, i, _) -> (r, i)) packages))
+      allIndexes = Set.fold Set.union Set.empty (Set.map (\ r -> Set.fromList (List.map (r,) (packageIndexList r))) (fromList (repoReleaseInfoLocal repo))) -- concatMap allIndexes (Set.toList indexes)
+      -- (indexes, invalid) = Set.partition (\ (_, i) -> packageIndexArch i == Source) (Set.fromList (List.map (\ (r, i, _) -> (r, i)) (repoReleaseInfoLocal repo)))
       -- (source, invalid) = Set.partition (\ (r, i, b) -> packageIndexArch i == Source) (Set.fromList packages)
       -- (indexes, invalid) = Set.partition (\ index -> packageIndexArch index == Source) (Set.fromList (List.map fst packages))
       -- allIndexes (release, sourceIndex) = packageIndexList release
@@ -172,11 +229,6 @@ deleteSourcePackages dry keyname repo packages =
       -- it is one of the packages we are deleting.
       victim :: Release -> PackageIndex -> BinaryPackage -> Bool
       victim release index binaryPackage = Set.member (sourceIdent (release, index, binaryPackage)) (Set.fromList packages)
-      sourceIdent :: (Release, PackageIndex, BinaryPackage) -> (Release, PackageIndex, PackageID BinPkgName)
-      sourceIdent (release, index, entry) =
-          case packageIndexArch index of
-            Source -> (release, index, packageID entry)
-            _ -> (release, (index {packageIndexArch = Source}), DRP.binaryPackageSourceID index entry)
       getEntries :: Release -> PackageIndex -> IO [BinaryPackage]
       getEntries release index = DRP.getPackages (repoKey repo) release index >>= return . either (error . show) id
       putIndex' :: Maybe PGPKey -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO Release
@@ -190,3 +242,49 @@ deleteSourcePackages dry keyname repo packages =
       putIndex root release index packages =
                 let text = formatControl (B.Control (List.map packageInfo packages)) in
                 liftIO $ writeAndZipFileWithBackup (outsidePath root </> packageIndexPath release index) (L.fromChunks [encodeUtf8 (mconcat text)])
+
+-- | Delete specific source packages and their associated binary packages.
+deleteBinaryPackages :: Bool -> Maybe PGPKey -> LocalRepository -> Set (Release, PackageIndex, PackageIDLocal BinPkgName) -> IO ()
+deleteBinaryPackages _ _ _ s | Set.null s = return ()
+deleteBinaryPackages dry keyname repo blacklist =
+    mapM_ doIndex (Set.toList allIndexes)
+    where
+      doIndex (release, index) = getEntries release index >>= put release index . List.partition (victim release index)
+      put :: Release -> PackageIndex -> ([BinaryPackage], [BinaryPackage]) -> IO Release
+      put release index ([], _) =
+          qPutStrLn ("deleteBinaryPackages - nothing to remove from " ++ show index) >>
+          return release
+      put release index (junk, keep) =
+          qPutStrLn ("deleteBinaryPackages - removing " ++ show (length junk) ++ " packages from " ++ show (F.pretty (fromLocalRepository repo, release, index)) ++ ", leaving " ++ show (length keep) {- ++ ":\n " ++ intercalate "\n " (List.map (show . F.pretty . packageID) junk) -}) >>
+          putIndex' keyname release index keep
+      allIndexes = Set.fold Set.union Set.empty (Set.map (\ r -> Set.fromList (List.map (r,) (packageIndexList r))) (fromList (repoReleaseInfoLocal repo)))
+
+      -- (invalid, indexes) = Set.partition (\ (_, i) -> packageIndexArch i == Source) (Set.fromList (List.map (\ (r, i, _) -> (r, i)) (toList packages)))
+      -- (source, invalid) = Set.partition (\ (r, i, b) -> packageIndexArch i == Source) (Set.fromList packages)
+      -- (indexes, invalid) = Set.partition (\ index -> packageIndexArch index == Source) (Set.fromList (List.map fst packages))
+      -- allIndexes (release, sourceIndex) = packageIndexList release
+
+      -- Compute the id of the source package this entry is from, and see if
+      -- it is one of the packages we are deleting.
+      victim :: Release -> PackageIndex -> BinaryPackage -> Bool
+      victim release index binaryPackage = Set.member (release, index, packageID binaryPackage) blacklist
+
+      getEntries :: Release -> PackageIndex -> IO [BinaryPackage]
+      getEntries release index = DRP.getPackages (repoKey repo) release index >>= return . either (error . show) id
+      putIndex' :: Maybe PGPKey -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO Release
+      putIndex' keyname release index entries =
+          do let root = repoRoot repo
+             case dry of
+               True -> ePutStrLn ("dry run: not changing " ++ show index)
+               False -> putIndex root release index entries >> signRelease keyname repo release
+             return release
+      putIndex :: EnvPath -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO (Either [String] ())
+      putIndex root release index packages =
+                let text = formatControl (B.Control (List.map packageInfo packages)) in
+                liftIO $ writeAndZipFileWithBackup (outsidePath root </> packageIndexPath release index) (L.fromChunks [encodeUtf8 (mconcat text)])
+
+sourceIdent :: (Release, PackageIndex, BinaryPackage) -> (Release, PackageIndex, PackageID BinPkgName)
+sourceIdent (release, index, entry) =
+    case packageIndexArch index of
+      Source -> (release, index, packageID entry)
+      _ -> (release, (index {packageIndexArch = Source}), DRP.binaryPackageSourceID index entry)

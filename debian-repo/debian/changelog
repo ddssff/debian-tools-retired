@@ -1,3 +1,10 @@
+haskell-debian-repo (5.46) unstable; urgency=low
+
+  * Add a --binary-orphans switch to newdist, which makes it remove
+    any binary packages that have no associated source package.
+
+ -- David Fox <dsf@seereason.com>  Mon, 02 Sep 2013 16:20:04 -0700
+
 haskell-debian-repo (5.45) unstable; urgency=low
 
   * Fix package removal in newdist.
