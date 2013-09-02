@@ -171,12 +171,12 @@ deleteSourcePackages dry keyname repo packages =
       -- Compute the id of the source package this entry is from, and see if
       -- it is one of the packages we are deleting.
       victim :: Release -> PackageIndex -> BinaryPackage -> Bool
-      victim release index entry = Set.member (release, index, sourceIdent index entry) (Set.fromList packages)
-      sourceIdent :: PackageIndex -> BinaryPackage -> PackageID BinPkgName
-      sourceIdent index entry =
+      victim release index binaryPackage = Set.member (sourceIdent (release, index, binaryPackage)) (Set.fromList packages)
+      sourceIdent :: (Release, PackageIndex, BinaryPackage) -> (Release, PackageIndex, PackageID BinPkgName)
+      sourceIdent (release, index, entry) =
           case packageIndexArch index of
-            Source -> packageID entry
-            _ -> DRP.binaryPackageSourceID index entry
+            Source -> (release, index, packageID entry)
+            _ -> (release, (index {packageIndexArch = Source}), DRP.binaryPackageSourceID index entry)
       getEntries :: Release -> PackageIndex -> IO [BinaryPackage]
       getEntries release index = DRP.getPackages (repoKey repo) release index >>= return . either (error . show) id
       putIndex' :: Maybe PGPKey -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO Release
