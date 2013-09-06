@@ -1,3 +1,11 @@
+haskell-cabal-debian (3.6) unstable; urgency=low
+
+  * Require haskell-devscripts >= 0.8.19.  This version changes the
+    value of datasubdir from /usr/share/packagename-packageversion to
+    simply /usr/share/packagename.  This could break some packaging.
+
+ -- David Fox <dsf@seereason.com>  Fri, 06 Sep 2013 16:48:18 -0700
+
 haskell-cabal-debian (3.5) unstable; urgency=low
 
   * Allow full lists of debian relations to be passed to the --build-dep

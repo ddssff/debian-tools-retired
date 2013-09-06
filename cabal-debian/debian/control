@@ -3,7 +3,7 @@ Priority: optional
 Section: haskell
 Maintainer: David Fox <dsf@seereason.com>
 Build-Depends: debhelper (>= 7.0)
-               , haskell-devscripts (>= 0.8)
+               , haskell-devscripts (>= 0.8.19)
                , cdbs
                , ghc
                , ghc-prof
@@ -158,6 +158,7 @@ Depends: ${shlibs:Depends}
 	 , apt-file
          , debian-policy
          , debhelper
+         , haskell-devscripts (>= 0.8.19)
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}, haskell-debian-utils (<< 3.59)
