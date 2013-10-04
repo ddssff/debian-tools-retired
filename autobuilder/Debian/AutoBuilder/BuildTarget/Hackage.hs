@@ -12,8 +12,8 @@ import Control.Monad (when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
-import Data.List (isPrefixOf, isSuffixOf, intercalate, nub, sort)
-import Data.Maybe (catMaybes)
+import Data.List (isPrefixOf, isSuffixOf, intercalate, nub, sort, tails)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Version (Version, showVersion, parseVersion)
 import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
@@ -103,10 +103,28 @@ patch cache flags name version =
 -}
 
 readVersion :: String -> Version
-readVersion s =
-    case filter (null . snd) $ readP_to_S parseVersion s of
-      [(v, _)] -> v
-      _ -> error $ "Failure reading cabal vesion: " ++ show s
+readVersion =
+    fst .
+    head' .
+    filter (null . snd) .
+    readP_to_S parseVersion .
+    trimInfix "</strong>" .
+    fromMaybe (error "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 1") .
+    dropInfix "<strong>"
+
+head' (x : xs) = x
+head' [] = error "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 2"
+
+-- | Remove everything until after the first occurrence of i
+dropInfix :: String -> String -> Maybe String
+dropInfix i s =
+    case dropWhile (not . isPrefixOf i) (tails s) of
+      [] -> Nothing
+      (x : _) -> Just (drop (length i) x)
+
+-- | Remove everything starting from the first occurrence of i
+trimInfix :: String -> String -> String
+trimInfix i s = take (length (takeWhile (not . isPrefixOf i) (tails s))) s
 
 -- |Download and unpack the given package version to the autobuilder's
 -- hackage temporary directory.  After the download it validates the
@@ -133,7 +151,10 @@ getVersion :: String -> String -> IO Version
 getVersion server name =
     do result@(code, out, _) <- readProcessWithExitCode cmd args B.empty
        case code of
-         ExitSuccess -> return $ readVersion $ findVersion name $ htmlParse (showCommandForUser cmd args) (B.unpack out)
+         -- This is bad it assumes the first occurrence of <strong>
+         -- encloses the newest package version number.  I should go
+         -- back to the html parser method
+         ExitSuccess -> return $ readVersion $ {- findVersion name $ (htmlParse (showCommandForUser cmd args) -} (B.unpack out)
          _ -> error ("Could not get version for " ++ name ++ "\n " ++ cmd ++ " -> " ++ show result)
     where
       cmd = "curl"
@@ -194,7 +215,7 @@ download' server name version =
 -- |Hackage paths
 packageURL server name = "http://" ++ server ++ "/package/" ++ name
 
-versionURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "/" ++ showVersion version ++ "/" ++ name ++ "-" ++ showVersion version ++ ".tar.gz"
+versionURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ showVersion version ++ "/" ++ name ++ "-" ++ showVersion version ++ ".tar.gz"
 
 downloadCommand :: String -> String -> Version -> String
 downloadCommand server name version = "curl -s '" ++ versionURL server name version ++ "'" {- ++ " > '" ++ destPath top name version ++ "'" -}
