@@ -194,7 +194,7 @@ download' server name version =
 -- |Hackage paths
 packageURL server name = "http://" ++ server ++ "/package/" ++ name
 
-versionURL server name version = "http://" ++ server ++ "/packages/archive/" ++ name ++ "/" ++ showVersion version ++ "/" ++ name ++ "-" ++ showVersion version ++ ".tar.gz"
+versionURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "/" ++ showVersion version ++ "/" ++ name ++ "-" ++ showVersion version ++ ".tar.gz"
 
 downloadCommand :: String -> String -> Version -> String
 downloadCommand server name version = "curl -s '" ++ versionURL server name version ++ "'" {- ++ " > '" ++ destPath top name version ++ "'" -}

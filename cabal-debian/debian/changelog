@@ -1,3 +1,9 @@
+haskell-cabal-debian (3.7) unstable; urgency=low
+
+  * Change path to hackage tarball in watch file for hackage2.
+
+ -- David Fox <dsf@seereason.com>  Fri, 04 Oct 2013 09:22:51 -0700
+
 haskell-cabal-debian (3.6) unstable; urgency=low
 
   * Require haskell-devscripts >= 0.8.19.  This version changes the

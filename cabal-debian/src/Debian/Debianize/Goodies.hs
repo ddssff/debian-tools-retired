@@ -172,7 +172,7 @@ oldClckwrksServerFlags x =
 watchAtom :: PackageName -> Text
 watchAtom (PackageName pkgname) =
     pack $ "version=3\nopts=\"downloadurlmangle=s|archive/([\\w\\d_-]+)/([\\d\\.]+)/|archive/$1/$2/$1-$2.tar.gz|,\\\nfilenamemangle=s|(.*)/$|" ++ pkgname ++
-           "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/packages/archive/" ++ pkgname ++
+           "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/package/" ++ pkgname ++
            " \\\n    ([\\d\\.]*\\d)/\n"
 
 siteAtoms :: BinPkgName -> Site -> Atoms -> Atoms
