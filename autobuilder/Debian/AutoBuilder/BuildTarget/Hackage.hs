@@ -103,14 +103,20 @@ patch cache flags name version =
 -}
 
 readVersion :: String -> Version
-readVersion =
+readVersion text =
     fst .
     head' .
     filter (null . snd) .
-    readP_to_S parseVersion .
+    readP_to_S parseVersion $
+    text
+
+scrapeVersion :: String -> Version
+scrapeVersion text =
+    readVersion .
     trimInfix "</strong>" .
-    fromMaybe (error "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 1") .
-    dropInfix "<strong>"
+    fromMaybe (error $ "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 1 " ++ show text) .
+    dropInfix "<strong>" $
+    text
 
 head' (x : xs) = x
 head' [] = error "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 2"
@@ -154,7 +160,7 @@ getVersion server name =
          -- This is bad it assumes the first occurrence of <strong>
          -- encloses the newest package version number.  I should go
          -- back to the html parser method
-         ExitSuccess -> return $ readVersion $ {- findVersion name $ (htmlParse (showCommandForUser cmd args) -} (B.unpack out)
+         ExitSuccess -> return $ scrapeVersion $ {- findVersion name $ (htmlParse (showCommandForUser cmd args) -} (B.unpack out)
          _ -> error ("Could not get version for " ++ name ++ "\n " ++ cmd ++ " -> " ++ show result)
     where
       cmd = "curl"

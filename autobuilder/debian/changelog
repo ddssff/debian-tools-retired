@@ -1,3 +1,10 @@
+autobuilder (6.56.1) unstable; urgency=low
+
+  * Fix bug involving the CabalPin flag and scraping version numbers from
+    hackage2.
+
+ -- David Fox <dsf@seereason.com>  Sat, 12 Oct 2013 09:05:52 -0700
+
 autobuilder (6.56) unstable; urgency=low
 
   * Change path to tarball files for hackage2.
