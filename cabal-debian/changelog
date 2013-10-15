@@ -1,3 +1,9 @@
+haskell-cabal-debian (3.8.1) unstable; urgency=low
+
+  * Move changelog top top directory so hackage will see it.
+
+ -- David Fox <dsf@seereason.com>  Tue, 15 Oct 2013 06:24:25 -0700
+
 haskell-cabal-debian (3.8) unstable; urgency=low
 
   * Downcase the package name to build the datadir name in /usr/share,

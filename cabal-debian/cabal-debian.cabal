@@ -1,5 +1,5 @@
 Name:           cabal-debian
-Version:        3.8
+Version:        3.8.1
 License:        BSD3
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>
@@ -10,12 +10,16 @@ Build-Type:     Simple
 Synopsis:       Create a debianization for a cabal package
 Cabal-Version: >= 1.8
 Extra-Source-Files:
-  debian/changelog,
+  changelog,
   debian/Debianize.hs
 Description:
- Tool for creating debianizations of Haskell packages based on the .cabal
- file.  If apt-file is installed it will use it to discover what is the
- debian package name of a C library.
+ Tool for creating debianizations of Haskell packages based on the
+ .cabal file.  If apt-file is installed it will use it to discover
+ what is the debian package name of a C library.  Basic usage is via
+ the cabal-debian executable.  A more powerful but still undocumented
+ programmatic interface is also provided.  Normal usage for this is to
+ put a script in debian/Debianize.hs (such as the one in this source
+ package) which is run to create the debianization.
 
 Flag tests
   Description: enable the unit test executable (disabled by default because it has a lot of wacky dependencies.)

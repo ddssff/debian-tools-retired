@@ -13,7 +13,11 @@ import Prelude hiding (log)
 
 main :: IO ()
 main =
-    do log <- inputChangeLog (Top ".")
+    do -- The official changelog was moved to the top directory so
+       -- that hackage will see it, so copy it before building the
+       -- debianization.
+       copyFile "changelog" "debian/changelog"
+       log <- inputChangeLog (Top ".")
        new <- debianization (Top ".") (return . customize . setL changelog (Just log)) seereasonDefaultAtoms
        old <- inputDebianization (Top ".")
        case compareDebianization old (copyFirstLogEntry old new) of
