@@ -78,6 +78,7 @@ module Debian.Debianize.Atoms
     , intermediateFiles
     ) where
 
+import Data.Char (toLower)
 import Data.Generics (Data, Typeable)
 import Data.Lens.Lazy (Lens, lens, getL, modL)
 import Data.Map as Map (Map, fold, foldWithKey, insertWith, empty, insert)
