@@ -1,5 +1,5 @@
 Name:           cabal-debian
-Version:        3.7
+Version:        3.8
 License:        BSD3
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>

@@ -374,8 +374,8 @@ dataDir :: Lens Atoms (Maybe FilePath)
 dataDir = lens g s
     where
       g atoms =
-          fmap (\ p -> let PackageName pkgname = pkgName. package $ p in
-                       "usr/share" </> pkgname) (getL packageDescription atoms)
+          fmap (\ p -> let PackageName pkgname = pkgName . package $ p in
+                       "usr/share" </> map toLower pkgname) (getL packageDescription atoms)
       s _ _ = error "setL dataDir"
 
 

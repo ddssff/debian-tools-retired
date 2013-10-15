@@ -1,3 +1,10 @@
+haskell-cabal-debian (3.8) unstable; urgency=low
+
+  * Downcase the package name to build the datadir name in /usr/share,
+    this matches the paths in dist/autogen/Paths_packagename.
+
+ -- David Fox <dsf@seereason.com>  Mon, 14 Oct 2013 20:48:39 -0700
+
 haskell-cabal-debian (3.7) unstable; urgency=low
 
   * Change path to hackage tarball in watch file for hackage2.
