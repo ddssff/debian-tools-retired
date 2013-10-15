@@ -1,5 +1,5 @@
 Name:           cabal-debian
-Version:        3.8.1
+Version:        3.8.2
 License:        BSD3
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>
@@ -32,7 +32,7 @@ Source-Repository head
 
 Library
  Hs-Source-Dirs: src
- GHC-Options: -threaded -Wall -O2
+ GHC-Options: -Wall -O2
  Build-Depends:
    ansi-wl-pprint,
    base < 5,

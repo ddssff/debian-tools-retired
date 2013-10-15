@@ -1,3 +1,10 @@
+haskell-cabal-debian (3.8.2) unstable; urgency=low
+
+  * Actually, copy changelog from debian/changelog before
+    building sdist tarball.
+
+ -- David Fox <dsf@seereason.com>  Tue, 15 Oct 2013 06:42:39 -0700
+
 haskell-cabal-debian (3.8.1) unstable; urgency=low
 
   * Move changelog top top directory so hackage will see it.

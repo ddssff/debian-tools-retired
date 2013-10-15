@@ -5,9 +5,12 @@ import Distribution.Simple
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
 import Distribution.Simple.Program
 import System.Cmd
+import System.Directory
 import System.Exit
 
-main = defaultMainWithHooks simpleUserHooks
+main =
+    copyFile "debian/changelog" "changelog" >>
+    defaultMainWithHooks simpleUserHooks
        {- { postBuild = \ _ _ _ lbi -> when (buildDir lbi /= "dist-ghc/build") (runTestScript lbi)
           , runTests = \ _ _ _ lbi -> runTestScript lbi } -}
 
