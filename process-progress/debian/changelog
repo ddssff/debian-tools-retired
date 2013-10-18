@@ -1,3 +1,9 @@
+haskell-process-progress (0.5.3) unstable; urgency=low
+
+  * Make changelog visible on hackage.
+
+ -- David Fox <dsf@seereason.com>  Tue, 15 Oct 2013 07:39:38 -0700
+
 haskell-process-progress (0.5.2) unstable; urgency=low
 
   * Fix the repository location in the cabal file.

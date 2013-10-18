@@ -1,5 +1,5 @@
 Name:               process-progress
-Version:            0.5.2
+Version:            0.5.3
 Synopsis:           Run a process and do reportsing on its progress.
 Description:        Function to run a process and wrappers to provide different
                     types of feedback while it executes.
@@ -11,7 +11,7 @@ Category:           System
 Build-type:         Simple
 Cabal-version:      >=1.6
 Extra-source-files:
-  README.md
+  README.md, changelog
 
 source-repository head
   Type:             darcs
