@@ -1,3 +1,9 @@
+haskell-cabal-debian (3.8.3) unstable; urgency=low
+
+  * Add an ifdef for compatibility with GHC-7.4.1.
+
+ -- David Fox <dsf@seereason.com>  Sun, 20 Oct 2013 15:50:47 -0700
+
 haskell-cabal-debian (3.8.2) unstable; urgency=low
 
   * Actually, copy changelog from debian/changelog before
