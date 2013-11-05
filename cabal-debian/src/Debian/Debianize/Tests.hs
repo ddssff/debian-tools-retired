@@ -20,7 +20,7 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Debianize (debianization)
 import Debian.Debianize.Atoms as Atoms
     (Atoms, rulesHead, compat, sourceFormat, changelog, control, missingDependencies, revision,
-     binaryArchitectures, copyright, debVersion, execMap, buildDeps, utilsPackageName, description,
+     binaryArchitectures, copyright, debVersion, execMap, buildDeps, utilsPackageNames, description,
      depends, installData, epochMap {-, sourcePackageName, install, buildDepsIndep-})
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Dependencies (getRulesHead)
@@ -341,7 +341,7 @@ test5 =
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-data") All) .
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-development") All) .
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-production") All) .
-                           setL utilsPackageName (Just (BinPkgName "creativeprompts-data")) .
+                           setL utilsPackageNames (Just (singleton (BinPkgName "creativeprompts-data"))) .
                            modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-data")
                                                     (T.intercalate "\n" [ "creativeprompts.com data files"
                                                                , "  Static data files for creativeprompts.com"])) .

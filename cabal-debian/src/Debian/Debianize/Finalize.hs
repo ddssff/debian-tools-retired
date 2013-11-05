@@ -19,7 +19,7 @@ import Debian.Debianize.Atoms as Atoms
     (Atoms, packageDescription, control, binaryArchitectures, rulesFragments, website, serverInfo, link,
      backups, executable, sourcePriority, sourceSection, binaryPriorities, binarySections, description,
      install, installTo, installData, installCabalExecTo, noProfilingLibrary, noDocumentationLibrary,
-     utilsPackageName, extraDevDeps, installData, installCabalExec, file, apacheSite, installDir, buildDir,
+     utilsPackageNames, extraDevDeps, installData, installCabalExec, file, apacheSite, installDir, buildDir,
      dataDir, intermediateFiles)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                newBinaryDebDescription, modifyBinaryDeb,
@@ -148,10 +148,14 @@ makeUtilsPackage deb =
     case (Set.difference availableData installedData, Set.difference availableExec installedExec) of
       (datas, execs) | Set.null datas && Set.null execs -> deb
       (datas, execs) ->
-          let p = fromMaybe (debianName deb Utilities (Cabal.package pkgDesc)) (getL utilsPackageName deb)
-              deb' = setL packageDescription (Just pkgDesc) . makeUtilsAtoms p datas execs $ deb in
-          modL control (\ y -> modifyBinaryDeb p (f deb' p (if Set.null execs then All else Any)) y) deb'
+          let ps = fromMaybe (singleton (debianName deb Utilities (Cabal.package pkgDesc))) (getL utilsPackageNames deb)
+              deb' = Set.fold (h datas execs) deb ps in
+              -- deb' = setL packageDescription (Just pkgDesc) (makeUtilsAtoms p datas execs deb) in
+          Set.fold (g execs) deb' ps
+          -- modL control (\ y -> modifyBinaryDeb p (f deb' p (if Set.null execs then All else Any)) y) deb'
     where
+      h datas execs p deb' = setL packageDescription (Just pkgDesc) (makeUtilsAtoms p datas execs deb')
+      g execs p deb' = modL control (\ y -> modifyBinaryDeb p (f deb' p (if Set.null execs then All else Any)) y) deb'
       f _ _ _ (Just bin) = bin
       f deb' p arch Nothing =
           let bin = newBinaryDebDescription p arch in

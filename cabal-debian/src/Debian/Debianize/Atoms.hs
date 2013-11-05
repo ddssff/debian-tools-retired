@@ -28,7 +28,7 @@ module Debian.Debianize.Atoms
     , backups
     , apacheSite
     , missingDependencies
-    , utilsPackageName
+    , utilsPackageNames
     , sourcePackageName
     , revision
     , debVersion
@@ -150,7 +150,7 @@ data DebAtom
                                                   -- from DebRulesFragment values in the atom list.
     | DebRulesFragment Text                       -- ^ A Fragment of debian/rules
     | Warning Text                                -- ^ A warning to be reported later
-    | UtilsPackageName BinPkgName                 -- ^ Name to give the package for left-over data files and executables
+    | UtilsPackageNames (Set BinPkgName)          -- ^ Names of the packages that will get left-over data files and executables
     | DebChangeLog ChangeLog			  -- ^ The changelog, first entry contains the source package name and version
     | DebLogComments [[Text]]			  -- ^ Each element is a comment to be added to the changelog, where the
                                                   -- element's text elements are the lines of the comment.
@@ -562,18 +562,20 @@ missingDependencies = lens g s
             p Source (MissingDependency _) = True
             p _ _ = False
 
--- | Override the package name used to hold left over data files and executables
-utilsPackageName :: Lens Atoms (Maybe BinPkgName)
-utilsPackageName = lens g s
+-- | Override the package name used to hold left over data files and executables.
+-- Usually only one package is specified, but if more then one are they will each
+-- receive the same list of files.
+utilsPackageNames :: Lens Atoms (Maybe (Set BinPkgName))
+utilsPackageNames = lens g s
     where
       g atoms = foldAtoms from Nothing atoms
           where
-            from Source (UtilsPackageName x') (Just x) | x /= x' = error $ "Conflicting compat values:" ++ show (x, x')
-            from Source (UtilsPackageName x) _ = Just x
-            from _ _ x = x
-      s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . UtilsPackageName) x)) atoms
+            from Source (UtilsPackageNames xs') (Just xs) | xs /= xs' = error $ "Conflicting compat values:" ++ show (xs, xs')
+            from Source (UtilsPackageNames xs) _ = Just xs
+            from _ _ xs = xs
+      s xs atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . UtilsPackageNames) xs)) atoms
           where
-            f Source (UtilsPackageName y) = Just y
+            f Source (UtilsPackageNames ys) = Just ys
             f _ _ = Nothing
 
 -- | Override the debian source package name constructed from the cabal name
