@@ -10,13 +10,13 @@ import Debian.Debianize.Details (seereasonDefaultAtoms)
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), VersionReq(SLT))
 import Debian.Version (parseDebianVersion)
 import Prelude hiding (log)
+import System.Directory (copyFile)
 
 main :: IO ()
 main =
-    do -- The official changelog was moved to the top directory so
-       -- that hackage will see it, so copy it before building the
-       -- debianization.
-       copyFile "changelog" "debian/changelog"
+    do -- Copy the changelog into the top directory so that hackage
+       -- will see it.
+       copyFile "debian/changelog" "changelog"
        log <- inputChangeLog (Top ".")
        new <- debianization (Top ".") (return . customize . setL changelog (Just log)) seereasonDefaultAtoms
        old <- inputDebianization (Top ".")
