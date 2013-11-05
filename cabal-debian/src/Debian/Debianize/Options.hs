@@ -37,60 +37,78 @@ compileArgs args atoms =
 options :: [OptDescr (Atoms -> Atoms)]
 options =
     [ Option "v" ["verbose"] (ReqArg (\ s atoms -> setL verbosity (read' (\ s' -> error $ "verbose: " ++ show s') s) atoms) "n")
-             "Change build verbosity",
+             "Change the amount of progress messages generated",
       Option "n" ["dry-run", "compare"] (NoArg (\ atoms -> setL dryRun True atoms))
              "Just compare the existing debianization to the one we would generate.",
       Option "h?" ["help"] (NoArg (\ atoms -> setL debAction Usage atoms))
              "Show this help text",
-      Option "" ["debianize"] (NoArg (\ atoms -> setL debAction Debianize atoms))
-             "Generate a new debianization, replacing any existing one.  One of --debianize or --substvar is required.",
-      Option "" ["substvar"] (ReqArg (\ name atoms -> setL debAction (SubstVar (read' (\ s -> error $ "substvar: " ++ show s) name)) atoms) "Doc, Prof, or Dev")
-             (unlines ["Write out the list of dependencies required for the dev, prof or doc package depending",
-                       "on the argument.  This value can be added to the appropriate substvars file."]),
       Option "" ["executable"] (ReqArg (\ path x -> executableOption path (\ bin e -> doExecutable bin e x)) "SOURCEPATH or SOURCEPATH:DESTDIR")
-             "Create individual eponymous executable packages for these executables.  Other executables and data files are gathered into a single utils package.",
+             (unlines [ "Create an individual binary package to hold this executable.  Other executables "
+                      , " and data files are gathered into a single utils package named 'haskell-packagename-utils'."]),
       Option "" ["ghc-version"] (ReqArg (\ ver x -> setL compilerVersion (Just (last (map fst (readP_to_S parseVersion ver)))) x) "VERSION")
-             "Version of GHC in build environment",
+             (unlines [ "Version of GHC in build environment.  Without this option it is assumed that"
+                      , "the version of GHC in the build environment is the same as the one in the"
+                      , "environment in which cabal-debian is running. (the usual case.)  The GHC"
+                      , "version is used to determine which packages are bundled with GHC - if a"
+                      , "package is bundled with GHC it is not necessary to add a build dependency for"
+                      , "that package to the debian/control file."]),
       Option "" ["disable-haddock"] (NoArg (setL noDocumentationLibrary True))
-             "Don't generate API documentation.  Use this if build is crashing due to a haddock error.",
+             (unlines [ "Don't generate API documentation packages, usually named"
+                      , "libghc-packagename-doc.  Use this if your build is crashing due to a"
+                      , "haddock bug."]),
       Option "" ["missing-dependency"] (ReqArg (\ name atoms -> modL missingDependencies (insert (BinPkgName name)) atoms) "DEB")
-             "Mark a package missing, do not add it to any dependency lists in the debianization.",
+             (unlines [ "This is the counterpart to --disable-haddock.  It prevents a package"
+                      , "from being added to the build dependencies.  This is necessary, for example,"
+                      , "when a dependency package was built with the --disable-haddock option, because"
+                      , "normally cabal-debian assumes that the -doc package exists and adds it as a"
+                      , "build dependency."]),
       Option "" ["source-package-name"] (ReqArg (\ name x -> setL sourcePackageName (Just (SrcPkgName name)) x) "NAME")
-             "Use this name for the debian source package.  Default is haskell-<cabalname>, where the cabal package name is downcased.",
+             (unlines [ "Use this name for the debian source package, the name in the Source field at the top of the"
+                      , "debian control file, and also at the very beginning of the debian/changelog file.  By default"
+                      , "this is haskell-<cabalname>, where the cabal package name is downcased."]),
       Option "" ["disable-library-profiling"] (NoArg (setL noProfilingLibrary True))
-             "Don't generate profiling libraries",
-      Option "f" ["flags"] (ReqArg (\ fs atoms -> modL cabalFlagAssignments (union (fromList (flagList fs))) atoms) "FLAGS")
-             "Set given flags in Cabal conditionals",
+             (unlines [ "Don't generate profiling (-prof) library packages.  This has been used in one case"
+                      , "where the package code triggered a compiler bug."]),
       Option "" ["maintainer"] (ReqArg (\ maint x -> setL maintainer (either (error ("Invalid maintainer string: " ++ show maint)) Just (parseMaintainer maint)) x) "Maintainer Name <email addr>")
-             "Override the Maintainer name and email in $DEBEMAIL/$EMAIL/$DEBFULLNAME/$FULLNAME",
+             (unlines [ "Override the Maintainer name and email given in $DEBEMAIL or $EMAIL or $DEBFULLNAME or $FULLNAME"]),
       Option "" ["build-dep"]
                  (ReqArg (\ name atoms ->
                               modL buildDeps
                                        (case parseRelations name of
                                           Right rss -> Set.insert rss
                                           Left err -> error ("cabal-debian option --build-dep " ++ show name ++ ": " ++ show err)) atoms) "Debian package relations")
-                 "Specify a package to add to the build dependency list for this source package, e.g. '--build-dep libglib2.0-dev'.",
+                 (unlines [ "Add a dependency relation to the Build-Depends: field for this source package, e.g."
+                          , ""
+                          , "     --build-dep libglib2.0-dev"
+                          , "     --build-dep 'libglib2.0-dev >= 2.2'" ]),
       Option "" ["build-dep-indep"]
                  (ReqArg (\ name atoms ->
                               modL buildDepsIndep
                                        (case parseRelations name of
                                           Right rss -> Set.insert rss
                                           Left err -> error ("cabal-debian option --build-dep-indep " ++ show name ++ ": " ++ show err)) atoms) "Debian binary package name")
-                 "Specify a package to add to the architecture independent build dependency list for this source package, e.g. '--build-dep-indep perl'.",
+                 (unlines [ "Similar to --build-dep, but the dependencies are added to Build-Depends-Indep, e.g.:"
+                          , ""
+                          , "    --build-dep-indep perl" ]),
       Option "" ["dev-dep"] (ReqArg (\ name atoms -> modL extraDevDeps (Set.insert (Rel (BinPkgName name) Nothing Nothing)) atoms) "Debian binary package name")
-             "Specify a package to add to the Depends: list of the -dev package, e.g. '--dev-dep libncurses5-dev'.  It might be good if this implied --build-dep.",
+             (unlines [ "Add an entry to the Depends: field of the -dev package, e.g."
+                      , "'--dev-dep libncurses5-dev'.  It might be good if this implied --build-dep."]),
       Option "" ["depends"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL depends (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
-             "Generalized --dev-dep - specify pairs A:B of debian binary package names, each A gets a Depends: B",
+             (unlines [ "Generalized --dev-dep - specify pairs A:B of debian binary package names, each"
+                      , "A gets a Depends: B.  Note that B can have debian style version relations"]),
       Option "" ["conflicts"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL conflicts (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
-             "Specify pairs A:B of debian binary package names, each A gets a Conflicts: B.  Note that B can have debian style version relations",
+             "Like --depends, modifies the Conflicts field.",
       Option "" ["replaces"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL replaces (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
-             "Specify pairs A:B of debian binary package names, each A gets a Replaces: B.  Note that B can have debian style version relations",
+             "Like --depends, modifies the Replaces field.",
       Option "" ["provides"] (ReqArg (\ arg atoms -> foldr (\ (p, r) atoms' -> modL provides (Map.insertWith union p (singleton r)) atoms') atoms (parseDeps arg)) "deb:deb,deb:deb,...")
-             "Specify pairs A:B of debian binary package names, each A gets a Provides: B.  Note that B can have debian style version relations",
+             "Like --depends, modifies the Provides field.",
       Option "" ["map-dep"] (ReqArg (\ pair atoms -> case break (== '=') pair of
                                                        (cab, (_ : deb)) -> modL extraLibMap (Map.insertWith Set.union cab (singleton (rels deb))) atoms
                                                        (_, "") -> error "usage: --map-dep CABALNAME=RELATIONS") "CABALNAME=RELATIONS")
-             "Specify a mapping from the name appearing in the Extra-Library field of the cabal file to a debian binary package name, e.g. --dep-map cryptopp=libcrypto-dev",
+             (unlines [ "Specify what debian package name corresponds with a name that appears in"
+                      , "the Extra-Library field of a cabal file, e.g. --map-dep cryptopp=libcrypto-dev."
+                      , "I think this information is present somewhere in the packaging system, but"
+                      , "I'm not sure of the details."]),
       Option "" ["deb-version"] (ReqArg (\ version atoms -> setL debVersion (Just (parseDebianVersion version)) atoms) "VERSION")
              "Specify the version number for the debian package.  This will pin the version and should be considered dangerous.",
       Option "" ["revision"] (ReqArg (setL revision . Just) "REVISION")
@@ -105,11 +123,29 @@ options =
                                                      _ -> error "usage: --exec-map EXECNAME=RELATIONS") "EXECNAME=RELATIONS")
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
       Option "" ["omit-lt-deps"] (NoArg (setL omitLTDeps True))
-             "Don't generate the << dependency when we see a cabal equals dependency.",
+             (unlines [ "Remove all less-than dependencies from the generated control file.  Less-than"
+                      , "dependencies are less useful and more troublesome for debian packages than cabal,"
+                      , "because you can't install multiple versions of a given debian package.  For more"
+                      , "google 'cabal hell'."]),
       Option "" ["quilt"] (NoArg (setL sourceFormat (Just Quilt3)))
              "The package has an upstream tarball, write '3.0 (quilt)' into source/format.",
       Option "" ["builddir"] (ReqArg (\ s atoms -> setL buildDir (Just (s </> "build")) atoms) "PATH")
-             "Subdirectory where cabal does its build, dist/build by default, dist-ghc when run by haskell-devscripts.  The build subdirectory is added to match the behavior of the --builddir option in the Setup script."
+             (unlines [ "Subdirectory where cabal does its build, dist/build by default, dist-ghc when"
+                      , "run by haskell-devscripts.  The build subdirectory is added to match the"
+                      , "behavior of the --builddir option in the Setup script."]),
+
+      Option "f" ["flags"] (ReqArg (\ fs atoms -> modL cabalFlagAssignments (union (fromList (flagList fs))) atoms) "FLAGS")
+             (unlines [ "Flags to pass to the finalizePackageDescription function in"
+                      , "Distribution.PackageDescription.Configuration when loading the cabal file."]),
+
+      Option "" ["debianize"] (NoArg (\ atoms -> setL debAction Debianize atoms))
+             "Deprecated - formerly used to get what is now the normal benavior.",
+      Option "" ["substvar"] (ReqArg (\ name atoms -> setL debAction (SubstVar (read' (\ s -> error $ "substvar: " ++ show s) name)) atoms) "Doc, Prof, or Dev")
+             (unlines [ "With this option no debianization is generated.  Instead, the list"
+                      , "of dependencies required for the dev, prof or doc package (depending"
+                      , "on the argument) is printed to standard output.  These can be added"
+                      , "to the appropriate substvars file.  (This is an option whose use case"
+                      , "is lost in the mists of time.)"])
     ]
 
 anyrel :: BinPkgName -> Relation

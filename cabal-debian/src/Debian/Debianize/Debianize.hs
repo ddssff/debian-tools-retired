@@ -73,7 +73,17 @@ cabalDebian defaultAtoms =
         Debianize -> debianize (Top ".") return defaultAtoms
         Usage -> do
           progName <- getProgName
-          let info = "Usage: " ++ progName ++ " [FLAGS]\n"
+          let info = unlines [ "Typical usage is to cd to the top directory of the package's unpacked source and run: "
+                             , ""
+                             , "    " ++ progName ++ " --maintainer 'Maintainer Name <maintainer@email>'."
+                             , ""
+                             , "This will read the package's cabal file and any existing debian/changelog file and"
+                             , "deduce what it can about the debianization, then it will create or modify files in"
+                             , "the debian subdirectory.  Note that it will not remove any files in debian, and"
+                             , "these could affect the operation of the debianization in unknown ways.  For this"
+                             , "reason I recommend either using a pristine unpacked directory each time, or else"
+                             , "using a revision control system to revert the package to a known state before running."
+                             , "The following additional options are available:" ]
           putStrLn (usageInfo info options)
 
 compileEnvironmentArgs :: Atoms -> IO Atoms
