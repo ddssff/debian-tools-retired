@@ -1,3 +1,16 @@
+haskell-cabal-debian (3.9) unstable; urgency=low
+
+  * Clean up documentation
+  * Allow more than one utility package name, each of which will
+    get copies of the data-files and leftover executables.
+  * Make the --debianize option a no-op, the behavior is now the
+    default.
+  * Update the unit tests and build an executable to run them.
+  * Copy debian/changelog to top directory at beginning of build
+    so hackage will see it.
+
+ -- David Fox <dsf@seereason.com>  Tue, 05 Nov 2013 11:34:48 -0800
+
 haskell-cabal-debian (3.8.3) unstable; urgency=low
 
   * Add an ifdef for compatibility with GHC-7.4.1.
