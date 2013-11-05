@@ -1209,7 +1209,7 @@ defaultFlags :: Flags
 defaultFlags =
     Flags {
       verbosity_ = 1
-    , debAction_ = Usage
+    , debAction_ = Debianize
     , dryRun_ = False
     , validate_ = False
     }
