@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP, OverloadedStrings #-}
 import Debian.Debianize
 import Data.Lens.Lazy
 import Debian.Debianize.Atoms as Atoms (depends, description)
@@ -31,9 +31,9 @@ main =
                modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-development") All) .
                modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-production") All) .
                modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-staging") All) .
-               modL buildDepsIndep (Set.insert (Rel (BinPkgName "libjs-jcrop") Nothing Nothing)) .
-               modL buildDepsIndep (Set.insert (Rel (BinPkgName "libjs-jquery") Nothing Nothing)) .
-               modL buildDepsIndep (Set.insert (Rel (BinPkgName "libjs-jquery-ui") (Just (SLT (parseDebianVersion ("1.10" :: String)))) Nothing)) .
+               modL buildDepsIndep (Set.insert [[Rel (BinPkgName "libjs-jcrop") Nothing Nothing]]) .
+               modL buildDepsIndep (Set.insert [[Rel (BinPkgName "libjs-jquery") Nothing Nothing]]) .
+               modL buildDepsIndep (Set.insert [[Rel (BinPkgName "libjs-jquery-ui") (Just (SLT (parseDebianVersion ("1.10" :: String)))) Nothing]]) .
                modL description (Map.insert (BinPkgName "appraisalscope") "Offline manipulation of appraisal database") .
                addServerDeps .
                addServerData .

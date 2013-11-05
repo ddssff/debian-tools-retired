@@ -3,7 +3,7 @@ Priority: optional
 Section: haskell
 Maintainer: David Fox <dsf@seereason.com>
 Build-Depends: debhelper (>= 7.0)
-               , haskell-devscripts (>= 0.8.19)
+               , haskell-devscripts (>= 0.8)
                , cdbs
                , ghc
                , ghc-prof
@@ -13,16 +13,10 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-diff-prof
                , libghc-hunit-dev
                , libghc-hunit-prof
-               , libghc-unixutils-dev (>= 1.50)
-               , libghc-unixutils-prof (>= 1.50)
                , libghc-ansi-wl-pprint-dev
                , libghc-ansi-wl-pprint-prof
-               , libghc-applicative-extras-dev
-               , libghc-applicative-extras-prof
                , libghc-base-dev (<< 5) | ghc
                , libghc-base-prof (<< 5) | ghc-prof
-               , libghc-bytestring-dev | ghc
-               , libghc-bytestring-prof | ghc-prof
                , libghc-containers-dev | ghc
                , libghc-containers-prof | ghc-prof
 	       , libghc-data-lens-dev
@@ -37,8 +31,6 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-hsemail-prof
                , libghc-mtl-dev
                , libghc-mtl-prof
-               , libghc-network-dev
-               , libghc-network-prof
                , libghc-parsec3-dev (>= 3)
                , libghc-parsec3-prof (>= 3)
                , libghc-process-dev | ghc
@@ -59,11 +51,8 @@ Build-Depends-Indep: ghc-doc
                      , libghc-cabal-doc (>= 1.9) | ghc-doc
                      , libghc-diff-doc
                      , libghc-hunit-doc
-                     , libghc-unixutils-doc (>= 1.50)
                      , libghc-ansi-wl-pprint-doc
-                     , libghc-applicative-extras-doc
                      , libghc-base-doc (<< 5) | ghc-doc
-                     , libghc-bytestring-doc | ghc-doc
                      , libghc-containers-doc | ghc-doc
 		     , libghc-data-lens-doc
                      , libghc-debian-doc (>= 3.71)
@@ -71,7 +60,6 @@ Build-Depends-Indep: ghc-doc
                      , libghc-filepath-doc | ghc-doc
                      , libghc-hsemail-doc
                      , libghc-mtl-doc
-                     , libghc-network-doc
                      , libghc-parsec3-doc (>= 3)
                      , libghc-process-doc | ghc-doc
                      , libghc-puremd5-doc
@@ -95,9 +83,13 @@ Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
 Replaces: ${haskell:Replaces}
 Description: Create a debianization for a cabal package
- Tool for creating debianizations of Haskell packages based on the .cabal
- file.  If apt-file is installed it will use it to discover what is the
- debian package name of a C library.
+ Tool for creating debianizations of Haskell packages based on the
+ .cabal file.  If apt-file is installed it will use it to discover
+ what is the debian package name of a C library.  Basic usage is via
+ the cabal-debian executable.  A more powerful but still undocumented
+ programmatic interface is also provided.  Normal usage for this is to
+ put a script in debian/Debianize.hs (such as the one in this source
+ package) which is run to create the debianization.
  .
   Author: David Fox <dsf@seereason.com>
   Upstream-Maintainer: David Fox <dsf@seereason.com>
@@ -116,9 +108,13 @@ Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
 Replaces: ${haskell:Replaces}
 Description: Create a debianization for a cabal package
- Tool for creating debianizations of Haskell packages based on the .cabal
- file.  If apt-file is installed it will use it to discover what is the
- debian package name of a C library.
+ Tool for creating debianizations of Haskell packages based on the
+ .cabal file.  If apt-file is installed it will use it to discover
+ what is the debian package name of a C library.  Basic usage is via
+ the cabal-debian executable.  A more powerful but still undocumented
+ programmatic interface is also provided.  Normal usage for this is to
+ put a script in debian/Debianize.hs (such as the one in this source
+ package) which is run to create the debianization.
  .
   Author: David Fox <dsf@seereason.com>
   Upstream-Maintainer: David Fox <dsf@seereason.com>
@@ -138,9 +134,13 @@ Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
 Replaces: ${haskell:Replaces}
 Description: Create a debianization for a cabal package
- Tool for creating debianizations of Haskell packages based on the .cabal
- file.  If apt-file is installed it will use it to discover what is the
- debian package name of a C library.
+ Tool for creating debianizations of Haskell packages based on the
+ .cabal file.  If apt-file is installed it will use it to discover
+ what is the debian package name of a C library.  Basic usage is via
+ the cabal-debian executable.  A more powerful but still undocumented
+ programmatic interface is also provided.  Normal usage for this is to
+ put a script in debian/Debianize.hs (such as the one in this source
+ package) which is run to create the debianization.
  .
   Author: David Fox <dsf@seereason.com>
   Upstream-Maintainer: David Fox <dsf@seereason.com>
@@ -156,8 +156,8 @@ Depends: ${shlibs:Depends}
          , ${haskell:Depends}
 	 , ${misc:Depends}
 	 , apt-file
-         , debian-policy
          , debhelper
+         , debian-policy
          , haskell-devscripts (>= 0.8.19)
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}

@@ -7,7 +7,7 @@ import Data.Text as Text (intercalate)
 import Debian.Debianize as Atoms
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Details (seereasonDefaultAtoms)
-import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), VersionReq(SLT))
+import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), VersionReq(SLT, GRE))
 import Debian.Version (parseDebianVersion)
 import Prelude hiding (log)
 import System.Directory (copyFile)
@@ -34,9 +34,12 @@ main =
                 setL sourceFormat (Just Native3) .
                 -- modL extraDevDeps (Set.insert (BinPkgName "debian-policy")) .
                 setL utilsPackageNames (Just (singleton (BinPkgName "cabal-debian"))) .
+                modL installCabalExec (Map.insertWith union (BinPkgName "cabal-debian-tests") (singleton ("cabal-debian-tests", "/usr/bin"))) .
                 modL depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "apt-file") Nothing Nothing))) .
                 modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "debian-policy") Nothing Nothing))) .
                 modL Atoms.depends (Map.insertWith union (BinPkgName "libghc-cabal-debian-dev") (singleton (Rel (BinPkgName "debian-policy") Nothing Nothing))) .
+                modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "debhelper") Nothing Nothing))) .
+                modL Atoms.depends (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "haskell-devscripts") (Just (GRE (parseDebianVersion ("0.8.19" :: String)))) Nothing))) .
                 modL conflicts (Map.insertWith union (BinPkgName "cabal-debian") (singleton (Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing))) .
                 modL description (Map.insertWith (error "test7") (BinPkgName "cabal-debian")
                                         (Text.intercalate "\n"

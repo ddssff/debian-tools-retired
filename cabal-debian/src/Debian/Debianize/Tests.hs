@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
-module Debian.Debianize.Tests
+module Main
     ( tests
+    , main
     ) where
 
 import Data.Algorithm.Diff.Context (contextDiff)
@@ -530,3 +531,7 @@ testEntry =
                                 , "    files that were supposed to be installed into packages."
                                 , ""
                                 , " -- David Fox <dsf@seereason.com>  Thu, 20 Dec 2012 06:49:25 -0800" ]))
+
+main :: IO ()
+main = runTestTT tests >>= putStrLn . show
+

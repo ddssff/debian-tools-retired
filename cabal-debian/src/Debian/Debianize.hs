@@ -58,7 +58,6 @@ module Debian.Debianize
     , module Debian.Debianize.Interspersed
     , module Debian.Debianize.Options
     , module Debian.Debianize.SubstVars
-    , module Debian.Debianize.Tests
     , module Debian.Debianize.Types
     , module Debian.Debianize.Utility
     , module Debian.Policy
@@ -75,7 +74,6 @@ import Debian.Debianize.Input
 import Debian.Debianize.Interspersed
 import Debian.Debianize.Options
 import Debian.Debianize.SubstVars
-import Debian.Debianize.Tests
 import Debian.Debianize.Types
 import Debian.Debianize.ControlFile hiding (depends, conflicts, maintainer, description, section)
 import Debian.Debianize.Utility
