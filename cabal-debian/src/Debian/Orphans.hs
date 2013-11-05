@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleInstances, StandaloneDeriving #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Debian.Orphans where
 
@@ -114,9 +114,6 @@ deriving instance Data License
 instance Pretty License where
     pretty (GPL _) = text "GPL"
     pretty (LGPL _) = text "LGPL"
-#if MIN_VERSION_Cabal(1,16,0)
-    pretty (Apache _) = text "Apache"
-#endif
     pretty BSD3 = text "BSD"
     pretty BSD4 = text "BSD-like"
     pretty PublicDomain = text "Public Domain"
@@ -124,6 +121,7 @@ instance Pretty License where
     pretty OtherLicense = text "Non-distributable"
     pretty MIT = text "MIT"
     pretty (UnknownLicense _) = text "Unknown"
+    pretty x = text (show x)
 
 deriving instance Data NameAddr
 deriving instance Typeable NameAddr

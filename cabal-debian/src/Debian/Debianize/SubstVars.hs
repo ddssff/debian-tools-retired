@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, ScopedTypeVariables, TupleSections, TypeSynonymInstances #-}
+{-# LANGUAGE ScopedTypeVariables, TupleSections, TypeSynonymInstances #-}
 {-# OPTIONS -Wall -fno-warn-name-shadowing #-}
 
 -- | Support for generating Debianization from Cabal data.

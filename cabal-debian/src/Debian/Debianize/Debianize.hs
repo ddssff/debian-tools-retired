@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, OverloadedStrings, ScopedTypeVariables, StandaloneDeriving, TupleSections, TypeSynonymInstances, CPP #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, ScopedTypeVariables, StandaloneDeriving, TupleSections, TypeSynonymInstances #-}
 {-# OPTIONS -Wall -fno-warn-name-shadowing -fno-warn-orphans #-}
 
 -- | Generate a package Debianization from Cabal data and command line
