@@ -29,11 +29,11 @@ import qualified Data.Set as Set
 import Data.Text as Text (Text, pack, unlines)
 import Data.Version (showVersion)
 import Debian.Control
-import Debian.Debianize.Atoms (Atoms, packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary,
-                               missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
-                               packageInfo, depends, conflicts, provides, replaces, control)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile as Debian (PackageType(..), SourceDebDescription(..))
+import Debian.Debianize.Lenses (Atoms, packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary,
+                               missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
+                               packageInfo, depends, conflicts, provides, replaces, control)
 import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), DebType(..))
 import Debian.Debianize.Types.VersionSplits (VersionSplits, doSplits, packageRangesFromVersionSplits)
 import Debian.Orphans ()

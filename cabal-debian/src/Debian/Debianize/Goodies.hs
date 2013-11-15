@@ -25,8 +25,7 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Set as Set (insert, union, singleton)
 import Data.Text as Text (Text, pack, unlines, intercalate)
-import Debian.Debianize.Atoms as Atoms ()
-import Debian.Debianize.Atoms as Atoms
+import Debian.Debianize.Lenses as Lenses
     (Atoms, packageDescription, rulesFragments, website, serverInfo, link, backups, executable,
      install, installTo, installCabalExecTo, file, installDir, logrotateStanza, postInst,
      installInit, installCabalExec, rulesFragments, packageDescription, executable,
@@ -94,7 +93,7 @@ doWebsite bin x deb = modL website (Map.insertWith (\ a b -> error $ "doWebsite:
 doBackups :: BinPkgName -> String -> Atoms -> Atoms
 doBackups bin s deb =
     modL backups (Map.insertWith (error "backups") bin s) $
-    modL Atoms.depends (Map.insertWith union bin (singleton (Rel (BinPkgName "anacron") Nothing Nothing))) $
+    modL Lenses.depends (Map.insertWith union bin (singleton (Rel (BinPkgName "anacron") Nothing Nothing))) $
     deb
 
 describe :: Atoms -> PackageType -> PackageIdentifier -> Text

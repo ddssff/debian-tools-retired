@@ -25,7 +25,7 @@ import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.Atoms as Atoms
+import Debian.Debianize.Lenses as Lenses
     (Atoms, rulesHead, compat, sourceFormat, watch, changelog, control, copyright,
      intermediateFiles, postInst, postRm, preInst, preRm, install, installDir, warning,
      logrotateStanza, installInit, link, packageDescription, compiler, maintainer, verbosity,
@@ -283,7 +283,7 @@ inputMaintainer atoms =
                                 return . maybe (Just haskellMaintainer) Just
     where
       debianPackageMaintainer :: IO (Maybe NameAddr)
-      debianPackageMaintainer = return (getL Atoms.maintainer atoms)
+      debianPackageMaintainer = return (getL Lenses.maintainer atoms)
       cabalPackageMaintainer :: IO (Maybe NameAddr)
       cabalPackageMaintainer = return $ case fmap Cabal.maintainer (getL packageDescription atoms) of
                                           Nothing -> Nothing

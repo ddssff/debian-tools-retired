@@ -18,8 +18,8 @@ import Data.Set as Set (fromList, union, insert, singleton)
 import qualified Data.Text as T
 import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
-import Debian.Debianize.Debianize (debianization)
-import Debian.Debianize.Atoms as Atoms
+import Debian.Debianize.Atoms (debianization)
+import Debian.Debianize.Lenses as Lenses
     (Atoms, rulesHead, compat, sourceFormat, changelog, control, missingDependencies, revision,
      binaryArchitectures, copyright, debVersion, execMap, buildDeps, utilsPackageNames, description,
      depends, installData, epochMap {-, sourcePackageName, install, buildDepsIndep-})
@@ -343,22 +343,22 @@ test5 =
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-development") All) .
                            modL binaryArchitectures (Map.insert (BinPkgName "creativeprompts-production") All) .
                            setL utilsPackageNames (Just (singleton (BinPkgName "creativeprompts-data"))) .
-                           modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-data")
+                           modL Lenses.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-data")
                                                     (T.intercalate "\n" [ "creativeprompts.com data files"
                                                                , "  Static data files for creativeprompts.com"])) .
-                           modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-production")
+                           modL Lenses.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-production")
                                                     (T.intercalate "\n" [ "Configuration for running the creativeprompts.com server"
                                                                , "  Production version of the blog server, runs on port"
                                                                , "  9021 with HTML validation turned off." ])) .
-                           modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-development")
+                           modL Lenses.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-development")
                                                     (T.intercalate "\n" [ "Configuration for running the creativeprompts.com server"
                                                                , "  Testing version of the blog server, runs on port"
                                                                , "  8000 with HTML validation turned on." ])) .
-                           modL Atoms.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-backups")
+                           modL Lenses.description (Map.insertWith (error "test5") (BinPkgName "creativeprompts-backups")
                                                     (T.intercalate "\n" [ "backup program for creativeprompts.com"
                                                                , "  Install this somewhere other than creativeprompts.com to run automated"
                                                                , "  backups of the database."])) .
-                           modL Atoms.depends (Map.insertWith union (BinPkgName "creativeprompts-server") (singleton (anyrel (BinPkgName "markdown")))) .
+                           modL Lenses.depends (Map.insertWith union (BinPkgName "creativeprompts-server") (singleton (anyrel (BinPkgName "markdown")))) .
                            modL execMap (Map.insertWith (error "Conflict in execMap") "trhsx" [[Rel (BinPkgName "haskell-hsx-utils") Nothing Nothing]]) .
                            doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups" .
                            doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development")) .

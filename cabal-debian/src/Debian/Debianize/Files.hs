@@ -13,7 +13,7 @@ import Data.Monoid ((<>))
 import Data.Set as Set (toList, member)
 import Data.Text as Text (Text, pack, unpack, lines, unlines, strip, null)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.Atoms (Atoms, compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
+import Debian.Debianize.Lenses (Atoms, compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
                                intermediateFiles, install, installDir, installInit, logrotateStanza, link,
                                rulesHead, rulesFragments, copyright)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),

@@ -15,7 +15,7 @@ import Data.Maybe
 import Data.Monoid (mempty, (<>))
 import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, map, union, singleton)
 import Data.Text as Text (pack, unlines, unpack)
-import Debian.Debianize.Atoms as Atoms
+import Debian.Debianize.Lenses as Lenses
     (Atoms, packageDescription, control, binaryArchitectures, rulesFragments, website, serverInfo, link,
      backups, executable, sourcePriority, sourceSection, binaryPriorities, binarySections, description,
      install, installTo, installData, installCabalExecTo, noProfilingLibrary, noDocumentationLibrary,
@@ -59,7 +59,7 @@ finalizeDebianization atoms0 =
                 (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {architecture = x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL binaryArchitectures atoms)) .
                 (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {binaryPriority = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL binaryPriorities atoms)) .
                 (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {binarySection = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL binarySections atoms)) .
-                (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL Atoms.description atoms)) $ atoms
+                (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL Lenses.description atoms)) $ atoms
 
 cabalExecBinaryPackage :: BinPkgName -> Atoms -> Atoms
 cabalExecBinaryPackage b deb =

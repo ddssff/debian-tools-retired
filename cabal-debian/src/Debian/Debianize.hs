@@ -49,13 +49,13 @@ module Debian.Debianize
     ( module Debian.Debianize.Atoms
     , module Debian.Debianize.Bundled
     , module Debian.Debianize.ControlFile
-    , module Debian.Debianize.Debianize
     , module Debian.Debianize.Dependencies
     , module Debian.Debianize.Files
     , module Debian.Debianize.Finalize
     , module Debian.Debianize.Goodies
     , module Debian.Debianize.Input
     , module Debian.Debianize.Interspersed
+    , module Debian.Debianize.Lenses
     , module Debian.Debianize.Options
     , module Debian.Debianize.SubstVars
     , module Debian.Debianize.Types
@@ -65,13 +65,13 @@ module Debian.Debianize
 
 import Debian.Debianize.Atoms
 import Debian.Debianize.Bundled
-import Debian.Debianize.Debianize
 import Debian.Debianize.Dependencies
 import Debian.Debianize.Files
 import Debian.Debianize.Finalize
 import Debian.Debianize.Goodies
 import Debian.Debianize.Input
 import Debian.Debianize.Interspersed
+import Debian.Debianize.Lenses
 import Debian.Debianize.Options
 import Debian.Debianize.SubstVars
 import Debian.Debianize.Types

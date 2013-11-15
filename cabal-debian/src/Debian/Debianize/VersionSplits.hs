@@ -6,7 +6,7 @@ module Debian.Debianize.VersionSplits
 import Data.Lens.Lazy (modL)
 import Data.Map as Map (alter)
 import Data.Version (Version)
-import Debian.Debianize.Atoms (Atoms, debianNameMap)
+import Debian.Debianize.Lenses (Atoms, debianNameMap)
 import Debian.Debianize.Types.VersionSplits (VersionSplits, makePackage, insertSplit)
 import Distribution.Package (PackageName)
 
