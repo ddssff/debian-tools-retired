@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 module Debian.Debianize.Lenses
     ( Atoms
+    , Flags(..)
     -- * Modes of operation
     , verbosity
     , dryRun

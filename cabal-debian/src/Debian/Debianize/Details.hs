@@ -10,7 +10,7 @@ import Data.Monoid (mempty)
 import Data.Set as Set (insert)
 import Debian.Relation (BinPkgName(BinPkgName))
 import Data.Version (Version(Version))
-import Debian.Debianize (Atoms, missingDependencies, epochMap)
+import Debian.Debianize.Lenses (Atoms, missingDependencies, epochMap)
 import Debian.Debianize.VersionSplits (mapCabal, splitCabal)
 import Distribution.Package (PackageName(PackageName))
 

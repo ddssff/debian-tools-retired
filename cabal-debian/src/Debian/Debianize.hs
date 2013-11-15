@@ -60,6 +60,7 @@ module Debian.Debianize
     , module Debian.Debianize.SubstVars
     , module Debian.Debianize.Types
     , module Debian.Debianize.Utility
+    , module Debian.DebT
     , module Debian.Policy
     ) where
 
@@ -71,10 +72,11 @@ import Debian.Debianize.Finalize
 import Debian.Debianize.Goodies
 import Debian.Debianize.Input
 import Debian.Debianize.Interspersed
-import Debian.Debianize.Lenses
+import Debian.Debianize.Lenses (Atoms)
 import Debian.Debianize.Options
 import Debian.Debianize.SubstVars
 import Debian.Debianize.Types
 import Debian.Debianize.ControlFile hiding (depends, conflicts, maintainer, description, section)
 import Debian.Debianize.Utility
+import Debian.DebT
 import Debian.Policy
