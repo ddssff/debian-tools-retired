@@ -46,7 +46,7 @@ module Debian.DebT
     , standards
     , dataDir
     , rulesHead
-    , rulesFragments
+    , rulesFragment
     , noProfilingLibrary
     , noDocumentationLibrary
     , utilsPackageName
@@ -171,8 +171,8 @@ dataDir :: Monad m => FilePath -> DebT m ()
 dataDir = doConstJust Lenses.dataDir
 compiler :: Monad m => Compiler -> DebT m ()
 compiler = doConstJust Lenses.compiler
-revision :: Monad m => String -> DebT m ()
-revision = doConstJust Lenses.revision
+revision :: Monad m => Maybe String -> DebT m ()
+revision = doConst Lenses.revision
 debVersion :: Monad m => DebianVersion -> DebT m ()
 debVersion = doConstJust Lenses.debVersion
 maintainer :: Monad m => NameAddr -> DebT m ()
@@ -238,8 +238,8 @@ buildDepsIndep = doSetElem Lenses.buildDepsIndep
 extraDevDeps :: Monad m => Relation -> DebT m ()
 extraDevDeps = doSetElem Lenses.extraDevDeps
 -- rulesFragments :: Monad m => Lens Atoms (Set Text)
-rulesFragments :: Monad m => Text -> DebT m ()
-rulesFragments text = doSetElem Lenses.rulesFragments text
+rulesFragment :: Monad m => Text -> DebT m ()
+rulesFragment text = doSetElem Lenses.rulesFragments text
 intermediateFiles :: Monad m => (FilePath, Text) -> DebT m ()
 intermediateFiles = doSetElem Lenses.intermediateFiles
 
