@@ -22,7 +22,7 @@ import Debian.Debianize.Atoms (debianization)
 import Debian.Debianize.Lenses as Lenses
     (Atoms, rulesHead, compat, sourceFormat, changelog, control, missingDependencies, revision,
      binaryArchitectures, copyright, debVersion, execMap, buildDeps, utilsPackageNames, description,
-     depends, installData, epochMap {-, sourcePackageName, install, buildDepsIndep-})
+     depends, installData)
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
@@ -30,7 +30,7 @@ import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), Top(Top))
-import Debian.Debianize.VersionSplits (mapCabal, splitCabal)
+import Debian.DebT (runDeb, epochMap, mapCabal, splitCabal)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
                       SourceFormat(Native3), Section(..), parseMaintainer)
@@ -50,13 +50,14 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
 -- | A suitable defaultAtoms value for the debian repository.
 defaultAtoms :: Atoms
 defaultAtoms =
-    setL epochMap (Map.fromList [(PackageName "HaXml", 1), (PackageName "HTTP", 1)]) .
-    splitCabal (PackageName "parsec") "parsec2" (Version [3] []) .
-    mapCabal (PackageName "parsec") "parsec3" .
-    splitCabal (PackageName "QuickCheck") "quickcheck1" (Version [2] []) .
-    mapCabal (PackageName "QuickCheck") "quickcheck2" .
-    mapCabal (PackageName "gtk2hs-buildtools") "gtk2hs-buildtools" $
-    mempty
+    flip runDeb mempty $ do
+      epochMap (PackageName "HaXml") 1
+      epochMap (PackageName "HTTP") 1
+      mapCabal (PackageName "parsec") "parsec3"
+      splitCabal (PackageName "parsec") "parsec2" (Version [3] [])
+      mapCabal (PackageName "QuickCheck") "quickcheck2"
+      splitCabal (PackageName "QuickCheck") "quickcheck1" (Version [2] [])
+      mapCabal (PackageName "gtk2hs-buildtools") "gtk2hs-buildtools"
 
 -- | Create a Debianization based on a changelog entry and a license
 -- value.  Uses the currently installed versions of debhelper and

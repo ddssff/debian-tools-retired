@@ -70,7 +70,6 @@ Library
    Debian.Debianize.Options
    Debian.Debianize.SubstVars
    Debian.Debianize.Types
-   Debian.Debianize.Types.VersionSplits
    Debian.Debianize.Utility
    Debian.Debianize.VersionSplits
    Debian.Orphans

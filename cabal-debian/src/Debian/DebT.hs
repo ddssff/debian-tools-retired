@@ -26,7 +26,8 @@ module Debian.DebT
     , execMap
     , epochMap
     , missingDependency
-    , debianNameMap
+    , Debian.DebT.mapCabal
+    , Debian.DebT.splitCabal
     , extraLibMap
 
     -- * Source Package Info
@@ -103,7 +104,7 @@ module Debian.DebT
 
 import Control.Monad.State (execState, execStateT, modify, State, StateT)
 import Data.Lens.Lazy (Lens, modL, setL)
-import Data.Map as Map (insert, insertWith, Map)
+import Data.Map as Map (Map, insert, insertWith, alter)
 import Data.Maybe (fromMaybe)
 import Data.Set as Set (empty, insert, Set, singleton, union)
 import Data.Text as Text (Text)
@@ -113,7 +114,7 @@ import Debian.Debianize.ControlFile (SourceDebDescription)
 import Debian.Debianize.Lenses (Atoms, Flags)
 import qualified Debian.Debianize.Lenses as Lenses
 import Debian.Debianize.Types (DebAction(..), InstallFile(..), PackageInfo(..), Server(..), Site(..))
-import Debian.Debianize.Types.VersionSplits (VersionSplits)
+import Debian.Debianize.VersionSplits (VersionSplits, makePackage, insertSplit)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat, StandardsVersion)
 import Debian.Relation (AndRelation, BinPkgName, Relation, Relations, SrcPkgName)
@@ -267,8 +268,27 @@ website :: Monad m => BinPkgName -> Site -> DebT m ()
 website = doMapElem Lenses.website
 backups :: Monad m => BinPkgName -> String -> DebT m ()
 backups = doMapElem Lenses.backups
-debianNameMap :: Monad m => PackageName -> VersionSplits -> DebT m ()
-debianNameMap = doMapElem Lenses.debianNameMap
+mapCabal :: Monad m => PackageName -> String -> DebT m ()
+
+-- | Map all versions of Cabal package pname to Debian package dname.
+-- Not really a debian package name, but the name of a cabal package
+-- that maps to the debian package name we want.  (Should this be a
+-- SrcPkgName?)
+mapCabal pname dname =
+    modify (modL Lenses.debianNameMap (Map.alter f pname))
+    where
+      f :: Maybe VersionSplits -> Maybe VersionSplits
+      f Nothing = Just (makePackage dname)
+      f (Just sp) = error $ "mapCabal - already mapped: " ++ show sp
+-- | Map versions less than ver of Cabal Package pname to Debian package ltname
+splitCabal :: Monad m => PackageName -> String -> Version -> DebT m ()
+splitCabal pname ltname ver =
+    modify (modL Lenses.debianNameMap (Map.alter f pname))
+    where
+      f :: Maybe VersionSplits -> Maybe VersionSplits
+      f Nothing = error $ "splitCabal - not mapped: " ++ show pname
+      f (Just sp) = Just (insertSplit ver ltname sp)
+
 apacheSite :: Monad m => BinPkgName -> (String, FilePath, Text) -> DebT m ()
 apacheSite = doMapElem Lenses.apacheSite
 packageInfo :: Monad m => PackageName -> PackageInfo -> DebT m ()

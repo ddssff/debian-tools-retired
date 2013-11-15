@@ -60,12 +60,14 @@ module Debian.Debianize
     , module Debian.Debianize.SubstVars
     , module Debian.Debianize.Types
     , module Debian.Debianize.Utility
+    , module Debian.Debianize.VersionSplits
     , module Debian.DebT
     , module Debian.Policy
     ) where
 
 import Debian.Debianize.Atoms
 import Debian.Debianize.Bundled
+import Debian.Debianize.ControlFile hiding (depends, conflicts, maintainer, description, section)
 import Debian.Debianize.Dependencies
 import Debian.Debianize.Files
 import Debian.Debianize.Finalize
@@ -76,7 +78,7 @@ import Debian.Debianize.Lenses (Atoms)
 import Debian.Debianize.Options
 import Debian.Debianize.SubstVars
 import Debian.Debianize.Types
-import Debian.Debianize.ControlFile hiding (depends, conflicts, maintainer, description, section)
 import Debian.Debianize.Utility
+import Debian.Debianize.VersionSplits
 import Debian.DebT
 import Debian.Policy
