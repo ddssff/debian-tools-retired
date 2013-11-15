@@ -78,26 +78,43 @@ Library
    Distribution.Version.Invert
 
 Executable cabal-debian
- Main-is: src/CabalDebian.hs
- ghc-options: -threaded -Wall -O2
- Build-Depends:
-   base,
-   Cabal,
-   cabal-debian,
-   containers,
-   data-lens
-
-Executable cabal-debian-tests
- Main-is: src/Debian/Debianize/Tests.hs
+ Hs-Source-Dirs: src
+ Main-is: CabalDebian.hs
  ghc-options: -threaded -Wall -O2
  Build-Depends:
    ansi-wl-pprint,
    base,
    Cabal,
-   cabal-debian,
    containers,
    data-lens,
    debian,
+   Diff,
+   directory,
+   filepath,
+   hsemail,
+   mtl,
+   parsec,
+   process,
+   pureMD5,
+   regex-tdfa,
+   syb,
+   text,
+   unix,
+   utf8-string
+
+Executable cabal-debian-tests
+ Hs-Source-Dirs: src
+ Main-is: Debian/Debianize/Tests.hs
+ ghc-options: -threaded -Wall -O2
+ Build-Depends:
+   ansi-wl-pprint,
+   base,
+   Cabal,
+   containers,
+   data-lens,
+   debian,
+   Diff,
+   directory,
    filepath,
    hsemail,
    HUnit,
