@@ -71,6 +71,7 @@ Library
    Debian.Debianize.Types
    Debian.Debianize.Utility
    Debian.Debianize.VersionSplits
+   Debian.DebT
    Debian.Orphans
    Debian.Policy
    Distribution.Version.Invert
