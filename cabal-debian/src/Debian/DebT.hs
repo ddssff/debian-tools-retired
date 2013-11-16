@@ -184,6 +184,8 @@ doConstJust :: Monad m => Lens Atoms (Maybe a) -> a -> DebT m ()
 doConstJust lens x = modify (setL lens (Just x))
 doConstMaybe :: Monad m => Lens Atoms (Maybe a) -> Maybe a -> DebT m ()
 doConstMaybe = doConst
+doModify :: Monad m => Lens Atoms a -> (a -> a) -> DebT m ()
+doModify lens f = modify (modL lens f)
 
 compilerVersion :: Monad m => (Maybe Version -> Maybe Version) -> DebT m () -- Lens Atoms (Maybe Version)
 compilerVersion f = doModify Lenses.compilerVersion f
@@ -217,8 +219,8 @@ sourcePriority :: Monad m => PackagePriority -> DebT m ()
 sourcePriority = doConstJust Lenses.sourcePriority
 sourceSection :: Monad m => Section -> DebT m ()
 sourceSection = doConstJust Lenses.sourceSection
-rulesHead :: Monad m => Text -> DebT m ()
-rulesHead = doConstJust Lenses.rulesHead
+rulesHead :: Monad m => (Maybe Text -> Maybe Text) -> DebT m ()
+rulesHead = doModify Lenses.rulesHead
 -- compat :: Monad m => Lens Atoms (Maybe Int)
 compat :: Monad m => Int -> DebT m ()
 compat = doConstJust Lenses.compat
@@ -238,9 +240,6 @@ doOnce lens x = modify (modL lens (maybe (Just x) (\ x' -> if x /= x' then error
 
 comments :: Monad m => [[Text]] -> DebT m ()
 comments = doOnce Lenses.comments
-
-doModify :: Monad m => Lens Atoms a -> (a -> a) -> DebT m ()
-doModify lens f = modify (modL lens f)
 
 -- control :: Monad m => Lens Atoms SourceDebDescription
 control :: Monad m => (SourceDebDescription -> SourceDebDescription) -> DebT m ()

@@ -24,11 +24,7 @@ import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import qualified Debian.Debianize.Lenses as Lenses
-    (rulesHead, compat, sourceFormat, watch, changelog, copyright,
-     install, installDir, warning, packageDescription,
-     link, maintainer, verbosity,
-     compilerVersion, cabalFlagAssignments)
+import qualified Debian.Debianize.Lenses as Lenses (packageDescription, maintainer)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Types (Top(Top, unTop))
@@ -199,7 +195,7 @@ inputAtoms :: FilePath -> FilePath -> Atoms -> IO Atoms
 inputAtoms _ path xs | elem path ["control"] = return xs
 inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> execDebT (either warning sourceFormat (readSourceFormat text)) xs
 inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> execDebT (watch text) xs
-inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> execDebT (rulesHead text) xs
+inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> execDebT (rulesHead (const (Just text))) xs
 inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> execDebT (compat (read' (\ s -> error $ "compat: " ++ show s) (unpack text))) xs
 inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> execDebT (copyright (Right text)) xs
 inputAtoms debian name@"changelog" xs =
@@ -280,17 +276,18 @@ inputLicenseFile pkgDesc = readFileMaybe (licenseFile pkgDesc)
 -- cabal package, or from the value returned by getDebianMaintainer.
 inputMaintainer :: Atoms -> IO (Maybe NameAddr)
 inputMaintainer atoms =
-    debianPackageMaintainer >>= maybe cabalPackageMaintainer (return . Just) >>=
-                                maybe getDebianMaintainer (return . Just) >>=
-                                return . maybe (Just haskellMaintainer) Just
+    return debianPackageMaintainer >>=
+    maybe (return cabalPackageMaintainer) (return . Just) >>=
+    maybe getDebianMaintainer (return . Just) >>=
+    return . maybe (Just haskellMaintainer) Just
     where
-      debianPackageMaintainer :: IO (Maybe NameAddr)
-      debianPackageMaintainer = return (getL Lenses.maintainer atoms)
-      cabalPackageMaintainer :: IO (Maybe NameAddr)
-      cabalPackageMaintainer = return $ case fmap Cabal.maintainer (getL Lenses.packageDescription atoms) of
-                                          Nothing -> Nothing
-                                          Just "" -> Nothing
-                                          Just x -> either (const Nothing) Just (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x))
+      debianPackageMaintainer :: Maybe NameAddr
+      debianPackageMaintainer = getL Lenses.maintainer atoms
+      cabalPackageMaintainer :: Maybe NameAddr
+      cabalPackageMaintainer = case fmap Cabal.maintainer (getL Lenses.packageDescription atoms) of
+                                 Nothing -> Nothing
+                                 Just "" -> Nothing
+                                 Just x -> either (const Nothing) Just (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x))
 
 intToVerbosity' :: Int -> Verbosity
 intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
