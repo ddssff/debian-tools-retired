@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -Wall -Wwarn -fno-warn-name-shadowing -fno-warn-orphans #-}
-module Debian.Debianize.Dependencies
+module Debian.Debianize.Internal.Dependencies
     ( cabalDependencies -- Debian.Cabal.SubstVars
     , selfDependency -- Debian.Debianize.Combinators
     , allBuildDepends
@@ -32,7 +32,7 @@ import Data.Version (showVersion)
 import Debian.Control
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile as Debian (PackageType(..))
-import qualified Debian.Debianize.Lenses as Lenses
+import qualified Debian.Debianize.Internal.Lenses as Lenses
     (packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary,
      missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
      packageInfo, depends, conflicts, provides, replaces)

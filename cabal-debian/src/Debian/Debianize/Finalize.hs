@@ -15,17 +15,17 @@ import Data.Maybe
 import Data.Monoid (mempty, (<>))
 import Data.Set as Set (Set, difference, fromList, null, insert, toList, filter, fold, map, union, singleton)
 import Data.Text as Text (pack, unlines, unpack)
-import Debian.Debianize.Lenses as Lenses
+import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
+                                               newBinaryDebDescription, modifyBinaryDeb,
+                                               PackageType(Exec, Development, Profiling, Documentation, Utilities))
+import Debian.Debianize.Internal.Dependencies (debianName, binaryPackageDeps, binaryPackageConflicts, binaryPackageProvides, binaryPackageReplaces,
+                                               debianBuildDeps, debianBuildDepsIndep)
+import Debian.Debianize.Internal.Lenses as Lenses
     (Atoms, packageDescription, control, binaryArchitectures, rulesFragments, website, serverInfo, link,
      backups, executable, sourcePriority, sourceSection, binaryPriorities, binarySections, description,
      install, installTo, installData, installCabalExecTo, noProfilingLibrary, noDocumentationLibrary,
      utilsPackageNames, extraDevDeps, installData, installCabalExec, file, apacheSite, installDir, buildDir,
      dataDir, intermediateFiles)
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                               newBinaryDebDescription, modifyBinaryDeb,
-                                               PackageType(Exec, Development, Profiling, Documentation, Utilities))
-import Debian.Debianize.Dependencies (debianName, binaryPackageDeps, binaryPackageConflicts, binaryPackageProvides, binaryPackageReplaces,
-                                      debianBuildDeps, debianBuildDepsIndep)
 import Debian.Debianize.Goodies (describe, siteAtoms, serverAtoms, backupAtoms, execAtoms)
 import Debian.Debianize.Types (InstallFile(..))
 import Debian.DebT as DebT (execDeb, control)

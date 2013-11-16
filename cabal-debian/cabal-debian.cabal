@@ -59,7 +59,6 @@ Library
    Debian.Debianize.Atoms
    Debian.Debianize.Bundled
    Debian.Debianize.ControlFile
-   Debian.Debianize.Dependencies
    Debian.Debianize.Details
    Debian.Debianize.Files
    Debian.Debianize.Finalize
@@ -77,6 +76,7 @@ Library
    Distribution.Version.Invert
  Other-Modules:
    Debian.Debianize.Internal.Lenses
+   Debian.Debianize.Internal.Dependencies
 
 Executable cabal-debian
  Hs-Source-Dirs: src

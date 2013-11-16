@@ -24,11 +24,11 @@ import Debian.Debianize.Lenses as Lenses
      binaryArchitectures, copyright, debVersion, execMap, buildDeps, utilsPackageNames, description,
      depends, installData)
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
-import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
+import Debian.Debianize.Internal.Dependencies (getRulesHead)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), Top(Top))
 import Debian.DebT (execDeb, epochMap, mapCabal, splitCabal)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,

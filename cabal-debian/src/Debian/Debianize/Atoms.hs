@@ -31,18 +31,19 @@ import Data.Text as Text (Text, unpack, split)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
-import Debian.Debianize.Dependencies (debianName)
+import Debian.Debianize.Internal.Dependencies (debianName)
 import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (watchAtom)
 import Debian.Debianize.Input (inputDebianization, inputCabalization, inputLicenseFile, inputMaintainer, inputChangeLog)
-import Debian.Debianize.Lenses (Atoms, packageDescription, compat, watch, control, copyright, changelog, comments,
-                               sourcePriority, sourceSection, debAction, validate, dryRun, debVersion, revision,
-                               sourcePackageName, epochMap, extraLibMap)
+import Debian.Debianize.Internal.Lenses (packageDescription, compat, watch, control, copyright, changelog, comments,
+                                         sourcePriority, sourceSection, debAction, validate, dryRun, debVersion, revision,
+                                         sourcePackageName, epochMap, extraLibMap)
 import Debian.Debianize.Options (options, compileArgs)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types (DebAction(..), Top(Top, unTop))
 import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty, replaceFile, zipMaps, indent, read')
+import Debian.DebT (Atoms)
 import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel)
 import Debian.Relation (SrcPkgName(..), BinPkgName(BinPkgName), Relation(Rel))
 import Debian.Release (parseReleaseName)
