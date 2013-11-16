@@ -199,7 +199,9 @@ aptFile pkg =
        return $ case ret of
                   (ExitSuccess, out, _) ->
                       case takeWhile (not . isSpace) out of
-                        "" -> error $ "Unable to locate a package containing " ++ pkg ++ ", try using --exec-map " ++ pkg ++ "=<debname> or modL execMap (Map.insert (PackageName " ++ show pkg ++ ") (BinPkgName \"<debname>\")"
+                        "" -> error $ "Unable to locate a debian package containing the build tool " ++ pkg ++
+                                      ", try using --exec-map " ++ pkg ++ "=<debname> or execMap " ++ show pkg ++
+                                      " [[Rel (BinPkgName \"<debname>\") Nothing Nothing]]"
                         s -> [[[D.Rel (D.BinPkgName s) Nothing Nothing]]]
                   _ -> []
 
