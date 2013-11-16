@@ -22,55 +22,56 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
 main :: IO ()
 main =
     do log <- inputChangeLog (Top "test-data/artvaluereport2/input")
-       new <- debianization (Top "test-data/artvaluereport2/input")
-              (return .
-               modL Lenses.control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) .
-               setL Lenses.compat (Just 7) .
-               modL Lenses.control (\ x -> x {standardsVersion = Just (StandardsVersion 3 9 1 Nothing)}) .
-               setL Lenses.sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) .
-               -- setL Lenses.utilsPackageName (Just (BinPkgName "artvaluereport2-server")) .
-               modL Lenses.binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-development") All) .
-               modL Lenses.binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-production") All) .
-               modL Lenses.binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-staging") All) .
-               modL Lenses.buildDepsIndep (Set.insert [[Rel (BinPkgName "libjs-jcrop") Nothing Nothing]]) .
-               modL Lenses.buildDepsIndep (Set.insert [[Rel (BinPkgName "libjs-jquery") Nothing Nothing]]) .
-               modL Lenses.buildDepsIndep (Set.insert [[Rel (BinPkgName "libjs-jquery-ui") (Just (SLT (parseDebianVersion ("1.10" :: String)))) Nothing]]) .
-               modL Lenses.description (Map.insert (BinPkgName "appraisalscope") "Offline manipulation of appraisal database") .
-               addServerDeps .
-               addServerData .
-               addDep (BinPkgName "artvaluereport2-production") (BinPkgName "apache2") .
-               -- This should go into the "real" data directory.  And maybe a different icon for each server?
-               -- modL Lenses.install (Map.insertWith union (BinPkgName "artvaluereport2-server") (singleton ("theme/ArtValueReport_SunsetSpectrum.ico", "usr/share/artvaluereport2-data"))) .
-               modL Lenses.description (Map.insertWith (error "test6") (BinPkgName "artvaluereport2-backups")
-                                       (Text.intercalate "\n"
-                                        [ "backup program for the appraisalreportonline.com site"
-                                        , "  Install this somewhere other than where the server is running get"
-                                        , "  automated backups of the database." ])) .
-               doBackups (BinPkgName "artvaluereport2-backups") "artvaluereport2-backups" .
-               doWebsite (BinPkgName "artvaluereport2-production") (theSite (BinPkgName "artvaluereport2-production")) .
-               doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging")) .
-               doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development")) .
-               execDeb (doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"})) .
-               modL Lenses.installCabalExec (Map.insertWith Set.union (BinPkgName "appraisalscope") (singleton ("lookatareport", "usr/bin"))) .
-               setL Lenses.changelog (Just log))
-              seereasonDefaultAtoms
+       new <- debianization (Top "test-data/artvaluereport2/input") (customize log) seereasonDefaultAtoms
        old <- inputDebianization (Top "test-data/artvaluereport2/output")
        -- The newest log entry gets modified when the Debianization is
        -- generated, it won't match so drop it for the comparison.
        putStr $ compareDebianization old (copyFirstLogEntry old new)
     where
-      addServerDeps :: Atoms -> Atoms
-      addServerDeps atoms = foldr addDeps atoms (map BinPkgName ["artvaluereport2-development", "artvaluereport2-staging", "artvaluereport2-production"])
-      addDeps p atoms = foldr (addDep p) atoms (map BinPkgName ["libjpeg-progs", "libjs-jcrop", "libjs-jquery", "libjs-jquery-ui", "netpbm", "texlive-fonts-extra", "texlive-fonts-recommended", "texlive-latex-extra", "texlive-latex-recommended"])
-      addDep p dep atoms = modL Lenses.depends (Map.insertWith union p (singleton (Rel dep Nothing Nothing))) atoms
+      customize :: ChangeLog -> DebT IO ()
+      customize log =
+          do changelog log
+             installCabalExec (BinPkgName "appraisalscope") ("lookatareport", "usr/bin")
+             doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"})
+             doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development"))
+             doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging"))
+             doWebsite (BinPkgName "artvaluereport2-production") (theSite (BinPkgName "artvaluereport2-production"))
+             doBackups (BinPkgName "artvaluereport2-backups") "artvaluereport2-backups"
+             -- This should go into the "real" data directory.  And maybe a different icon for each server?
+             -- install (BinPkgName "artvaluereport2-server") ("theme/ArtValueReport_SunsetSpectrum.ico", "usr/share/artvaluereport2-data")
+             description (BinPkgName "artvaluereport2-backups")
+                         (Text.intercalate "\n"
+                                  [ "backup program for the appraisalreportonline.com site"
+                                  , "  Install this somewhere other than where the server is running get"
+                                  , "  automated backups of the database." ])
+             addDep (BinPkgName "artvaluereport2-production") (BinPkgName "apache2")
+             addServerData
+             addServerDeps
+             description (BinPkgName "appraisalscope") "Offline manipulation of appraisal database"
+             buildDepsIndep [[Rel (BinPkgName "libjs-jquery-ui") (Just (SLT (parseDebianVersion ("1.10" :: String)))) Nothing]]
+             buildDepsIndep [[Rel (BinPkgName "libjs-jquery") Nothing Nothing]]
+             buildDepsIndep [[Rel (BinPkgName "libjs-jcrop") Nothing Nothing]]
+             binaryArchitectures (BinPkgName "artvaluereport2-staging") All
+             binaryArchitectures (BinPkgName "artvaluereport2-production") All
+             binaryArchitectures (BinPkgName "artvaluereport2-development") All
+             -- utilsPackageNames [BinPkgName "artvaluereport2-server"]
+             sourcePackageName (SrcPkgName "haskell-artvaluereport2")
+             control (\ x -> x {standardsVersion = Just (StandardsVersion 3 9 1 Nothing)})
+             compat 7
+             control (\ y -> y {homepage = Just "http://appraisalreportonline.com"})
 
-      addServerData :: Atoms -> Atoms
-      addServerData atoms = foldr addData atoms (map BinPkgName ["artvaluereport2-development", "artvaluereport2-staging", "artvaluereport2-production"])
-      addData p atoms =
-          modL Lenses.installData (Map.insertWith union p (singleton ("theme/ArtValueReport_SunsetSpectrum.ico", "ArtValueReport_SunsetSpectrum.ico"))) $
-          foldr (addDataFile p) atoms ["Udon.js", "flexbox.css", "DataTables-1.8.2", "html5sortable", "jGFeed", "searchMag.png",
-                                       "Clouds.jpg", "tweaks.css", "verticalTabs.css", "blueprint", "jquery.blockUI", "jquery.tinyscrollbar"]
-      addDataFile p path atoms = modL Lenses.installData (Map.insertWith union p (singleton (path, path))) atoms
+      addServerDeps :: DebT IO ()
+      addServerDeps = mapM_ addDeps (map BinPkgName ["artvaluereport2-development", "artvaluereport2-staging", "artvaluereport2-production"])
+      addDeps p = mapM_ (addDep p) (map BinPkgName ["libjpeg-progs", "libjs-jcrop", "libjs-jquery", "libjs-jquery-ui", "netpbm", "texlive-fonts-extra", "texlive-fonts-recommended", "texlive-latex-extra", "texlive-latex-recommended"])
+      addDep p dep = depends p (Rel dep Nothing Nothing)
+
+      addServerData :: DebT IO ()
+      addServerData = mapM_ addData (map BinPkgName ["artvaluereport2-development", "artvaluereport2-staging", "artvaluereport2-production"])
+      addData p =
+          do installData p ("theme/ArtValueReport_SunsetSpectrum.ico", "ArtValueReport_SunsetSpectrum.ico")
+             mapM_ (addDataFile p) ["Udon.js", "flexbox.css", "DataTables-1.8.2", "html5sortable", "jGFeed", "searchMag.png",
+                                    "Clouds.jpg", "tweaks.css", "verticalTabs.css", "blueprint", "jquery.blockUI", "jquery.tinyscrollbar"]
+      addDataFile p path = installData p (path, path)
 
       theSite :: BinPkgName -> Site
       theSite deb =

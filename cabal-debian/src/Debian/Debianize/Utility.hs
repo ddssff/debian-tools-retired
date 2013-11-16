@@ -28,12 +28,14 @@ module Debian.Debianize.Utility
     , indent
     , maybeRead
     , read'
+    , modifyM
     ) where
 
 import Control.Applicative ((<$>))
 import Control.Exception as E (catch, try, bracket, IOException)
 import Control.Monad (when)
 import Control.Monad.Reader (ReaderT, ask)
+import Control.Monad.State (MonadState, get, put, lift)
 import Data.Char (isSpace)
 import Data.List as List (isSuffixOf, intercalate, map, lines)
 import Data.Lens.Lazy (Lens, modL)
@@ -242,6 +244,13 @@ maybeRead = fmap fst . listToMaybe . reads
 
 read' :: Read a => (String -> a) -> String -> a
 read' f s = fromMaybe (f s) (maybeRead s)
+
+-- modifyM :: (Monad m, MonadTrans t, MonadState a (t m)) => (a -> m a) -> t m ()
+-- modifyM f = get >>= lift . f >>= put
+
+-- modifyM :: (Monad m, MonadTrans t, MonadState a (t m)) => (a -> m a) -> t m ()
+modifyM :: MonadState a m => (a -> m a) -> m ()
+modifyM f = get >>= f >>= put
 
 -- read' :: Read a => String -> a
 -- read' s = trace ("read " ++ show s) (read s)

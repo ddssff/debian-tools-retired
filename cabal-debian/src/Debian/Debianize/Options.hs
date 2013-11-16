@@ -3,12 +3,13 @@ module Debian.Debianize.Options
     , options
     ) where
 
+import Control.Monad.State (modify)
 import Data.Char (toLower, isDigit, ord)
 import Data.Version (parseVersion)
 import Debian.Debianize.Goodies (doExecutable)
 import Debian.Debianize.Types (InstallFile(..), DebAction(..))
 import Debian.Debianize.Utility (read')
-import Debian.DebT (Atoms, execDeb, verbosity, dryRun, debAction, compilerVersion, noDocumentationLibrary, noProfilingLibrary,
+import Debian.DebT (Atoms, DebT, execDeb, verbosity, dryRun, debAction, compilerVersion, noDocumentationLibrary, noProfilingLibrary,
                     missingDependency, sourcePackageName, cabalFlagAssignment, maintainer, buildDir, omitLTDeps,
                     sourceFormat, buildDeps, buildDepsIndep, extraDevDeps, depends, conflicts, replaces, provides,
                     extraLibMap, debVersion, revision, epochMap, execMap)
@@ -25,8 +26,11 @@ import System.FilePath ((</>), splitFileName)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.Regex.TDFA ((=~))
 
-compileArgs :: [String] -> Atoms -> Atoms
-compileArgs args atoms =
+compileArgs :: Monad m => [String] -> DebT m ()
+compileArgs args = modify (compileArgs' args)
+
+compileArgs' :: [String] -> Atoms -> Atoms
+compileArgs' args atoms =
     case getOpt' RequireOrder options args of
       (os, [], [], []) -> foldl (flip ($)) atoms os
       (_, non, unk, errs) -> error ("Errors: " ++ show errs ++

@@ -81,17 +81,18 @@ doExecutable :: Monad m => BinPkgName -> InstallFile -> DebT m ()
 doExecutable = executable
 
 -- | Add a debian binary package to the debianization containing a cabal executable file set up to be a server.
-doServer :: BinPkgName -> Server -> Atoms -> Atoms
-doServer bin x deb = execDeb (serverInfo bin x) deb
+doServer :: Monad m => BinPkgName -> Server -> DebT m ()
+doServer = serverInfo
 
 -- | Add a debian binary package to the debianization containing a cabal executable file set up to be a web site.
-doWebsite :: BinPkgName -> Site -> Atoms -> Atoms
-doWebsite bin x deb = execDeb (website bin x) deb
+doWebsite :: Monad m => BinPkgName -> Site -> DebT m ()
+doWebsite = website
 
 -- | Add a debian binary package to the debianization containing a cabal executable file set up to be a backup script.
-doBackups :: BinPkgName -> String -> Atoms -> Atoms
-doBackups bin s deb =
-    execDeb (backups bin s >> depends bin (Rel (BinPkgName "anacron") Nothing Nothing)) deb
+doBackups :: Monad m => BinPkgName -> String -> DebT m ()
+doBackups bin s =
+    do backups bin s
+       depends bin (Rel (BinPkgName "anacron") Nothing Nothing)
 
 describe :: Atoms -> PackageType -> PackageIdentifier -> Text
 describe atoms typ ident =

@@ -23,6 +23,7 @@ import Debian.Debianize.Internal.Dependencies (cabalDependencies, debDeps, debNa
 import Debian.Debianize.Internal.Lenses (Atoms, compiler, dryRun, packageInfo)
 import Debian.Debianize.Types (Top(Top), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType)
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps, dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
+import Debian.DebT (execDebT)
 import qualified Debian.Relation as D
 import Distribution.Package (Dependency(..), PackageName(PackageName))
 import Distribution.Simple.Compiler (CompilerFlavor(..), compilerFlavor, Compiler(..))
@@ -46,7 +47,7 @@ substvars :: Atoms
           -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> IO ()
 substvars atoms debType =
-    do atoms' <- inputCabalization (Top ".") atoms
+    do atoms' <- execDebT (inputCabalization (Top ".")) atoms
        debVersions <- buildDebVersionMap
        atoms'' <- libPaths (fromMaybe (error "substvars") $ getL compiler atoms') debVersions atoms'
        control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"

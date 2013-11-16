@@ -17,8 +17,9 @@ module Debian.Debianize.Atoms
     , validateDebianization
     ) where
 
-import Control.Applicative ((<$>), (<*>), pure)
-import Control.Exception as E (catch, throw)
+import Control.Applicative ((<$>))
+import Control.Exception as E (throw)
+import Control.Monad.State (lift, get)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Lens.Lazy (getL, setL, modL)
@@ -36,14 +37,15 @@ import Debian.Debianize.Files (toFileMap)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (watchAtom)
 import Debian.Debianize.Input (inputDebianization, inputCabalization, inputLicenseFile, inputMaintainer, inputChangeLog)
-import Debian.Debianize.Internal.Lenses (packageDescription, compat, watch, control, copyright, changelog, comments,
-                                         sourcePriority, sourceSection, debAction, validate, dryRun, debVersion, revision,
-                                         sourcePackageName, epochMap, extraLibMap)
+import qualified Debian.Debianize.Internal.Lenses as Lenses
+    (packageDescription, compat, watch, control, copyright, changelog, comments,
+     sourcePriority, sourceSection, debAction, validate, dryRun, debVersion, revision,
+     sourcePackageName, epochMap, extraLibMap)
 import Debian.Debianize.Options (options, compileArgs)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types (DebAction(..), Top(Top, unTop))
-import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty, replaceFile, zipMaps, indent, read')
-import Debian.DebT (Atoms)
+import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty, replaceFile, zipMaps, indent, maybeRead)
+import Debian.DebT (Atoms, DebT, execDebT, execDeb, control, changelog)
 import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel)
 import Debian.Relation (SrcPkgName(..), BinPkgName(BinPkgName), Relation(Rel))
 import Debian.Release (parseReleaseName)
@@ -58,7 +60,7 @@ import System.Directory (doesFileExist, Permissions(executable), getPermissions,
 import System.Environment (getArgs, getEnv, getProgName, withArgs)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>), takeDirectory)
-import System.IO.Error (catchIOError)
+import System.IO.Error (catchIOError, tryIOError)
 import System.Posix.Env (setEnv)
 import System.Process (readProcessWithExitCode)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
@@ -67,11 +69,10 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 -- | The main function for the cabal-debian executable.
 cabalDebian :: Atoms -> IO ()
 cabalDebian defaultAtoms =
-    compileEnvironmentArgs defaultAtoms >>=
-    compileCommandlineArgs >>= \ atoms ->
-      case getL debAction atoms of
+    execDebT (compileEnvironmentArgs >> compileCommandlineArgs) defaultAtoms >>= \ atoms ->
+      case getL Lenses.debAction atoms of
         SubstVar debType -> substvars atoms debType
-        Debianize -> debianize (Top ".") return defaultAtoms
+        Debianize -> debianize (Top ".") (return ()) defaultAtoms
         Usage -> do
           progName <- getProgName
           let info = unlines [ "Typical usage is to cd to the top directory of the package's unpacked source and run: "
@@ -87,12 +88,17 @@ cabalDebian defaultAtoms =
                              , "The following additional options are available:" ]
           putStrLn (usageInfo info options)
 
-compileEnvironmentArgs :: Atoms -> IO Atoms
-compileEnvironmentArgs atoms0 =
-    (compileArgs <$> (read' (\ s -> error $ "compileEnvrionmentArgs: " ++ show s) <$> getEnv "CABALDEBIAN") <*> pure atoms0) `catchIOError` const (return atoms0)
+-- | Read a value out of the CABALDEBIAN environment variable which is
+-- the result of applying show to a [String].
+withEnvironmentArgs :: ([String] -> DebT IO a) -> DebT IO a
+withEnvironmentArgs f =
+    lift (tryIOError (getEnv "CABALDEBIAN")) >>= either (\ _ -> f []) (maybe (f []) f . maybeRead)
 
-compileCommandlineArgs :: Atoms -> IO Atoms
-compileCommandlineArgs atoms0 = compileArgs <$> getArgs <*> pure atoms0
+compileEnvironmentArgs :: DebT IO ()
+compileEnvironmentArgs = withEnvironmentArgs compileArgs
+
+compileCommandlineArgs :: DebT IO ()
+compileCommandlineArgs = lift getArgs >>= compileArgs
 
 -- | Compile the given arguments into an Atoms value and run the
 -- debianize function.  This is basically equivalent to @cabal-debian
@@ -100,7 +106,7 @@ compileCommandlineArgs atoms0 = compileArgs <$> getArgs <*> pure atoms0
 -- function parameter.
 callDebianize :: [String] -> Atoms -> IO ()
 callDebianize args defaultAtoms =
-    withArgs args (debianize (Top ".") return defaultAtoms)
+    withArgs args (debianize (Top ".") (return ()) defaultAtoms)
 
 -- | Put an argument list into the @CABALDEBIAN@ environment variable
 -- and then run the script in debian/Debianize.hs.  If this exists and
@@ -135,34 +141,31 @@ runDebianize' top args = withCurrentDirectory (unTop top) $ runDebianize args
 
 -- | Depending on the options in @atoms@, either validate, describe,
 -- or write the generated debianization.
-debianize :: Top -> (Atoms -> IO Atoms) -> Atoms -> IO ()
+debianize :: Top -> DebT IO () -> Atoms -> IO ()
 debianize top customize defaultAtoms =
     debianization top customize defaultAtoms >>= \ atoms ->
-    if getL validate atoms
+    if getL Lenses.validate atoms
     then inputDebianization top >>= \ old -> return (validateDebianization old atoms)
-    else if getL dryRun atoms
+    else if getL Lenses.dryRun atoms
          then inputDebianization top >>= \ old -> putStr ("Debianization (dry run):\n" ++ compareDebianization (ensureCopyright old) atoms)
          else writeDebianization top atoms
     where
-      ensureCopyright = modL copyright (maybe (Just (Left AllRightsReserved)) Just)
+      ensureCopyright = modL Lenses.copyright (maybe (Just (Left AllRightsReserved)) Just)
 
 -- | Given an Atoms value, get any additional configuration
 -- information from the environment, read the cabal package
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-debianization :: Top -> (Atoms -> IO Atoms) -> Atoms -> IO Atoms
+debianization :: Top -> DebT IO () -> Atoms -> IO Atoms
 debianization top customize defaultAtoms =
-    do atoms <- compileEnvironmentArgs defaultAtoms >>=
-                compileCommandlineArgs >>=
-                customize >>=
-                inputCabalization top
-       log <- (Just <$> inputChangeLog top) `E.catch` (\ (_ :: IOError) -> return Nothing)
+    do atoms <- execDebT (compileEnvironmentArgs >> compileCommandlineArgs >> customize >> inputCabalization top) defaultAtoms
+       log <- (Just <$> inputChangeLog top) `catchIOError` (\ _ -> return Nothing)
        date <- getCurrentLocalRFC822Time
        maint <- inputMaintainer atoms >>= maybe (error "Missing value for --maintainer") return
        level <- getDebhelperCompatLevel
        copyright <- withCurrentDirectory (unTop top) $ inputLicenseFile (fromMaybe (error $ "cabalToDebianization: Failed to read cabal file in " ++ unTop top)
-                                                                         (getL packageDescription atoms))
+                                                                         (getL Lenses.packageDescription atoms))
        return $ debianization' date copyright maint level log atoms
 
 debianization' :: String              -- ^ current date
@@ -174,60 +177,61 @@ debianization' :: String              -- ^ current date
                -> Atoms               -- ^ New debianization
 debianization' date copy maint level log deb =
     finalizeDebianization $
-    modL compat (maybe level Just) $
-    modL changelog (maybe log Just) $
-    setL sourcePriority (Just Optional) $
-    setL sourceSection (Just (MainSection "haskell")) $
-    setL watch (Just (watchAtom (pkgName $ Cabal.package $ pkgDesc)))  $
-    modL copyright (maybe (finalizeCopyright copy) Just) $
-    versionInfo maint date $
-    addExtraLibDependencies $
+    modL Lenses.compat (maybe level Just) $
+    modL Lenses.changelog (maybe log Just) $
+    setL Lenses.sourcePriority (Just Optional) $
+    setL Lenses.sourceSection (Just (MainSection "haskell")) $
+    setL Lenses.watch (Just (watchAtom (pkgName $ Cabal.package $ pkgDesc)))  $
+    modL Lenses.copyright (maybe (finalizeCopyright copy) Just) $
+    execDeb (versionInfo maint date) $
+    execDeb addExtraLibDependencies $
     -- Do we want to replace the atoms in the old deb, or add these?
     -- Or should we delete even more information from the original,
     -- keeping only the changelog?  Probably the latter.  So this is
     -- somewhat wrong.
     deb
     where
-      pkgDesc = fromMaybe (error "debianization") $ getL packageDescription deb
+      pkgDesc = fromMaybe (error "debianization") $ getL Lenses.packageDescription deb
       finalizeCopyright (Just x) = Just (Right x)
       finalizeCopyright Nothing = Just (Left (Cabal.license pkgDesc))
 
 -- | Set the debianization's version info - everything that goes into
 -- the new changelog entry, source package name, exact debian version,
 -- log comments, maintainer name, revision date.
-versionInfo :: NameAddr -> String -> Atoms -> Atoms
-versionInfo debianMaintainer date deb =
-    modL changelog (const (Just newLog)) $
-    modL control (\ y -> y { source = Just sourceName, Debian.maintainer = Just debianMaintainer }) deb
+versionInfo :: Monad m => NameAddr -> String -> DebT m ()
+versionInfo debianMaintainer date =
+    do deb <- get
+       let newLog = case getL Lenses.changelog deb of
+                      Nothing -> ChangeLog [newEntry]
+                      Just (ChangeLog oldEntries) ->
+                          case dropWhile (\ entry -> logVersion entry > logVersion newEntry) oldEntries of
+                            -- If the new package version number matches the old, merge the new and existing log entries
+                            entry@(Entry {logVersion = d}) : older | d == logVersion newEntry -> ChangeLog (merge entry newEntry : older)
+                            -- Otherwise prepend the new entry
+                            entries -> ChangeLog (newEntry : entries)
+           newEntry = Entry { logPackage = show (pretty sourceName)
+                            , logVersion = convertVersion debinfo (pkgVersion pkgId)
+                            , logDists = [parseReleaseName "unstable"]
+                            , logUrgency = "low"
+                            , logComments = List.unlines $ map (("  * " <>) . List.intercalate "\n    " . map unpack)
+                                                               (fromMaybe [["Debianization generated by cabal-debian"]] (getL Lenses.comments deb))
+                            , logWho = show (pretty debianMaintainer)
+                            , logDate = date }
+           -- Get the source package name, either from the SourcePackageName
+           -- atom or construct it from the cabal package name.
+           sourceName :: SrcPkgName
+           sourceName = maybe (debianName deb Source' pkgId) id (getL Lenses.sourcePackageName deb)
+           debinfo = maybe (Right (epoch, fromMaybe "" (getL Lenses.revision deb))) Left (getL Lenses.debVersion deb)
+           epoch = Map.lookup (pkgName pkgId) (getL Lenses.epochMap deb)
+           pkgId = Cabal.package pkgDesc
+           pkgDesc = fromMaybe (error "versionInfo: no PackageDescription") $ getL Lenses.packageDescription deb
+       changelog newLog
+       control (\ y -> y { source = Just sourceName, Debian.maintainer = Just debianMaintainer })
     where
-      newLog =
-          case getL changelog deb of
-            Nothing -> ChangeLog [newEntry]
-            Just (ChangeLog oldEntries) ->
-                case dropWhile (\ entry -> logVersion entry > logVersion newEntry) oldEntries of
-                  -- If the new package version number matches the old, merge the new and existing log entries
-                  entry@(Entry {logVersion = d}) : older | d == logVersion newEntry -> ChangeLog (merge entry newEntry : older)
-                  -- Otherwise prepend the new entry
-                  entries -> ChangeLog (newEntry : entries)
-      newEntry = Entry { logPackage = show (pretty sourceName)
-                       , logVersion = convertVersion debinfo (pkgVersion pkgId)
-                       , logDists = [parseReleaseName "unstable"]
-                       , logUrgency = "low"
-                       , logComments = List.unlines $ (map (("  * " <>) . List.intercalate "\n    " . map unpack)) (fromMaybe [["Debianization generated by cabal-debian"]] (getL comments deb))
-                       , logWho = show (pretty debianMaintainer)
-                       , logDate = date }
-      -- Get the source package name, either from the SourcePackageName
-      -- atom or construct it from the cabal package name.
-      sourceName :: SrcPkgName
-      sourceName = maybe (debianName deb Source' pkgId) id (getL sourcePackageName deb)
       merge :: ChangeLogEntry -> ChangeLogEntry -> ChangeLogEntry
       merge old new =
           old { logComments = logComments old ++ logComments new
               , logDate = date }
-      debinfo = maybe (Right (epoch, fromMaybe "" (getL revision deb))) Left (getL debVersion deb)
-      epoch = Map.lookup (pkgName pkgId) (getL epochMap deb)
-      pkgId = Cabal.package pkgDesc
-      pkgDesc = fromMaybe (error "versionInfo: no PackageDescription") $ getL packageDescription deb
 
 -- | Combine various bits of information to produce the debian version
 -- which will be used for the debian package.  If the override
@@ -251,24 +255,26 @@ convertVersion debinfo cabalVersion =
 -- | Convert the extraLibs field of the cabal build info into debian
 -- binary package names and make them dependendencies of the debian
 -- devel package (if there is one.)
-addExtraLibDependencies :: Atoms -> Atoms
-addExtraLibDependencies deb =
-    modL control (\ y -> y {binaryPackages = map f (binaryPackages (getL control deb))}) deb
+addExtraLibDependencies :: Monad m => DebT m ()
+addExtraLibDependencies =
+    do deb <- get
+       control (\ y -> y {binaryPackages = map (f deb) (binaryPackages (getL Lenses.control deb))})
     where
-      f :: BinaryDebDescription -> BinaryDebDescription
-      f bin
-          | debianName deb Development (Cabal.package pkgDesc) == Debian.package bin
-              = bin { relations = g (relations bin) }
-      f bin = bin
-      g :: Debian.PackageRelations -> Debian.PackageRelations
-      g rels = rels { Debian.depends =
-                        concat $
+      f :: Atoms -> BinaryDebDescription -> BinaryDebDescription
+      f deb bin
+          | debianName deb Development (Cabal.package (pkgDesc deb)) == Debian.package bin
+              = bin { relations = g deb (relations bin) }
+      f _ bin = bin
+      g :: Atoms -> Debian.PackageRelations -> Debian.PackageRelations
+      g deb rels =
+          rels { Debian.depends =
+                     concat $
                           [Debian.depends rels] ++
                           concatMap (\ cab -> maybe [[[Rel (BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]]
                                                     Set.toList
-                                                    (Map.lookup cab (getL extraLibMap deb)))
-                                    (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc) }
-      pkgDesc = fromMaybe (error "addExtraLibDependencies: no PackageDescription") $ getL packageDescription deb
+                                                    (Map.lookup cab (getL Lenses.extraLibMap deb)))
+                                    (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc deb) }
+      pkgDesc deb = fromMaybe (error "addExtraLibDependencies: no PackageDescription") $ getL Lenses.packageDescription deb
 
 -- | Write the files of the debianization @d@ to the directory @top@.
 writeDebianization :: Top -> Atoms -> IO ()
@@ -310,11 +316,11 @@ validateDebianization old new =
         | oldPackages /= newPackages -> throw (userError ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages)))
         | True -> ()
     where
-      oldVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL changelog old))))
-      newVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL changelog new))))
-      oldSource = source . getL control $ old
-      newSource = source . getL control $ new
-      oldPackages = map Debian.package . binaryPackages . getL control $ old
-      newPackages = map Debian.package . binaryPackages . getL control $ new
+      oldVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL Lenses.changelog old))))
+      newVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL Lenses.changelog new))))
+      oldSource = source . getL Lenses.control $ old
+      newSource = source . getL Lenses.control $ new
+      oldPackages = map Debian.package . binaryPackages . getL Lenses.control $ old
+      newPackages = map Debian.package . binaryPackages . getL Lenses.control $ new
       unChangeLog :: ChangeLog -> [ChangeLogEntry]
       unChangeLog (ChangeLog x) = x

@@ -28,7 +28,7 @@ import qualified Debian.Debianize.Lenses as Lenses (packageDescription, maintain
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Types (Top(Top, unTop))
-import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read')
+import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', modifyM)
 import Debian.DebT (Atoms, DebT, execDebT, evalDebT, intermediateFile, control, warning, sourceFormat, watch, rulesHead, compat,
                     copyright, changelog, installInit, postInst, postRm, preInst, preRm, compiler, packageDescription,
                     logrotateStanza, link, install, installDir, lookCompilerVersion, lookCabalFlagAssignments, lookVerbosity)
@@ -236,8 +236,11 @@ readInstall p line =
 readDir :: Monad m => BinPkgName -> Text -> DebT m ()
 readDir p line = installDir p (unpack line)
 
-inputCabalization :: Top -> Atoms -> IO Atoms
-inputCabalization top atoms =
+inputCabalization :: Top -> DebT IO ()
+inputCabalization top = modifyM (lift . inputCabalization' top)
+
+inputCabalization' :: Top -> Atoms -> IO Atoms
+inputCabalization' top atoms =
     withCurrentDirectory (unTop top) $ do
       vb <- evalDebT lookVerbosity atoms >>= return . intToVerbosity'
       descPath <- defaultPackageDesc vb
