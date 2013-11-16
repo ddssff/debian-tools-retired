@@ -30,7 +30,7 @@ import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), Top(Top))
-import Debian.DebT (runDeb, epochMap, mapCabal, splitCabal)
+import Debian.DebT (execDeb, epochMap, mapCabal, splitCabal)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
                       SourceFormat(Native3), Section(..), parseMaintainer)
@@ -50,7 +50,7 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
 -- | A suitable defaultAtoms value for the debian repository.
 defaultAtoms :: Atoms
 defaultAtoms =
-    flip runDeb mempty $ do
+    flip execDeb mempty $ do
       epochMap (PackageName "HaXml") 1
       epochMap (PackageName "HTTP") 1
       mapCabal (PackageName "parsec") "parsec3"
@@ -253,7 +253,7 @@ test4 =
           doWebsite (BinPkgName "clckwrks-dot-com-production") (theSite (BinPkgName "clckwrks-dot-com-production")) .
           doBackups (BinPkgName "clckwrks-dot-com-backups") "clckwrks-dot-com-backups" .
           fixRules .
-          tight .
+          execDeb tight .
           setL changelog (getL changelog old)
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
@@ -277,14 +277,10 @@ test4 =
                                                                 else [line] :: [T.Text]) (T.lines t)))
             f k a = singleton (k, a)
 -}
-      tight deb = foldr (tightDependencyFixup
-                         -- For each pair (A, B) make sure that this package requires the
-                         -- same exact version of package B as the version of A currently
-                         -- installed during the build.
-                         [(BinPkgName "libghc-clckwrks-theme-clckwrks-dev", BinPkgName "haskell-clckwrks-theme-clckwrks-utils"),
-                          (BinPkgName "libghc-clckwrks-plugin-media-dev", BinPkgName "haskell-clckwrks-plugin-media-utils"),
-                          (BinPkgName "libghc-clckwrks-plugin-bugs-dev", BinPkgName "haskell-clckwrks-plugin-bugs-utils"),
-                          (BinPkgName "libghc-clckwrks-dev", BinPkgName "haskell-clckwrks-utils")]) deb serverNames
+      tight = mapM_ (tightDependencyFixup [(BinPkgName "libghc-clckwrks-theme-clckwrks-dev", BinPkgName "haskell-clckwrks-theme-clckwrks-utils"),
+                                           (BinPkgName "libghc-clckwrks-plugin-media-dev", BinPkgName "haskell-clckwrks-plugin-media-utils"),
+                                           (BinPkgName "libghc-clckwrks-plugin-bugs-dev", BinPkgName "haskell-clckwrks-plugin-bugs-utils"),
+                                           (BinPkgName "libghc-clckwrks-dev", BinPkgName "haskell-clckwrks-utils")]) serverNames
 
       theSite :: BinPkgName -> Site
       theSite deb =
@@ -457,7 +453,7 @@ test9 =
                   new <- debianization (Top "test-data/alex/input")
                            (return .
                             modL buildDeps (Set.insert [[Rel (BinPkgName "alex") Nothing Nothing]]) .
-                            doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing}) .
+                            execDeb (doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing})) .
                             setL debVersion (Just (parseDebianVersion ("3.0.2-1~hackage1" :: String))) .
                             setL sourceFormat (Just Native3) .
                             modL control (\ y -> y {homepage = Just "http://www.haskell.org/alex/"}) .

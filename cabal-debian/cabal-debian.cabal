@@ -75,6 +75,8 @@ Library
    Debian.Orphans
    Debian.Policy
    Distribution.Version.Invert
+ Other-Modules:
+   Debian.Debianize.Internal.Lenses
 
 Executable cabal-debian
  Hs-Source-Dirs: src

@@ -7,13 +7,12 @@ module Debian.Debianize.Details
 import Data.Monoid (mempty)
 import Debian.Relation (BinPkgName(BinPkgName))
 import Data.Version (Version(Version))
-import Debian.Debianize.Lenses (Atoms)
-import Debian.DebT (runDeb, epochMap, mapCabal, splitCabal, missingDependency)
+import Debian.DebT (Atoms, execDeb, epochMap, mapCabal, splitCabal, missingDependency)
 import Distribution.Package (PackageName(PackageName))
 
 debianDefaultAtoms :: Atoms
 debianDefaultAtoms =
-    flip runDeb mempty $ do
+    flip execDeb mempty $ do
       epochMap (PackageName "HaXml") 1
       epochMap (PackageName "HTTP") 1
       mapCabal (PackageName "parsec") "parsec3"
@@ -24,7 +23,7 @@ debianDefaultAtoms =
 
 seereasonDefaultAtoms :: Atoms
 seereasonDefaultAtoms =
-    flip runDeb debianDefaultAtoms $ do
+    flip execDeb debianDefaultAtoms $ do
       missingDependency (BinPkgName "libghc-happstack-authenticate-9-doc")
 
       mapCabal (PackageName "clckwrks") "clckwrks"

@@ -5,10 +5,11 @@ module Debian.Debianize.Dependencies
     , selfDependency -- Debian.Debianize.Combinators
     , allBuildDepends
     , debDeps
-    , putBuildDeps
     , dependencies
     , debianName
     , debianName'
+    , debianBuildDeps
+    , debianBuildDepsIndep
     , debNameFromType
     , getRulesHead
     , filterMissing
@@ -20,7 +21,7 @@ module Debian.Debianize.Dependencies
 
 import Data.Char (isSpace, toLower)
 import Data.Function (on)
-import Data.Lens.Lazy (getL, modL)
+import Data.Lens.Lazy (getL)
 import Data.List as List (nub, minimumBy, isSuffixOf, map)
 import Data.Map as Map (Map, lookup)
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
@@ -30,12 +31,14 @@ import Data.Text as Text (Text, pack, unlines)
 import Data.Version (showVersion)
 import Debian.Control
 import Debian.Debianize.Bundled (ghcBuiltIn)
-import Debian.Debianize.ControlFile as Debian (PackageType(..), SourceDebDescription(..))
-import Debian.Debianize.Lenses (Atoms, packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary,
-                               missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
-                               packageInfo, depends, conflicts, provides, replaces, control)
+import Debian.Debianize.ControlFile as Debian (PackageType(..))
+import qualified Debian.Debianize.Lenses as Lenses
+    (packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary,
+     missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
+     packageInfo, depends, conflicts, provides, replaces)
 import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), DebType(..))
 import Debian.Debianize.VersionSplits (VersionSplits, doSplits, packageRangesFromVersionSplits)
+import Debian.DebT (Atoms)
 import Debian.Orphans ()
 import qualified Debian.Relation as D
 import Debian.Relation (Relations, Relation, BinPkgName(BinPkgName), PkgName(pkgNameFromString))
@@ -85,7 +88,7 @@ debDeps debType atoms control =
             _ -> []
       otherdependencies =
           catMaybes (map (\ (Dependency name _) ->
-                          case Map.lookup name (getL packageInfo atoms) of
+                          case Map.lookup name (getL Lenses.packageInfo atoms) of
                             Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (case debType of
                                                                                                              Dev -> devDeb p
                                                                                                              Prof -> profDeb p
@@ -95,10 +98,10 @@ debDeps debType atoms control =
 cabalDependencies :: Atoms -> [Dependency]
 cabalDependencies atoms =
     catMaybes $ map unboxDependency $ allBuildDepends atoms
-                  (Cabal.buildDepends (fromMaybe (error "cabalDependencies") $ getL packageDescription atoms))
-                  (concatMap buildTools . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL packageDescription atoms)
-                  (concatMap pkgconfigDepends . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL packageDescription atoms)
-                  (concatMap extraLibs . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL packageDescription atoms)
+                  (Cabal.buildDepends (fromMaybe (error "cabalDependencies") $ getL Lenses.packageDescription atoms))
+                  (concatMap buildTools . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL Lenses.packageDescription atoms)
+                  (concatMap pkgconfigDepends . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL Lenses.packageDescription atoms)
+                  (concatMap extraLibs . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL Lenses.packageDescription atoms)
 
 -- |Debian packages don't have per binary package build dependencies,
 -- so we just gather them all up here.
@@ -112,11 +115,7 @@ allBuildDepends atoms buildDepends buildTools pkgconfigDepends extraLibs =
       fixDeps :: [String] -> [Relations]
       fixDeps xs = concatMap (\ cab -> maybe [[[D.Rel (D.BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]]
                                              Set.toList
-                                             (Map.lookup cab (getL extraLibMap atoms))) xs
-
-putBuildDeps :: Atoms -> Atoms
-putBuildDeps deb =
-    modL control (\ y -> y { Debian.buildDepends = debianBuildDeps deb, buildDependsIndep = debianBuildDepsIndep deb }) deb
+                                             (Map.lookup cab (getL Lenses.extraLibMap atoms))) xs
 
 -- The haskell-cdbs package contains the hlibrary.mk file with
 -- the rules for building haskell packages.
@@ -127,9 +126,9 @@ debianBuildDeps deb =
            [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
            anyrel "cdbs",
            anyrel "ghc"] ++
-            concat (Set.toList (getL buildDeps deb)) ++
-            (if getL noProfilingLibrary deb then [] else [anyrel "ghc-prof"]) ++
-            cabalDeps (getL packageDescription deb)
+            concat (Set.toList (getL Lenses.buildDeps deb)) ++
+            (if getL Lenses.noProfilingLibrary deb then [] else [anyrel "ghc-prof"]) ++
+            cabalDeps (getL Lenses.packageDescription deb)
     where
       cabalDeps Nothing = []
       cabalDeps (Just pkgDesc) =
@@ -143,11 +142,11 @@ debianBuildDeps deb =
 debianBuildDepsIndep :: Atoms -> D.Relations
 debianBuildDepsIndep deb =
     filterMissing deb $
-    if getL noDocumentationLibrary deb
+    if getL Lenses.noDocumentationLibrary deb
     then []
     else nub $ [anyrel "ghc-doc"] ++
-               concat (Set.toList (getL buildDepsIndep deb)) ++
-               cabalDeps (getL packageDescription deb)
+               concat (Set.toList (getL Lenses.buildDepsIndep deb)) ++
+               cabalDeps (getL Lenses.packageDescription deb)
     where
       cabalDeps Nothing = []
       cabalDeps (Just pkgDesc) =
@@ -173,11 +172,11 @@ buildDependencies atoms (BuildDepends (Dependency name ranges)) =
     dependencies atoms Development name ranges ++
     dependencies atoms Profiling name ranges
 buildDependencies atoms dep@(ExtraLibs _) =
-    concat (adapt (getL execMap atoms) dep)
+    concat (adapt (getL Lenses.execMap atoms) dep)
 buildDependencies atoms dep =
     case unboxDependency dep of
       Just (Dependency _name _ranges) ->
-          concat (adapt (getL execMap atoms) dep)
+          concat (adapt (getL Lenses.execMap atoms) dep)
       Nothing ->
           []
 
@@ -226,7 +225,7 @@ dependencies atoms typ name cabalRange =
       -- we may need to distribute any "and" dependencies implied
       -- by a version range over these "or" dependences.
       alts :: [(BinPkgName, VersionRange)]
-      alts = case Map.lookup name (getL debianNameMap atoms) of
+      alts = case Map.lookup name (getL Lenses.debianNameMap atoms) of
                -- If there are no splits for this package just return the single dependency for the package
                Nothing -> [(mkPkgName name typ, cabalRange')]
                -- If there are splits create a list of (debian package name, VersionRange) pairs
@@ -273,7 +272,7 @@ dependencies atoms typ name cabalRange =
             id
             cabalRange
       -- Convert a cabal version to a debian version, adding an epoch number if requested
-      dv v = parseDebianVersion (maybe "" (\ n -> show n ++ ":") (Map.lookup name (getL epochMap atoms)) ++ showVersion v)
+      dv v = parseDebianVersion (maybe "" (\ n -> show n ++ ":") (Map.lookup name (getL Lenses.epochMap atoms)) ++ showVersion v)
       simpler v1 v2 = minimumBy (compare `on` (length . asVersionIntervals)) [v1, v2]
       -- Simplify a VersionRange
       canon = fromVersionIntervals . toVersionIntervals
@@ -283,7 +282,7 @@ dependencies atoms typ name cabalRange =
       -- specify the virtual package (e.g. libghc-base-dev) we would
       -- have to make sure not to specify a version number.
       doBundled :: [D.Relation] -> [D.Relation]
-      doBundled rels | ghcBuiltIn (fromMaybe (error "dependencies") $ getL compiler atoms) name = rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
+      doBundled rels | ghcBuiltIn (fromMaybe (error "dependencies") $ getL Lenses.compiler atoms) name = rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
       doBundled rels = rels
 
       compilerPackageName Documentation = D.BinPkgName "ghc-doc"
@@ -303,7 +302,7 @@ canonical (And rels) = And $ concatMap (unAnd . canonical) rels
 canonical (Or rels) = And . map Or $ sequence $ map (concat . map unOr . unAnd . canonical) $ rels
 
 debianName :: (PkgName name) => Atoms -> PackageType -> PackageIdentifier -> name
-debianName atoms typ pkgDesc = debianName' (Map.lookup (pkgName pkgDesc) (getL debianNameMap atoms)) typ pkgDesc
+debianName atoms typ pkgDesc = debianName' (Map.lookup (pkgName pkgDesc) (getL Lenses.debianNameMap atoms)) typ pkgDesc
 
 -- | Function that applies the mapping from cabal names to debian
 -- names based on version numbers.  If a version split happens at v,
@@ -380,28 +379,28 @@ cdbsRules pkgId deb =
 
 getRulesHead :: Atoms -> Text
 getRulesHead atoms =
-    fromMaybe computeRulesHead (getL rulesHead atoms)
+    fromMaybe computeRulesHead (getL Lenses.rulesHead atoms)
     where
       computeRulesHead =
           unlines $
             ["#!/usr/bin/make -f", ""] ++
-            maybe [] (\ x -> ["DEB_CABAL_PACKAGE = " <> x, ""]) (fmap name (getL packageDescription atoms)) ++
+            maybe [] (\ x -> ["DEB_CABAL_PACKAGE = " <> x, ""]) (fmap name (getL Lenses.packageDescription atoms)) ++
             ["include /usr/share/cdbs/1/rules/debhelper.mk",
              "include /usr/share/cdbs/1/class/hlibrary.mk"]
       name pkgDesc = pack (show (pretty (debianName atoms Cabal (Cabal.package pkgDesc) :: BinPkgName)))
 
 filterMissing :: Atoms -> [[Relation]] -> [[Relation]]
 filterMissing atoms rels =
-    filter (/= []) (List.map (filter (\ (D.Rel name _ _) -> not (Set.member name (getL missingDependencies atoms)))) rels)
+    filter (/= []) (List.map (filter (\ (D.Rel name _ _) -> not (Set.member name (getL Lenses.missingDependencies atoms)))) rels)
 
 binaryPackageDeps :: BinPkgName -> Atoms -> [[Relation]]
-binaryPackageDeps b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL depends atoms))
+binaryPackageDeps b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL Lenses.depends atoms))
 
 binaryPackageConflicts :: BinPkgName -> Atoms -> [[Relation]]
-binaryPackageConflicts b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL conflicts atoms))
+binaryPackageConflicts b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL Lenses.conflicts atoms))
 
 binaryPackageReplaces :: BinPkgName -> Atoms -> [[Relation]]
-binaryPackageReplaces b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL replaces atoms))
+binaryPackageReplaces b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL Lenses.replaces atoms))
 
 binaryPackageProvides :: BinPkgName -> Atoms -> [[Relation]]
-binaryPackageProvides b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL provides atoms))
+binaryPackageProvides b atoms = maybe [] (map (: []) . Set.toList) (Map.lookup b (getL Lenses.provides atoms))

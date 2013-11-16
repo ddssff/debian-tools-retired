@@ -24,9 +24,11 @@ import Debian.Debianize.Lenses as Lenses
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                newBinaryDebDescription, modifyBinaryDeb,
                                                PackageType(Exec, Development, Profiling, Documentation, Utilities))
-import Debian.Debianize.Dependencies (debianName, binaryPackageDeps, binaryPackageConflicts, binaryPackageProvides, binaryPackageReplaces, putBuildDeps)
+import Debian.Debianize.Dependencies (debianName, binaryPackageDeps, binaryPackageConflicts, binaryPackageProvides, binaryPackageReplaces,
+                                      debianBuildDeps, debianBuildDepsIndep)
 import Debian.Debianize.Goodies (describe, siteAtoms, serverAtoms, backupAtoms, execAtoms)
 import Debian.Debianize.Types (InstallFile(..))
+import Debian.DebT as DebT (execDeb, control)
 import Debian.Policy (PackageArchitectures(Any, All), Section(..))
 import Debian.Relation (Relation(Rel), BinPkgName(BinPkgName))
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..))
@@ -54,16 +56,19 @@ finalizeDebianization atoms0 =
                 (\ atoms' -> Map.foldWithKey (\ b _ atoms'' -> cabalExecBinaryPackage b atoms'') atoms' (getL executable atoms)) $ atoms
       -- Turn atoms related to priority, section, and description into debianization elements
       g :: Atoms -> Atoms
-      g atoms = (\ atoms' -> maybe atoms' (\ x -> modL control (\ y -> y {priority = Just x}) atoms') (getL sourcePriority atoms)) .
-                (\ atoms' -> maybe atoms' (\ x -> modL control (\ y -> y {section = Just x}) atoms') (getL sourceSection atoms)) .
-                (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {architecture = x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL binaryArchitectures atoms)) .
-                (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {binaryPriority = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL binaryPriorities atoms)) .
-                (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {binarySection = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL binarySections atoms)) .
-                (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL control (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL Lenses.description atoms)) $ atoms
+      g atoms = (\ atoms' -> maybe atoms' (\ x -> modL Lenses.control (\ y -> y {priority = Just x}) atoms') (getL sourcePriority atoms)) .
+                (\ atoms' -> maybe atoms' (\ x -> modL Lenses.control (\ y -> y {section = Just x}) atoms') (getL sourceSection atoms)) .
+                (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL Lenses.control (\ y -> modifyBinaryDeb b ((\ bin -> bin {architecture = x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL binaryArchitectures atoms)) .
+                (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL Lenses.control (\ y -> modifyBinaryDeb b ((\ bin -> bin {binaryPriority = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL binaryPriorities atoms)) .
+                (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL Lenses.control (\ y -> modifyBinaryDeb b ((\ bin -> bin {binarySection = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL binarySections atoms)) .
+                (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL Lenses.control (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL Lenses.description atoms)) $ atoms
+
+      putBuildDeps :: Atoms -> Atoms
+      putBuildDeps deb = execDeb (DebT.control (\ y -> y { Debian.buildDepends = debianBuildDeps deb, buildDependsIndep = debianBuildDepsIndep deb })) deb
 
 cabalExecBinaryPackage :: BinPkgName -> Atoms -> Atoms
 cabalExecBinaryPackage b deb =
-    modL control (\ y -> y {binaryPackages = bin : binaryPackages y}) deb
+    modL Lenses.control (\ y -> y {binaryPackages = bin : binaryPackages y}) deb
     where
       bin = BinaryDebDescription
             { Debian.package = b
@@ -99,7 +104,7 @@ librarySpecs deb =
     (if doc
      then modL link (Map.insertWith Set.union debName (singleton ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt", "/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")))
      else id) $
-    modL control
+    modL Lenses.control
          (\ y -> y { binaryPackages =
                                (if dev then [librarySpec deb Any Development (Cabal.package pkgDesc)] else []) ++
                                (if prof then [librarySpec deb Any Profiling (Cabal.package pkgDesc)] else []) ++
@@ -155,7 +160,7 @@ makeUtilsPackage deb =
           -- modL control (\ y -> modifyBinaryDeb p (f deb' p (if Set.null execs then All else Any)) y) deb'
     where
       h datas execs p deb' = setL packageDescription (Just pkgDesc) (makeUtilsAtoms p datas execs deb')
-      g execs p deb' = modL control (\ y -> modifyBinaryDeb p (f deb' p (if Set.null execs then All else Any)) y) deb'
+      g execs p deb' = modL Lenses.control (\ y -> modifyBinaryDeb p (f deb' p (if Set.null execs then All else Any)) y) deb'
       f _ _ _ (Just bin) = bin
       f deb' p arch Nothing =
           let bin = newBinaryDebDescription p arch in

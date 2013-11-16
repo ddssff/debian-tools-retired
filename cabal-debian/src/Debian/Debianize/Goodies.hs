@@ -25,14 +25,14 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Set as Set (insert, union, singleton)
 import Data.Text as Text (Text, pack, unlines, intercalate)
-import Debian.Debianize.Lenses as Lenses
-    (Atoms, packageDescription, rulesFragments, website, serverInfo, link, backups, executable,
-     install, installTo, installCabalExecTo, file, installDir, logrotateStanza, postInst,
-     installInit, installCabalExec, rulesFragments, packageDescription, executable,
-     serverInfo, website, backups, depends)
+import qualified Debian.Debianize.Lenses as Lenses
+    (packageDescription, rulesFragments,
+     install, installTo, installCabalExecTo, logrotateStanza, postInst,
+     installInit, installCabalExec, rulesFragments, packageDescription)
 import Debian.Debianize.ControlFile as Debian (PackageType(..))
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (trim)
+import Debian.DebT (Atoms, DebT, execDeb, executable, rulesFragment, installDir, link, file, logrotateStanza, serverInfo, website, backups, depends)
 import Debian.Orphans ()
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel))
@@ -58,19 +58,18 @@ translate str =
 -- to find out B's version number, version B.  Then write a rule into
 -- P's .substvar that makes P require that that exact version of A,
 -- and another that makes P conflict with any older version of A.
-tightDependencyFixup :: [(BinPkgName, BinPkgName)] -> BinPkgName -> Atoms -> Atoms
-tightDependencyFixup [] _ deb = deb
-tightDependencyFixup pairs p deb =
-    modL rulesFragments
-             (Set.insert
-              (Text.unlines $
+tightDependencyFixup :: Monad m => [(BinPkgName, BinPkgName)] -> BinPkgName -> DebT m ()
+tightDependencyFixup [] _ = return ()
+tightDependencyFixup pairs p =
+    rulesFragment
+          (Text.unlines $
                ([ "binary-fixup/" <> name <> "::"
                 , "\techo -n 'haskell:Depends=' >> debian/" <> name <> ".substvars" ] ++
                 intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (List.map equals pairs) ++
                 [ "\techo '' >> debian/" <> name <> ".substvars"
                 , "\techo -n 'haskell:Conflicts=' >> debian/" <> name <> ".substvars" ] ++
                 intersperse ("\techo -n ', ' >> debian/" <> name <> ".substvars") (List.map newer pairs) ++
-                [ "\techo '' >> debian/" <> name <> ".substvars" ]))) deb
+                [ "\techo '' >> debian/" <> name <> ".substvars" ]))
     where
       equals (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (=$${Version})' " <>  display' installed <> " >> debian/" <> name <> ".substvars"
       newer  (installed, dependent) = "\tdpkg-query -W -f='" <> display' dependent <> " (>>$${Version})' " <> display' installed <> " >> debian/" <> name <> ".substvars"
@@ -78,29 +77,27 @@ tightDependencyFixup pairs p deb =
       display' = pack . show . pretty
 
 -- | Add a debian binary package to the debianization containing a cabal executable file.
-doExecutable :: BinPkgName -> InstallFile -> Atoms -> Atoms
-doExecutable bin x deb = modL executable (Map.insertWith (\ a b -> error $ "doExecutable: " ++ show (a, b)) bin x) deb
+doExecutable :: Monad m => BinPkgName -> InstallFile -> DebT m ()
+doExecutable = executable
 
 -- | Add a debian binary package to the debianization containing a cabal executable file set up to be a server.
 doServer :: BinPkgName -> Server -> Atoms -> Atoms
-doServer bin x deb = modL serverInfo (Map.insertWith (\ a b -> error $ "doServer: " ++ show (a, b)) bin x) deb
+doServer bin x deb = execDeb (serverInfo bin x) deb
 
 -- | Add a debian binary package to the debianization containing a cabal executable file set up to be a web site.
 doWebsite :: BinPkgName -> Site -> Atoms -> Atoms
-doWebsite bin x deb = modL website (Map.insertWith (\ a b -> error $ "doWebsite: " ++ show (a, b)) bin x) deb
+doWebsite bin x deb = execDeb (website bin x) deb
 
 -- | Add a debian binary package to the debianization containing a cabal executable file set up to be a backup script.
 doBackups :: BinPkgName -> String -> Atoms -> Atoms
 doBackups bin s deb =
-    modL backups (Map.insertWith (error "backups") bin s) $
-    modL Lenses.depends (Map.insertWith union bin (singleton (Rel (BinPkgName "anacron") Nothing Nothing))) $
-    deb
+    execDeb (backups bin s >> depends bin (Rel (BinPkgName "anacron") Nothing Nothing)) deb
 
 describe :: Atoms -> PackageType -> PackageIdentifier -> Text
 describe atoms typ ident =
     debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc) typ ident
     where
-      pkgDesc = fromMaybe (error $ "describe " ++ show ident) $ getL packageDescription atoms
+      pkgDesc = fromMaybe (error $ "describe " ++ show ident) $ getL Lenses.packageDescription atoms
 
 debianDescription :: String -> String -> String -> String -> String -> PackageType -> PackageIdentifier -> Text
 debianDescription synopsis' description' author' maintainer' url typ pkgId =
@@ -176,24 +173,22 @@ watchAtom (PackageName pkgname) =
 
 siteAtoms :: BinPkgName -> Site -> Atoms -> Atoms
 siteAtoms b site =
-    modL installDir (Map.insertWith Set.union b (singleton "/etc/apache2/sites-available")) .
-    modL link (Map.insertWith Set.union b (singleton ("/etc/apache2/sites-available/" ++ domain site, "/etc/apache2/sites-enabled/" ++ domain site))) .
-    modL file (Map.insertWith Set.union b (singleton ("/etc/apache2/sites-available" </> domain site, apacheConfig))) .
-    modL installDir (Map.insertWith Set.union b (singleton (apacheLogDirectory b))) .
-    modL logrotateStanza (Map.insertWith Set.union b (singleton (Text.unlines $
-                                                                 [ pack (apacheAccessLog b) <> " {"
-                                                                 , "  weekly"
-                                                                 , "  rotate 5"
-                                                                 , "  compress"
-                                                                 , "  missingok"
-                                                                 , "}"]))) .
-    modL logrotateStanza (Map.insertWith Set.union b (singleton (Text.unlines $
-                                                                 [ pack (apacheErrorLog b) <> " {"
-                                                                 , "  weekly"
-                                                                 , "  rotate 5"
-                                                                 , "  compress"
-                                                                 , "  missingok"
-                                                                 , "}" ]))) .
+    execDeb (do installDir b "/etc/apache2/sites-available"
+                link b ("/etc/apache2/sites-available/" ++ domain site, "/etc/apache2/sites-enabled/" ++ domain site)
+                file b ("/etc/apache2/sites-available" </> domain site, apacheConfig)
+                installDir b (apacheLogDirectory b)
+                logrotateStanza b (Text.unlines $ [ pack (apacheAccessLog b) <> " {"
+                                                  , "  weekly"
+                                                  , "  rotate 5"
+                                                  , "  compress"
+                                                  , "  missingok"
+                                                  , "}"])
+                logrotateStanza b (Text.unlines $ [ pack (apacheErrorLog b) <> " {"
+                                                  , "  weekly"
+                                                  , "  rotate 5"
+                                                  , "  compress"
+                                                  , "  missingok"
+                                                  , "}" ])) .
     serverAtoms b (server site) True
     where
       -- An apache site configuration file.  This is installed via a line
@@ -236,8 +231,8 @@ siteAtoms b site =
 
 serverAtoms :: BinPkgName -> Server -> Bool -> Atoms -> Atoms
 serverAtoms b server' isSite =
-    modL postInst (insertWith (error "serverAtoms") b debianPostinst) .
-    modL installInit (Map.insertWith (error "serverAtoms") b debianInit) .
+    modL Lenses.postInst (insertWith (error "serverAtoms") b debianPostinst) .
+    modL Lenses.installInit (Map.insertWith (error "serverAtoms") b debianInit) .
     serverLogrotate' b .
     execAtoms b exec
     where
@@ -301,13 +296,13 @@ serverAtoms b server' isSite =
 -- in debianFiles.
 serverLogrotate' :: BinPkgName -> Atoms -> Atoms
 serverLogrotate' b =
-    modL logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAccessLog b) <> " {"
+    modL Lenses.logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAccessLog b) <> " {"
                                  , "  weekly"
                                  , "  rotate 5"
                                  , "  compress"
                                  , "  missingok"
                                  , "}" ]))) .
-    modL logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAppLog b) <> " {"
+    modL Lenses.logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAppLog b) <> " {"
                                  , "  weekly"
                                  , "  rotate 5"
                                  , "  compress"
@@ -316,7 +311,7 @@ serverLogrotate' b =
 
 backupAtoms :: BinPkgName -> String -> Atoms -> Atoms
 backupAtoms b name =
-    modL postInst (insertWith (error "backupAtoms") b
+    modL Lenses.postInst (insertWith (error "backupAtoms") b
                  (Text.unlines $
                   [ "#!/bin/sh"
                   , ""
@@ -332,7 +327,7 @@ backupAtoms b name =
 
 execAtoms :: BinPkgName -> InstallFile -> Atoms -> Atoms
 execAtoms b ifile r =
-    modL rulesFragments (Set.insert (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp"))) .
+    modL Lenses.rulesFragments (Set.insert (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp"))) .
     fileAtoms b ifile $
     r
 
@@ -343,9 +338,9 @@ fileAtoms b installFile' r =
 fileAtoms' :: BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> Atoms -> Atoms
 fileAtoms' b sourceDir' execName' destDir' destName' r =
     case (sourceDir', execName' == destName') of
-      (Nothing, True) -> modL installCabalExec (insertWith Set.union b (singleton (execName', d))) r
-      (Just s, True) -> modL install (insertWith Set.union b (singleton (s </> execName', d))) r
-      (Nothing, False) -> modL installCabalExecTo (insertWith Set.union b (singleton (execName', (d </> destName')))) r
-      (Just s, False) -> modL installTo (insertWith Set.union b (singleton (s </> execName', d </> destName'))) r
+      (Nothing, True) -> modL Lenses.installCabalExec (insertWith Set.union b (singleton (execName', d))) r
+      (Just s, True) -> modL Lenses.install (insertWith Set.union b (singleton (s </> execName', d))) r
+      (Nothing, False) -> modL Lenses.installCabalExecTo (insertWith Set.union b (singleton (execName', (d </> destName')))) r
+      (Just s, False) -> modL Lenses.installTo (insertWith Set.union b (singleton (s </> execName', d </> destName'))) r
     where
       d = fromMaybe "usr/bin" destDir'

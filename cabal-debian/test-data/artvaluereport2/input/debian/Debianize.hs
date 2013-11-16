@@ -1,9 +1,10 @@
 {-# LANGUAGE CPP, OverloadedStrings #-}
 import Debian.Debianize
 import Data.Lens.Lazy
-import Debian.Debianize.Atoms as Atoms (depends, description)
+import qualified Debian.Debianize.Lenses as Lenses
 import Debian.Debianize.Details (seereasonDefaultAtoms)
 import Debian.Debianize.Types (Top(Top))
+import Debian.DebT (execDeb)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(..), Relation(Rel), VersionReq(SLT))
 import Debian.Version (parseDebianVersion)
@@ -23,24 +24,24 @@ main =
     do log <- inputChangeLog (Top "test-data/artvaluereport2/input")
        new <- debianization (Top "test-data/artvaluereport2/input")
               (return .
-               modL control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) .
-               setL compat (Just 7) .
-               modL control (\ x -> x {standardsVersion = Just (StandardsVersion 3 9 1 Nothing)}) .
-               setL sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) .
-               -- setL utilsPackageName (Just (BinPkgName "artvaluereport2-server")) .
-               modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-development") All) .
-               modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-production") All) .
-               modL binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-staging") All) .
-               modL buildDepsIndep (Set.insert [[Rel (BinPkgName "libjs-jcrop") Nothing Nothing]]) .
-               modL buildDepsIndep (Set.insert [[Rel (BinPkgName "libjs-jquery") Nothing Nothing]]) .
-               modL buildDepsIndep (Set.insert [[Rel (BinPkgName "libjs-jquery-ui") (Just (SLT (parseDebianVersion ("1.10" :: String)))) Nothing]]) .
-               modL description (Map.insert (BinPkgName "appraisalscope") "Offline manipulation of appraisal database") .
+               modL Lenses.control (\ y -> y {homepage = Just "http://appraisalreportonline.com"}) .
+               setL Lenses.compat (Just 7) .
+               modL Lenses.control (\ x -> x {standardsVersion = Just (StandardsVersion 3 9 1 Nothing)}) .
+               setL Lenses.sourcePackageName (Just (SrcPkgName "haskell-artvaluereport2")) .
+               -- setL Lenses.utilsPackageName (Just (BinPkgName "artvaluereport2-server")) .
+               modL Lenses.binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-development") All) .
+               modL Lenses.binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-production") All) .
+               modL Lenses.binaryArchitectures (Map.insert (BinPkgName "artvaluereport2-staging") All) .
+               modL Lenses.buildDepsIndep (Set.insert [[Rel (BinPkgName "libjs-jcrop") Nothing Nothing]]) .
+               modL Lenses.buildDepsIndep (Set.insert [[Rel (BinPkgName "libjs-jquery") Nothing Nothing]]) .
+               modL Lenses.buildDepsIndep (Set.insert [[Rel (BinPkgName "libjs-jquery-ui") (Just (SLT (parseDebianVersion ("1.10" :: String)))) Nothing]]) .
+               modL Lenses.description (Map.insert (BinPkgName "appraisalscope") "Offline manipulation of appraisal database") .
                addServerDeps .
                addServerData .
                addDep (BinPkgName "artvaluereport2-production") (BinPkgName "apache2") .
                -- This should go into the "real" data directory.  And maybe a different icon for each server?
-               -- modL install (Map.insertWith union (BinPkgName "artvaluereport2-server") (singleton ("theme/ArtValueReport_SunsetSpectrum.ico", "usr/share/artvaluereport2-data"))) .
-               modL Atoms.description (Map.insertWith (error "test6") (BinPkgName "artvaluereport2-backups")
+               -- modL Lenses.install (Map.insertWith union (BinPkgName "artvaluereport2-server") (singleton ("theme/ArtValueReport_SunsetSpectrum.ico", "usr/share/artvaluereport2-data"))) .
+               modL Lenses.description (Map.insertWith (error "test6") (BinPkgName "artvaluereport2-backups")
                                        (Text.intercalate "\n"
                                         [ "backup program for the appraisalreportonline.com site"
                                         , "  Install this somewhere other than where the server is running get"
@@ -49,9 +50,9 @@ main =
                doWebsite (BinPkgName "artvaluereport2-production") (theSite (BinPkgName "artvaluereport2-production")) .
                doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging")) .
                doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development")) .
-               doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"}) .
-               modL installCabalExec (Map.insertWith Set.union (BinPkgName "appraisalscope") (singleton ("lookatareport", "usr/bin"))) .
-               setL changelog (Just log))
+               execDeb (doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"})) .
+               modL Lenses.installCabalExec (Map.insertWith Set.union (BinPkgName "appraisalscope") (singleton ("lookatareport", "usr/bin"))) .
+               setL Lenses.changelog (Just log))
               seereasonDefaultAtoms
        old <- inputDebianization (Top "test-data/artvaluereport2/output")
        -- The newest log entry gets modified when the Debianization is
@@ -61,15 +62,15 @@ main =
       addServerDeps :: Atoms -> Atoms
       addServerDeps atoms = foldr addDeps atoms (map BinPkgName ["artvaluereport2-development", "artvaluereport2-staging", "artvaluereport2-production"])
       addDeps p atoms = foldr (addDep p) atoms (map BinPkgName ["libjpeg-progs", "libjs-jcrop", "libjs-jquery", "libjs-jquery-ui", "netpbm", "texlive-fonts-extra", "texlive-fonts-recommended", "texlive-latex-extra", "texlive-latex-recommended"])
-      addDep p dep atoms = modL Atoms.depends (Map.insertWith union p (singleton (Rel dep Nothing Nothing))) atoms
+      addDep p dep atoms = modL Lenses.depends (Map.insertWith union p (singleton (Rel dep Nothing Nothing))) atoms
 
       addServerData :: Atoms -> Atoms
       addServerData atoms = foldr addData atoms (map BinPkgName ["artvaluereport2-development", "artvaluereport2-staging", "artvaluereport2-production"])
       addData p atoms =
-          modL installData (Map.insertWith union p (singleton ("theme/ArtValueReport_SunsetSpectrum.ico", "ArtValueReport_SunsetSpectrum.ico"))) $
+          modL Lenses.installData (Map.insertWith union p (singleton ("theme/ArtValueReport_SunsetSpectrum.ico", "ArtValueReport_SunsetSpectrum.ico"))) $
           foldr (addDataFile p) atoms ["Udon.js", "flexbox.css", "DataTables-1.8.2", "html5sortable", "jGFeed", "searchMag.png",
                                        "Clouds.jpg", "tweaks.css", "verticalTabs.css", "blueprint", "jquery.blockUI", "jquery.tinyscrollbar"]
-      addDataFile p path atoms = modL installData (Map.insertWith union p (singleton (path, path))) atoms
+      addDataFile p path atoms = modL Lenses.installData (Map.insertWith union p (singleton (path, path))) atoms
 
       theSite :: BinPkgName -> Site
       theSite deb =
@@ -124,7 +125,7 @@ anyrel b = Rel b Nothing Nothing
 
 copyFirstLogEntry :: Atoms -> Atoms -> Atoms
 copyFirstLogEntry deb1 deb2 =
-    modL changelog (const (Just (ChangeLog (hd1 : tl2)))) deb2
+    modL Lenses.changelog (const (Just (ChangeLog (hd1 : tl2)))) deb2
     where
-      ChangeLog (hd1 : _) = fromMaybe (error "Missing debian/changelog") (getL changelog deb1)
-      ChangeLog (_ : tl2) = fromMaybe (error "Missing debian/changelog") (getL changelog deb2)
+      ChangeLog (hd1 : _) = fromMaybe (error "Missing debian/changelog") (getL Lenses.changelog deb1)
+      ChangeLog (_ : tl2) = fromMaybe (error "Missing debian/changelog") (getL Lenses.changelog deb2)

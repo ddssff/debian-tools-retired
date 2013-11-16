@@ -1,10 +1,16 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wall #-}
 module Debian.DebT
-    ( DebT
+    ( Atoms
+
+    , DebT
     , runDebT
+    , evalDebT
+    , execDebT
     , Deb
     , runDeb
+    , evalDeb
+    , execDeb
 
     -- * Lens Helper Functions
     , doConst
@@ -18,9 +24,11 @@ module Debian.DebT
 
      -- * Modes of operation
     , verbosity
+    , lookVerbosity
     , dryRun
     , debAction
-    , cabalFlagAssignments
+    , cabalFlagAssignment
+    , lookCabalFlagAssignments
 
     -- * Repository info
     , execMap
@@ -57,6 +65,7 @@ module Debian.DebT
     , buildDepsIndep
     , omitLTDeps
     , compilerVersion
+    , lookCompilerVersion
 
     -- * Binary Package Info
     , binaryArchitectures
@@ -96,14 +105,14 @@ module Debian.DebT
     , packageDescription -- Internal
     , warning -- no-op?
     , compiler
-    , intermediateFiles
+    , intermediateFile
     , packageInfo
     , control
 
     ) where
 
-import Control.Monad.State (execState, execStateT, modify, State, StateT)
-import Data.Lens.Lazy (Lens, modL, setL)
+import Control.Monad.State (execState, execStateT, evalState, evalStateT, runState, runStateT, modify, State, StateT, get)
+import Data.Lens.Lazy (Lens, modL, setL, getL)
 import Data.Map as Map (Map, insert, insertWith, alter)
 import Data.Maybe (fromMaybe)
 import Data.Set as Set (empty, insert, Set, singleton, union)
@@ -111,8 +120,8 @@ import Data.Text as Text (Text)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog)
 import Debian.Debianize.ControlFile (SourceDebDescription)
-import Debian.Debianize.Lenses (Atoms, Flags)
-import qualified Debian.Debianize.Lenses as Lenses
+import Debian.Debianize.Internal.Lenses (Atoms, Flags)
+import qualified Debian.Debianize.Internal.Lenses as Lenses
 import Debian.Debianize.Types (DebAction(..), InstallFile(..), PackageInfo(..), Server(..), Site(..))
 import Debian.Debianize.VersionSplits (VersionSplits, makePackage, insertSplit)
 import Debian.Orphans ()
@@ -129,11 +138,23 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 type DebT m = StateT Lenses.Atoms m
 type Deb = State Lenses.Atoms
 
-runDebT :: Monad m => DebT m () -> Atoms -> m Atoms
-runDebT action atoms = execStateT action atoms
+execDebT :: Monad m => DebT m a -> Atoms -> m Atoms
+execDebT action atoms = execStateT action atoms
 
-runDeb :: Deb () -> Atoms -> Atoms
-runDeb action atoms = execState action atoms
+evalDebT :: Monad m => DebT m a -> Atoms -> m a
+evalDebT action atoms = evalStateT action atoms
+
+runDebT :: Monad m => DebT m a -> Atoms -> m (a, Atoms)
+runDebT action atoms = runStateT action atoms
+
+execDeb :: Deb a -> Atoms -> Atoms
+execDeb action atoms = execState action atoms
+
+evalDeb :: Deb a -> Atoms -> a
+evalDeb action atoms = evalState action atoms
+
+runDeb :: Deb a -> Atoms -> (a, Atoms)
+runDeb action atoms = runState action atoms
 
 -- | Set the value to x regardless of its previous value
 doConst :: Monad m => Lens Atoms a -> a -> DebT m ()
@@ -141,6 +162,9 @@ doConst lens x = modify (modL lens (const x))
 
 verbosity :: Monad m => Int -> DebT m ()
 verbosity = doConst Lenses.verbosity
+lookVerbosity :: Monad m => DebT m Int
+lookVerbosity = get >>= return . getL Lenses.verbosity
+
 dryRun :: Monad m => Bool -> DebT m ()
 dryRun x = modify (modL (Lenses.dryRun :: Lens Atoms Bool) (const x))
 validate :: Monad m => Bool -> DebT m ()
@@ -161,8 +185,11 @@ doConstJust lens x = modify (setL lens (Just x))
 doConstMaybe :: Monad m => Lens Atoms (Maybe a) -> Maybe a -> DebT m ()
 doConstMaybe = doConst
 
-compilerVersion :: Monad m => Version -> DebT m () -- Lens Atoms (Maybe Version)
-compilerVersion v = doConstJust Lenses.compilerVersion v
+compilerVersion :: Monad m => (Maybe Version -> Maybe Version) -> DebT m () -- Lens Atoms (Maybe Version)
+compilerVersion f = doModify Lenses.compilerVersion f
+lookCompilerVersion :: Monad m => DebT m (Maybe Version)
+lookCompilerVersion = get >>= return . getL Lenses.compilerVersion
+
 packageDescription :: Monad m => PackageDescription -> DebT m ()
 packageDescription d = doConstJust Lenses.packageDescription d
 buildDir :: Monad m => FilePath -> DebT m ()
@@ -228,8 +255,12 @@ warning = doSetElem Lenses.warning
 -- missingDependencies :: Monad m => Lens Atoms (Set BinPkgName)
 missingDependency :: Monad m => BinPkgName -> DebT m ()
 missingDependency = doSetElem Lenses.missingDependencies
-cabalFlagAssignments :: Monad m => (FlagName, Bool) -> DebT m ()
-cabalFlagAssignments = doSetElem Lenses.cabalFlagAssignments
+
+cabalFlagAssignment :: Monad m => FlagName -> Bool -> DebT m ()
+cabalFlagAssignment f b = doSetElem Lenses.cabalFlagAssignments (f, b)
+lookCabalFlagAssignments :: Monad m => DebT m (Set (FlagName, Bool))
+lookCabalFlagAssignments = get >>= return . getL Lenses.cabalFlagAssignments
+
 buildDeps :: Monad m => Relations -> DebT m ()
 buildDeps = doSetElem Lenses.buildDeps
 -- buildDepsIndep :: Monad m => Lens Atoms (Set Relations)
@@ -240,8 +271,8 @@ extraDevDeps = doSetElem Lenses.extraDevDeps
 -- rulesFragments :: Monad m => Lens Atoms (Set Text)
 rulesFragment :: Monad m => Text -> DebT m ()
 rulesFragment text = doSetElem Lenses.rulesFragments text
-intermediateFiles :: Monad m => (FilePath, Text) -> DebT m ()
-intermediateFiles = doSetElem Lenses.intermediateFiles
+intermediateFile :: Monad m => (FilePath, Text) -> DebT m ()
+intermediateFile = doSetElem Lenses.intermediateFiles
 
 -- We should change the lens type from Maybe (Set a) to Set a
 utilsPackageName :: Monad m => BinPkgName -> DebT m ()
@@ -249,6 +280,9 @@ utilsPackageName x = modify (modL Lenses.utilsPackageNames (\ s -> Just (Set.ins
 
 doMapElem :: (Monad m, Ord a) => Lens Atoms (Map a b) -> a -> b -> DebT m ()
 doMapElem lens a b = modify (modL lens (Map.insert a b))
+-- Like doMapElem, but throws an error if two different values are attempted
+doMapElem' :: (Monad m, Ord k, Show a, Eq a) => Lens Atoms (Map k a) -> String -> k -> a -> DebT m ()
+doMapElem' lens desc k a = modify (modL lens (Map.insertWith (\ x y -> if x /= y then error ("Conflicting values for " ++ desc ++ ":\n " ++ show x ++ "\n " ++ show y) else a) k a))
 
 -- binaryArchitectures :: Monad m => Lens Atoms (Map BinPkgName PackageArchitectures)
 binaryArchitectures :: Monad m => BinPkgName -> PackageArchitectures -> DebT m ()
@@ -298,15 +332,15 @@ binaryPriorities = doMapElem Lenses.binaryPriorities
 binarySections :: Monad m => BinPkgName -> Section -> DebT m ()
 binarySections = doMapElem Lenses.binarySections
 postInst :: Monad m => BinPkgName -> Text -> DebT m ()
-postInst = doMapElem Lenses.postInst
+postInst = doMapElem' Lenses.postInst "post-install script"
 postRm :: Monad m => BinPkgName -> Text -> DebT m ()
-postRm = doMapElem Lenses.postRm
+postRm = doMapElem' Lenses.postRm "post-install script"
 preInst :: Monad m => BinPkgName -> Text -> DebT m ()
-preInst = doMapElem Lenses.preInst
+preInst = doMapElem' Lenses.preInst "pre-install script"
 preRm :: Monad m => BinPkgName -> Text -> DebT m ()
-preRm = doMapElem Lenses.preRm
+preRm = doMapElem' Lenses.preRm "pre-remove script"
 installInit :: Monad m => BinPkgName -> Text -> DebT m ()
-installInit = doMapElem Lenses.installInit
+installInit = doMapElem' Lenses.installInit "init file"
 
 doMapSet :: (Monad m, Ord a, Ord b) => Lens Atoms (Map a (Set b)) -> a -> b -> DebT m ()
 doMapSet lens a b = modify (modL lens (Map.insertWith union a (singleton b)))

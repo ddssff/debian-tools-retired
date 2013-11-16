@@ -13,52 +13,54 @@ import Data.Monoid ((<>))
 import Data.Set as Set (toList, member)
 import Data.Text as Text (Text, pack, unpack, lines, unlines, strip, null)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.Lenses (Atoms, compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
-                               intermediateFiles, install, installDir, installInit, logrotateStanza, link,
-                               rulesHead, rulesFragments, copyright)
+import qualified Debian.Debianize.Lenses as Lenses
+    (compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
+     intermediateFiles, install, installDir, installInit, logrotateStanza, link,
+     rulesHead, rulesFragments, copyright)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Dependencies (getRulesHead)
 import Debian.Debianize.Utility (showDeps')
+import Debian.DebT (Atoms)
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
 import Prelude hiding (init, unlines, writeFile)
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 sourceFormatFiles :: Atoms -> [(FilePath, Text)]
-sourceFormatFiles deb = maybe [] (\ x -> [("debian/source/format", pack (show (pretty x)))]) (getL sourceFormat deb)
+sourceFormatFiles deb = maybe [] (\ x -> [("debian/source/format", pack (show (pretty x)))]) (getL Lenses.sourceFormat deb)
 
 watchFile :: Atoms -> [(FilePath, Text)]
-watchFile deb = maybe [] (\ x -> [("debian/watch", x)]) (getL watch deb)
+watchFile deb = maybe [] (\ x -> [("debian/watch", x)]) (getL Lenses.watch deb)
 
 intermediates :: Atoms -> [(FilePath, Text)]
-intermediates deb = Set.toList $ getL intermediateFiles deb
+intermediates deb = Set.toList $ getL Lenses.intermediateFiles deb
 
 installs :: Atoms -> [(FilePath, Text)]
 installs deb =
     map (\ (path, pairs) -> (path, pack (List.unlines (map (\ (src, dst) -> src <> " " <> dst) (Set.toList pairs))))) $
     Map.toList $
     mapKeys pathf $
-    getL install deb
+    getL Lenses.install deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".install"
 
 dirs :: Atoms -> [(FilePath, Text)]
 dirs deb =
-    map (\ (path, dirs') -> (path, pack (List.unlines (Set.toList dirs')))) $ Map.toList $ mapKeys pathf $ getL installDir deb
+    map (\ (path, dirs') -> (path, pack (List.unlines (Set.toList dirs')))) $ Map.toList $ mapKeys pathf $ getL Lenses.installDir deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".dirs"
 
 init :: Atoms -> [(FilePath, Text)]
 init deb =
-    Map.toList $ mapKeys pathf $ getL installInit deb
+    Map.toList $ mapKeys pathf $ getL Lenses.installInit deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".init"
 
 -- FIXME - use a map and insertWith, check for multiple entries
 logrotate :: Atoms -> [(FilePath, Text)]
 logrotate deb =
-    map (\ (path, stanzas) -> (path, Text.unlines (Set.toList stanzas))) $ Map.toList $ mapKeys pathf $ getL logrotateStanza deb
+    map (\ (path, stanzas) -> (path, Text.unlines (Set.toList stanzas))) $ Map.toList $ mapKeys pathf $ getL Lenses.logrotateStanza deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".logrotate"
 
@@ -68,31 +70,31 @@ links deb =
     map (\ (path, pairs) -> (path, pack (List.unlines (map (\ (loc, txt) -> loc ++ " " ++ txt) (Set.toList pairs))))) $
     Map.toList $
     mapKeys pathf $
-    getL link deb
+    getL Lenses.link deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".links"
 
 postinstFiles :: Atoms -> [(FilePath, Text)]
 postinstFiles deb =
-    Map.toList $ mapKeys pathf $ getL postInst deb
+    Map.toList $ mapKeys pathf $ getL Lenses.postInst deb
     where
       pathf (BinPkgName name) = "debian" </> show (pretty name) ++ ".postinst"
 
 postrmFiles :: Atoms -> [(FilePath, Text)]
 postrmFiles deb =
-    Map.toList $ mapKeys pathf $ getL postRm deb
+    Map.toList $ mapKeys pathf $ getL Lenses.postRm deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".postrm"
 
 preinstFiles :: Atoms -> [(FilePath, Text)]
 preinstFiles deb =
-    Map.toList $ mapKeys pathf $ getL preInst deb
+    Map.toList $ mapKeys pathf $ getL Lenses.preInst deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".preinst"
 
 prermFiles :: Atoms -> [(FilePath, Text)]
 prermFiles deb =
-    Map.toList $ mapKeys pathf $ getL preRm deb
+    Map.toList $ mapKeys pathf $ getL Lenses.preRm deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".prerm"
 
@@ -106,10 +108,10 @@ toFileMap :: Atoms -> Map FilePath Text
 toFileMap atoms =
     Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
       [("debian/control", pack (show (pretty (controlFile d)))),
-       ("debian/changelog", pack (show (pretty (fromMaybe (error "Missing debian/changelog") (getL changelog atoms))))),
+       ("debian/changelog", pack (show (pretty (fromMaybe (error "Missing debian/changelog") (getL Lenses.changelog atoms))))),
        ("debian/rules", rules atoms),
-       ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom - is debhelper installed?") $ getL compat atoms) <> "\n")),
-       ("debian/copyright", either (\ x -> pack (show (pretty x))) id (fromMaybe (error ("No DebCopyright atom: " ++ show atoms)) $ getL copyright atoms))] ++
+       ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom - is debhelper installed?") $ getL Lenses.compat atoms) <> "\n")),
+       ("debian/copyright", either (\ x -> pack (show (pretty x))) id (fromMaybe (error ("No DebCopyright atom: " ++ show atoms)) $ getL Lenses.copyright atoms))] ++
       sourceFormatFiles atoms ++
       watchFile atoms ++
       installs atoms ++
@@ -122,10 +124,10 @@ toFileMap atoms =
       preinstFiles atoms ++
       prermFiles atoms ++
       intermediates atoms
-    where d = getL control atoms
+    where d = getL Lenses.control atoms
 
 rules :: Atoms -> Text
-rules deb = Text.unlines (maybe (getRulesHead deb) id (getL rulesHead deb) : reverse (Set.toList (getL rulesFragments deb)))
+rules deb = Text.unlines (maybe (getRulesHead deb) id (getL Lenses.rulesHead deb) : reverse (Set.toList (getL Lenses.rulesFragments deb)))
 
 controlFile :: SourceDebDescription -> Control' String
 controlFile src =

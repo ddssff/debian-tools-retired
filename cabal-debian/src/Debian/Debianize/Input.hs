@@ -14,26 +14,28 @@ import Debug.Trace (trace)
 
 import Control.Exception (bracket)
 import Control.Monad (when, foldM, filterM)
-import Control.Monad.Trans (MonadIO, liftIO)
+import Control.Monad.Trans (MonadIO, liftIO, lift)
 import Data.Char (isSpace)
-import Data.Lens.Lazy (getL, setL, modL)
-import Data.Map as Map (insertWith)
+import Data.Lens.Lazy (getL)
 import Data.Maybe (fromMaybe, fromJust)
 import Data.Monoid (mempty)
-import Data.Set as Set (toList, fromList, insert, union, singleton)
+import Data.Set as Set (toList, fromList, insert)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import Debian.Debianize.Lenses as Lenses
-    (Atoms, rulesHead, compat, sourceFormat, watch, changelog, control, copyright,
-     intermediateFiles, postInst, postRm, preInst, preRm, install, installDir, warning,
-     logrotateStanza, installInit, link, packageDescription, compiler, maintainer, verbosity,
+import qualified Debian.Debianize.Lenses as Lenses
+    (rulesHead, compat, sourceFormat, watch, changelog, copyright,
+     install, installDir, warning, packageDescription,
+     link, maintainer, verbosity,
      compilerVersion, cabalFlagAssignments)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Types (Top(Top, unTop))
 import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read')
+import Debian.DebT (Atoms, DebT, execDebT, evalDebT, intermediateFile, control, warning, sourceFormat, watch, rulesHead, compat,
+                    copyright, changelog, installInit, postInst, postRm, preInst, preRm, compiler, packageDescription,
+                    logrotateStanza, link, install, installDir, lookCompilerVersion, lookCabalFlagAssignments, lookVerbosity)
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer, haskellMaintainer)
@@ -61,12 +63,12 @@ inputDebianization :: Top -> IO Atoms
 inputDebianization top =
     do (ctl, _) <- inputSourceDebDescription top
        atoms <- inputAtomsFromDirectory top mempty
-       return $ modL control (const ctl) atoms
+       execDebT (control (const ctl)) atoms
 
 -- | Try to input a file and if successful add it to the debianization.
-inputDebianizationFile :: Top -> FilePath -> Atoms -> IO Atoms
-inputDebianizationFile (Top top) path atoms =
-    readFileMaybe (top </> path) >>= return . maybe atoms (\ text -> modL intermediateFiles (insert (path, text)) atoms)
+inputDebianizationFile :: Top -> FilePath -> DebT IO ()
+inputDebianizationFile (Top top) path =
+    lift (readFileMaybe (top </> path)) >>= maybe (return ()) (\ text -> intermediateFile (path, text))
 
 inputSourceDebDescription :: Top -> IO (SourceDebDescription, [Field])
 inputSourceDebDescription top =
@@ -187,32 +189,32 @@ inputAtomsFromDirectory top xs =
           filterM (doesFileExist . ((unTop top </> "debian") </>)) >>=
           foldM (\ xs'' name -> inputAtoms (unTop top </> "debian") name xs'') xs'
       doFiles :: FilePath -> Atoms -> IO Atoms
-      doFiles tmp xs' =
+      doFiles tmp atoms' =
           do sums <- getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
              paths <- mapM (\ sum -> getDirectoryContents' (tmp </> sum) >>= return . map (sum </>)) sums >>= return . filter ((/= '~') . last) . concat
              files <- mapM (readFile . (tmp </>)) paths
-             foldM (\ xs'' (path, file) -> return $ modL intermediateFiles (Set.insert ("debian/cabalInstall" </> path, file)) xs'') xs' (zip paths files)
+             execDebT (mapM_ intermediateFile (zip (map ("debian/cabalInstall" </>) paths) files)) atoms'
 
 inputAtoms :: FilePath -> FilePath -> Atoms -> IO Atoms
 inputAtoms _ path xs | elem path ["control"] = return xs
-inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> return $ (either (modL warning . Set.insert) (setL sourceFormat . Just) (readSourceFormat text)) xs
-inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> return $ setL watch (Just text) xs
-inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> return $ setL rulesHead (Just text) xs
-inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> return $ setL compat (Just (read' (\ s -> error $ "compat: " ++ show s) (unpack text))) xs
-inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> return $ setL copyright (Just (Right text)) xs
+inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> execDebT (either warning sourceFormat (readSourceFormat text)) xs
+inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> execDebT (watch text) xs
+inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> execDebT (rulesHead text) xs
+inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> execDebT (compat (read' (\ s -> error $ "compat: " ++ show s) (unpack text))) xs
+inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> execDebT (copyright (Right text)) xs
 inputAtoms debian name@"changelog" xs =
-    readFile (debian </> name) >>= return . parseChangeLog . unpack >>= \ log -> return $ setL changelog (Just log) xs
+    readFile (debian </> name) >>= return . parseChangeLog . unpack >>= \ log -> execDebT (changelog log) xs
 inputAtoms debian name xs =
     case (BinPkgName (dropExtension name), takeExtension name) of
-      (p, ".install") ->   readFile (debian </> name) >>= \ text -> return $ foldr (readInstall p) xs (lines text)
-      (p, ".dirs") ->      readFile (debian </> name) >>= \ text -> return $ foldr (readDir p) xs (lines text)
-      (p, ".init") ->      readFile (debian </> name) >>= \ text -> return $ modL installInit (insertWith (error "inputAtoms") p text) xs
-      (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> return $ modL logrotateStanza (insertWith Set.union p (singleton text)) xs
-      (p, ".links") ->     readFile (debian </> name) >>= \ text -> return $ foldr (readLink p) xs (lines text)
-      (p, ".postinst") ->  readFile (debian </> name) >>= \ text -> return $ modL postInst (insertWith (error "inputAtoms") p text) xs
-      (p, ".postrm") ->    readFile (debian </> name) >>= \ text -> return $ modL postRm (insertWith (error "inputAtoms") p text) xs
-      (p, ".preinst") ->   readFile (debian </> name) >>= \ text -> return $ modL preInst (insertWith (error "inputAtoms") p text) xs
-      (p, ".prerm") ->     readFile (debian </> name) >>= \ text -> return $ modL preRm (insertWith (error "inputAtoms") p text) xs
+      (p, ".install") ->   readFile (debian </> name) >>= \ text -> execDebT (mapM_ (readInstall p) (lines text)) xs
+      (p, ".dirs") ->      readFile (debian </> name) >>= \ text -> execDebT (mapM_ (readDir p) (lines text)) xs
+      (p, ".init") ->      readFile (debian </> name) >>= \ text -> execDebT (installInit p text) xs
+      (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> execDebT (logrotateStanza p text) xs
+      (p, ".links") ->     readFile (debian </> name) >>= \ text -> execDebT (mapM_ (readLink p) (lines text)) xs
+      (p, ".postinst") ->  readFile (debian </> name) >>= \ text -> execDebT (postInst p text) xs
+      (p, ".postrm") ->    readFile (debian </> name) >>= \ text -> execDebT (postRm p text) xs
+      (p, ".preinst") ->   readFile (debian </> name) >>= \ text -> execDebT (preInst p text) xs
+      (p, ".prerm") ->     readFile (debian </> name) >>= \ text -> execDebT (preRm p text) xs
       (_, ".log") ->       return xs -- Generated by debhelper
       (_, ".debhelper") -> return xs -- Generated by debhelper
       (_, ".hs") ->        return xs -- Code that uses this library
@@ -222,39 +224,39 @@ inputAtoms debian name xs =
       (_, x) | last x == '~' -> return xs -- backup file
       _ -> trace ("Ignored: " ++ debian </> name) (return xs)
 
-readLink :: BinPkgName -> Text -> Atoms -> Atoms
-readLink p line atoms =
+readLink :: Monad m => BinPkgName -> Text -> DebT m ()
+readLink p line =
     case words line of
-      [a, b] -> modL link (insertWith Set.union p (singleton (unpack a, unpack b))) atoms
-      [] -> atoms
-      _ -> trace ("readLink: " ++ show line) atoms
+      [a, b] -> link p (unpack a, unpack b)
+      [] -> return ()
+      _ -> trace ("Unexpected value passed to readLink: " ++ show line) (return ())
 
-readInstall :: BinPkgName -> Text -> Atoms -> Atoms
-readInstall p line atoms =
+readInstall :: Monad m => BinPkgName -> Text -> DebT m ()
+readInstall p line =
     case break isSpace line of
       (_, b) | null b -> error $ "readInstall: syntax error in .install file for " ++ show p ++ ": " ++ show line
-      (a, b) -> modL install (insertWith union p (singleton (unpack (strip a), unpack (strip b)))) atoms
+      (a, b) -> install p (unpack (strip a), unpack (strip b))
 
-readDir :: BinPkgName -> Text -> Atoms -> Atoms
-readDir p line atoms = modL installDir (insertWith union p (singleton (unpack line))) atoms
+readDir :: Monad m => BinPkgName -> Text -> DebT m ()
+readDir p line = installDir p (unpack line)
 
 inputCabalization :: Top -> Atoms -> IO Atoms
 inputCabalization top atoms =
     withCurrentDirectory (unTop top) $ do
+      vb <- evalDebT lookVerbosity atoms >>= return . intToVerbosity'
       descPath <- defaultPackageDesc vb
       genPkgDesc <- readPackageDescription vb descPath
       (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
-      let compiler'' = case getL compilerVersion atoms of
+      mCompiler <- evalDebT lookCompilerVersion atoms
+      let compiler'' = case mCompiler of
                          (Just ver) -> compiler' {compilerId = CompilerId GHC ver}
                          _ -> compiler'
-      case finalizePackageDescription (toList (getL cabalFlagAssignments atoms)) (const True) (Platform buildArch buildOS) (compilerId compiler'') [] genPkgDesc of
+      flags <- evalDebT lookCabalFlagAssignments atoms
+      case finalizePackageDescription (toList flags) (const True) (Platform buildArch buildOS) (compilerId compiler'') [] genPkgDesc of
         Left e -> error $ "Failed to load cabal package description: " ++ show e
         Right (pkgDesc, _) -> do
           liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
-          return $ setL compiler (Just compiler'') $
-                   setL packageDescription (Just pkgDesc) $ atoms
-    where
-      vb = intToVerbosity' (getL verbosity atoms)
+          execDebT (compiler compiler'' >> packageDescription pkgDesc) atoms
 
 -- | Run the package's configuration script.
 autoreconf :: Verbosity -> PackageDescription -> IO ()
@@ -285,7 +287,7 @@ inputMaintainer atoms =
       debianPackageMaintainer :: IO (Maybe NameAddr)
       debianPackageMaintainer = return (getL Lenses.maintainer atoms)
       cabalPackageMaintainer :: IO (Maybe NameAddr)
-      cabalPackageMaintainer = return $ case fmap Cabal.maintainer (getL packageDescription atoms) of
+      cabalPackageMaintainer = return $ case fmap Cabal.maintainer (getL Lenses.packageDescription atoms) of
                                           Nothing -> Nothing
                                           Just "" -> Nothing
                                           Just x -> either (const Nothing) Just (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x))
