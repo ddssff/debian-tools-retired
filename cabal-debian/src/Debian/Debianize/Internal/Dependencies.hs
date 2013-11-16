@@ -11,7 +11,7 @@ module Debian.Debianize.Internal.Dependencies
     , debianBuildDeps
     , debianBuildDepsIndep
     , debNameFromType
-    , getRulesHead
+
     , filterMissing
     , binaryPackageDeps
     , binaryPackageConflicts
@@ -25,15 +25,13 @@ import Data.Lens.Lazy (getL)
 import Data.List as List (nub, minimumBy, isSuffixOf, map)
 import Data.Map as Map (Map, lookup)
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
-import Data.Monoid ((<>))
 import qualified Data.Set as Set
-import Data.Text as Text (Text, pack, unlines)
 import Data.Version (showVersion)
 import Debian.Control
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile as Debian (PackageType(..))
 import qualified Debian.Debianize.Internal.Lenses as Lenses
-    (packageDescription, rulesHead, compiler, noProfilingLibrary, noDocumentationLibrary,
+    (packageDescription, compiler, noProfilingLibrary, noDocumentationLibrary,
      missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
      packageInfo, depends, conflicts, provides, replaces)
 import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), DebType(..))
@@ -53,7 +51,6 @@ import Prelude hiding (unlines)
 import System.Exit (ExitCode(ExitSuccess))
 import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readProcessWithExitCode)
-import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 data Dependency_
   = BuildDepends Dependency
@@ -376,18 +373,6 @@ cdbsRules pkgId deb =
       -- capital letters.
       name = pack (show (pretty (debianName deb Cabal pkgId :: BinPkgName)))
 -}
-
-getRulesHead :: Atoms -> Text
-getRulesHead atoms =
-    fromMaybe computeRulesHead (getL Lenses.rulesHead atoms)
-    where
-      computeRulesHead =
-          unlines $
-            ["#!/usr/bin/make -f", ""] ++
-            maybe [] (\ x -> ["DEB_CABAL_PACKAGE = " <> x, ""]) (fmap name (getL Lenses.packageDescription atoms)) ++
-            ["include /usr/share/cdbs/1/rules/debhelper.mk",
-             "include /usr/share/cdbs/1/class/hlibrary.mk"]
-      name pkgDesc = pack (show (pretty (debianName atoms Cabal (Cabal.package pkgDesc) :: BinPkgName)))
 
 filterMissing :: Atoms -> [[Relation]] -> [[Relation]]
 filterMissing atoms rels =

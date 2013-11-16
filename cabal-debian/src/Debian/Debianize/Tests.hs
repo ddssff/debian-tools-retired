@@ -25,14 +25,14 @@ import qualified Debian.Debianize.Lenses as Lenses
      binaryArchitectures, debVersion, execMap, buildDeps, utilsPackageNames, description,
      depends, installData)
 import Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
-import Debian.Debianize.Files (toFileMap)
+import Debian.Debianize.Files (toFileMap, getRulesHead)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
-import Debian.Debianize.Internal.Dependencies (getRulesHead)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), Top(Top))
 import Debian.Debianize.Utility (modifyM)
-import Debian.DebT (Atoms, DebT, execDeb, execDebT, epochMap, mapCabal, splitCabal, changelog, compat, control, copyright, rulesHead, sourceFormat)
+import Debian.DebT (Atoms, DebT, execDeb, execDebT, evalDeb, epochMap, mapCabal, splitCabal, changelog, compat, control,
+                    copyright, rulesHead, sourceFormat)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
                       SourceFormat(Native3), Section(..), parseMaintainer)
@@ -261,7 +261,7 @@ test4 =
       serverNames = map BinPkgName ["clckwrks-dot-com-production"] -- , "clckwrks-dot-com-staging", "clckwrks-dot-com-development"]
       -- Insert a line just above the debhelper.mk include
       fixRules deb =
-          modL Lenses.rulesHead (\ mt -> (Just . f) (fromMaybe (getRulesHead deb) mt)) deb
+          modL Lenses.rulesHead (\ mt -> (Just . f) (fromMaybe (evalDeb getRulesHead deb) mt)) deb
           where
             f t = T.unlines $ concat $
                   map (\ line -> if line == "include /usr/share/cdbs/1/rules/debhelper.mk"
