@@ -8,6 +8,7 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     ) where
 
 import Control.Monad (when)
+import Control.Monad.State (modify)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (isSuffixOf)
@@ -18,6 +19,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Debianize (Atoms, compileArgs, Top(Top))
 import qualified Debian.Debianize as Cabal
+import Debian.DebT (DebT)
 import Debian.Relation (prettyRelations)
 import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
@@ -90,29 +92,29 @@ autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do -- This will be false if the package has no debian/Debianize.hs script
        done <- collectPackageFlags cache pflags >>= Cabal.runDebianize
-       when (not done) (withArgs [] (Cabal.debianization (Top ".") (return . applyPackageFlags pflags) defaultAtoms >>= Cabal.writeDebianization (Top ".")))
+       when (not done) (withArgs [] (Cabal.debianization (Top ".") (applyPackageFlags pflags) defaultAtoms >>= Cabal.writeDebianization (Top ".")))
 
-applyPackageFlags :: [P.PackageFlag] -> Atoms -> Atoms
-applyPackageFlags flags atoms = foldr applyPackageFlag atoms flags
+applyPackageFlags :: Monad m => [P.PackageFlag] -> DebT m ()
+applyPackageFlags flags = mapM_ applyPackageFlag flags
 
-applyPackageFlag :: P.PackageFlag -> Atoms -> Atoms
-applyPackageFlag x@(P.Maintainer _) atoms = compileArgs (asCabalFlags x) atoms
-applyPackageFlag x@(P.BuildDep _) atoms = compileArgs (asCabalFlags x) atoms
-applyPackageFlag x@(P.DevelDep _) atoms = compileArgs (asCabalFlags x) atoms
-applyPackageFlag x@(P.MapDep _ _) atoms = compileArgs (asCabalFlags x) atoms
-applyPackageFlag x@(P.DebVersion _) atoms = compileArgs (asCabalFlags x) atoms
-applyPackageFlag x@(P.Revision _) atoms = compileArgs (asCabalFlags x) atoms
-applyPackageFlag x@(P.Epoch _ _) atoms = compileArgs (asCabalFlags x) atoms
-applyPackageFlag x@P.NoDoc atoms = compileArgs (asCabalFlags x) atoms
-applyPackageFlag (P.CabalDebian ss) atoms = compileArgs ss atoms
-applyPackageFlag (P.ModifyAtoms f) atoms = f atoms
-applyPackageFlag (P.RelaxDep _) x = x
-applyPackageFlag (P.UDeb _) x = x
-applyPackageFlag P.OmitLTDeps x = x -- I think this exists
-applyPackageFlag (P.AptPin _) x = x
-applyPackageFlag (P.CabalPin _) x = x
-applyPackageFlag (P.DarcsTag _) x = x
-applyPackageFlag (P.GitBranch _) x = x
+applyPackageFlag :: Monad m => P.PackageFlag -> DebT m ()
+applyPackageFlag x@(P.Maintainer _) = compileArgs (asCabalFlags x)
+applyPackageFlag x@(P.BuildDep _) = compileArgs (asCabalFlags x)
+applyPackageFlag x@(P.DevelDep _) = compileArgs (asCabalFlags x)
+applyPackageFlag x@(P.MapDep _ _) = compileArgs (asCabalFlags x)
+applyPackageFlag x@(P.DebVersion _) = compileArgs (asCabalFlags x)
+applyPackageFlag x@(P.Revision _) = compileArgs (asCabalFlags x)
+applyPackageFlag x@(P.Epoch _ _) = compileArgs (asCabalFlags x)
+applyPackageFlag x@P.NoDoc = compileArgs (asCabalFlags x)
+applyPackageFlag (P.CabalDebian ss) = compileArgs ss
+applyPackageFlag (P.ModifyAtoms f) = modify f
+applyPackageFlag (P.RelaxDep _) = return ()
+applyPackageFlag (P.UDeb _) = return ()
+applyPackageFlag P.OmitLTDeps = return () -- I think this exists
+applyPackageFlag (P.AptPin _) = return ()
+applyPackageFlag (P.CabalPin _) = return ()
+applyPackageFlag (P.DarcsTag _) = return ()
+applyPackageFlag (P.GitBranch _) = return ()
 
 asCabalFlags :: P.PackageFlag -> [String]
 asCabalFlags (P.Maintainer s) = ["--maintainer", s]
