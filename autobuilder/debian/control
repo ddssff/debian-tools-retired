@@ -11,10 +11,12 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-cabal-prof | ghc-prof
                , libghc-extra-dev
                , libghc-extra-prof
+               , libghc-hunit-dev
+               , libghc-hunit-prof
                , libghc-haxml-dev (>= 1:1.22.5)
                , libghc-haxml-prof (>= 1:1.22.5)
-               , libghc-listlike-dev
-               , libghc-listlike-prof
+               , libghc-listlike-dev (>= 4.0)
+               , libghc-listlike-prof (>= 4.0)
                , libghc-mime-dev (>= 1.1)
                , libghc-mime-prof (>= 1.1)
                , libghc-monadcatchio-mtl-dev
@@ -31,14 +33,14 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-bytestring-prof | ghc-prof
                , libghc-bzlib-dev
                , libghc-bzlib-prof
-               , libghc-cabal-debian-dev (>= 3.1)
-               , libghc-cabal-debian-prof (>= 3.1)
+               , libghc-cabal-debian-dev (>= 3.10)
+               , libghc-cabal-debian-prof (>= 3.10)
                , libghc-containers-dev | ghc
                , libghc-containers-prof | ghc-prof
                , libghc-debian-dev (>= 3.78)
                , libghc-debian-prof (>= 3.78)
-               , libghc-debian-repo-dev (>= 5.40.1)
-               , libghc-debian-repo-prof (>= 5.40.1)
+               , libghc-debian-repo-dev (>= 5.42)
+               , libghc-debian-repo-prof (>= 5.42)
                , libghc-directory-dev | ghc
                , libghc-directory-prof | ghc-prof
                , libghc-file-embed-dev
@@ -77,6 +79,8 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-tar-prof (>= 0.4)
                , libghc-template-haskell-dev | ghc
                , libghc-template-haskell-prof | ghc-prof
+               , libghc-text-dev
+               , libghc-text-prof
                , libghc-time-dev | ghc
                , libghc-time-prof | ghc-prof
                , libghc-unix-dev | ghc
@@ -90,8 +94,9 @@ Build-Depends: debhelper (>= 7.0)
 Build-Depends-Indep: ghc-doc
                      , libghc-cabal-doc | ghc-doc
                      , libghc-extra-doc
+                     , libghc-hunit-doc
                      , libghc-haxml-doc (>= 1:1.22.5)
-                     , libghc-listlike-doc
+                     , libghc-listlike-doc (>= 4.0)
                      , libghc-mime-doc (>= 1.1)
                      , libghc-monadcatchio-mtl-doc
                      , libghc-unixutils-doc (>= 1.51)
@@ -100,10 +105,10 @@ Build-Depends-Indep: ghc-doc
                      , libghc-base-doc | ghc-doc
                      , libghc-bytestring-doc | ghc-doc
                      , libghc-bzlib-doc
-                     , libghc-cabal-debian-doc (>= 3.1)
+                     , libghc-cabal-debian-doc (>= 3.10)
                      , libghc-containers-doc | ghc-doc
                      , libghc-debian-doc (>= 3.78)
-                     , libghc-debian-repo-doc (>= 5.40.1)
+                     , libghc-debian-repo-doc (>= 5.42)
                      , libghc-directory-doc | ghc-doc
                      , libghc-file-embed-doc
                      , libghc-filepath-doc | ghc-doc
@@ -123,6 +128,7 @@ Build-Depends-Indep: ghc-doc
                      , libghc-regex-tdfa-doc
                      , libghc-tar-doc (>= 0.4)
                      , libghc-template-haskell-doc | ghc-doc
+                     , libghc-text-doc
                      , libghc-time-doc | ghc-doc
                      , libghc-unix-doc | ghc-doc
                      , libghc-utf8-string-doc
@@ -138,6 +144,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: Build Debian source packages in suitable environments.
  The autobuilder program is now shipped as a haskell source file
  which uses the autobuilder library.  To configure it make a copy of
@@ -166,6 +173,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: Build Debian source packages in suitable environments.
  The autobuilder program is now shipped as a haskell source file
  which uses the autobuilder library.  To configure it make a copy of
@@ -195,6 +203,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: Build Debian source packages in suitable environments.
  The autobuilder program is now shipped as a haskell source file
  which uses the autobuilder library.  To configure it make a copy of
@@ -225,8 +234,8 @@ Depends: ${shlibs:Depends}
          , build-essential
          , curl
          , darcs
-         , debootstrap
          , debian-archive-keyring
+         , debootstrap
          , dupload
          , ghc
          , git
@@ -242,6 +251,7 @@ Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
 Description: Build Debian source packages in suitable environments.
  The autobuilder program is now shipped as a haskell source file
  which uses the autobuilder library.  To configure it make a copy of
@@ -259,3 +269,16 @@ Description: Build Debian source packages in suitable environments.
   Upstream-Maintainer: David Fox <dsf@seereason.com>
  .
  An executable built from the AutoBuilder package.
+
+Package: haskell-autobuilder-utils
+Architecture: any
+Section: misc
+Depends: ${shlibs:Depends}
+         , ${haskell:Depends}
+         , ${misc:Depends}
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
+Conflicts: ${haskell:Conflicts}
+Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
+Description: No description available.

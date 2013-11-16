@@ -2,8 +2,9 @@ import Data.Lens.Lazy (setL, modL)
 import Data.Map as Map (insertWith)
 import Data.Set as Set (union, singleton)
 import Debian.Changes (ChangeLog)
-import Debian.Debianize (Atoms, Top(..), sourcePackageName, inputChangeLog, debianize, changelog, copyright, doExecutable, sourceFormat, depends, SourceFormat(Native3), InstallFile(..))
+import Debian.Debianize (Top(..), SourceFormat(Native3), InstallFile(..), doExecutable, inputChangeLog, debianize)
 import Debian.Debianize.Details (seereasonDefaultAtoms)
+import Debian.DebT (Atoms, DebT, runDebT, sourcePackageName, copyright, sourceFormat, changelog, depends)
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName), VersionReq(EEQ), Relation(Rel))
 import Debian.Version (buildDebianVersion)
 import Distribution.License (License(AllRightsReserved))
@@ -15,25 +16,28 @@ main =
     where
       top = Top "."
 
-customize :: ChangeLog -> Atoms -> IO Atoms
+customize :: ChangeLog -> DebT IO ()
 customize log =
-    return .
-    setL sourcePackageName (Just (SrcPkgName "autobuilder")) .
-    setL copyright (Just (Left AllRightsReserved)) .
-    setL sourceFormat (Just Native3) .
-    setL changelog (Just log) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "ghc") Nothing Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "libghc-autobuilder-dev") (Just (EEQ (buildDebianVersion Nothing "${Source-Version}" Nothing))) Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "debootstrap") Nothing Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "rsync") Nothing Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "dupload") Nothing Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "darcs") Nothing Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "git") Nothing Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "tla") Nothing Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "mercurial") Nothing Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "subversion") Nothing Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "apt") Nothing Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "build-essential") Nothing Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "quilt") Nothing Nothing))) .
-    modL depends (Map.insertWith union (BinPkgName "autobuilder") (singleton (Rel (BinPkgName "curl") Nothing Nothing))) .
-    doExecutable (BinPkgName "autobuilder") (InstallFile {execName = "autobuilder", sourceDir = Just ".", destDir = Nothing, destName = "autobuilder"})
+    do sourcePackageName (SrcPkgName "autobuilder")
+       copyright (Left AllRightsReserved)
+       sourceFormat Native3
+       changelog log
+       mapM (depends (BinPkgName "autobuilder"))
+            [ Rel (BinPkgName "ghc") Nothing Nothing
+            , Rel (BinPkgName "libghc-autobuilder-dev") (Just (EEQ (buildDebianVersion Nothing "${Source-Version}" Nothing))) Nothing
+            , Rel (BinPkgName "debootstrap") Nothing Nothing
+            , Rel (BinPkgName "rsync") Nothing Nothing
+            , Rel (BinPkgName "dupload") Nothing Nothing
+            , Rel (BinPkgName "darcs") Nothing Nothing
+            , Rel (BinPkgName "git") Nothing Nothing
+            , Rel (BinPkgName "tla") Nothing Nothing
+            , Rel (BinPkgName "mercurial") Nothing Nothing
+            , Rel (BinPkgName "subversion") Nothing Nothing
+            , Rel (BinPkgName "apt") Nothing Nothing
+            , Rel (BinPkgName "build-essential") Nothing Nothing
+            , Rel (BinPkgName "quilt") Nothing Nothing
+            , Rel (BinPkgName "curl") Nothing Nothing
+            , Rel (BinPkgName "debian-archive-keyring") Nothing Nothing
+            , Rel (BinPkgName "seereason-keyring") Nothing Nothing
+            , Rel (BinPkgName "ubuntu-keyring") Nothing Nothing ]
+       doExecutable (BinPkgName "autobuilder") (InstallFile {execName = "autobuilder", sourceDir = Just ".", destDir = Nothing, destName = "autobuilder"})
