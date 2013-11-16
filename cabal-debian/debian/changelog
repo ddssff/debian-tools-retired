@@ -1,3 +1,9 @@
+haskell-cabal-debian (3.10) unstable; urgency=low
+
+  * Add a monadic interface
+
+ -- David Fox <dsf@seereason.com>  Sat, 16 Nov 2013 10:42:02 -0800
+
 haskell-cabal-debian (3.9) unstable; urgency=low
 
   * Clean up documentation
