@@ -26,7 +26,7 @@ import Data.Lens.Lazy (getL, setL, modL)
 import Data.List as List (unlines, intercalate, nub)
 import Data.Map as Map (lookup, toList, elems)
 import Data.Maybe
-import Data.Monoid ((<>))
+import Data.Monoid (mempty, (<>))
 import Data.Set as Set (toList)
 import Data.Text as Text (Text, unpack, split)
 import Data.Version (Version)
@@ -41,11 +41,11 @@ import qualified Debian.Debianize.Internal.Lenses as Lenses
     (packageDescription, compat, watch, control, copyright, changelog, comments,
      sourcePriority, sourceSection, debAction, validate, dryRun, debVersion, revision,
      sourcePackageName, epochMap, extraLibMap)
+import Debian.Debianize.Monad (Atoms, DebT, execDebT, execDebM, control, changelog)
 import Debian.Debianize.Options (options, compileArgs)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types (DebAction(..), Top(Top, unTop))
 import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty, replaceFile, zipMaps, indent, maybeRead)
-import Debian.DebT (Atoms, DebT, execDebT, execDebM, control, changelog)
 import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel)
 import Debian.Relation (SrcPkgName(..), BinPkgName(BinPkgName), Relation(Rel))
 import Debian.Release (parseReleaseName)
@@ -67,12 +67,12 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 -- | The main function for the cabal-debian executable.
-cabalDebian :: Atoms -> IO ()
-cabalDebian defaultAtoms =
-    execDebT (compileEnvironmentArgs >> compileCommandlineArgs) defaultAtoms >>= \ atoms ->
+cabalDebian :: DebT IO () -> IO ()
+cabalDebian init =
+    execDebT (init >> compileEnvironmentArgs >> compileCommandlineArgs) mempty >>= \ atoms ->
       case getL Lenses.debAction atoms of
         SubstVar debType -> substvars atoms debType
-        Debianize -> debianize (Top ".") (return ()) defaultAtoms
+        Debianize -> debianize (Top ".") (return ()) atoms
         Usage -> do
           progName <- getProgName
           let info = unlines [ "Typical usage is to cd to the top directory of the package's unpacked source and run: "

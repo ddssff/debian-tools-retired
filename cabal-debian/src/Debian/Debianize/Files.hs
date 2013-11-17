@@ -22,8 +22,8 @@ import qualified Debian.Debianize.Internal.Lenses as Lenses
     (compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
      intermediateFiles, install, installDir, installInit, logrotateStanza, link,
      rulesHead, rulesFragments, copyright, packageDescription)
+import Debian.Debianize.Monad (Atoms, DebT, evalDebM)
 import Debian.Debianize.Utility (showDeps')
-import Debian.DebT (Atoms, DebT, evalDebM)
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
 import qualified Distribution.PackageDescription as Cabal (PackageDescription(package))
 import Prelude hiding (init, unlines, writeFile)

@@ -27,8 +27,8 @@ import Debian.Debianize.Internal.Lenses as Lenses
      utilsPackageNames, extraDevDeps, installData, installCabalExec, file, apacheSite, installDir, buildDir,
      dataDir, intermediateFiles)
 import Debian.Debianize.Goodies (describe, siteAtoms, serverAtoms, backupAtoms, execAtoms)
+import Debian.Debianize.Monad as Monad (execDebM, control)
 import Debian.Debianize.Types (InstallFile(..))
-import Debian.DebT as DebT (execDebM, control)
 import Debian.Policy (PackageArchitectures(Any, All), Section(..))
 import Debian.Relation (Relation(Rel), BinPkgName(BinPkgName))
 import Distribution.Package (PackageName(PackageName), PackageIdentifier(..))
@@ -64,7 +64,7 @@ finalizeDebianization atoms0 =
                 (\ atoms' -> Map.foldWithKey (\ b x atoms'' -> modL Lenses.control (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y) atoms'') atoms' (getL Lenses.description atoms)) $ atoms
 
       putBuildDeps :: Atoms -> Atoms
-      putBuildDeps deb = execDebM (DebT.control (\ y -> y { Debian.buildDepends = debianBuildDeps deb, buildDependsIndep = debianBuildDepsIndep deb })) deb
+      putBuildDeps deb = execDebM (Monad.control (\ y -> y { Debian.buildDepends = debianBuildDeps deb, buildDependsIndep = debianBuildDepsIndep deb })) deb
 
 cabalExecBinaryPackage :: BinPkgName -> Atoms -> Atoms
 cabalExecBinaryPackage b deb =

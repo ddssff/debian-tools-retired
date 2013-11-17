@@ -1,17 +1,18 @@
 module Debian.Debianize.Options
-    ( compileArgs
-    , options
+    ( options
+    , compileArgs
     ) where
 
 import Data.Char (toLower, isDigit, ord)
 import Data.Version (parseVersion)
 import Debian.Debianize.Goodies (doExecutable)
+import Debian.Debianize.Monad
+    (DebT, verbosity, dryRun, debAction, compilerVersion, noDocumentationLibrary, noProfilingLibrary,
+     missingDependency, sourcePackageName, cabalFlagAssignment, maintainer, buildDir, omitLTDeps,
+     sourceFormat, buildDeps, buildDepsIndep, extraDevDeps, depends, conflicts, replaces, provides,
+     extraLibMap, debVersion, revision, epochMap, execMap)
 import Debian.Debianize.Types (InstallFile(..), DebAction(..))
 import Debian.Debianize.Utility (read')
-import Debian.DebT (DebT, verbosity, dryRun, debAction, compilerVersion, noDocumentationLibrary, noProfilingLibrary,
-                    missingDependency, sourcePackageName, cabalFlagAssignment, maintainer, buildDir, omitLTDeps,
-                    sourceFormat, buildDeps, buildDepsIndep, extraDevDeps, depends, conflicts, replaces, provides,
-                    extraLibMap, debVersion, revision, epochMap, execMap)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relations, Relation(..))

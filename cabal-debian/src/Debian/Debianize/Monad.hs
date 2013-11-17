@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wall #-}
-module Debian.DebT
+module Debian.Debianize.Monad
     ( Atoms
 
     , DebT
@@ -12,6 +12,7 @@ module Debian.DebT
     , evalDebM
     , execDebM
 
+{-
     -- * Lens Helper Functions
     , doConst
     , doConstJust
@@ -21,6 +22,7 @@ module Debian.DebT
     , doSetElem
     , doMapElem
     , doMapSet
+-}
 
      -- * Modes of operation
     , verbosity
@@ -34,8 +36,8 @@ module Debian.DebT
     , execMap
     , epochMap
     , missingDependency
-    , Debian.DebT.mapCabal
-    , Debian.DebT.splitCabal
+    , Debian.Debianize.Monad.mapCabal
+    , Debian.Debianize.Monad.splitCabal
     , extraLibMap
 
     -- * Source Package Info
@@ -60,6 +62,7 @@ module Debian.DebT
     , utilsPackageName
     , buildDir
     , watch
+
     -- * Source Package Build Dependencies
     , buildDeps
     , buildDepsIndep

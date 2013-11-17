@@ -21,9 +21,9 @@ import Debian.Control
 import Debian.Debianize.Input (inputCabalization)
 import Debian.Debianize.Internal.Dependencies (cabalDependencies, debDeps, debNameFromType, filterMissing)
 import Debian.Debianize.Internal.Lenses (Atoms, compiler, dryRun, packageInfo)
+import Debian.Debianize.Monad (execDebT)
 import Debian.Debianize.Types (Top(Top), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType)
 import Debian.Debianize.Utility (buildDebVersionMap, DebMap, showDeps, dpkgFileMap, cond, debOfFile, (!), diffFile, replaceFile)
-import Debian.DebT (execDebT)
 import qualified Debian.Relation as D
 import Distribution.Package (Dependency(..), PackageName(PackageName))
 import Distribution.Simple.Compiler (CompilerFlavor(..), compilerFlavor, Compiler(..))

@@ -30,10 +30,10 @@ import qualified Debian.Debianize.Lenses as Lenses
      install, installTo, installCabalExecTo, logrotateStanza, postInst,
      installInit, installCabalExec, rulesFragments, packageDescription)
 import Debian.Debianize.ControlFile as Debian (PackageType(..))
-import Debian.Debianize.Internal.Dependencies (debianName)
+import Debian.Debianize.Monad (Atoms, DebT, execDebM, executable, rulesFragment, installDir, link, file, logrotateStanza,
+                               serverInfo, website, backups, depends)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (trim)
-import Debian.DebT (Atoms, DebT, execDebM, executable, rulesFragment, installDir, link, file, logrotateStanza, serverInfo, website, backups, depends)
 import Debian.Orphans ()
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel))

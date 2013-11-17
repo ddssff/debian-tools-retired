@@ -27,11 +27,12 @@ import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseContro
 import qualified Debian.Debianize.Lenses as Lenses (packageDescription, maintainer)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
+import Debian.Debianize.Monad
+    (Atoms, DebT, execDebT, evalDebT, intermediateFile, control, warning, sourceFormat, watch, rulesHead, compat,
+     copyright, changelog, installInit, postInst, postRm, preInst, preRm, compiler, packageDescription,
+     logrotateStanza, link, install, installDir, lookCompilerVersion, lookCabalFlagAssignments, lookVerbosity)
 import Debian.Debianize.Types (Top(Top, unTop))
 import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', modifyM)
-import Debian.DebT (Atoms, DebT, execDebT, evalDebT, intermediateFile, control, warning, sourceFormat, watch, rulesHead, compat,
-                    copyright, changelog, installInit, postInst, postRm, preInst, preRm, compiler, packageDescription,
-                    logrotateStanza, link, install, installDir, lookCompilerVersion, lookCabalFlagAssignments, lookVerbosity)
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer, haskellMaintainer)

@@ -34,9 +34,9 @@ import qualified Debian.Debianize.Internal.Lenses as Lenses
     (packageDescription, compiler, noProfilingLibrary, noDocumentationLibrary,
      missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
      packageInfo, depends, conflicts, provides, replaces)
+import Debian.Debianize.Monad (Atoms)
 import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), DebType(..))
 import Debian.Debianize.VersionSplits (VersionSplits, doSplits, packageRangesFromVersionSplits)
-import Debian.DebT (Atoms)
 import Debian.Orphans ()
 import qualified Debian.Relation as D
 import Debian.Relation (Relations, Relation, BinPkgName(BinPkgName), PkgName(pkgNameFromString))

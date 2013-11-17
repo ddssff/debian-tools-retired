@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections #-}
-module Debian.Debianize.Lenses {-# DEPRECATED "Use monadic functions in Debian.DebT: execDeb (monadic stuff) atoms" #-}
+module Debian.Debianize.Lenses {-# DEPRECATED "Use monadic functions in Debian.Debianize.Monad: execDeb (monadic stuff) atoms" #-}
     ( Atoms
     , Flags(..)
     -- * Modes of operation

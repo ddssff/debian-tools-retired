@@ -29,10 +29,10 @@ import Debian.Debianize.Files (toFileMap, getRulesHead)
 import Debian.Debianize.Finalize (finalizeDebianization)
 import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
+import Debian.Debianize.Monad (Atoms, DebT, execDebM, execDebT, evalDebM, epochMap, mapCabal, splitCabal, changelog, compat, control,
+                               copyright, rulesHead, sourceFormat)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), Top(Top))
 import Debian.Debianize.Utility (modifyM)
-import Debian.DebT (Atoms, DebT, execDebM, execDebT, evalDebM, epochMap, mapCabal, splitCabal, changelog, compat, control,
-                    copyright, rulesHead, sourceFormat)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
                       SourceFormat(Native3), Section(..), parseMaintainer)
