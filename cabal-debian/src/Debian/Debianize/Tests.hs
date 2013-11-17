@@ -31,7 +31,7 @@ import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, 
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), Top(Top))
 import Debian.Debianize.Utility (modifyM)
-import Debian.DebT (Atoms, DebT, execDebMM, execDebT, evalDebM, epochMap, mapCabal, splitCabal, changelog, compat, control,
+import Debian.DebT (Atoms, DebT, execDebM, execDebT, evalDebM, epochMap, mapCabal, splitCabal, changelog, compat, control,
                     copyright, rulesHead, sourceFormat)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),

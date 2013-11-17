@@ -3,13 +3,12 @@ module Debian.Debianize.Options
     , options
     ) where
 
-import Control.Monad.State (modify)
 import Data.Char (toLower, isDigit, ord)
 import Data.Version (parseVersion)
 import Debian.Debianize.Goodies (doExecutable)
 import Debian.Debianize.Types (InstallFile(..), DebAction(..))
 import Debian.Debianize.Utility (read')
-import Debian.DebT (Atoms, DebT, DebM, execDebM, verbosity, dryRun, debAction, compilerVersion, noDocumentationLibrary, noProfilingLibrary,
+import Debian.DebT (DebT, verbosity, dryRun, debAction, compilerVersion, noDocumentationLibrary, noProfilingLibrary,
                     missingDependency, sourcePackageName, cabalFlagAssignment, maintainer, buildDir, omitLTDeps,
                     sourceFormat, buildDeps, buildDepsIndep, extraDevDeps, depends, conflicts, replaces, provides,
                     extraLibMap, debVersion, revision, epochMap, execMap)
@@ -26,127 +25,125 @@ import System.FilePath ((</>), splitFileName)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.Regex.TDFA ((=~))
 
-compileArgs :: Monad m => [String] -> DebT m ()
-compileArgs args = modify (compileArgs' args)
-
-compileArgs' :: [String] -> Atoms -> Atoms
-compileArgs' args atoms =
+compileArgs :: [String] -> DebT IO ()
+compileArgs args =
     case getOpt' RequireOrder options args of
-      (os, [], [], []) -> foldl (flip ($)) atoms os
+      (os, [], [], []) -> sequence_ os
       (_, non, unk, errs) -> error ("Errors: " ++ show errs ++
                                     ", Unrecognized: " ++ show unk ++
                                     ", Non-Options: " ++ show non)
 
 -- | Options that modify other atoms.
-options :: [OptDescr (Atoms -> Atoms)]
+options :: [OptDescr (DebT IO ())]
 options =
-    [ Option "v" ["verbose"] (ReqArg (\ s atoms -> execDeb (verbosity (read' (\ s' -> error $ "verbose: " ++ show s') s)) atoms) "n")
+    [ Option "v" ["verbose"] (ReqArg (\ s -> verbosity (read' (\ s' -> error $ "verbose: " ++ show s') s)) "n")
              "Change the amount of progress messages generated",
-      Option "n" ["dry-run", "compare"] (NoArg (\ atoms -> execDebM (dryRun True) atoms))
+      Option "n" ["dry-run", "compare"] (NoArg (dryRun True))
              "Just compare the existing debianization to the one we would generate.",
-      Option "h?" ["help"] (NoArg (\ atoms -> execDebM (debAction Usage) atoms))
+      Option "h?" ["help"] (NoArg (debAction Usage))
              "Show this help text",
-      Option "" ["executable"] (ReqArg (\ path x -> executableOption path (\ bin e -> execDebM (doExecutable bin e) x)) "SOURCEPATH or SOURCEPATH:DESTDIR")
+      Option "" ["executable"] (ReqArg (\ path -> executableOption path (\ bin e -> doExecutable bin e)) "SOURCEPATH or SOURCEPATH:DESTDIR")
              (unlines [ "Create an individual binary package to hold this executable.  Other executables "
                       , " and data files are gathered into a single utils package named 'haskell-packagename-utils'."]),
-      Option "" ["ghc-version"] (ReqArg (\ ver x -> execDebM (compilerVersion (const (Just (last (map fst (readP_to_S parseVersion ver)))))) x) "VERSION")
+      Option "" ["ghc-version"] (ReqArg (\ ver -> compilerVersion (const (Just (last (map fst (readP_to_S parseVersion ver)))))) "VERSION")
              (unlines [ "Version of GHC in build environment.  Without this option it is assumed that"
                       , "the version of GHC in the build environment is the same as the one in the"
                       , "environment in which cabal-debian is running. (the usual case.)  The GHC"
                       , "version is used to determine which packages are bundled with GHC - if a"
                       , "package is bundled with GHC it is not necessary to add a build dependency for"
                       , "that package to the debian/control file."]),
-      Option "" ["disable-haddock"] (NoArg (execDebM (noDocumentationLibrary True)))
+      Option "" ["disable-haddock"] (NoArg (noDocumentationLibrary True))
              (unlines [ "Don't generate API documentation packages, usually named"
                       , "libghc-packagename-doc.  Use this if your build is crashing due to a"
                       , "haddock bug."]),
-      Option "" ["missing-dependency"] (ReqArg (\ name atoms -> execDebM (missingDependency (BinPkgName name)) atoms) "DEB")
+      Option "" ["missing-dependency"] (ReqArg (\ name -> missingDependency (BinPkgName name)) "DEB")
              (unlines [ "This is the counterpart to --disable-haddock.  It prevents a package"
                       , "from being added to the build dependencies.  This is necessary, for example,"
                       , "when a dependency package was built with the --disable-haddock option, because"
                       , "normally cabal-debian assumes that the -doc package exists and adds it as a"
                       , "build dependency."]),
-      Option "" ["source-package-name"] (ReqArg (\ name x -> execDebM (sourcePackageName (SrcPkgName name)) x) "NAME")
+      Option "" ["source-package-name"] (ReqArg (\ name -> sourcePackageName (SrcPkgName name)) "NAME")
              (unlines [ "Use this name for the debian source package, the name in the Source field at the top of the"
                       , "debian control file, and also at the very beginning of the debian/changelog file.  By default"
                       , "this is haskell-<cabalname>, where the cabal package name is downcased."]),
-      Option "" ["disable-library-profiling"] (NoArg (execDebM (noProfilingLibrary True)))
+      Option "" ["disable-library-profiling"] (NoArg (noProfilingLibrary True))
              (unlines [ "Don't generate profiling (-prof) library packages.  This has been used in one case"
                       , "where the package code triggered a compiler bug."]),
-      Option "" ["maintainer"] (ReqArg (\ maint x -> execDebM (either (error ("Invalid maintainer string: " ++ show maint)) maintainer (parseMaintainer maint)) x) "Maintainer Name <email addr>")
+      Option "" ["maintainer"] (ReqArg (\ maint -> either (error ("Invalid maintainer string: " ++ show maint)) maintainer (parseMaintainer maint)) "Maintainer Name <email addr>")
              (unlines [ "Override the Maintainer name and email given in $DEBEMAIL or $EMAIL or $DEBFULLNAME or $FULLNAME"]),
       Option "" ["build-dep"]
-                 (ReqArg (\ name atoms ->
+                 (ReqArg (\ name ->
                               case parseRelations name of
                                 Left err -> error ("cabal-debian option --build-dep " ++ show name ++ ": " ++ show err)
-                                Right rss -> execDebM (buildDeps rss) atoms) "Debian package relations")
+                                Right rss -> buildDeps rss) "Debian package relations")
                  (unlines [ "Add a dependency relation to the Build-Depends: field for this source package, e.g."
                           , ""
                           , "     --build-dep libglib2.0-dev"
                           , "     --build-dep 'libglib2.0-dev >= 2.2'" ]),
       Option "" ["build-dep-indep"]
-                 (ReqArg (\ name atoms ->
+                 (ReqArg (\ name ->
                               case parseRelations name of
                                 Left err -> error ("cabal-debian option --build-dep-indep " ++ show name ++ ": " ++ show err)
-                                Right rss -> execDebM (buildDepsIndep rss) atoms) "Debian binary package name")
+                                Right rss -> buildDepsIndep rss) "Debian binary package name")
                  (unlines [ "Similar to --build-dep, but the dependencies are added to Build-Depends-Indep, e.g.:"
                           , ""
                           , "    --build-dep-indep perl" ]),
-      Option "" ["dev-dep"] (ReqArg (\ name atoms -> execDebM (extraDevDeps (Rel (BinPkgName name) Nothing Nothing)) atoms) "Debian binary package name")
+      Option "" ["dev-dep"] (ReqArg (\ name -> extraDevDeps (Rel (BinPkgName name) Nothing Nothing)) "Debian binary package name")
              (unlines [ "Add an entry to the Depends: field of the -dev package, e.g."
                       , "'--dev-dep libncurses5-dev'.  It might be good if this implied --build-dep."]),
       Option "" ["depends"]
-             (ReqArg (\ arg atoms -> execDebM (mapM_ (uncurry depends) (parseDeps arg)) atoms) "deb:deb,deb:deb,...")
+             (ReqArg (\ arg -> mapM_ (uncurry depends) (parseDeps arg)) "deb:deb,deb:deb,...")
              (unlines [ "Generalized --dev-dep - specify pairs A:B of debian binary package names, each"
                       , "A gets a Depends: B.  Note that B can have debian style version relations"]),
       Option "" ["conflicts"]
-             (ReqArg (\ arg atoms -> execDebM (mapM_ (uncurry conflicts) (parseDeps arg)) atoms) "deb:deb,deb:deb,...")
+             (ReqArg (\ arg -> mapM_ (uncurry conflicts) (parseDeps arg)) "deb:deb,deb:deb,...")
              "Like --depends, modifies the Conflicts field.",
       Option "" ["replaces"]
-             (ReqArg (\ arg atoms -> execDebM (mapM_ (uncurry replaces) (parseDeps arg)) atoms) "deb:deb,deb:deb,...")
+             (ReqArg (\ arg -> mapM_ (uncurry replaces) (parseDeps arg)) "deb:deb,deb:deb,...")
              "Like --depends, modifies the Replaces field.",
       Option "" ["provides"]
-             (ReqArg (\ arg atoms -> execDebM (mapM_ (uncurry provides) (parseDeps arg)) atoms) "deb:deb,deb:deb,...")
+             (ReqArg (\ arg -> mapM_ (uncurry provides) (parseDeps arg)) "deb:deb,deb:deb,...")
              "Like --depends, modifies the Provides field.",
-      Option "" ["map-dep"] (ReqArg (\ pair atoms -> case break (== '=') pair of
-                                                       (cab, (_ : deb)) -> execDebM (extraLibMap cab (rels deb)) atoms
-                                                       (_, "") -> error "usage: --map-dep CABALNAME=RELATIONS") "CABALNAME=RELATIONS")
+      Option "" ["map-dep"] (ReqArg (\ pair -> case break (== '=') pair of
+                                                 (cab, (_ : deb)) -> extraLibMap cab (rels deb)
+                                                 (_, "") -> error "usage: --map-dep CABALNAME=RELATIONS") "CABALNAME=RELATIONS")
              (unlines [ "Specify what debian package name corresponds with a name that appears in"
                       , "the Extra-Library field of a cabal file, e.g. --map-dep cryptopp=libcrypto-dev."
                       , "I think this information is present somewhere in the packaging system, but"
                       , "I'm not sure of the details."]),
-      Option "" ["deb-version"] (ReqArg (\ version atoms -> execDebM (debVersion (parseDebianVersion version)) atoms) "VERSION")
+      Option "" ["deb-version"] (ReqArg (\ version -> debVersion (parseDebianVersion version)) "VERSION")
              "Specify the version number for the debian package.  This will pin the version and should be considered dangerous.",
-      Option "" ["revision"] (ReqArg (\ rev atoms -> execDebM (revision (Just rev)) atoms) "REVISION")
+      Option "" ["revision"] (ReqArg (\ rev -> revision (Just rev)) "REVISION")
              "Add this string to the cabal version to get the debian version number.  By default this is '-1~hackage1'.  Debian policy says this must either be empty (--revision '') or begin with a dash.",
-      Option "" ["epoch-map"] (ReqArg (\ pair atoms -> case break (== '=') pair of
-                                                         (_, (_ : ['0'])) -> atoms
-                                                         (cab, (_ : [d])) | isDigit d -> execDebM (epochMap (PackageName cab) (ord d - ord '0')) atoms
-                                                         _ -> error "usage: --epoch-map CABALNAME=DIGIT") "CABALNAME=DIGIT")
+      Option "" ["epoch-map"]
+             (ReqArg (\ pair -> case break (== '=') pair of
+                                  (_, (_ : ['0'])) -> return ()
+                                  (cab, (_ : [d])) | isDigit d -> epochMap (PackageName cab) (ord d - ord '0')
+                                  _ -> error "usage: --epoch-map CABALNAME=DIGIT") "CABALNAME=DIGIT")
              "Specify a mapping from the cabal package name to a digit to use as the debian package epoch number, e.g. --epoch-map HTTP=1",
-      Option "" ["exec-map"] (ReqArg (\ s atoms -> case break (== '=') s of
-                                                     (cab, (_ : deb)) -> execDebM (execMap cab (rels deb)) atoms
-                                                     _ -> error "usage: --exec-map EXECNAME=RELATIONS") "EXECNAME=RELATIONS")
+      Option "" ["exec-map"] (ReqArg (\ s -> case break (== '=') s of
+                                               (cab, (_ : deb)) -> execMap cab (rels deb)
+                                               _ -> error "usage: --exec-map EXECNAME=RELATIONS") "EXECNAME=RELATIONS")
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
-      Option "" ["omit-lt-deps"] (NoArg (execDebM (omitLTDeps True)))
+      Option "" ["omit-lt-deps"] (NoArg (omitLTDeps True))
              (unlines [ "Remove all less-than dependencies from the generated control file.  Less-than"
                       , "dependencies are less useful and more troublesome for debian packages than cabal,"
                       , "because you can't install multiple versions of a given debian package.  For more"
                       , "google 'cabal hell'."]),
-      Option "" ["quilt"] (NoArg (execDebM (sourceFormat Quilt3)))
+      Option "" ["quilt"] (NoArg (sourceFormat Quilt3))
              "The package has an upstream tarball, write '3.0 (quilt)' into source/format.",
-      Option "" ["builddir"] (ReqArg (\ s atoms -> execDebM (buildDir (s </> "build")) atoms) "PATH")
+      Option "" ["builddir"] (ReqArg (\ s -> buildDir (s </> "build")) "PATH")
              (unlines [ "Subdirectory where cabal does its build, dist/build by default, dist-ghc when"
                       , "run by haskell-devscripts.  The build subdirectory is added to match the"
                       , "behavior of the --builddir option in the Setup script."]),
 
-      Option "f" ["flags"] (ReqArg (\ fs atoms -> execDebM (mapM_ (uncurry cabalFlagAssignment) (flagList fs)) atoms) "FLAGS")
+      Option "f" ["flags"] (ReqArg (\ fs -> mapM_ (uncurry cabalFlagAssignment) (flagList fs)) "FLAGS")
              (unlines [ "Flags to pass to the finalizePackageDescription function in"
                       , "Distribution.PackageDescription.Configuration when loading the cabal file."]),
 
-      Option "" ["debianize"] (NoArg (\ atoms -> execDebM (debAction Debianize) atoms))
+      Option "" ["debianize"] (NoArg (debAction Debianize))
              "Deprecated - formerly used to get what is now the normal benavior.",
-      Option "" ["substvar"] (ReqArg (\ name atoms -> execDebM (debAction (SubstVar (read' (\ s -> error $ "substvar: " ++ show s) name))) atoms) "Doc, Prof, or Dev")
+      Option "" ["substvar"] (ReqArg (\ name -> debAction (SubstVar (read' (\ s -> error $ "substvar: " ++ show s) name))) "Doc, Prof, or Dev")
              (unlines [ "With this option no debianization is generated.  Instead, the list"
                       , "of dependencies required for the dev, prof or doc package (depending"
                       , "on the argument) is printed to standard output.  These can be added"
