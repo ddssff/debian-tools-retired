@@ -7,10 +7,10 @@ module Debian.DebT
     , runDebT
     , evalDebT
     , execDebT
-    , Deb
-    , runDeb
-    , evalDeb
-    , execDeb
+    , DebM
+    , runDebM
+    , evalDebM
+    , execDebM
 
     -- * Lens Helper Functions
     , doConst
@@ -136,7 +136,7 @@ import Prelude hiding (init, log, unlines)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 type DebT m = StateT Lenses.Atoms m
-type Deb = State Lenses.Atoms
+type DebM = State Lenses.Atoms
 
 execDebT :: Monad m => DebT m a -> Atoms -> m Atoms
 execDebT action atoms = execStateT action atoms
@@ -147,14 +147,14 @@ evalDebT action atoms = evalStateT action atoms
 runDebT :: Monad m => DebT m a -> Atoms -> m (a, Atoms)
 runDebT action atoms = runStateT action atoms
 
-execDeb :: Deb a -> Atoms -> Atoms
-execDeb action atoms = execState action atoms
+execDebM :: DebM a -> Atoms -> Atoms
+execDebM action atoms = execState action atoms
 
-evalDeb :: Deb a -> Atoms -> a
-evalDeb action atoms = evalState action atoms
+evalDebM :: DebM a -> Atoms -> a
+evalDebM action atoms = evalState action atoms
 
-runDeb :: Deb a -> Atoms -> (a, Atoms)
-runDeb action atoms = runState action atoms
+runDebM :: DebM a -> Atoms -> (a, Atoms)
+runDebM action atoms = runState action atoms
 
 -- | Set the value to x regardless of its previous value
 doConst :: Monad m => Lens Atoms a -> a -> DebT m ()

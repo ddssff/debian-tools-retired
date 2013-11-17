@@ -31,7 +31,7 @@ import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, 
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), Top(Top))
 import Debian.Debianize.Utility (modifyM)
-import Debian.DebT (Atoms, DebT, execDeb, execDebT, evalDeb, epochMap, mapCabal, splitCabal, changelog, compat, control,
+import Debian.DebT (Atoms, DebT, execDebMM, execDebT, evalDebM, epochMap, mapCabal, splitCabal, changelog, compat, control,
                     copyright, rulesHead, sourceFormat)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
@@ -52,7 +52,7 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
 -- | A suitable defaultAtoms value for the debian repository.
 defaultAtoms :: Atoms
 defaultAtoms =
-    flip execDeb mempty $ do
+    flip execDebM mempty $ do
       epochMap (PackageName "HaXml") 1
       epochMap (PackageName "HTTP") 1
       mapCabal (PackageName "parsec") "parsec3"
@@ -87,13 +87,13 @@ test1 =
     TestLabel "test1" $
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion :: IO (Maybe StandardsVersion)
-                 let deb = finalizeDebianization $ execDeb (copyright (Left BSD3)) $
-                           execDeb (newDebianization (ChangeLog [testEntry]) level standards) defaultAtoms
+                 let deb = finalizeDebianization $ execDebM (copyright (Left BSD3)) $
+                           execDebM (newDebianization (ChangeLog [testEntry]) level standards) defaultAtoms
                  assertEqual "test1" [] (diffDebianizations testDeb1 deb))
     where
       testDeb1 :: Atoms
       testDeb1 =
-          execDeb
+          execDebM
             (do newDebianization log (Just 9) (Just (StandardsVersion 3 9 3 (Just 1)))
                 rulesHead (const (Just (T.unlines $
                                              [ "#!/usr/bin/make -f"
@@ -125,11 +125,11 @@ test2 =
     TestLabel "test2" $
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion
-                 let deb = finalizeDebianization $ execDeb (newDebianization (ChangeLog [testEntry]) level standards >> copyright (Left BSD3)) defaultAtoms
+                 let deb = finalizeDebianization $ execDebM (newDebianization (ChangeLog [testEntry]) level standards >> copyright (Left BSD3)) defaultAtoms
                  assertEqual "test2" [] (diffDebianizations expect deb))
     where
       expect =
-          execDeb
+          execDebM
             (do newDebianization log (Just 9) (Just (StandardsVersion 3 9 3 (Just 1)))
                 rulesHead (const (Just (T.unlines $
                                              ["#!/usr/bin/make -f",
@@ -165,7 +165,7 @@ test3 =
     where
       testDeb2 :: Atoms
       testDeb2 =
-          execDeb
+          execDebM
             (do newDebianization log (Just 7) (Just (StandardsVersion 3 9 4 Nothing))
                 sourceFormat Native3
                 rulesHead (const (Just "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n"))
@@ -251,17 +251,17 @@ test4 =
           setL Lenses.sourceFormat (Just Native3) .
           modL Lenses.missingDependencies (insert (BinPkgName "libghc-clckwrks-theme-clckwrks-doc")) .
           setL Lenses.revision Nothing .
-          execDeb (doWebsite (BinPkgName "clckwrks-dot-com-production") (theSite (BinPkgName "clckwrks-dot-com-production"))) .
-          execDeb (doBackups (BinPkgName "clckwrks-dot-com-backups") "clckwrks-dot-com-backups") .
+          execDebM (doWebsite (BinPkgName "clckwrks-dot-com-production") (theSite (BinPkgName "clckwrks-dot-com-production"))) .
+          execDebM (doBackups (BinPkgName "clckwrks-dot-com-backups") "clckwrks-dot-com-backups") .
           fixRules .
-          execDeb tight .
+          execDebM tight .
           setL Lenses.changelog (getL Lenses.changelog old)
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
       serverNames = map BinPkgName ["clckwrks-dot-com-production"] -- , "clckwrks-dot-com-staging", "clckwrks-dot-com-development"]
       -- Insert a line just above the debhelper.mk include
       fixRules deb =
-          modL Lenses.rulesHead (\ mt -> (Just . f) (fromMaybe (evalDeb getRulesHead deb) mt)) deb
+          modL Lenses.rulesHead (\ mt -> (Just . f) (fromMaybe (evalDebM getRulesHead deb) mt)) deb
           where
             f t = T.unlines $ concat $
                   map (\ line -> if line == "include /usr/share/cdbs/1/rules/debhelper.mk"
@@ -361,11 +361,11 @@ test5 =
                                                                , "  backups of the database."])) .
                            modL Lenses.depends (Map.insertWith union (BinPkgName "creativeprompts-server") (singleton (anyrel (BinPkgName "markdown")))) .
                            modL Lenses.execMap (Map.insertWith (error "Conflict in execMap") "trhsx" [[Rel (BinPkgName "haskell-hsx-utils") Nothing Nothing]]) .
-                           execDeb (doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups") .
-                           execDeb (doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development"))) .
-                           execDeb (doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production"))) .
+                           execDebM (doBackups (BinPkgName "creativeprompts-backups") "creativeprompts-backups") .
+                           execDebM (doServer (BinPkgName "creativeprompts-development") (theServer (BinPkgName "creativeprompts-development"))) .
+                           execDebM (doWebsite (BinPkgName "creativeprompts-production") (theSite (BinPkgName "creativeprompts-production"))) .
                            setL Lenses.changelog (getL Lenses.changelog old) .
-                           execDeb (newDebianization' level standards))
+                           execDebM (newDebianization' level standards))
 
       theSite :: BinPkgName -> Site
       theSite deb =
@@ -446,7 +446,7 @@ test8 =
                             modL Lenses.control (\ y -> y {homepage = Just "http://artvaluereportonline.com"}) .
                             setL Lenses.sourceFormat (Just Native3) .
                             setL Lenses.changelog (Just log) .
-                            execDeb (newDebianization' (Just 7) (Just (StandardsVersion 3 9 3 Nothing))))
+                            execDebM (newDebianization' (Just 7) (Just (StandardsVersion 3 9 3 Nothing))))
 
 test9 :: Test
 test9 =
@@ -457,7 +457,7 @@ test9 =
     where
       customize =          (return .
                             modL Lenses.buildDeps (Set.insert [[Rel (BinPkgName "alex") Nothing Nothing]]) .
-                            execDeb (doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing})) .
+                            execDebM (doExecutable (BinPkgName "alex") (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing})) .
                             setL Lenses.debVersion (Just (parseDebianVersion ("3.0.2-1~hackage1" :: String))) .
                             setL Lenses.sourceFormat (Just Native3) .
                             modL Lenses.control (\ y -> y {homepage = Just "http://www.haskell.org/alex/"}) .
@@ -477,7 +477,7 @@ test9 =
                                               , "AlexWrapper-posn"
                                               , "AlexWrapper-posn-bytestring"
                                               , "AlexWrapper-strict-bytestring"]) .
-                            execDeb (newDebianization' (Just 7) (Just (StandardsVersion 3 9 3 Nothing))))
+                            execDebM (newDebianization' (Just 7) (Just (StandardsVersion 3 9 3 Nothing))))
 
 data Change k a
     = Created k a

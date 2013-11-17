@@ -45,7 +45,7 @@ import Debian.Debianize.Options (options, compileArgs)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types (DebAction(..), Top(Top, unTop))
 import Debian.Debianize.Utility (withCurrentDirectory, foldEmpty, replaceFile, zipMaps, indent, maybeRead)
-import Debian.DebT (Atoms, DebT, execDebT, execDeb, control, changelog)
+import Debian.DebT (Atoms, DebT, execDebT, execDebM, control, changelog)
 import Debian.Policy (PackagePriority(Optional), Section(MainSection), getDebhelperCompatLevel)
 import Debian.Relation (SrcPkgName(..), BinPkgName(BinPkgName), Relation(Rel))
 import Debian.Release (parseReleaseName)
@@ -183,8 +183,8 @@ debianization' date copy maint level log deb =
     setL Lenses.sourceSection (Just (MainSection "haskell")) $
     setL Lenses.watch (Just (watchAtom (pkgName $ Cabal.package $ pkgDesc)))  $
     modL Lenses.copyright (maybe (finalizeCopyright copy) Just) $
-    execDeb (versionInfo maint date) $
-    execDeb addExtraLibDependencies $
+    execDebM (versionInfo maint date) $
+    execDebM addExtraLibDependencies $
     -- Do we want to replace the atoms in the old deb, or add these?
     -- Or should we delete even more information from the original,
     -- keeping only the changelog?  Probably the latter.  So this is

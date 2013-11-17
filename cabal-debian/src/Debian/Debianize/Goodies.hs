@@ -33,7 +33,7 @@ import Debian.Debianize.ControlFile as Debian (PackageType(..))
 import Debian.Debianize.Internal.Dependencies (debianName)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (trim)
-import Debian.DebT (Atoms, DebT, execDeb, executable, rulesFragment, installDir, link, file, logrotateStanza, serverInfo, website, backups, depends)
+import Debian.DebT (Atoms, DebT, execDebM, executable, rulesFragment, installDir, link, file, logrotateStanza, serverInfo, website, backups, depends)
 import Debian.Orphans ()
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel))
@@ -175,23 +175,24 @@ watchAtom (PackageName pkgname) =
 
 siteAtoms :: BinPkgName -> Site -> Atoms -> Atoms
 siteAtoms b site =
-    execDeb (do installDir b "/etc/apache2/sites-available"
-                link b ("/etc/apache2/sites-available/" ++ domain site, "/etc/apache2/sites-enabled/" ++ domain site)
-                file b ("/etc/apache2/sites-available" </> domain site, apacheConfig)
-                installDir b (apacheLogDirectory b)
-                logrotateStanza b (Text.unlines $ [ pack (apacheAccessLog b) <> " {"
-                                                  , "  weekly"
-                                                  , "  rotate 5"
-                                                  , "  compress"
-                                                  , "  missingok"
-                                                  , "}"])
-                logrotateStanza b (Text.unlines $ [ pack (apacheErrorLog b) <> " {"
-                                                  , "  weekly"
-                                                  , "  rotate 5"
-                                                  , "  compress"
-                                                  , "  missingok"
-                                                  , "}" ])) .
-    serverAtoms b (server site) True
+    execDebM
+      (do installDir b "/etc/apache2/sites-available"
+          link b ("/etc/apache2/sites-available/" ++ domain site, "/etc/apache2/sites-enabled/" ++ domain site)
+          file b ("/etc/apache2/sites-available" </> domain site, apacheConfig)
+          installDir b (apacheLogDirectory b)
+          logrotateStanza b (Text.unlines $ [ pack (apacheAccessLog b) <> " {"
+                                            , "  weekly"
+                                            , "  rotate 5"
+                                            , "  compress"
+                                            , "  missingok"
+                                            , "}"])
+          logrotateStanza b (Text.unlines $ [ pack (apacheErrorLog b) <> " {"
+                                            , "  weekly"
+                                            , "  rotate 5"
+                                            , "  compress"
+                                            , "  missingok"
+                                            , "}" ])) .
+      serverAtoms b (server site) True
     where
       -- An apache site configuration file.  This is installed via a line
       -- in debianFiles.
