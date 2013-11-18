@@ -161,7 +161,7 @@ getVersion server name =
          -- encloses the newest package version number.  I should go
          -- back to the html parser method
          ExitSuccess -> return $ scrapeVersion $ {- findVersion name $ (htmlParse (showCommandForUser cmd args) -} (B.unpack out)
-         _ -> error ("Could not get version for " ++ name ++ "\n " ++ cmd ++ " -> " ++ show result)
+         _ -> error ("Could not get version for " ++ name ++ "\n " ++ showCommandForUser cmd args ++ " -> " ++ show result)
     where
       cmd = "curl"
       args = ["-s", url]
