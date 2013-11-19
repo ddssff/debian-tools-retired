@@ -95,6 +95,7 @@ doBackups bin s =
     do backups bin s
        depends bin (Rel (BinPkgName "anacron") Nothing Nothing)
 
+-- FIXME - use DebT
 describe :: Atoms -> PackageType -> PackageIdentifier -> Text
 describe atoms typ ident =
     debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc) typ ident
@@ -173,6 +174,7 @@ watchAtom (PackageName pkgname) =
            "-$1.tar.gz|\" \\\n    http://hackage.haskell.org/package/" ++ pkgname ++
            " \\\n    ([\\d\\.]*\\d)/\n"
 
+-- FIXME - use Atoms
 siteAtoms :: BinPkgName -> Site -> Atoms -> Atoms
 siteAtoms b site =
     execDebM
@@ -232,6 +234,7 @@ siteAtoms b site =
                    , "</VirtualHost>" ]
       port' = pack (show (port (server site)))
 
+-- FIXME - use Atoms
 serverAtoms :: BinPkgName -> Server -> Bool -> Atoms -> Atoms
 serverAtoms b server' isSite =
     modL Lenses.postInst (insertWith (error "serverAtoms") b debianPostinst) .
@@ -297,6 +300,7 @@ serverAtoms b server' isSite =
 
 -- | A configuration file for the logrotate facility, installed via a line
 -- in debianFiles.
+-- FIXME - use Atoms
 serverLogrotate' :: BinPkgName -> Atoms -> Atoms
 serverLogrotate' b =
     modL Lenses.logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAccessLog b) <> " {"
@@ -312,6 +316,7 @@ serverLogrotate' b =
                                  , "  missingok"
                                  , "}" ])))
 
+-- FIXME - use Atoms
 backupAtoms :: BinPkgName -> String -> Atoms -> Atoms
 backupAtoms b name =
     modL Lenses.postInst (insertWith (error "backupAtoms") b
@@ -328,16 +333,19 @@ backupAtoms b name =
                               , sourceDir = Nothing
                               , destDir = Just "/etc/cron.hourly" })
 
+-- FIXME - use Atoms
 execAtoms :: BinPkgName -> InstallFile -> Atoms -> Atoms
 execAtoms b ifile r =
     modL Lenses.rulesFragments (Set.insert (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp"))) .
     fileAtoms b ifile $
     r
 
+-- FIXME - use Atoms
 fileAtoms :: BinPkgName -> InstallFile -> Atoms -> Atoms
 fileAtoms b installFile' r =
     fileAtoms' b (sourceDir installFile') (execName installFile') (destDir installFile') (destName installFile') r
 
+-- FIXME - use Atoms
 fileAtoms' :: BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> Atoms -> Atoms
 fileAtoms' b sourceDir' execName' destDir' destName' r =
     case (sourceDir', execName' == destName') of

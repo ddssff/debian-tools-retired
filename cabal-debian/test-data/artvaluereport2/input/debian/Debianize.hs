@@ -1,18 +1,20 @@
 {-# LANGUAGE CPP, OverloadedStrings #-}
-import Debian.Debianize
-import Data.Lens.Lazy
-import qualified Debian.Debianize.Lenses as Lenses
-import Debian.Debianize.Details (seereasonDefaultAtoms)
-import Debian.Debianize.Types (Top(Top))
-import Debian.DebT (execDeb)
-import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(..), Relation(Rel), VersionReq(SLT))
-import Debian.Version (parseDebianVersion)
-import Data.Map as Map (insertWith, insert)
+import Data.Lens.Lazy (getL, modL)
 import Data.Maybe (fromMaybe)
-import Data.Set as Set (insert, union, singleton)
+import Data.Monoid (mempty)
 import Data.Text as Text (intercalate)
-import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
+import Debian.Changes (ChangeLog(..))
+import Debian.Debianize (binaryArchitectures, buildDepsIndep, changelog, compat, control, debianization, DebT, depends, description, doBackups, doExecutable, doServer, doWebsite, execDebM, inputChangeLog, inputDebianization, installCabalExec, installData, seereasonDefaultAtoms, sourcePackageName)
+import Debian.Debianize.Atoms (compareDebianization)
+import Debian.Debianize.ControlFile (SourceDebDescription(homepage, standardsVersion))
+import Debian.Debianize.ControlFile hiding (depends, description)
+import qualified Debian.Debianize.Lenses as Lenses (changelog)
+import Debian.Debianize.Monad (Atoms)
+import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), Top(Top))
+import Debian.Policy (databaseDirectory, PackageArchitectures(All), StandardsVersion(StandardsVersion))
+import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), SrcPkgName(..), VersionReq(SLT))
+import Debian.Version (parseDebianVersion)
+import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 -- This looks just like a "real" Debianize.hs file except that it
 -- returns the comparison string instead of doing a
@@ -22,7 +24,7 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
 main :: IO ()
 main =
     do log <- inputChangeLog (Top "test-data/artvaluereport2/input")
-       new <- debianization (Top "test-data/artvaluereport2/input") (customize log) seereasonDefaultAtoms
+       new <- debianization (Top "test-data/artvaluereport2/input") seereasonDefaultAtoms (customize log)
        old <- inputDebianization (Top "test-data/artvaluereport2/output")
        -- The newest log entry gets modified when the Debianization is
        -- generated, it won't match so drop it for the comparison.

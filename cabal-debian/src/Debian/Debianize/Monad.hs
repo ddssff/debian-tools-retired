@@ -75,7 +75,9 @@ module Debian.Debianize.Monad
     , description
     , executable
     , serverInfo
+    , askServers
     , website
+    , askWebsites
     , backups
     , apacheSite
     , extraDevDeps
@@ -123,8 +125,8 @@ import Data.Text as Text (Text)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog)
 import Debian.Debianize.ControlFile (SourceDebDescription)
-import Debian.Debianize.Internal.Lenses (Atoms, Flags)
-import qualified Debian.Debianize.Internal.Lenses as Lenses
+import Debian.Debianize.Lenses (Atoms, Flags)
+import qualified Debian.Debianize.Lenses as Lenses
 import Debian.Debianize.Types (DebAction(..), InstallFile(..), PackageInfo(..), Server(..), Site(..))
 import Debian.Debianize.VersionSplits (VersionSplits, makePackage, insertSplit)
 import Debian.Orphans ()
@@ -300,8 +302,12 @@ executable :: Monad m => BinPkgName -> InstallFile -> DebT m ()
 executable = doMapElem Lenses.executable
 serverInfo :: Monad m => BinPkgName -> Server -> DebT m ()
 serverInfo = doMapElem Lenses.serverInfo
+askServers :: Monad m => DebT m (Map BinPkgName Server)
+askServers = get >>= return . getL Lenses.serverInfo
 website :: Monad m => BinPkgName -> Site -> DebT m ()
 website = doMapElem Lenses.website
+askWebsites :: Monad m => DebT m (Map BinPkgName Site)
+askWebsites = get >>= return . getL Lenses.website
 backups :: Monad m => BinPkgName -> String -> DebT m ()
 backups = doMapElem Lenses.backups
 mapCabal :: Monad m => PackageName -> String -> DebT m ()

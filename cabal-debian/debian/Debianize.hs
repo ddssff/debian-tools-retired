@@ -1,19 +1,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Control.Monad.State (get)
-import Data.Lens.Lazy
-import Data.Map as Map (insertWith)
-import Data.Maybe (fromMaybe)
-import Data.Set as Set (insert, union, singleton)
+import Data.Lens.Lazy (getL)
+import Data.Monoid (mempty)
 import Data.Text as Text (intercalate)
--- import Debian.Debianize.Lenses as Lenses
-import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import Debian.Debianize (inputChangeLog, debianization, inputDebianization, compareDebianization)
+import Debian.Changes (ChangeLog(ChangeLog))
+import Debian.Debianize (inputChangeLog, inputDebianization)
+import Debian.Debianize.Atoms (compareDebianization, debianization)
 import Debian.Debianize.ControlFile (SourceDebDescription(homepage))
+import Debian.Debianize.ControlFile hiding (conflicts, depends, description)
 import Debian.Debianize.Details (seereasonDefaultAtoms)
 import qualified Debian.Debianize.Lenses as Lenses (changelog)
+import Debian.Debianize.Monad (Atoms, changelog, compat, conflicts, control, DebT, depends, description, execDebM, installCabalExec,
+                               sourceFormat, standards, utilsPackageName)
 import Debian.Debianize.Types (Top(Top))
-import Debian.DebT (Atoms, DebT, changelog, description, depends, conflicts, installCabalExec, utilsPackageName, sourceFormat, standards, compat, control)
-import Debian.Policy (StandardsVersion(StandardsVersion), SourceFormat(Native3))
+import Debian.Policy (SourceFormat(Native3), StandardsVersion(StandardsVersion))
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), VersionReq(SLT, GRE))
 import Debian.Version (parseDebianVersion)
 import Prelude hiding (log)
@@ -26,7 +26,7 @@ main =
        copyFile "debian/changelog" "changelog"
        log <- inputChangeLog (Top ".")
        old <- inputDebianization (Top ".")
-       new <- debianization (Top ".") (changelog log >> customize >> copyFirstLogEntry old) seereasonDefaultAtoms
+       new <- debianization (Top ".") seereasonDefaultAtoms (changelog log >> customize >> copyFirstLogEntry old)
        case compareDebianization old new of
          "" -> return ()
          s -> error $ "Debianization mismatch:\n" ++ s

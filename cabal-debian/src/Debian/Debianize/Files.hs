@@ -18,7 +18,7 @@ import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Fiel
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..), PackageType(..))
 import Debian.Debianize.Files2 (debianName)
-import qualified Debian.Debianize.Internal.Lenses as Lenses
+import qualified Debian.Debianize.Lenses as Lenses
     (compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
      intermediateFiles, install, installDir, installInit, logrotateStanza, link,
      rulesHead, rulesFragments, copyright, packageDescription)
@@ -26,7 +26,6 @@ import Debian.Debianize.Monad (Atoms, DebT, evalDebM)
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
 import qualified Distribution.PackageDescription as Cabal (PackageDescription(package))
-import Distribution.PackageDescription (PackageDescription)
 import Prelude hiding (init, unlines, writeFile)
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -36,20 +35,22 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 getRulesHead :: Monad m => DebT m Text
 getRulesHead =
     do atoms <- get
-       let mrh = getL Lenses.rulesHead atoms
-       let rh = fromMaybe (computeRulesHead atoms) mrh
+       packageNameLines <-
+           maybe (return [])
+                 (\ pkgDesc -> debianName Cabal (Cabal.package pkgDesc) >>= \ (x :: BinPkgName) ->
+                               return $ ["DEB_CABAL_PACKAGE = " <> pack (show (pretty x)), ""])
+                 (getL Lenses.packageDescription atoms)
+       let rh = fromMaybe (buildRulesHead packageNameLines) (getL Lenses.rulesHead atoms)
        put (setL Lenses.rulesHead (Just rh) atoms)
        return rh
     where
-      computeRulesHead :: Atoms -> Text
-      computeRulesHead atoms =
+      buildRulesHead :: [Text] -> Text
+      buildRulesHead xs =
           Text.unlines $
             ["#!/usr/bin/make -f", ""] ++
-            maybe [] (\ x -> ["DEB_CABAL_PACKAGE = " <> x, ""]) (fmap (name atoms) (getL Lenses.packageDescription atoms)) ++
+            xs ++
             ["include /usr/share/cdbs/1/rules/debhelper.mk",
              "include /usr/share/cdbs/1/class/hlibrary.mk"]
-      name :: Atoms -> PackageDescription -> Text
-      name atoms pkgDesc = pack (show (pretty (debianName atoms Cabal (Cabal.package pkgDesc) :: BinPkgName)))
 
 sourceFormatFiles :: Atoms -> [(FilePath, Text)]
 sourceFormatFiles deb = maybe [] (\ x -> [("debian/source/format", pack (show (pretty x)))]) (getL Lenses.sourceFormat deb)

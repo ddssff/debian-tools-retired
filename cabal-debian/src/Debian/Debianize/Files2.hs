@@ -1,18 +1,19 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -Wall -Wwarn -fno-warn-name-shadowing -fno-warn-orphans #-}
 module Debian.Debianize.Files2
-    ( debianName             -- Used in Debian.Debianize.Files
+    ( debianName             -- Used in Debian.Debianize.Files and
     , mkPkgName
     , mkPkgName'
     ) where
 
+import Control.Monad.State (get)
 import Data.Char (toLower)
 import Data.Lens.Lazy (getL)
 import Data.Map as Map (lookup)
 import Data.Version (showVersion)
 import Debian.Debianize.ControlFile as Debian (PackageType(..))
-import qualified Debian.Debianize.Internal.Lenses as Lenses (debianNameMap)
-import Debian.Debianize.Monad (Atoms)
+import qualified Debian.Debianize.Lenses as Lenses (debianNameMap)
+import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.VersionSplits (doSplits, VersionSplits)
 import Debian.Orphans ()
 import Debian.Relation (PkgName(..), Relations)
@@ -28,8 +29,10 @@ data Dependency_
   | ExtraLibs Relations
     deriving (Eq, Show)
 
-debianName :: PkgName name => Atoms -> PackageType -> PackageIdentifier -> name
-debianName atoms typ pkgDesc = debianName' (Map.lookup (pkgName pkgDesc) (getL Lenses.debianNameMap atoms)) typ pkgDesc
+debianName :: (Monad m, PkgName name) => PackageType -> PackageIdentifier -> DebT m name
+debianName typ pkgDesc =
+    do atoms <- get
+       return $ debianName' (Map.lookup (pkgName pkgDesc) (getL Lenses.debianNameMap atoms)) typ pkgDesc
 
 -- | Function that applies the mapping from cabal names to debian
 -- names based on version numbers.  If a version split happens at v,

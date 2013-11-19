@@ -76,7 +76,6 @@ Library
    Debian.Debianize.Utility
    Debian.Debianize.VersionSplits
    Debian.Orphans
-   Debian.Debianize.Internal.Lenses
 
 Executable cabal-debian
  Hs-Source-Dirs: src
