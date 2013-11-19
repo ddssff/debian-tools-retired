@@ -8,7 +8,7 @@ haskell-clckwrks-dot-com (0.2.3) unstable; urgency=low
 
   * Added -rtsopts flag because the debian packaging requires it
 
-  -- Jeremy Shaw <jeremy@seereason.com>  Thu, 20 Dec 2012 15:51:07 -0600
+ -- Jeremy Shaw <jeremy@seereason.com>  Thu, 20 Dec 2012 15:51:07 -0600
 
 haskell-clckwrks-dot-com (0.2.2) unstable; urgency=low
 

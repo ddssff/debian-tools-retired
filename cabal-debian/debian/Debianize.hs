@@ -36,7 +36,10 @@ main =
     where
       customize :: Monad m => DebT m ()
       customize =
-          do description (BinPkgName "cabal-debian")
+          do sourceFormat Native3
+             standards (StandardsVersion 3 9 3 Nothing)
+             compat 7
+             description (BinPkgName "cabal-debian")
                          (Text.intercalate "\n"
                                   [ "Create a debianization for a cabal package"
                                   , " Tool for creating debianizations of Haskell packages based on the .cabal"
@@ -54,9 +57,6 @@ main =
              installCabalExec (BinPkgName "cabal-debian-tests") ("cabal-debian-tests", "/usr/bin")
              utilsPackageName (BinPkgName "cabal-debian")
              -- extraDevDeps (BinPkgName "debian-policy")
-             sourceFormat Native3
-             standards (StandardsVersion 3 9 3 Nothing)
-             compat 7
              control (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"})
 
 -- | This copies the first log entry of deb1 into deb2.  Because the
