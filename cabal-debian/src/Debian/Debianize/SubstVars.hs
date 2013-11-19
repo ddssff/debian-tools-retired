@@ -19,7 +19,7 @@ import qualified Data.Set as Set
 import Data.Text (pack)
 import Debian.Control
 import Debian.Debianize.Input (inputCabalization)
-import Debian.Debianize.Internal.Dependencies (cabalDependencies, debDeps, debNameFromType, filterMissing)
+import Debian.Debianize.SubstVars2 (cabalDependencies, debDeps, debNameFromType, filterMissing)
 import Debian.Debianize.Internal.Lenses (Atoms, compiler, dryRun, packageInfo)
 import Debian.Debianize.Monad (execDebT)
 import Debian.Debianize.Types (Top(Top), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), DebType)

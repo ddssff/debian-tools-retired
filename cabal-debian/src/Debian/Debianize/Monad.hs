@@ -185,8 +185,8 @@ noDocumentationLibrary = doConst Lenses.noDocumentationLibrary
 
 doConstJust :: Monad m => Lens Atoms (Maybe a) -> a -> DebT m ()
 doConstJust lens x = modify (setL lens (Just x))
-doConstMaybe :: Monad m => Lens Atoms (Maybe a) -> Maybe a -> DebT m ()
-doConstMaybe = doConst
+-- doConstMaybe :: Monad m => Lens Atoms (Maybe a) -> Maybe a -> DebT m ()
+-- doConstMaybe = doConst
 doModify :: Monad m => Lens Atoms a -> (a -> a) -> DebT m ()
 doModify lens f = modify (modL lens f)
 

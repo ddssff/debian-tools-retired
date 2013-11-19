@@ -2,7 +2,7 @@
 -- written out.
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 module Debian.Debianize.Files
-    ( toFileMap
+    ( toFileMap    -- Used by Debian.Debianize.Atoms and Debian.Debianize.Tests
     , getRulesHead
     ) where
 
@@ -17,7 +17,7 @@ import Data.Text as Text (Text, pack, unpack, lines, unlines, strip, null)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..), PackageType(..))
-import Debian.Debianize.Internal.Dependencies (debianName)
+import Debian.Debianize.Files2 (debianName)
 import qualified Debian.Debianize.Internal.Lenses as Lenses
     (compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
      intermediateFiles, install, installDir, installInit, logrotateStanza, link,
@@ -26,6 +26,7 @@ import Debian.Debianize.Monad (Atoms, DebT, evalDebM)
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
 import qualified Distribution.PackageDescription as Cabal (PackageDescription(package))
+import Distribution.PackageDescription (PackageDescription)
 import Prelude hiding (init, unlines, writeFile)
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -47,6 +48,7 @@ getRulesHead =
             maybe [] (\ x -> ["DEB_CABAL_PACKAGE = " <> x, ""]) (fmap (name atoms) (getL Lenses.packageDescription atoms)) ++
             ["include /usr/share/cdbs/1/rules/debhelper.mk",
              "include /usr/share/cdbs/1/class/hlibrary.mk"]
+      name :: Atoms -> PackageDescription -> Text
       name atoms pkgDesc = pack (show (pretty (debianName atoms Cabal (Cabal.package pkgDesc) :: BinPkgName)))
 
 sourceFormatFiles :: Atoms -> [(FilePath, Text)]

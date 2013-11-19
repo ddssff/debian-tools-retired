@@ -1,51 +1,35 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -Wall -Wwarn -fno-warn-name-shadowing -fno-warn-orphans #-}
-module Debian.Debianize.Internal.Dependencies
-    ( cabalDependencies -- Debian.Cabal.SubstVars
-    , selfDependency -- Debian.Debianize.Combinators
-    , allBuildDepends
-    , debDeps
-    , dependencies
-    , debianName
-    , debianName'
-    , debianBuildDeps
-    , debianBuildDepsIndep
-    , debNameFromType
-
-    , filterMissing
-    , binaryPackageDeps
-    , binaryPackageConflicts
-    , binaryPackageProvides
-    , binaryPackageReplaces
+module Debian.Debianize.Finalize2
+    ( debianBuildDeps        -- Used in Debian.Debianize.Finalize
+    , debianBuildDepsIndep   -- Used in Debian.Debianize.Finalize
+    , binaryPackageDeps      -- Used in Debian.Debianize.Finalize
+    , binaryPackageConflicts -- Used in Debian.Debianize.Finalize
+    , binaryPackageProvides  -- Used in Debian.Debianize.Finalize
+    , binaryPackageReplaces  -- Used in Debian.Debianize.Finalize
     ) where
 
-import Data.Char (isSpace, toLower)
+import Data.Char (isSpace)
 import Data.Function (on)
 import Data.Lens.Lazy (getL)
-import Data.List as List (nub, minimumBy, isSuffixOf, map)
-import Data.Map as Map (Map, lookup)
-import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
-import qualified Data.Set as Set
+import Data.List as List (map, minimumBy, nub)
+import Data.Map as Map (lookup, Map)
+import Data.Maybe (catMaybes, fromMaybe)
+import qualified Data.Set as Set (member, toList)
 import Data.Version (showVersion)
-import Debian.Control
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.ControlFile as Debian (PackageType(..))
-import qualified Debian.Debianize.Internal.Lenses as Lenses
-    (packageDescription, compiler, noProfilingLibrary, noDocumentationLibrary,
-     missingDependencies, debianNameMap, extraLibMap, buildDeps, buildDepsIndep, execMap, epochMap,
-     packageInfo, depends, conflicts, provides, replaces)
+import Debian.Debianize.Files2 (mkPkgName, mkPkgName')
+import qualified Debian.Debianize.Internal.Lenses as Lenses (buildDeps, buildDepsIndep, compiler, conflicts, debianNameMap, depends, epochMap, execMap, extraLibMap, missingDependencies, noDocumentationLibrary, noProfilingLibrary, packageDescription, provides, replaces)
 import Debian.Debianize.Monad (Atoms)
-import Debian.Debianize.Types (PackageInfo(devDeb, profDeb, docDeb), DebType(..))
-import Debian.Debianize.VersionSplits (VersionSplits, doSplits, packageRangesFromVersionSplits)
+import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
-import qualified Debian.Relation as D
-import Debian.Relation (Relations, Relation, BinPkgName(BinPkgName), PkgName(pkgNameFromString))
+import Debian.Relation (BinPkgName, Relation, Relations)
+import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(EEQ, GRE, LTE, SGR, SLT))
 import Debian.Version (parseDebianVersion)
-import Distribution.Package (PackageName(PackageName), PackageIdentifier(..), Dependency(..))
-import Distribution.PackageDescription as Cabal (PackageDescription(..), allBuildInfo, buildTools, pkgconfigDepends, extraLibs)
-import Distribution.Version (VersionRange, anyVersion, foldVersionRange', intersectVersionRanges, unionVersionRanges,
-                             laterVersion, orLaterVersion, earlierVersion, orEarlierVersion, fromVersionIntervals, toVersionIntervals, withinVersion,
-                             isNoVersion, asVersionIntervals)
+import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
+import Distribution.PackageDescription as Cabal (allBuildInfo, buildTools, extraLibs, PackageDescription(..), pkgconfigDepends)
+import Distribution.Version (anyVersion, asVersionIntervals, earlierVersion, foldVersionRange', fromVersionIntervals, intersectVersionRanges, isNoVersion, laterVersion, orEarlierVersion, orLaterVersion, toVersionIntervals, unionVersionRanges, VersionRange, withinVersion)
 import Distribution.Version.Invert (invertVersionRange)
 import Prelude hiding (unlines)
 import System.Exit (ExitCode(ExitSuccess))
@@ -72,33 +56,6 @@ unboxDependency (BuildDepends d) = Just d
 unboxDependency (BuildTools d) = Just d
 unboxDependency (PkgConfigDepends d) = Just d
 unboxDependency (ExtraLibs _) = Nothing -- Dependency (PackageName d) anyVersion
-
--- Make a list of the debian devel packages corresponding to cabal packages
--- which are build dependencies
-debDeps :: DebType -> Atoms -> Control' String -> D.Relations
-debDeps debType atoms control =
-    interdependencies ++ otherdependencies
-    where
-      interdependencies =
-          case debType of
-            Prof -> maybe [] (\ name -> [[D.Rel name Nothing Nothing]]) (debNameFromType control Dev)
-            _ -> []
-      otherdependencies =
-          catMaybes (map (\ (Dependency name _) ->
-                          case Map.lookup name (getL Lenses.packageInfo atoms) of
-                            Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (case debType of
-                                                                                                             Dev -> devDeb p
-                                                                                                             Prof -> profDeb p
-                                                                                                             Doc -> docDeb p)
-                            Nothing -> Nothing) (cabalDependencies atoms))
-
-cabalDependencies :: Atoms -> [Dependency]
-cabalDependencies atoms =
-    catMaybes $ map unboxDependency $ allBuildDepends atoms
-                  (Cabal.buildDepends (fromMaybe (error "cabalDependencies") $ getL Lenses.packageDescription atoms))
-                  (concatMap buildTools . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL Lenses.packageDescription atoms)
-                  (concatMap pkgconfigDepends . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL Lenses.packageDescription atoms)
-                  (concatMap extraLibs . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL Lenses.packageDescription atoms)
 
 -- |Debian packages don't have per binary package build dependencies,
 -- so we just gather them all up here.
@@ -299,82 +256,6 @@ canonical :: Rels a -> Rels a
 canonical (Rel rel) = And [Or [Rel rel]]
 canonical (And rels) = And $ concatMap (unAnd . canonical) rels
 canonical (Or rels) = And . map Or $ sequence $ map (concat . map unOr . unAnd . canonical) $ rels
-
-debianName :: (PkgName name) => Atoms -> PackageType -> PackageIdentifier -> name
-debianName atoms typ pkgDesc = debianName' (Map.lookup (pkgName pkgDesc) (getL Lenses.debianNameMap atoms)) typ pkgDesc
-
--- | Function that applies the mapping from cabal names to debian
--- names based on version numbers.  If a version split happens at v,
--- this will return the ltName if < v, and the geName if the relation
--- is >= v.
-debianName' :: (PkgName name) => Maybe VersionSplits -> PackageType -> PackageIdentifier -> name
-debianName' msplits typ pkgDesc =
-    case msplits of
-      Nothing -> mkPkgName pname typ
-      Just splits -> (\ s -> mkPkgName' s typ) $ doSplits splits version
-    where
-      -- def = mkPkgName pname typ
-      pname@(PackageName _) = pkgName pkgDesc
-      version = (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion pkgDesc)))))
-
--- | Given a control file and a DebType, look for the binary deb with
--- the corresponding suffix and return its name.
-debNameFromType :: Control' String -> DebType -> Maybe BinPkgName
-debNameFromType control debType =
-    case debType of
-      Dev -> fmap BinPkgName $ listToMaybe (filter (isSuffixOf "-dev") debNames)
-      Prof -> fmap BinPkgName $ listToMaybe (filter (isSuffixOf "-prof") debNames)
-      Doc -> fmap BinPkgName $ listToMaybe (filter (isSuffixOf "-doc") debNames)
-    where
-      debNames = map (\ (Field (_, s)) -> stripWS s) (catMaybes (map (lookupP "Package") (tail (unControl control))))
-
--- | Build a debian package name from a cabal package name and a
--- debian package type.  Unfortunately, this does not enforce the
--- correspondence between the PackageType value and the name type, so
--- it can return nonsense like (SrcPkgName "libghc-debian-dev").
-mkPkgName :: PkgName name => PackageName -> PackageType -> name
-mkPkgName pkg typ = mkPkgName' (debianBaseName pkg) typ
-
-mkPkgName' :: PkgName name => String -> PackageType -> name
-mkPkgName' base typ =
-    pkgNameFromString $
-             case typ of
-                Documentation -> "libghc-" ++ base ++ "-doc"
-                Development -> "libghc-" ++ base ++ "-dev"
-                Profiling -> "libghc-" ++ base ++ "-prof"
-                Utilities -> "haskell-" ++ base ++ "-utils"
-                Exec -> base
-                Source' -> "haskell-" ++ base ++ ""
-                Cabal -> base
-
-debianBaseName :: PackageName -> String
-debianBaseName (PackageName name) =
-    map (fixChar . toLower) name
-    where
-      -- Underscore is prohibited in debian package names.
-      fixChar :: Char -> Char
-      fixChar '_' = '-'
-      fixChar c = toLower c
-
-{-
--- | Generate the head of the debian/rules file.
-cdbsRules :: PackageIdentifier -> Atoms -> Atoms
-cdbsRules pkgId deb =
-    setL rulesHead
-         (Just . unlines $
-          ["#!/usr/bin/make -f",
-           "",
-           "DEB_CABAL_PACKAGE = " <> name,
-           "",
-           "include /usr/share/cdbs/1/rules/debhelper.mk",
-           "include /usr/share/cdbs/1/class/hlibrary.mk" ])
-         deb
-    where
-      -- The name is based on the cabal package, but it may need to be
-      -- modified to avoid violating Debian rules - no underscores, no
-      -- capital letters.
-      name = pack (show (pretty (debianName deb Cabal pkgId :: BinPkgName)))
--}
 
 filterMissing :: Atoms -> [[Relation]] -> [[Relation]]
 filterMissing atoms rels =

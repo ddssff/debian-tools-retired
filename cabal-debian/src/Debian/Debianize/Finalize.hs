@@ -18,8 +18,9 @@ import Data.Text as Text (pack, unlines, unpack)
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                newBinaryDebDescription, modifyBinaryDeb,
                                                PackageType(Exec, Development, Profiling, Documentation, Utilities))
-import Debian.Debianize.Internal.Dependencies (debianName, binaryPackageDeps, binaryPackageConflicts, binaryPackageProvides, binaryPackageReplaces,
-                                               debianBuildDeps, debianBuildDepsIndep)
+import Debian.Debianize.Files2 (debianName)
+import Debian.Debianize.Finalize2 (binaryPackageDeps, binaryPackageConflicts, binaryPackageProvides, binaryPackageReplaces,
+                                   debianBuildDeps, debianBuildDepsIndep)
 import Debian.Debianize.Internal.Lenses as Lenses
     (Atoms, packageDescription, control, binaryArchitectures, rulesFragments, website, serverInfo, link,
      backups, executable, sourcePriority, sourceSection, binaryPriorities, binarySections, description,
