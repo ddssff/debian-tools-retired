@@ -17,9 +17,11 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
-import Debian.Debianize (Atoms, compileArgs, Top(Top))
+import Debian.Debianize (compileArgs)
 import qualified Debian.Debianize as Cabal
-import Debian.DebT (DebT)
+import Debian.Debianize.Atoms (runDebianize, writeDebianization)
+import Debian.Debianize.Monad (DebT)
+import Debian.Debianize.Types (Top(Top))
 import Debian.Relation (prettyRelations)
 import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
@@ -37,7 +39,7 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: MonadDeb m => Atoms -> P.CacheRec -> P.Packages -> T.Download -> m T.Download
+prepare :: MonadDeb m => DebT IO () -> P.CacheRec -> P.Packages -> T.Download -> m T.Download
 prepare defaultAtoms cache package' target =
     do dir <- sub ("debianize" </> takeFileName (T.getTop target))
        liftIO $ createDirectoryIfMissing True dir
@@ -87,17 +89,17 @@ collectPackageFlags cache pflags =
     where
       ver = P.ghcVersion (P.params cache)
 
-autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> Atoms -> IO ()
+autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> DebT IO () -> IO ()
 autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do -- This will be false if the package has no debian/Debianize.hs script
-       done <- collectPackageFlags cache pflags >>= Cabal.runDebianize
-       when (not done) (withArgs [] (Cabal.debianization (Top ".") (applyPackageFlags pflags) defaultAtoms >>= Cabal.writeDebianization (Top ".")))
+       done <- collectPackageFlags cache pflags >>= runDebianize
+       when (not done) (withArgs [] (Cabal.debianization (Top ".") defaultAtoms (applyPackageFlags pflags) >>= writeDebianization (Top ".")))
 
-applyPackageFlags :: Monad m => [P.PackageFlag] -> DebT m ()
+applyPackageFlags :: [P.PackageFlag] -> DebT IO ()
 applyPackageFlags flags = mapM_ applyPackageFlag flags
 
-applyPackageFlag :: Monad m => P.PackageFlag -> DebT m ()
+applyPackageFlag :: P.PackageFlag -> DebT IO ()
 applyPackageFlag x@(P.Maintainer _) = compileArgs (asCabalFlags x)
 applyPackageFlag x@(P.BuildDep _) = compileArgs (asCabalFlags x)
 applyPackageFlag x@(P.DevelDep _) = compileArgs (asCabalFlags x)

@@ -33,8 +33,8 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-bytestring-prof | ghc-prof
                , libghc-bzlib-dev
                , libghc-bzlib-prof
-               , libghc-cabal-debian-dev (>= 3.10)
-               , libghc-cabal-debian-prof (>= 3.10)
+               , libghc-cabal-debian-dev (>= 3.10.1)
+               , libghc-cabal-debian-prof (>= 3.10.1)
                , libghc-containers-dev | ghc
                , libghc-containers-prof | ghc-prof
                , libghc-debian-dev (>= 3.78)
@@ -105,7 +105,7 @@ Build-Depends-Indep: ghc-doc
                      , libghc-base-doc | ghc-doc
                      , libghc-bytestring-doc | ghc-doc
                      , libghc-bzlib-doc
-                     , libghc-cabal-debian-doc (>= 3.10)
+                     , libghc-cabal-debian-doc (>= 3.10.1)
                      , libghc-containers-doc | ghc-doc
                      , libghc-debian-doc (>= 3.78)
                      , libghc-debian-repo-doc (>= 5.42)

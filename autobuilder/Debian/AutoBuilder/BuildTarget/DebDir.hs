@@ -4,7 +4,6 @@ module Debian.AutoBuilder.BuildTarget.DebDir
     , prepare
     ) where
 
-import Control.Exception as E (catch)
 import Control.Monad.Trans (liftIO)
 import Data.ByteString.Lazy.Char8 (pack)
 import Data.Digest.Pure.MD5 (md5)

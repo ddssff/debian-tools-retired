@@ -29,7 +29,7 @@ import Debian.AutoBuilder.Types.Download (Download)
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
-import Debian.Debianize (Atoms)
+import Debian.Debianize.Monad (DebT)
 import Debian.Release (parseSection', releaseName')
 import Debian.Sources (SliceName(..))
 import Debian.Repo.AptImage(prepareAptEnv)
@@ -59,8 +59,8 @@ import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-main :: Atoms -> (FilePath -> String -> P.ParamRec) -> IO ()
-main atoms myParams =
+main :: DebT IO () -> (FilePath -> String -> P.ParamRec) -> IO ()
+main init myParams =
     do IO.hPutStrLn IO.stderr "Autobuilder starting..."
        args <- getArgs
        home <- getEnv "HOME"
@@ -72,7 +72,7 @@ main atoms myParams =
          True -> IO.hPutStr IO.stderr (P.usage "Usage: ")
          False ->
              do let paramSets = map (\ params -> params {P.buildPackages = P.buildTargets params (P.knownPackages params)}) recs
-                results <- runAptT (foldM (doParameterSet atoms) [] paramSets) `catch` handle
+                results <- runAptT (foldM (doParameterSet init) [] paramSets) `catch` handle
                 IO.hFlush IO.stdout
                 IO.hFlush IO.stderr
                 -- The result of processing a set of parameters is either an
@@ -95,8 +95,8 @@ main atoms myParams =
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: MonadApt m => Atoms -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
-doParameterSet defaultAtoms results params =
+doParameterSet :: MonadApt m => DebT IO () -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
+doParameterSet init results params =
     case () of
       _ | not (Set.null badForceBuild) ->
             error $ "Invalid forceBuild target name(s): " ++ intercalate ", " (map P.unTargetName (toList badForceBuild))
@@ -111,7 +111,7 @@ doParameterSet defaultAtoms results params =
       _ ->
           noisier (P.verbosity params)
             (do top <- liftIO $ P.computeTopDir params
-                withLock (top ++ "/lockfile") (runTopT top (quieter 2 (P.buildCache params) >>= runParameterSet defaultAtoms)))
+                withLock (top ++ "/lockfile") (runTopT top (quieter 2 (P.buildCache params) >>= runParameterSet init)))
             `IO.catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
           (\ result -> return (result : results))
     where
@@ -155,8 +155,8 @@ prepareDependOS params buildRelease localRepo =
                   (P.excludePackages params)
                   (P.components params)
 
-runParameterSet :: MonadDeb m => Atoms -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
-runParameterSet defaultAtoms cache =
+runParameterSet :: MonadDeb m => DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
+runParameterSet init cache =
     do
       top <- askTop
       liftIO doRequiredVersion
@@ -185,7 +185,7 @@ runParameterSet defaultAtoms cache =
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
       -- Build an apt-get environment which we can use to retrieve all the package lists
       poolOS <-prepareAptEnv top (P.ifSourcesChanged params) poolSources
-      (failures, targets) <- retrieveTargetList defaultAtoms cache dependOS >>= return . partitionEithers
+      (failures, targets) <- retrieveTargetList init cache dependOS >>= return . partitionEithers
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
       buildResult <- buildTargets cache dependOS globalBuildDeps (osLocalMaster dependOS) poolOS targets
       -- If all targets succeed they may be uploaded to a remote repo
@@ -287,8 +287,8 @@ doVerifyBuildRepo cache =
     where
       params = C.params cache
 
-retrieveTargetList :: MonadDeb m => Atoms -> C.CacheRec -> OSImage -> m [Either String Buildable]
-retrieveTargetList defaultAtoms cache dependOS =
+retrieveTargetList :: MonadDeb m => DebT IO () -> C.CacheRec -> OSImage -> m [Either String Buildable]
+retrieveTargetList init cache dependOS =
           retrieveTargetList' dependOS >>=
           mapM (either (return . Left) (\ download -> liftIO (try (asBuildable download)) >>= return. either (\ (e :: SomeException) -> Left (show e)) Right))
     where
@@ -300,7 +300,7 @@ retrieveTargetList defaultAtoms cache dependOS =
              when (P.report params) (ePutStrLn . doReport $ allTargets)
              qPutStrLn "Retrieving all source code:\n"
              countTasks' (map (\ (target :: P.Packages) ->
-                                   (show (P.spec target), (Right <$> retrieve defaultAtoms buildOS cache target) `IO.catch` handleRetrieveException target))
+                                   (show (P.spec target), (Right <$> retrieve init buildOS cache target) `IO.catch` handleRetrieveException target))
                               (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
           where
             allTargets = P.buildPackages (C.params cache)

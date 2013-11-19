@@ -30,7 +30,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as C
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Debianize (Atoms)
+import Debian.Debianize.Monad (DebT)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo (OSImage, rootPath, rootDir, findSourceTree, copySourceTree, SourceTree(dir'), topdir)
 import System.Directory (createDirectoryIfMissing)
@@ -39,7 +39,7 @@ import System.Process (proc)
 import System.Process.Progress (runProcessF, qPutStrLn, quieter)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
-retrieve :: MonadDeb m => Atoms -> OSImage -> C.CacheRec -> P.Packages -> m Download
+retrieve :: MonadDeb m => DebT IO () -> OSImage -> C.CacheRec -> P.Packages -> m Download
 retrieve defaultAtoms buildOS cache target =
     (\ x -> qPutStrLn (" " ++ show (P.spec target)) >> x) $
      case P.spec target of
