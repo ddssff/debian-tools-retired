@@ -2,9 +2,10 @@ import Data.Lens.Lazy (setL, modL)
 import Data.Map as Map (insertWith)
 import Data.Set as Set (union, singleton)
 import Debian.Changes (ChangeLog)
-import Debian.Debianize (Top(..), SourceFormat(Native3), InstallFile(..), doExecutable, inputChangeLog, debianize)
-import Debian.Debianize.Details (seereasonDefaultAtoms)
-import Debian.DebT (Atoms, DebT, runDebT, sourcePackageName, copyright, sourceFormat, changelog, depends)
+import Debian.Debianize
+import Debian.Debianize.Monad (Atoms, DebT, runDebT, sourcePackageName, copyright, sourceFormat, changelog, depends)
+import Debian.Debianize.Types
+import Debian.Policy (SourceFormat(Native3), StandardsVersion(StandardsVersion))
 import Debian.Relation (BinPkgName(BinPkgName), SrcPkgName(SrcPkgName), VersionReq(EEQ), Relation(Rel))
 import Debian.Version (buildDebianVersion)
 import Distribution.License (License(AllRightsReserved))
