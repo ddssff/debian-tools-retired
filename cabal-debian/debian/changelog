@@ -1,3 +1,10 @@
+haskell-cabal-debian (3.10.1) unstable; urgency=low
+
+  * More API changes - want need to get all the clients in sync before
+    proceeding.
+
+ -- David Fox <dsf@seereason.com>  Tue, 19 Nov 2013 11:31:16 -0800
+
 haskell-cabal-debian (3.10) unstable; urgency=low
 
   * Add a monadic interface
