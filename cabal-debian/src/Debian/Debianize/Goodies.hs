@@ -178,8 +178,8 @@ siteAtoms :: BinPkgName -> Site -> Atoms -> Atoms
 siteAtoms b site =
     execDebM
       (do installDir b "/etc/apache2/sites-available"
-          link b ("/etc/apache2/sites-available/" ++ domain site, "/etc/apache2/sites-enabled/" ++ domain site)
-          file b ("/etc/apache2/sites-available" </> domain site, apacheConfig)
+          link b ("/etc/apache2/sites-available/" ++ domain site) ("/etc/apache2/sites-enabled/" ++ domain site)
+          file b ("/etc/apache2/sites-available" </> domain site) apacheConfig
           installDir b (apacheLogDirectory b)
           logrotateStanza b (Text.unlines $ [ pack (apacheAccessLog b) <> " {"
                                             , "  weekly"

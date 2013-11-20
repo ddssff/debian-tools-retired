@@ -1,3 +1,9 @@
+haskell-cabal-debian (3.10.2) unstable; urgency=low
+
+  * Make some signatures in Monad.hs clearer
+
+ -- David Fox <dsf@seereason.com>  Wed, 20 Nov 2013 14:26:28 -0800
+
 haskell-cabal-debian (3.10.1) unstable; urgency=low
 
   * More API changes - want need to get all the clients in sync before

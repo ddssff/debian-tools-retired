@@ -130,8 +130,8 @@ librarySpecs pkgDesc =
        doc <- get >>= return . not . getL Lenses.noDocumentationLibrary
        prof <- get >>= return . not . getL Lenses.noProfilingLibrary
        when (dev && doc)
-            (link debName ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt",
-                           "/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt"))
+            (link debName ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt")
+                          ("/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt"))
        devSpec <- librarySpec Any Development (Cabal.package pkgDesc)
        profSpec <- librarySpec Any Profiling (Cabal.package pkgDesc)
        docSpec <- docSpecsParagraph (Cabal.package pkgDesc)
@@ -225,8 +225,8 @@ makeUtilsAtoms :: Monad m => BinPkgName -> Set FilePath -> Set String -> DebT m 
 makeUtilsAtoms p datas execs =
     if Set.null datas && Set.null execs
     then return ()
-    else Set.mapM_ (\ path -> installData p (path, path)) datas >>
-         Set.mapM_ (\ name -> installCabalExec p (name, "usr/bin")) execs >>
+    else Set.mapM_ (\ path -> installData p path path) datas >>
+         Set.mapM_ (\ name -> installCabalExec p name "usr/bin") execs >>
          rulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))
 
 -- finalizeAtoms :: Atoms -> Atoms
@@ -255,14 +255,14 @@ expandAtoms =
              List.mapM_ expandApacheSite (Map.toList mp)
           where
             expandApacheSite (b, (dom, log, text)) =
-                do link b ("/etc/apache2/sites-available/" ++ dom, "/etc/apache2/sites-enabled/" ++ dom)
+                do link b ("/etc/apache2/sites-available/" ++ dom) ("/etc/apache2/sites-enabled/" ++ dom)
                    installDir b log
-                   file b ("/etc/apache2/sites-available" </> dom, text)
+                   file b ("/etc/apache2/sites-available" </> dom) text
 
       expandInstallCabalExecs :: Monad m => FilePath -> DebT m ()
       expandInstallCabalExecs builddir =
           do mp <- get >>= return . getL Lenses.installCabalExec
-             List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (name, dst) -> install b (builddir </> name </> name, dst)) pairs) (Map.toList mp)
+             List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (name, dst) -> install b (builddir </> name </> name) dst) pairs) (Map.toList mp)
 
       expandInstallCabalExecTo :: Monad m => FilePath -> DebT m ()
       expandInstallCabalExecTo builddir =
@@ -276,8 +276,8 @@ expandAtoms =
           do mp <- get >>= return . getL Lenses.installData
              List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (s, d) ->
                                                         if takeFileName s == takeFileName d
-                                                        then install b (s, datadir </> makeRelative "/" (takeDirectory d))
-                                                        else installTo b (s, datadir </> makeRelative "/" d)) pairs) (Map.toList mp)
+                                                        then install b s (datadir </> makeRelative "/" (takeDirectory d))
+                                                        else installTo b s (datadir </> makeRelative "/" d)) pairs) (Map.toList mp)
 
       expandInstallTo :: Monad m => DebT m ()
       expandInstallTo =
@@ -293,8 +293,8 @@ expandAtoms =
                                                         do let (destDir', destName') = splitFileName path
                                                                tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
                                                                tmpPath = tmpDir </> destName'
-                                                           intermediateFile (tmpPath, s)
-                                                           install p (tmpPath, destDir')) pairs) (Map.toList mp)
+                                                           intermediateFile tmpPath s
+                                                           install p tmpPath destDir') pairs) (Map.toList mp)
 
       expandWebsite :: Monad m => DebT m ()
       expandWebsite =

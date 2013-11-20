@@ -39,6 +39,8 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-puremd5-prof
                , libghc-regex-tdfa-dev
                , libghc-regex-tdfa-prof
+               , libghc-set-extra-dev
+               , libghc-set-extra-prof
                , libghc-syb-dev
                , libghc-syb-prof
                , libghc-text-dev
@@ -64,6 +66,7 @@ Build-Depends-Indep: ghc-doc
                      , libghc-process-doc | ghc-doc
                      , libghc-puremd5-doc
                      , libghc-regex-tdfa-doc
+                     , libghc-set-extra-doc
                      , libghc-syb-doc
                      , libghc-text-doc
                      , libghc-unix-doc | ghc-doc

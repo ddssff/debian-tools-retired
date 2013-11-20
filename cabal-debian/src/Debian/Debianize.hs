@@ -158,16 +158,17 @@ module Debian.Debianize
 
     , Debian.Debianize.Options.compileArgs
     , Debian.Debianize.SubstVars.substvars
+
+    , module Debian.Debianize.Types
+    , module Debian.Policy
 {-
     , module Debian.Debianize.Bundled
     , module Debian.Debianize.ControlFile
     , module Debian.Debianize.Files
     , module Debian.Debianize.Finalize
     , module Debian.Debianize.Interspersed
-    , module Debian.Debianize.Types
     , module Debian.Debianize.Utility
     , module Debian.Debianize.VersionSplits
-    , module Debian.Policy
 -}
     ) where
 
@@ -183,7 +184,7 @@ import Debian.Debianize.Input
 import Debian.Debianize.Monad
 import Debian.Debianize.Options
 import Debian.Debianize.SubstVars
--- import Debian.Debianize.Types
+import Debian.Debianize.Types
 -- import Debian.Debianize.Utility
 -- import Debian.Debianize.VersionSplits
--- import Debian.Policy
+import Debian.Policy

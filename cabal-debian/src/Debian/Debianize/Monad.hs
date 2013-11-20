@@ -275,8 +275,8 @@ extraDevDeps = doSetElem Lenses.extraDevDeps
 -- rulesFragments :: Monad m => Lens Atoms (Set Text)
 rulesFragment :: Monad m => Text -> DebT m ()
 rulesFragment text = doSetElem Lenses.rulesFragments text
-intermediateFile :: Monad m => (FilePath, Text) -> DebT m ()
-intermediateFile = doSetElem Lenses.intermediateFiles
+intermediateFile :: Monad m => FilePath -> Text -> DebT m ()
+intermediateFile = curry (doSetElem Lenses.intermediateFiles)
 
 -- We should change the lens type from Maybe (Set a) to Set a
 utilsPackageName :: Monad m => BinPkgName -> DebT m ()
@@ -331,8 +331,11 @@ splitCabal pname ltname ver =
       f Nothing = error $ "splitCabal - not mapped: " ++ show pname
       f (Just sp) = Just (insertSplit ver ltname sp)
 
-apacheSite :: Monad m => BinPkgName -> (String, FilePath, Text) -> DebT m ()
-apacheSite = doMapElem Lenses.apacheSite
+curry3 :: ((a, b, c) -> d) -> a -> b -> c -> d
+curry3 f a b c = f (a, b, c)
+
+apacheSite :: Monad m => BinPkgName -> String -> FilePath -> Text -> DebT m ()
+apacheSite = curry3 . doMapElem Lenses.apacheSite
 packageInfo :: Monad m => PackageName -> PackageInfo -> DebT m ()
 packageInfo = doMapElem Lenses.packageInfo
 binaryPriorities :: Monad m => BinPkgName -> PackagePriority -> DebT m ()
@@ -366,23 +369,23 @@ depends = doMapSet Lenses.depends
 replaces :: Monad m => BinPkgName -> Relation -> DebT m ()
 replaces = doMapSet Lenses.replaces
 
-link :: Monad m => BinPkgName -> (FilePath, FilePath) -> DebT m ()
-link = doMapSet Lenses.link
-install :: Monad m => BinPkgName -> (FilePath, FilePath) -> DebT m ()
-install = doMapSet Lenses.install
-installTo :: Monad m => BinPkgName -> (FilePath, FilePath) -> DebT m ()
-installTo = doMapSet Lenses.installTo
-installData :: Monad m => BinPkgName -> (FilePath, FilePath) -> DebT m ()
-installData = doMapSet Lenses.installData
-file :: Monad m => BinPkgName -> (FilePath, Text) -> DebT m ()
-file = doMapSet Lenses.file
+link :: Monad m => BinPkgName -> FilePath -> FilePath -> DebT m ()
+link = curry . doMapSet Lenses.link
+install :: Monad m => BinPkgName -> FilePath -> FilePath -> DebT m ()
+install = curry . doMapSet Lenses.install
+installTo :: Monad m => BinPkgName -> FilePath -> FilePath -> DebT m ()
+installTo = curry . doMapSet Lenses.installTo
+installData :: Monad m => BinPkgName -> FilePath -> FilePath -> DebT m ()
+installData = curry . doMapSet Lenses.installData
+file :: Monad m => BinPkgName -> FilePath -> Text -> DebT m ()
+file = curry . doMapSet Lenses.file
 logrotateStanza :: Monad m => BinPkgName -> Text -> DebT m ()
 logrotateStanza = doMapSet Lenses.logrotateStanza
 -- installCabalExec :: Monad m => Lens Atoms (Map BinPkgName (Set (String, FilePath)))
-installCabalExec :: Monad m => BinPkgName -> (String, FilePath) -> DebT m ()
-installCabalExec = doMapSet Lenses.installCabalExec
-installCabalExecTo :: Monad m => BinPkgName -> (String, FilePath) -> DebT m ()
-installCabalExecTo = doMapSet Lenses.installCabalExecTo
+installCabalExec :: Monad m => BinPkgName -> String -> FilePath -> DebT m ()
+installCabalExec = curry . doMapSet Lenses.installCabalExec
+installCabalExecTo :: Monad m => BinPkgName -> String -> FilePath -> DebT m ()
+installCabalExecTo = curry . doMapSet Lenses.installCabalExecTo
 installDir :: Monad m => BinPkgName -> FilePath -> DebT m ()
 installDir = doMapSet Lenses.installDir
 

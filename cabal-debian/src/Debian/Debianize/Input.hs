@@ -65,7 +65,7 @@ inputDebianization top =
 -- | Try to input a file and if successful add it to the debianization.
 inputDebianizationFile :: Top -> FilePath -> DebT IO ()
 inputDebianizationFile (Top top) path =
-    lift (readFileMaybe (top </> path)) >>= maybe (return ()) (\ text -> intermediateFile (path, text))
+    lift (readFileMaybe (top </> path)) >>= maybe (return ()) (\ text -> intermediateFile path text)
 
 inputSourceDebDescription :: Top -> IO (SourceDebDescription, [Field])
 inputSourceDebDescription top =
@@ -190,7 +190,7 @@ inputAtomsFromDirectory top xs =
           do sums <- getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
              paths <- mapM (\ sum -> getDirectoryContents' (tmp </> sum) >>= return . map (sum </>)) sums >>= return . filter ((/= '~') . last) . concat
              files <- mapM (readFile . (tmp </>)) paths
-             execDebT (mapM_ intermediateFile (zip (map ("debian/cabalInstall" </>) paths) files)) atoms'
+             execDebT (mapM_ (uncurry intermediateFile) (zip (map ("debian/cabalInstall" </>) paths) files)) atoms'
 
 inputAtoms :: FilePath -> FilePath -> Atoms -> IO Atoms
 inputAtoms _ path xs | elem path ["control"] = return xs
@@ -224,7 +224,7 @@ inputAtoms debian name xs =
 readLink :: Monad m => BinPkgName -> Text -> DebT m ()
 readLink p line =
     case words line of
-      [a, b] -> link p (unpack a, unpack b)
+      [a, b] -> link p (unpack a) (unpack b)
       [] -> return ()
       _ -> trace ("Unexpected value passed to readLink: " ++ show line) (return ())
 
@@ -232,7 +232,7 @@ readInstall :: Monad m => BinPkgName -> Text -> DebT m ()
 readInstall p line =
     case break isSpace line of
       (_, b) | null b -> error $ "readInstall: syntax error in .install file for " ++ show p ++ ": " ++ show line
-      (a, b) -> install p (unpack (strip a), unpack (strip b))
+      (a, b) -> install p (unpack (strip a)) (unpack (strip b))
 
 readDir :: Monad m => BinPkgName -> Text -> DebT m ()
 readDir p line = installDir p (unpack line)

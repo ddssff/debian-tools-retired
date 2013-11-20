@@ -490,7 +490,7 @@ test9 label =
     where
       customize =
           do newDebianization' (Just 7) (Just (StandardsVersion 3 9 3 Nothing))
-             mapM_ (\ name -> installData (BinPkgName "alex") (name, name))
+             mapM_ (\ name -> installData (BinPkgName "alex") name name)
                    [ "AlexTemplate"
                    , "AlexTemplate-debug"
                    , "AlexTemplate-ghc"

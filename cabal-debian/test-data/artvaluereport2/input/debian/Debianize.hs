@@ -33,7 +33,7 @@ main =
       customize :: ChangeLog -> DebT IO ()
       customize log =
           do changelog log
-             installCabalExec (BinPkgName "appraisalscope") ("lookatareport", "usr/bin")
+             installCabalExec (BinPkgName "appraisalscope") "lookatareport" "usr/bin"
              doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"})
              doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development"))
              doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging"))
@@ -70,10 +70,10 @@ main =
       addServerData :: DebT IO ()
       addServerData = mapM_ addData (map BinPkgName ["artvaluereport2-development", "artvaluereport2-staging", "artvaluereport2-production"])
       addData p =
-          do installData p ("theme/ArtValueReport_SunsetSpectrum.ico", "ArtValueReport_SunsetSpectrum.ico")
+          do installData p "theme/ArtValueReport_SunsetSpectrum.ico" "ArtValueReport_SunsetSpectrum.ico"
              mapM_ (addDataFile p) ["Udon.js", "flexbox.css", "DataTables-1.8.2", "html5sortable", "jGFeed", "searchMag.png",
                                     "Clouds.jpg", "tweaks.css", "verticalTabs.css", "blueprint", "jquery.blockUI", "jquery.tinyscrollbar"]
-      addDataFile p path = installData p (path, path)
+      addDataFile p path = installData p path path
 
       theSite :: BinPkgName -> Site
       theSite deb =
