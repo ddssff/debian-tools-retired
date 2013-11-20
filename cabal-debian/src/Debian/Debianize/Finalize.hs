@@ -16,7 +16,7 @@ import Data.Lens.Lazy (getL)
 import Data.List as List (filter, map, minimumBy, nub)
 import Data.Map as Map (Map, elems, lookup, toList)
 import Data.Maybe (catMaybes, fromMaybe, isJust)
-import Data.Monoid ((<>), mempty)
+import Data.Monoid ((<>))
 import Data.Set as Set (difference, filter, fromList, map, null, Set, singleton, toList, unions)
 import qualified Data.Set as Set (member)
 import Data.Set.Extra as Set (mapM_)
@@ -27,7 +27,7 @@ import Debian.Debianize.ControlFile as Debian (BinaryDebDescription(..), newBina
 import Debian.Debianize.Files2 (debianName, mkPkgName, mkPkgName')
 import Debian.Debianize.Goodies (backupAtoms, describe, execAtoms, serverAtoms, siteAtoms)
 import qualified Debian.Debianize.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, compiler, conflicts, dataDir, debianNameMap, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, missingDependencies, noDocumentationLibrary, noProfilingLibrary, provides, replaces, serverInfo, sourcePriority, sourceSection, utilsPackageNames, website)
-import Debian.Debianize.Monad as Monad (Atoms, control, DebT, evalDebM, execDebM, link, binaryArchitectures, rulesFragment, installData, installCabalExec, installDir, file, install, installTo, intermediateFile)
+import Debian.Debianize.Monad as Monad (Atoms, control, DebT, evalDebM, link, binaryArchitectures, rulesFragment, installData, installCabalExec, installDir, file, install, installTo, intermediateFile)
 import Debian.Debianize.Types (InstallFile(..))
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
@@ -58,7 +58,13 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 --        paramter type to Maybe PackageDescription and propagate down thru code
 finalizeDebianization  :: Monad m => PackageDescription -> DebT m ()
 finalizeDebianization pkgDesc =
-    modify (execDebM g . finalizeAtoms . execDebM (makeUtilsPackages pkgDesc) . execDebM (librarySpecs pkgDesc) . execDebM (putBuildDeps pkgDesc) . execDebM f . finalizeAtoms)
+    do expandAtoms
+       f
+       putBuildDeps pkgDesc
+       librarySpecs pkgDesc
+       makeUtilsPackages pkgDesc
+       expandAtoms
+       g
     where
       -- Create the binary packages for the web sites, servers, backup packges, and other executables
       f :: Monad m => DebT m ()
@@ -223,9 +229,10 @@ makeUtilsAtoms p datas execs =
          Set.mapM_ (\ name -> installCabalExec p (name, "usr/bin")) execs >>
          rulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))
 
-finalizeAtoms :: Atoms -> Atoms
-finalizeAtoms atoms | atoms == mempty = atoms
-finalizeAtoms atoms = atoms <> finalizeAtoms (expandAtoms atoms)
+-- finalizeAtoms :: Atoms -> Atoms
+-- finalizeAtoms atoms = execDebM expandAtoms atoms
+-- finalizeAtoms atoms | atoms == mempty = atoms
+-- finalizeAtoms atoms = atoms <> finalizeAtoms (execDebM expandAtoms atoms)
 
 expandAtoms :: Monad m => DebT m ()
 expandAtoms =

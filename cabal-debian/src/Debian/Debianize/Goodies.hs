@@ -236,8 +236,8 @@ siteAtoms b site =
 -- FIXME - use Atoms
 serverAtoms :: BinPkgName -> Server -> Bool -> Atoms -> Atoms
 serverAtoms b server' isSite =
-    modL Lenses.postInst (insertWith (error "serverAtoms") b debianPostinst) .
-    modL Lenses.installInit (Map.insertWith (error "serverAtoms") b debianInit) .
+    modL Lenses.postInst (insertWith (\ old new -> if old /= new then error ("serverAtoms: " ++ show old ++ " -> " ++ show new) else old) b debianPostinst) .
+    modL Lenses.installInit (Map.insertWith (\ old new -> if old /= new then error ("serverAtoms: " ++ show old ++ " -> " ++ show new) else old) b debianInit) .
     serverLogrotate' b .
     execAtoms b exec
     where
@@ -318,7 +318,7 @@ serverLogrotate' b =
 -- FIXME - use Atoms
 backupAtoms :: BinPkgName -> String -> Atoms -> Atoms
 backupAtoms b name =
-    modL Lenses.postInst (insertWith (error "backupAtoms") b
+    modL Lenses.postInst (insertWith (\ old new -> if old /= new then error $ "backupAtoms: " ++ show old ++ " -> " ++ show new else old) b
                  (Text.unlines $
                   [ "#!/bin/sh"
                   , ""
