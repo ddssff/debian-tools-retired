@@ -21,7 +21,7 @@ import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Atoms (debianization)
 import qualified Debian.Debianize.Lenses as Lenses
-    (rulesHead, compat, sourceFormat, changelog, control, missingDependencies, revision, buildDeps)
+    (rulesHead, compat, sourceFormat, changelog, control, missingDependencies, revision, buildDeps, packageDescription)
 import qualified Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Files (toFileMap, getRulesHead)
 import Debian.Debianize.Finalize (finalizeDebianization)
@@ -97,7 +97,8 @@ test1 label =
                           (do defaultAtoms
                               newDebianization (ChangeLog [testEntry]) level standards
                               copyright (Left BSD3)
-                              finalizeDebianization)
+                              pkgDesc <- get >>= return . getL Lenses.packageDescription
+                              maybe (return ()) finalizeDebianization pkgDesc)
                           mempty
                  assertEqual label [] (diffDebianizations testDeb1 deb))
     where
@@ -140,7 +141,8 @@ test2 label =
                           (do defaultAtoms
                               newDebianization (ChangeLog [testEntry]) level standards
                               copyright (Left BSD3)
-                              finalizeDebianization)
+                              pkgDesc <- get >>= return . getL Lenses.packageDescription
+                              maybe (return ()) finalizeDebianization pkgDesc)
                           mempty
                  assertEqual label [] (diffDebianizations expect deb))
     where

@@ -7,7 +7,6 @@ module Debian.Debianize.Goodies
     , doWebsite
     , doBackups
     , doExecutable
-    , debianDescription
     , describe
     , watchAtom
     , oldClckwrksSiteFlags
@@ -18,6 +17,7 @@ module Debian.Debianize.Goodies
     , execAtoms
     ) where
 
+import Control.Monad.State (get)
 import Data.Lens.Lazy (getL, modL)
 import Data.List as List (map, intersperse, intercalate)
 import Data.Map as Map (insertWith)
@@ -95,46 +95,45 @@ doBackups bin s =
     do backups bin s
        depends bin (Rel (BinPkgName "anacron") Nothing Nothing)
 
--- FIXME - use DebT
-describe :: Atoms -> PackageType -> PackageIdentifier -> Text
-describe atoms typ ident =
-    debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc) typ ident
+describe :: Monad m => PackageType -> PackageIdentifier -> DebT m Text
+describe typ pkgId =
+    do atoms <- get
+       let pkgDesc = fromMaybe (error $ "describe " ++ show pkgId) $ getL Lenses.packageDescription atoms
+       return $ debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc)
     where
-      pkgDesc = fromMaybe (error $ "describe " ++ show ident) $ getL Lenses.packageDescription atoms
-
-debianDescription :: String -> String -> String -> String -> String -> PackageType -> PackageIdentifier -> Text
-debianDescription synopsis' description' author' maintainer' url typ pkgId =
-    debianDescriptionBase synopsis' description' author' maintainer' url <> "\n" <>
-    case typ of
-      Profiling ->
-          Text.intercalate "\n"
-                  [" .",
-                   " This package provides a library for the Haskell programming language, compiled",
-                   " for profiling.  See http:///www.haskell.org/ for more information on Haskell."]
-      Development ->
-          Text.intercalate "\n"
-                  [" .",
-                   " This package provides a library for the Haskell programming language.",
-                   " See http:///www.haskell.org/ for more information on Haskell."]
-      Documentation ->
-          Text.intercalate "\n"
-                  [" .",
-                   " This package provides the documentation for a library for the Haskell",
-                   " programming language.",
-                   " See http:///www.haskell.org/ for more information on Haskell." ]
-      Exec ->
-          Text.intercalate "\n"
-                  [" .",
-                   " An executable built from the " <> pack (display (pkgName pkgId)) <> " package."]
-{-    ServerPackage ->
-          Text.intercalate "\n"
-                  [" .",
-                   " A server built from the " <> pack (display (pkgName pkgId)) <> " package."] -}
-      Utilities ->
-          Text.intercalate "\n"
-                  [" .",
-                   " Utility files associated with the " <> pack (display (pkgName pkgId)) <> " package."]
-      x -> error $ "Unexpected library package name suffix: " ++ show x
+      debianDescription :: String -> String -> String -> String -> String -> Text
+      debianDescription synopsis' description' author' maintainer' url =
+          debianDescriptionBase synopsis' description' author' maintainer' url <> "\n" <>
+          case typ of
+            Profiling ->
+                Text.intercalate "\n"
+                        [" .",
+                         " This package provides a library for the Haskell programming language, compiled",
+                         " for profiling.  See http:///www.haskell.org/ for more information on Haskell."]
+            Development ->
+                Text.intercalate "\n"
+                        [" .",
+                         " This package provides a library for the Haskell programming language.",
+                         " See http:///www.haskell.org/ for more information on Haskell."]
+            Documentation ->
+                Text.intercalate "\n"
+                        [" .",
+                         " This package provides the documentation for a library for the Haskell",
+                         " programming language.",
+                         " See http:///www.haskell.org/ for more information on Haskell." ]
+            Exec ->
+                Text.intercalate "\n"
+                        [" .",
+                         " An executable built from the " <> pack (display (pkgName pkgId)) <> " package."]
+      {-    ServerPackage ->
+                Text.intercalate "\n"
+                        [" .",
+                         " A server built from the " <> pack (display (pkgName pkgId)) <> " package."] -}
+            Utilities ->
+                Text.intercalate "\n"
+                        [" .",
+                         " Utility files associated with the " <> pack (display (pkgName pkgId)) <> " package."]
+            x -> error $ "Unexpected library package name suffix: " ++ show x
 
 -- | The Cabal package has one synopsis and one description field
 -- for the entire package, while in a Debian package there is a

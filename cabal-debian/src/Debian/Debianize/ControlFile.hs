@@ -9,7 +9,6 @@ module Debian.Debianize.ControlFile
     , XFieldDest(..)
     , BinaryDebDescription(..)
     , newBinaryDebDescription
-    , modifyBinaryDeb
     -- , modifyBinaryDescription
     , PackageRelations(..)
     , PackageType(..)
@@ -141,18 +140,6 @@ newBinaryDebDescription name arch =
       , essential = False
       , description = mempty
       , relations = newPackageRelations }
-
--- | Modify the description of one of the binary debs without changing
--- the package order.
-modifyBinaryDeb :: BinPkgName -> (Maybe BinaryDebDescription -> BinaryDebDescription) -> SourceDebDescription -> SourceDebDescription
-modifyBinaryDeb bin f deb =
-    deb {binaryPackages = bins'}
-    where
-      bins' = if any (\ x -> package x == bin) bins
-             then map g (binaryPackages deb)
-             else binaryPackages deb ++ [f Nothing]
-      g x = if package x == bin then f (Just x) else x
-      bins = binaryPackages deb
 
 -- ^ Package interrelationship information.
 data PackageRelations

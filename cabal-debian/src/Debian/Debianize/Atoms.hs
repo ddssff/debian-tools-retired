@@ -29,7 +29,6 @@ import Data.Maybe
 import Data.Monoid (mempty, (<>))
 import Data.Set as Set (toList)
 import Data.Text as Text (Text, unpack, split)
-import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import qualified Debian.Debianize.ControlFile as D (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), PackageType(..))
 import Debian.Debianize.Files (toFileMap)
@@ -53,7 +52,7 @@ import Debian.Release (parseReleaseName)
 import Debian.Version (DebianVersion, parseDebianVersion, buildDebianVersion)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Distribution.License (License(AllRightsReserved))
-import Distribution.Package (PackageIdentifier(..))
+import Distribution.Package (PackageIdentifier(..), PackageName)
 import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (writeFile, unlines)
 import System.Console.GetOpt (usageInfo)
@@ -195,7 +194,7 @@ debianization' date copy maint level log =
        maybe (return ()) compat level
        finalizeChangelog maint date
        finalizeControl
-       finalizeDebianization
+       finalizeDebianization pkgDesc
 
 dropFutureChangelogEntries :: Monad m => DebT m ()
 dropFutureChangelogEntries =
@@ -205,18 +204,36 @@ dropFutureChangelogEntries =
              (\ (ChangeLog entries) -> changelog (ChangeLog (dropWhile (\ entry -> logVersion entry > ver) entries)))
              (getL Lenses.changelog deb)
 
--- | Compute and return the Debian version number for the package
--- based on the cabal version number, the debian epoch number for this
--- package, the debian revision string, and, if given, the
--- value of debVersion (which overrides evertyhing else.)
+
+-- | Combine various bits of information to produce the debian version
+-- which will be used for the debian package.  If the override
+-- parameter is provided this exact version will be used, but an error
+-- will be thrown if that version is unusably old - i.e. older than
+-- the cabal version of the package.  Otherwise, the cabal version is
+-- combined with the given epoch number and revision string to create
+-- a version.
 debianVersion :: Monad m => DebT m DebianVersion
 debianVersion =
     do deb <- get
        let pkgDesc = fromMaybe (error "versionInfo: no PackageDescription") $ getL Lenses.packageDescription deb
            pkgId = Cabal.package pkgDesc
-           epoch = Map.lookup (pkgName pkgId) (getL Lenses.epochMap deb)
-           debinfo = maybe (Right (epoch, fromMaybe "" (getL Lenses.revision deb))) Left (getL Lenses.debVersion deb)
-       return $ convertVersion debinfo (pkgVersion pkgId)
+       epoch <- debianEpoch (pkgName pkgId)
+       case getL Lenses.debVersion deb of
+         Just override
+             | override < parseDebianVersion (show (pretty (pkgVersion pkgId))) ->
+                 error ("Version from --deb-version (" ++ show (pretty override) ++
+                        ") is older than hackage version (" ++ show (pretty (pkgVersion pkgId)) ++
+                        "), maybe you need to unpin this package?")
+         Just override -> return override
+         Nothing ->
+             let rev = foldEmpty Nothing Just (fromMaybe "" (getL Lenses.revision deb))
+                 ver = show (pretty (pkgVersion pkgId)) in
+             return $ buildDebianVersion epoch ver rev
+
+-- | Return the Debian epoch number assigned to the given cabal
+-- package - the 1 in version numbers like 1:3.5-2.
+debianEpoch :: Monad m => PackageName -> DebT m (Maybe Int)
+debianEpoch name = get >>= return . Map.lookup name . getL Lenses.epochMap
 
 -- | Compute and return the debian source package name, based on the
 -- sourcePackageName if it was specified, and constructed from the
@@ -276,68 +293,6 @@ mergeChangelogEntries :: ChangeLogEntry -> ChangeLogEntry -> ChangeLogEntry
 mergeChangelogEntries old new =
     old { logComments = logComments old ++ logComments new
         , logDate = logDate new }
-
-{-
--- | Set the debianization's version info - everything that goes into
--- the new changelog entry, source package name, exact debian version,
--- log comments, maintainer name, revision date.
-versionInfo :: Monad m => NameAddr -> String -> DebT m ()
-versionInfo debianMaintainer date =
-    do deb <- get
-       dropFutureChangelogEntries
-       putChangelogEntry date
-
-       let newLog = case getL Lenses.changelog deb of
-                      Nothing -> ChangeLog [newEntry]
-                      Just (ChangeLog oldEntries) ->
-                          case dropWhile (\ entry -> logVersion entry > logVersion newEntry) oldEntries of
-                            -- If the new package version number matches the old, merge the new and existing log entries
-                            entry@(Entry {logVersion = d}) : older | d == logVersion newEntry -> ChangeLog (merge entry newEntry : older)
-                            -- Otherwise prepend the new entry
-                            entries -> ChangeLog (newEntry : entries)
-           newEntry = Entry { logPackage = show (pretty sourceName)
-                            , logVersion = convertVersion debinfo (pkgVersion pkgId)
-                            , logDists = [parseReleaseName "unstable"]
-                            , logUrgency = "low"
-                            , logComments = List.unlines $ map (("  * " <>) . List.intercalate "\n    " . map unpack)
-                                                               (fromMaybe [["Debianization generated by cabal-debian"]] (getL Lenses.comments deb))
-                            , logWho = show (pretty debianMaintainer)
-                            , logDate = date }
-           -- Get the source package name, either from the SourcePackageName
-           -- atom or construct it from the cabal package name.
-           sourceName :: SrcPkgName
-           sourceName = maybe (evalDebM (debianName Source' pkgId) deb) id (getL Lenses.sourcePackageName deb)
-           debinfo = maybe (Right (epoch, fromMaybe "" (getL Lenses.revision deb))) Left (getL Lenses.debVersion deb)
-           epoch = Map.lookup (pkgName pkgId) (getL Lenses.epochMap deb)
-           pkgId = Cabal.package pkgDesc
-           pkgDesc = fromMaybe (error "versionInfo: no PackageDescription") $ getL Lenses.packageDescription deb
-       changelog newLog
-       control (\ y -> y { source = Just sourceName, Debian.maintainer = Just debianMaintainer })
-    where
-      merge :: ChangeLogEntry -> ChangeLogEntry -> ChangeLogEntry
-      merge old new =
-          old { logComments = logComments old ++ logComments new
-              , logDate = date }
--}
-
--- | Combine various bits of information to produce the debian version
--- which will be used for the debian package.  If the override
--- parameter is provided this exact version will be used, but an error
--- will be thrown if that version is unusably old - i.e. older than
--- the cabal version of the package.  Otherwise, the cabal version is
--- combined with the given epoch number and revision string to create
--- a version.
-convertVersion :: Either DebianVersion (Maybe Int, String) -> Version -> DebianVersion
-convertVersion debinfo cabalVersion =
-    case debinfo of
-      Left override | override >= parseDebianVersion (show (pretty cabalVersion)) -> override
-      Left override -> error ("Version from --deb-version (" ++ show (pretty override) ++
-                              ") is older than hackage version (" ++ show (pretty cabalVersion) ++
-                              "), maybe you need to unpin this package?")
-      Right (debianEpoch, debianRevision) ->
-          buildDebianVersion debianEpoch
-                             (show (pretty cabalVersion))
-                             (foldEmpty Nothing Just debianRevision)
 
 -- | Convert the extraLibs field of the cabal build info into debian
 -- binary package names and make them dependendencies of the debian

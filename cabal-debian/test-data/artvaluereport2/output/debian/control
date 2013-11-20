@@ -256,7 +256,7 @@ Description: Haskell modules for fine art appraisal applications
  .
  An executable built from the ArtValueReport package.
 
-Package: artvaluereport2-development
+Package: artvaluereport2-staging
 Architecture: all
 Section: misc
 Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, libjpeg-progs, libjs-jcrop, libjs-jquery, libjs-jquery-ui, netpbm, texlive-fonts-extra, texlive-fonts-recommended, texlive-latex-extra, texlive-latex-recommended
@@ -273,7 +273,7 @@ Description: Haskell modules for fine art appraisal applications
  .
  An executable built from the ArtValueReport package.
 
-Package: artvaluereport2-staging
+Package: artvaluereport2-development
 Architecture: all
 Section: misc
 Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, libjpeg-progs, libjs-jcrop, libjs-jquery, libjs-jquery-ui, netpbm, texlive-fonts-extra, texlive-fonts-recommended, texlive-latex-extra, texlive-latex-recommended
