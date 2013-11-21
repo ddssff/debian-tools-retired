@@ -15,6 +15,7 @@ module Debian.Debianize.Goodies
     , serverAtoms
     , backupAtoms
     , execAtoms
+    , makeRulesHead
     ) where
 
 import Control.Monad.State (get)
@@ -30,6 +31,7 @@ import qualified Debian.Debianize.Lenses as Lenses
      install, installTo, installCabalExecTo, logrotateStanza, postInst,
      installInit, installCabalExec, rulesFragments, packageDescription)
 import Debian.Debianize.ControlFile as Debian (PackageType(..))
+import Debian.Debianize.Files2 (debianName)
 import Debian.Debianize.Monad (Atoms, DebT, execDebM, executable, rulesFragment, installDir, link, file, logrotateStanza,
                                serverInfo, website, backups, depends)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
@@ -354,3 +356,18 @@ fileAtoms' b sourceDir' execName' destDir' destName' r =
       (Just s, False) -> modL Lenses.installTo (insertWith Set.union b (singleton (s </> execName', d </> destName'))) r
     where
       d = fromMaybe "usr/bin" destDir'
+
+-- | Build a suitable value for the head of the rules file.
+makeRulesHead :: Monad m => DebT m Text
+makeRulesHead =
+    do pkgDesc <- get >>= return . getL Lenses.packageDescription
+       ls <- maybe (return [])
+                   (\ p -> do b <- debianName Cabal (Cabal.package p)
+                              return ["DEB_CABAL_PACKAGE = " <> pack (show (pretty (b :: BinPkgName))), ""])
+                   pkgDesc
+       return $
+          Text.unlines $
+            ["#!/usr/bin/make -f", ""] ++
+            ls ++
+            ["include /usr/share/cdbs/1/rules/debhelper.mk",
+             "include /usr/share/cdbs/1/class/hlibrary.mk"]

@@ -46,8 +46,14 @@
 -- 
 -- > % runhaskell debian/Debianize.hs
 module Debian.Debianize
-    ( Debian.Debianize.Atoms.debianize
-    , Debian.Debianize.Atoms.debianization
+    ( Debian.Debianize.Finalize.debianization
+
+    , Debian.Debianize.Output.doDebianizeAction
+    , Debian.Debianize.Output.runDebianizeScript
+    , Debian.Debianize.Output.writeDebianization
+    , Debian.Debianize.Output.describeDebianization
+    , Debian.Debianize.Output.compareDebianization
+    , Debian.Debianize.Output.validateDebianization
 
     , Debian.Debianize.Details.debianDefaultAtoms
     , Debian.Debianize.Details.seereasonDefaultAtoms
@@ -159,6 +165,15 @@ module Debian.Debianize
     , Debian.Debianize.Options.compileArgs
     , Debian.Debianize.SubstVars.substvars
 
+    -- * Utility functions
+
+    , Debian.Debianize.Utility.withCurrentDirectory
+    , Debian.Debianize.Utility.buildDebVersionMap
+    , Debian.Debianize.Utility.dpkgFileMap
+    , Debian.Debianize.Utility.debOfFile
+
+    -- * TBD
+
     , module Debian.Debianize.Types
     , module Debian.Policy
 {-
@@ -167,24 +182,23 @@ module Debian.Debianize
     , module Debian.Debianize.Files
     , module Debian.Debianize.Finalize
     , module Debian.Debianize.Interspersed
-    , module Debian.Debianize.Utility
     , module Debian.Debianize.VersionSplits
 -}
     ) where
 
-import Debian.Debianize.Atoms
 -- import Debian.Debianize.Bundled
 -- import Debian.Debianize.ControlFile hiding (depends, conflicts, maintainer, description, section)
 import Debian.Debianize.Details
 -- import Debian.Debianize.Files
--- import Debian.Debianize.Finalize
+import Debian.Debianize.Finalize
 import Debian.Debianize.Goodies
 import Debian.Debianize.Input
 -- import Debian.Debianize.Interspersed
 import Debian.Debianize.Monad
 import Debian.Debianize.Options
+import Debian.Debianize.Output
 import Debian.Debianize.SubstVars
 import Debian.Debianize.Types
--- import Debian.Debianize.Utility
+import Debian.Debianize.Utility
 -- import Debian.Debianize.VersionSplits
 import Debian.Policy

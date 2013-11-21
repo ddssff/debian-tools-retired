@@ -1,8 +1,13 @@
 module Debian.Debianize.Options
     ( options
     , compileArgs
+    , compileEnvironmentArgs
+    , compileCommandlineArgs
+    , putEnvironmentArgs
+    , withEnvironmentArgs
     ) where
 
+import Control.Monad.State (lift)
 import Data.Char (toLower, isDigit, ord)
 import Data.Version (parseVersion)
 import Debian.Debianize.Goodies (doExecutable)
@@ -12,7 +17,7 @@ import Debian.Debianize.Monad
      sourceFormat, buildDeps, buildDepsIndep, extraDevDeps, depends, conflicts, replaces, provides,
      extraLibMap, debVersion, revision, epochMap, execMap)
 import Debian.Debianize.Types (InstallFile(..), DebAction(..))
-import Debian.Debianize.Utility (read')
+import Debian.Debianize.Utility (read', maybeRead)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relations, Relation(..))
@@ -22,7 +27,10 @@ import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
 import Prelude hiding (readFile, lines, null, log, sum)
 import System.Console.GetOpt (ArgDescr(..), OptDescr(..), ArgOrder(RequireOrder), getOpt')
+import System.Environment (getArgs, getEnv)
 import System.FilePath ((</>), splitFileName)
+import System.IO.Error (tryIOError)
+import System.Posix.Env (setEnv)
 import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.Regex.TDFA ((=~))
 
@@ -33,6 +41,24 @@ compileArgs args =
       (_, non, unk, errs) -> error ("Errors: " ++ show errs ++
                                     ", Unrecognized: " ++ show unk ++
                                     ", Non-Options: " ++ show non)
+
+compileEnvironmentArgs :: DebT IO ()
+compileEnvironmentArgs = withEnvironmentArgs compileArgs
+
+compileCommandlineArgs :: DebT IO ()
+compileCommandlineArgs = lift getArgs >>= compileArgs
+
+-- | Read a value out of the CABALDEBIAN environment variable which is
+-- the result of applying show to a [String].
+withEnvironmentArgs :: ([String] -> DebT IO a) -> DebT IO a
+withEnvironmentArgs f =
+    lift (tryIOError (getEnv "CABALDEBIAN")) >>= either (\ _ -> f []) (maybe (f []) f . maybeRead)
+
+-- | Insert a value for CABALDEBIAN into the environment that the
+-- withEnvironment* functions above will find and use.  E.g.
+-- putEnvironmentFlags ["--dry-run", "--validate"] (debianize defaultFlags)
+putEnvironmentArgs :: [String] -> IO ()
+putEnvironmentArgs fs = setEnv "CABALDEBIAN" (show fs) True
 
 -- | Options that modify other atoms.
 options :: [OptDescr (DebT IO ())]

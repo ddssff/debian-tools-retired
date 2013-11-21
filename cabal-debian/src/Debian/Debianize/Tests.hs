@@ -19,13 +19,12 @@ import Data.Set as Set (fromList, union, insert)
 import qualified Data.Text as T
 import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
-import Debian.Debianize.Atoms (debianization)
 import qualified Debian.Debianize.Lenses as Lenses
     (rulesHead, compat, sourceFormat, changelog, control, missingDependencies, revision, buildDeps, packageDescription)
 import qualified Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
-import Debian.Debianize.Files (toFileMap, getRulesHead)
-import Debian.Debianize.Finalize (finalizeDebianization)
-import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups)
+import Debian.Debianize.Files (debianizationFileMap)
+import Debian.Debianize.Finalize (debianization, finalizeDebianization)
+import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups, makeRulesHead)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
 import Debian.Debianize.Monad (Atoms, DebT, execDebM, execDebT, evalDebM, epochMap, mapCabal, splitCabal, changelog, compat, control,
                                copyright, rulesHead, sourceFormat, installData, debVersion, buildDeps, execMap, utilsPackageName,
@@ -282,7 +281,7 @@ test4 label =
       serverNames = map BinPkgName ["clckwrks-dot-com-production"] -- , "clckwrks-dot-com-staging", "clckwrks-dot-com-development"]
       -- Insert a line just above the debhelper.mk include
       fixRules deb =
-          modL Lenses.rulesHead (\ mt -> (Just . f) (fromMaybe (evalDebM getRulesHead deb) mt)) deb
+          modL Lenses.rulesHead (\ mt -> (Just . f) (fromMaybe (evalDebM makeRulesHead deb) mt)) deb
           where
             f t = T.unlines $ concat $
                   map (\ line -> if line == "include /usr/share/cdbs/1/rules/debhelper.mk"
@@ -532,8 +531,8 @@ diffDebianizations :: Atoms -> Atoms -> String -- [Change FilePath T.Text]
 diffDebianizations old new =
     show (mconcat (map prettyChange (filter (not . isUnchanged) (diffMaps old' new'))))
     where
-      old' = toFileMap (sortBinaryDebs old) -- (sortBinaryDebs (fromMaybe newSourceDebDescription . getL control $ old))
-      new' = toFileMap (sortBinaryDebs new) -- (sortBinaryDebs (fromMaybe newSourceDebDescription . getL control $ new))
+      old' = debianizationFileMap (sortBinaryDebs old) -- (sortBinaryDebs (fromMaybe newSourceDebDescription . getL control $ old))
+      new' = debianizationFileMap (sortBinaryDebs new) -- (sortBinaryDebs (fromMaybe newSourceDebDescription . getL control $ new))
       isUnchanged (Unchanged _ _) = True
       isUnchanged _ = False
       prettyChange (Unchanged p _) = text ("Unchanged: " <> p <> "\n")

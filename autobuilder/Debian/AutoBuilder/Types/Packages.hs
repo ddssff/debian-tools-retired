@@ -45,7 +45,7 @@ import Data.Monoid (Monoid(mempty, mappend))
 import Data.Set (Set, empty, union)
 import Data.String (IsString(fromString))
 import qualified Debian.Debianize as CD
-import qualified Debian.Debianize.Monad as CD
+import qualified Debian.Debianize.Monad as CD (Atoms)
 import Debian.Relation (Relations)
 import Debian.Repo (DebianSourceTree, findDebianSourceTrees)
 import System.FilePath ((</>))

@@ -59,7 +59,6 @@ Library
    Debian.Debianize
    Debian.Policy
    Distribution.Version.Invert
-   Debian.Debianize.Atoms
    Debian.Debianize.Bundled
    Debian.Debianize.ControlFile
    Debian.Debianize.Details
@@ -72,6 +71,7 @@ Library
    Debian.Debianize.Lenses
    Debian.Debianize.Monad
    Debian.Debianize.Options
+   Debian.Debianize.Output
    Debian.Debianize.SubstVars
    Debian.Debianize.Types
    Debian.Debianize.Utility

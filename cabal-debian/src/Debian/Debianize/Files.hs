@@ -2,11 +2,11 @@
 -- written out.
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 module Debian.Debianize.Files
-    ( toFileMap    -- Used by Debian.Debianize.Atoms and Debian.Debianize.Tests
+    ( debianizationFileMap    -- Used by Debian.Debianize.Atoms and Debian.Debianize.Tests
     , getRulesHead
     ) where
 
-import Control.Monad.State (get, put)
+import Control.Monad.State (get, modify)
 import Data.Lens.Lazy (getL, setL)
 import Data.List as List (map, unlines)
 import Data.Map as Map (Map, toList, fromListWithKey, mapKeys)
@@ -16,41 +16,54 @@ import Data.Set as Set (toList, member)
 import Data.Text as Text (Text, pack, unpack, lines, unlines, strip, null)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                               VersionControlSpec(..), XField(..), XFieldDest(..), PackageType(..))
-import Debian.Debianize.Files2 (debianName)
+                                               VersionControlSpec(..), XField(..), XFieldDest(..))
+import Debian.Debianize.Goodies (makeRulesHead)
 import qualified Debian.Debianize.Lenses as Lenses
     (compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
      intermediateFiles, install, installDir, installInit, logrotateStanza, link,
-     rulesHead, rulesFragments, copyright, packageDescription)
+     rulesHead, rulesFragments, copyright)
 import Debian.Debianize.Monad (Atoms, DebT, evalDebM)
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
-import qualified Distribution.PackageDescription as Cabal (PackageDescription(package))
 import Prelude hiding (init, unlines, writeFile)
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | If the rulesHead value is still Nothing, construct a suitable
 -- value, save it in the DebT state and return it.
-getRulesHead :: Monad m => DebT m Text
+getRulesHead :: Monad m => DebT m ()
 getRulesHead =
-    do atoms <- get
-       packageNameLines <-
-           maybe (return [])
-                 (\ pkgDesc -> debianName Cabal (Cabal.package pkgDesc) >>= \ (x :: BinPkgName) ->
-                               return $ ["DEB_CABAL_PACKAGE = " <> pack (show (pretty x)), ""])
-                 (getL Lenses.packageDescription atoms)
-       let rh = fromMaybe (buildRulesHead packageNameLines) (getL Lenses.rulesHead atoms)
-       put (setL Lenses.rulesHead (Just rh) atoms)
-       return rh
-    where
-      buildRulesHead :: [Text] -> Text
-      buildRulesHead xs =
-          Text.unlines $
-            ["#!/usr/bin/make -f", ""] ++
-            xs ++
-            ["include /usr/share/cdbs/1/rules/debhelper.mk",
-             "include /usr/share/cdbs/1/class/hlibrary.mk"]
+    do oldText <- get >>= return . getL Lenses.rulesHead
+       newText <- maybe makeRulesHead return oldText
+       modify (setL Lenses.rulesHead (Just newText))
+
+-- | Turn the Debianization into a list of files, making sure the text
+-- associated with each path is unique.  Assumes that
+-- finalizeDebianization has already been called.  (Yes, I'm
+-- considering building one into the other, but it is handy to look at
+-- the Debianization produced by finalizeDebianization in the unit
+-- tests.)
+debianizationFileMap :: Atoms -> Map FilePath Text
+debianizationFileMap atoms =
+    Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
+      [("debian/control", pack (show (pretty (controlFile d)))),
+       ("debian/changelog", pack (show (pretty (fromMaybe (error "Missing debian/changelog") (getL Lenses.changelog atoms))))),
+       ("debian/rules", rules atoms),
+       ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom - is debhelper installed?") $ getL Lenses.compat atoms) <> "\n")),
+       ("debian/copyright", either (\ x -> pack (show (pretty x))) id (fromMaybe (error ("No DebCopyright atom: " ++ show atoms)) $ getL Lenses.copyright atoms))] ++
+      sourceFormatFiles atoms ++
+      watchFile atoms ++
+      installs atoms ++
+      dirs atoms ++
+      init atoms ++
+      logrotate atoms ++
+      links atoms ++
+      postinstFiles atoms ++
+      postrmFiles atoms ++
+      preinstFiles atoms ++
+      prermFiles atoms ++
+      intermediates atoms
+    where d = getL Lenses.control atoms
 
 sourceFormatFiles :: Atoms -> [(FilePath, Text)]
 sourceFormatFiles deb = maybe [] (\ x -> [("debian/source/format", pack (show (pretty x)))]) (getL Lenses.sourceFormat deb)
@@ -123,38 +136,10 @@ prermFiles deb =
     where
       pathf name = "debian" </> show (pretty name) ++ ".prerm"
 
--- | Turn the Debianization into a list of files, making sure the text
--- associated with each path is unique.  Assumes that
--- finalizeDebianization has already been called.  (Yes, I'm
--- considering building one into the other, but it is handy to look at
--- the Debianization produced by finalizeDebianization in the unit
--- tests.)
-toFileMap :: Atoms -> Map FilePath Text
-toFileMap atoms =
-    Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
-      [("debian/control", pack (show (pretty (controlFile d)))),
-       ("debian/changelog", pack (show (pretty (fromMaybe (error "Missing debian/changelog") (getL Lenses.changelog atoms))))),
-       ("debian/rules", rules atoms),
-       ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom - is debhelper installed?") $ getL Lenses.compat atoms) <> "\n")),
-       ("debian/copyright", either (\ x -> pack (show (pretty x))) id (fromMaybe (error ("No DebCopyright atom: " ++ show atoms)) $ getL Lenses.copyright atoms))] ++
-      sourceFormatFiles atoms ++
-      watchFile atoms ++
-      installs atoms ++
-      dirs atoms ++
-      init atoms ++
-      logrotate atoms ++
-      links atoms ++
-      postinstFiles atoms ++
-      postrmFiles atoms ++
-      preinstFiles atoms ++
-      prermFiles atoms ++
-      intermediates atoms
-    where d = getL Lenses.control atoms
-
 rules :: Atoms -> Text
 rules deb = Text.unlines (rh : reverse (Set.toList (getL Lenses.rulesFragments deb)))
     where
-      rh = maybe (evalDebM getRulesHead deb) id (getL Lenses.rulesHead deb)
+      rh = maybe (evalDebM makeRulesHead deb) id (getL Lenses.rulesHead deb)
 
 controlFile :: SourceDebDescription -> Control' String
 controlFile src =

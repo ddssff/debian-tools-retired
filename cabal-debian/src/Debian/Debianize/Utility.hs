@@ -13,8 +13,8 @@ module Debian.Debianize.Utility
     , diffFile
     , removeIfExists
     , dpkgFileMap
-    , cond
     , debOfFile
+    , cond
     , readFile'
     , readFileMaybe
     , showDeps
@@ -58,9 +58,9 @@ import System.IO.Error (isDoesNotExistError, catchIOError)
 import System.Process (readProcessWithExitCode, showCommandForUser)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-type DebMap = Map.Map D.BinPkgName (Maybe DebianVersion)
+type DebMap = Map D.BinPkgName (Maybe DebianVersion)
 
--- | Read and parse the status file for installed debian packages.
+-- | Read and parse the status file for installed debian packages: @/var/lib/dpkg/status@
 buildDebVersionMap :: IO DebMap
 buildDebVersionMap =
     readFile "/var/lib/dpkg/status" >>=
@@ -124,24 +124,26 @@ removeDirectoryIfExists x = doesDirectoryExist x >>= (`when` (removeDirectory x)
 removeIfExists :: FilePath -> IO ()
 removeIfExists x = removeFileIfExists x >> removeDirectoryIfExists x
 
--- |Create a map from pathname to the names of the packages that contains that pathname.
--- We need to make sure we consume all the files, so 
-dpkgFileMap :: IO (Map.Map FilePath (Set.Set D.BinPkgName))
+-- |Create a map from pathname to the names of the packages that contains that pathname using the
+-- contents of the debian package info directory @/var/lib/dpkg/info".
+dpkgFileMap :: IO (Map FilePath (Set D.BinPkgName))
 dpkgFileMap =
     do
       let fp = "/var/lib/dpkg/info"
       names <- getDirectoryContents fp >>= return . filter (isSuffixOf ".list")
       let paths = List.map (fp </>) names
+      -- Read strictly to make sure we consume all the files and don't
+      -- hold tons of open file descriptors.
       files <- mapM (strictReadF Text.lines) paths
       return $ Map.fromList $ zip (List.map dropExtension names) (List.map (Set.fromList . List.map (D.BinPkgName . unpack)) $ files)
 
 -- |Given a path, return the name of the package that owns it.
-debOfFile :: FilePath -> ReaderT (Map.Map FilePath (Set.Set D.BinPkgName)) IO (Maybe D.BinPkgName)
+debOfFile :: FilePath -> ReaderT (Map FilePath (Set D.BinPkgName)) IO (Maybe D.BinPkgName)
 debOfFile path =
     do mp <- ask
        return $ testPath (lookup path mp)
     where
-      -- testPath :: Maybe (Set.Set FilePath) -> Maybe FilePath
+      -- testPath :: Maybe (Set FilePath) -> Maybe FilePath
       testPath Nothing = Nothing
       testPath (Just s) =
           case Set.size s of
@@ -172,7 +174,7 @@ showDeps' prefix xss =
     intercalate  ("\n" ++ prefix' ++ " ") . Prelude.lines . show . D.prettyRelations $ xss
     where prefix' = List.map (\ _ -> ' ') prefix
 
--- | From Darcs.Utils
+-- | From Darcs.Utils - set the working directory and run an IO operation.
 withCurrentDirectory :: FilePath -> IO a -> IO a
 withCurrentDirectory name m =
     E.bracket
