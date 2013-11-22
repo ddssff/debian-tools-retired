@@ -12,33 +12,35 @@ module Debian.Debianize.Input
 
 import Debug.Trace (trace)
 
+import Control.Applicative ((<$>))
 import Control.Exception (bracket)
 import Control.Monad (when, foldM, filterM)
-import Control.Monad.Trans (MonadIO, liftIO, lift)
+import Control.Monad.Trans (lift)
 import Data.Char (isSpace)
 import Data.Lens.Lazy (getL)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
-import Data.Set as Set (toList, fromList, insert)
+import Data.Set as Set (Set, toList, fromList, insert)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
+import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import qualified Debian.Debianize.Lenses as Lenses (packageDescription, maintainer)
 import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Monad
-    (Atoms, DebT, execDebT, evalDebT, intermediateFile, control, warning, sourceFormat, watch, rulesHead, compat,
+    (Atoms, DebT, execDebT, intermediateFile, control, warning, sourceFormat, watch, rulesHead, compat,
      copyright, changelog, installInit, postInst, postRm, preInst, preRm, compiler, packageDescription,
      logrotateStanza, link, install, installDir, lookCompilerVersion, lookCabalFlagAssignments, lookVerbosity)
 import Debian.Debianize.Types (Top(Top, unTop))
-import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', modifyM, intToVerbosity')
+import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity')
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer, haskellMaintainer)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
-import Distribution.Package (Package(packageId))
-import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer))
+import Distribution.Package (Package(packageId), Dependency)
+import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer), FlagName)
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), Compiler(..))
@@ -238,25 +240,36 @@ readDir :: Monad m => BinPkgName -> Text -> DebT m ()
 readDir p line = installDir p (unpack line)
 
 inputCabalization :: Top -> DebT IO ()
-inputCabalization top = modifyM (lift . inputCabalization' top)
+inputCabalization top =
+    do vb <- intToVerbosity' <$> lookVerbosity
+       mCompilerVersion <- lookCompilerVersion
+       flags <- lookCabalFlagAssignments
+       compiler'' <- lift $ inputCompiler' top vb mCompilerVersion
+       compiler compiler''
+       result <- lift $ inputCabalization' top vb compiler'' flags
+       either (\ e -> (error $ "Missing cabal dependencies: " ++ show e)) packageDescription result
 
-inputCabalization' :: Top -> Atoms -> IO Atoms
-inputCabalization' top atoms =
+-- | Read the (GHC) compiler version specified by Cabal, optionally
+-- changing the version number.
+inputCompiler' :: Top -> Verbosity -> Maybe Version -> IO Compiler
+inputCompiler' top vb mCompilerVersion =
     withCurrentDirectory (unTop top) $ do
-      vb <- evalDebT lookVerbosity atoms >>= return . intToVerbosity'
-      descPath <- defaultPackageDesc vb
-      genPkgDesc <- readPackageDescription vb descPath
       (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
-      mCompiler <- evalDebT lookCompilerVersion atoms
-      let compiler'' = case mCompiler of
+      let compiler'' = case mCompilerVersion of
                          (Just ver) -> compiler' {compilerId = CompilerId GHC ver}
                          _ -> compiler'
-      flags <- evalDebT lookCabalFlagAssignments atoms
+      return compiler''
+
+inputCabalization' :: Top -> Verbosity -> Compiler -> Set (FlagName, Bool) -> IO (Either [Dependency] PackageDescription)
+inputCabalization' top vb compiler'' flags =
+    withCurrentDirectory (unTop top) $ do
+      descPath <- defaultPackageDesc vb
+      genPkgDesc <- readPackageDescription vb descPath
       case finalizePackageDescription (toList flags) (const True) (Platform buildArch buildOS) (compilerId compiler'') [] genPkgDesc of
-        Left e -> error $ "Failed to load cabal package description: " ++ show e
-        Right (pkgDesc, _) -> do
-          liftIO $ bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
-          execDebT (compiler compiler'' >> packageDescription pkgDesc) atoms
+        Left deps -> return $ Left deps
+        Right (pkgDesc, _) ->
+            do bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
+               return $ Right pkgDesc
 
 -- | Run the package's configuration script.
 autoreconf :: Verbosity -> PackageDescription -> IO ()
