@@ -17,7 +17,7 @@ import Control.Monad (when, foldM, filterM)
 import Control.Monad.Trans (MonadIO, liftIO, lift)
 import Data.Char (isSpace)
 import Data.Lens.Lazy (getL)
-import Data.Maybe (fromMaybe, fromJust)
+import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 import Data.Set as Set (toList, fromList, insert)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
@@ -32,7 +32,7 @@ import Debian.Debianize.Monad
      copyright, changelog, installInit, postInst, postRm, preInst, preRm, compiler, packageDescription,
      logrotateStanza, link, install, installDir, lookCompilerVersion, lookCabalFlagAssignments, lookVerbosity)
 import Debian.Debianize.Types (Top(Top, unTop))
-import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', modifyM)
+import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', modifyM, intToVerbosity')
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer, haskellMaintainer)
@@ -46,7 +46,7 @@ import Distribution.Simple.Configure (configCompiler)
 import Distribution.Simple.Program (defaultProgramConfiguration)
 import Distribution.Simple.Utils (defaultPackageDesc, die, setupMessage)
 import Distribution.System (Platform(..), buildOS, buildArch)
-import Distribution.Verbosity (Verbosity, intToVerbosity)
+import Distribution.Verbosity (Verbosity)
 import Prelude hiding (readFile, lines, words, break, null, log, sum)
 import System.Cmd (system)
 import System.Directory (doesFileExist)
@@ -292,6 +292,3 @@ inputMaintainer atoms =
                                  Nothing -> Nothing
                                  Just "" -> Nothing
                                  Just x -> either (const Nothing) Just (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x))
-
-intToVerbosity' :: Int -> Verbosity
-intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))

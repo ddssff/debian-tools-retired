@@ -29,6 +29,7 @@ module Debian.Debianize.Utility
     , maybeRead
     , read'
     , modifyM
+    , intToVerbosity'
     ) where
 
 import Control.Applicative ((<$>))
@@ -40,7 +41,7 @@ import Data.Char (isSpace)
 import Data.List as List (isSuffixOf, intercalate, map, lines)
 import Data.Lens.Lazy (Lens, modL)
 import Data.Map as Map (Map, foldWithKey, empty, fromList, findWithDefault, insert, map, lookup)
-import Data.Maybe (catMaybes, mapMaybe, listToMaybe, fromMaybe)
+import Data.Maybe (catMaybes, mapMaybe, listToMaybe, fromMaybe, fromJust)
 import Data.Set (Set, toList)
 import qualified Data.Set as Set
 import Data.Text as Text (Text, unpack, lines)
@@ -49,6 +50,7 @@ import Debian.Control (parseControl, lookupP, Field'(Field), unControl, stripWS)
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Debian.Version.String (parseDebianVersion)
 import qualified Debian.Relation as D
+import Distribution.Verbosity (Verbosity, intToVerbosity)
 import Prelude hiding (map, lookup)
 import System.Directory (doesFileExist, doesDirectoryExist, removeFile, renameFile, removeDirectory, getDirectoryContents, getCurrentDirectory, setCurrentDirectory)
 import System.Exit(ExitCode(ExitSuccess, ExitFailure))
@@ -256,3 +258,8 @@ modifyM f = get >>= f >>= put
 
 -- read' :: Read a => String -> a
 -- read' s = trace ("read " ++ show s) (read s)
+
+-- | Version of 'Distribution.Verbosity.intToVerbosity' that first
+-- clamps its argument to the acceptable range (0-3).
+intToVerbosity' :: Int -> Verbosity
+intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))

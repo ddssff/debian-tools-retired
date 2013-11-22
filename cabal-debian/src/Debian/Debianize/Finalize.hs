@@ -72,9 +72,9 @@ debianization top init customize =
        date <- getCurrentLocalRFC822Time
        maint <- inputMaintainer atoms
        level <- maybe getDebhelperCompatLevel (return . Just) (getL Lenses.compat atoms :: Maybe Int)
-       copyright <- withCurrentDirectory (unTop top) $ inputLicenseFile (fromMaybe (error $ "cabalToDebianization: Failed to read cabal file in " ++ unTop top)
+       copyrt <- withCurrentDirectory (unTop top) $ inputLicenseFile (fromMaybe (error $ "cabalToDebianization: Failed to read cabal file in " ++ unTop top)
                                                                                    (getL Lenses.packageDescription atoms))
-       execDebT (debianization' date copyright maint level log) atoms
+       execDebT (debianization' date copyrt maint level log) atoms
 
 debianization' :: Monad m =>
                   String              -- ^ current date
@@ -190,8 +190,8 @@ finalizeChangelog maint date =
        case getL Lenses.changelog deb of
          -- If there is already a changelog entry with the exact
          -- version number we need to create, modify it.
-         Just (ChangeLog (entry@(Entry {logVersion = d}) : older))
-             | d == ver -> changelog (ChangeLog (mergeChangelogEntries entry newEntry : older))
+         Just (ChangeLog (oldEntry@(Entry {logVersion = d}) : older))
+             | d == ver -> changelog (ChangeLog (mergeChangelogEntries oldEntry newEntry : older))
          -- Otherwise create a new log entry
          Just (ChangeLog entries) -> changelog (ChangeLog (newEntry : entries))
          Nothing -> changelog (ChangeLog [newEntry])
