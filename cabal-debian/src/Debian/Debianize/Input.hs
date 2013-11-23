@@ -194,6 +194,8 @@ inputAtomsFromDirectory =
        atoms'' <- lift $ doFiles (top </> "debian/cabalInstall") atoms'
        put atoms''
     where
+      -- Find regular files matching debian/* and debian/source/format and
+      -- add them to the debianization.
       findFiles :: FilePath -> Atoms -> IO Atoms
       findFiles top atoms =
           getDirectoryContents' (top </> "debian") >>=
@@ -207,6 +209,11 @@ inputAtomsFromDirectory =
              files <- mapM (readFile . (tmp </>)) paths
              execDebT (mapM_ (uncurry intermediateFile) (zip (map ("debian/cabalInstall" </>) paths) files)) atoms
 
+-- | Construct a file path from the debian directory and a relative
+-- path, read its contents and add the result to the debianization.
+-- This may mean using a specialized parser from the debian package
+-- (e.g. parseChangeLog), and some files (like control) are ignored
+-- here, though I don't recall why at the moment.
 inputAtoms :: FilePath -> FilePath -> Atoms -> IO Atoms
 inputAtoms _ path xs | elem path ["control"] = return xs
 inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> execDebT (either warning sourceFormat (readSourceFormat text)) xs
@@ -236,6 +243,7 @@ inputAtoms debian name xs =
       (_, x) | last x == '~' -> return xs -- backup file
       _ -> trace ("Ignored: " ++ debian </> name) (return xs)
 
+-- | Read a line from a debian .links file
 readLink :: Monad m => BinPkgName -> Text -> DebT m ()
 readLink p line =
     case words line of
@@ -243,24 +251,16 @@ readLink p line =
       [] -> return ()
       _ -> trace ("Unexpected value passed to readLink: " ++ show line) (return ())
 
+-- | Read a line from a debian .install file
 readInstall :: Monad m => BinPkgName -> Text -> DebT m ()
 readInstall p line =
     case break isSpace line of
       (_, b) | null b -> error $ "readInstall: syntax error in .install file for " ++ show p ++ ": " ++ show line
       (a, b) -> install p (unpack (strip a)) (unpack (strip b))
 
+-- | Read a line from a debian .dirs file
 readDir :: Monad m => BinPkgName -> Text -> DebT m ()
 readDir p line = installDir p (unpack line)
-
-{-
-inputCabalization :: DebT IO ()
-inputCabalization =
-    do vb <- intToVerbosity' <$> lookVerbosity
-       flags <- lookCabalFlagAssignments
-       compiler'' <- inputCompiler
-       result <- inputCabalization' vb compiler'' flags
-       either (\ e -> (error $ "Missing cabal dependencies: " ++ show e)) packageDescription result
--}
 
 inputCabalization :: MonadIO m => DebT m (Either [Dependency] PackageDescription)
 inputCabalization =
@@ -276,17 +276,20 @@ inputCabalization =
            Right (pkgDesc, _) ->
                do bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
                   return $ Right pkgDesc
-{-
-    askTop >>= \ top -> liftIO $
-    withCurrentDirectory top $ do
-      descPath <- defaultPackageDesc vb
-      genPkgDesc <- readPackageDescription vb descPath
-      case finalizePackageDescription (toList flags) (const True) (Platform buildArch buildOS) (compilerId compiler'') [] genPkgDesc of
-        Left deps -> return $ Left deps
-        Right (pkgDesc, _) ->
-            do bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
-               return $ Right pkgDesc
--}
+
+-- | Run the package's configuration script.
+autoreconf :: Verbosity -> PackageDescription -> IO ()
+autoreconf verbose pkgDesc = do
+    ac <- doesFileExist "configure.ac"
+    when ac $ do
+        c <- doesFileExist "configure"
+        when (not c) $ do
+            setupMessage verbose "Running autoreconf" (packageId pkgDesc)
+            ret <- system "autoreconf"
+            case ret of
+              ExitSuccess -> return ()
+              ExitFailure n -> die ("autoreconf failed with status " ++ show n)
+
 inputCompiler :: MonadIO m => DebT m Compiler
 inputCompiler =
     do vb <- lookVerbosity >>= return . intToVerbosity'
@@ -305,26 +308,17 @@ inputCompiler' vb mCompilerVersion =
                          _ -> compiler'
       return compiler''
 
--- | Run the package's configuration script.
-autoreconf :: Verbosity -> PackageDescription -> IO ()
-autoreconf verbose pkgDesc = do
-    ac <- doesFileExist "configure.ac"
-    when ac $ do
-        c <- doesFileExist "configure"
-        when (not c) $ do
-            setupMessage verbose "Running autoreconf" (packageId pkgDesc)
-            ret <- system "autoreconf"
-            case ret of
-              ExitSuccess -> return ()
-              ExitFailure n -> die ("autoreconf failed with status " ++ show n)
-
 -- | Try to read the license file specified in the cabal package,
 -- otherwise return a text representation of the License field.
 inputLicenseFile :: PackageDescription -> IO (Maybe Text)
 inputLicenseFile pkgDesc = readFileMaybe (licenseFile pkgDesc)
 
--- | Try to compute the debian maintainer from the maintainer field of the
--- cabal package, or from the value returned by getDebianMaintainer.
+-- | Try to compute a string for the the debian "Maintainer:" field using, in this order
+--    1. the maintainer explicitly specified using 'Debian.Debianize.Monad.maintainer'
+--    2. the maintainer field of the cabal package,
+--    3. the value returned by getDebianMaintainer, which looks in several environment variables,
+--    4. the signature from the latest entry in debian/changelog,
+--    5. the Debian Haskell Group, pkg-haskell-maintainers@lists.alioth.debian.org
 inputMaintainer :: DebT IO NameAddr
 inputMaintainer =
     do specifiedMaintainer <- get >>= return . getL Lenses.maintainer
@@ -346,21 +340,11 @@ inputMaintainer =
                                                              Just
                                                              (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x)))
        return $ fromMaybe haskellMaintainer $ maybe changelogMaintainer Just $ maybe debianMaintainer Just $ maybe cabalMaintainer Just $ specifiedMaintainer
-{-
-       let maint' = maybe cabalPackageMaintainer Just debianPackageMaintainer
-           maint'' = maybe (liftIO getDebianMaintainer) (return . Just) >>=
-       return . maybe (Just haskellMaintainer) Just
-    where
-      debianPackageMaintainer :: Maybe NameAddr
-      debianPackageMaintainer = getL Lenses.maintainer atoms
-      cabalPackageMaintainer :: Either [Dependency] PackageDescription -> Maybe NameAddr
-      cabalPackageMaintainer (Left deps) = Nothing
-      cabalPackageMaintainer (Right pkgDesc) =
-          case Cabal.maintainer pkgDesc of
-            "" -> Nothing
-            x -> either (const Nothing) Just (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x))
--}
 
+-- | Compute the Cabal data directory for a Linux install from a Cabal
+-- package description.  This needs to match the path cabal assigns to
+-- datadir in the dist/build/autogen/Paths_packagename.hs module, or
+-- perhaps the path in the cabal_debian_datadir environment variable.
 dataDir :: PackageDescription -> FilePath
 dataDir p =
     let PackageName pkgname = pkgName . Cabal.package $ p in
