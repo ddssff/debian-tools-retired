@@ -5,42 +5,44 @@ module Debian.Debianize.Input
     ( inputDebianization
     , inputDebianizationFile
     , inputChangeLog
+    , inputCompiler
     , inputCabalization
     , inputLicenseFile
     , inputMaintainer
+    , dataDir
     ) where
 
 import Debug.Trace (trace)
 
-import Control.Applicative ((<$>))
 import Control.Exception (bracket)
 import Control.Monad (when, foldM, filterM)
-import Control.Monad.Trans (lift)
-import Data.Char (isSpace)
+import Control.Monad.State (get, put)
+import Control.Monad.Trans (MonadIO, liftIO, lift)
+import Data.Char (isSpace, toLower)
 import Data.Lens.Lazy (getL)
 import Data.Maybe (fromMaybe)
-import Data.Monoid (mempty)
-import Data.Set as Set (Set, toList, fromList, insert)
+import Data.Set as Set (toList, fromList, insert)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Data.Version (Version)
-import Debian.Changes (ChangeLog(..), parseChangeLog)
+import Debian.Changes (ChangeLog(..), ChangeLogEntry(logWho), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import qualified Debian.Debianize.Lenses as Lenses (packageDescription, maintainer)
-import Debian.Debianize.ControlFile (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                     VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
+import qualified Debian.Debianize.Lenses as Lenses (maintainer, changelog)
+import Debian.Debianize.ControlFile as Debian
+    (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
+     VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
+import Debian.Debianize.Lenses (newAtoms)
 import Debian.Debianize.Monad
-    (Atoms, DebT, execDebT, intermediateFile, control, warning, sourceFormat, watch, rulesHead, compat,
-     copyright, changelog, installInit, postInst, postRm, preInst, preRm, compiler, packageDescription,
+    (Atoms, askTop, DebT, execDebT, intermediateFile, control, warning, sourceFormat, watch, rulesHead, compat,
+     copyright, changelog, installInit, postInst, postRm, preInst, preRm,
      logrotateStanza, link, install, installDir, lookCompilerVersion, lookCabalFlagAssignments, lookVerbosity)
-import Debian.Debianize.Types (Top(Top, unTop))
 import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity')
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer, haskellMaintainer)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
-import Distribution.Package (Package(packageId), Dependency)
-import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer), FlagName)
+import Distribution.Package (Package(packageId), Dependency(..), PackageIdentifier(..), PackageName(PackageName))
+import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer, package))
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), Compiler(..))
@@ -55,23 +57,28 @@ import System.Directory (doesFileExist)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeExtension, dropExtension)
 import System.Posix.Files (setFileCreationMask)
-import System.IO.Error (catchIOError)
+import System.IO.Error (catchIOError, tryIOError)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
-inputDebianization :: Top -> IO Atoms
-inputDebianization top =
-    do (ctl, _) <- inputSourceDebDescription top
-       atoms <- inputAtomsFromDirectory top mempty
-       execDebT (control (const ctl)) atoms
+inputDebianization :: DebT IO ()
+inputDebianization =
+    do -- Erase any the existing information
+       askTop >>= put . newAtoms
+       (ctl, _) <- inputSourceDebDescription
+       inputAtomsFromDirectory
+       control (const ctl)
 
 -- | Try to input a file and if successful add it to the debianization.
-inputDebianizationFile :: Top -> FilePath -> DebT IO ()
-inputDebianizationFile (Top top) path =
-    lift (readFileMaybe (top </> path)) >>= maybe (return ()) (\ text -> intermediateFile path text)
+inputDebianizationFile :: FilePath -> DebT IO ()
+inputDebianizationFile path =
+    do inputAtomsFromDirectory
+       top <- askTop
+       lift (readFileMaybe (top </> path)) >>= maybe (return ()) (\ text -> intermediateFile path text)
 
-inputSourceDebDescription :: Top -> IO (SourceDebDescription, [Field])
-inputSourceDebDescription top =
-    do paras <- parseControlFromFile (unTop top </> "debian/control") >>= either (error . show) (return . unControl)
+inputSourceDebDescription :: DebT IO (SourceDebDescription, [Field])
+inputSourceDebDescription =
+    do top <- askTop
+       paras <- lift $ parseControlFromFile (top </> "debian/control") >>= either (error . show) (return . unControl)
        case paras of
          [] -> error "Missing source paragraph"
          [_] -> error "Missing binary paragraph"
@@ -136,7 +143,7 @@ parseBinaryDebDescription (Paragraph fields) =
 -}
 
       readField :: Field -> (BinaryDebDescription, [Field]) -> (BinaryDebDescription, [Field])
-      readField (Field ("Package", value)) (desc, unrecognized) = (desc {package = BinPkgName value}, unrecognized)
+      readField (Field ("Package", value)) (desc, unrecognized) = (desc {Debian.package = BinPkgName value}, unrecognized)
       readField (Field ("Architecture", value)) (desc, unrecognized) = (desc {architecture = parsePackageArchitectures value}, unrecognized)
       readField (Field ("Section", value)) (desc, unrecognized) = (desc {binarySection = Just (readSection value)}, unrecognized)
       readField (Field ("Priority", value)) (desc, unrecognized) = (desc {binaryPriority = Just (readPriority value)}, unrecognized)
@@ -174,25 +181,31 @@ yes "yes" = True
 yes "no" = False
 yes x = error $ "Expecting yes or no: " ++ x
 
-inputChangeLog :: Top -> IO ChangeLog
-inputChangeLog (Top top) = readFile (top </> "debian/changelog") >>= return . parseChangeLog . unpack
+inputChangeLog :: DebT IO (Either IOError ChangeLog)
+inputChangeLog =
+    do top <- askTop
+       lift $ tryIOError (readFile (top </> "debian/changelog") >>= return . parseChangeLog . unpack)
 
-inputAtomsFromDirectory :: Top -> Atoms -> IO Atoms -- .install files, .init files, etc.
-inputAtomsFromDirectory top xs =
-    findFiles xs >>= doFiles (unTop top </> "debian/cabalInstall")
+inputAtomsFromDirectory :: DebT IO () -- .install files, .init files, etc.
+inputAtomsFromDirectory =
+    do atoms <- get
+       top <- askTop
+       atoms' <- lift $ findFiles top atoms
+       atoms'' <- lift $ doFiles (top </> "debian/cabalInstall") atoms'
+       put atoms''
     where
-      findFiles :: Atoms -> IO Atoms
-      findFiles xs' =
-          getDirectoryContents' (unTop top </> "debian") >>=
+      findFiles :: FilePath -> Atoms -> IO Atoms
+      findFiles top atoms =
+          getDirectoryContents' (top </> "debian") >>=
           return . (++ ["source/format"]) >>=
-          filterM (doesFileExist . ((unTop top </> "debian") </>)) >>=
-          foldM (\ xs'' name -> inputAtoms (unTop top </> "debian") name xs'') xs'
+          filterM (doesFileExist . ((top </> "debian") </>)) >>=
+          foldM (\ atoms' name -> inputAtoms (top </> "debian") name atoms') atoms
       doFiles :: FilePath -> Atoms -> IO Atoms
-      doFiles tmp atoms' =
+      doFiles tmp atoms =
           do sums <- getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
              paths <- mapM (\ sum -> getDirectoryContents' (tmp </> sum) >>= return . map (sum </>)) sums >>= return . filter ((/= '~') . last) . concat
              files <- mapM (readFile . (tmp </>)) paths
-             execDebT (mapM_ (uncurry intermediateFile) (zip (map ("debian/cabalInstall" </>) paths) files)) atoms'
+             execDebT (mapM_ (uncurry intermediateFile) (zip (map ("debian/cabalInstall" </>) paths) files)) atoms
 
 inputAtoms :: FilePath -> FilePath -> Atoms -> IO Atoms
 inputAtoms _ path xs | elem path ["control"] = return xs
@@ -239,30 +252,33 @@ readInstall p line =
 readDir :: Monad m => BinPkgName -> Text -> DebT m ()
 readDir p line = installDir p (unpack line)
 
-inputCabalization :: Top -> DebT IO ()
-inputCabalization top =
+{-
+inputCabalization :: DebT IO ()
+inputCabalization =
     do vb <- intToVerbosity' <$> lookVerbosity
-       mCompilerVersion <- lookCompilerVersion
        flags <- lookCabalFlagAssignments
-       compiler'' <- lift $ inputCompiler' top vb mCompilerVersion
-       compiler compiler''
-       result <- lift $ inputCabalization' top vb compiler'' flags
+       compiler'' <- inputCompiler
+       result <- inputCabalization' vb compiler'' flags
        either (\ e -> (error $ "Missing cabal dependencies: " ++ show e)) packageDescription result
+-}
 
--- | Read the (GHC) compiler version specified by Cabal, optionally
--- changing the version number.
-inputCompiler' :: Top -> Verbosity -> Maybe Version -> IO Compiler
-inputCompiler' top vb mCompilerVersion =
-    withCurrentDirectory (unTop top) $ do
-      (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
-      let compiler'' = case mCompilerVersion of
-                         (Just ver) -> compiler' {compilerId = CompilerId GHC ver}
-                         _ -> compiler'
-      return compiler''
-
-inputCabalization' :: Top -> Verbosity -> Compiler -> Set (FlagName, Bool) -> IO (Either [Dependency] PackageDescription)
-inputCabalization' top vb compiler'' flags =
-    withCurrentDirectory (unTop top) $ do
+inputCabalization :: MonadIO m => DebT m (Either [Dependency] PackageDescription)
+inputCabalization =
+    do vb <- lookVerbosity >>= return . intToVerbosity'
+       comp <- inputCompiler
+       flags <- lookCabalFlagAssignments
+       top <- askTop
+       liftIO $ withCurrentDirectory top $ do
+         descPath <- defaultPackageDesc vb
+         genPkgDesc <- readPackageDescription vb descPath
+         case finalizePackageDescription (toList flags) (const True) (Platform buildArch buildOS) (compilerId comp) [] genPkgDesc of
+           Left deps -> return $ Left deps
+           Right (pkgDesc, _) ->
+               do bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
+                  return $ Right pkgDesc
+{-
+    askTop >>= \ top -> liftIO $
+    withCurrentDirectory top $ do
       descPath <- defaultPackageDesc vb
       genPkgDesc <- readPackageDescription vb descPath
       case finalizePackageDescription (toList flags) (const True) (Platform buildArch buildOS) (compilerId compiler'') [] genPkgDesc of
@@ -270,6 +286,24 @@ inputCabalization' top vb compiler'' flags =
         Right (pkgDesc, _) ->
             do bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
                return $ Right pkgDesc
+-}
+inputCompiler :: MonadIO m => DebT m Compiler
+inputCompiler =
+    do vb <- lookVerbosity >>= return . intToVerbosity'
+       mCompilerVersion <- lookCompilerVersion
+       inputCompiler' vb mCompilerVersion
+
+-- | Read the (GHC) compiler version specified by Cabal, optionally
+-- changing the version number.
+inputCompiler' :: MonadIO m => Verbosity -> Maybe Version -> DebT m Compiler
+inputCompiler' vb mCompilerVersion =
+    askTop >>= \ top -> liftIO $
+    withCurrentDirectory top $ do
+      (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
+      let compiler'' = case mCompilerVersion of
+                         (Just ver) -> compiler' {compilerId = CompilerId GHC ver}
+                         _ -> compiler'
+      return compiler''
 
 -- | Run the package's configuration script.
 autoreconf :: Verbosity -> PackageDescription -> IO ()
@@ -291,17 +325,43 @@ inputLicenseFile pkgDesc = readFileMaybe (licenseFile pkgDesc)
 
 -- | Try to compute the debian maintainer from the maintainer field of the
 -- cabal package, or from the value returned by getDebianMaintainer.
-inputMaintainer :: Atoms -> IO (Maybe NameAddr)
-inputMaintainer atoms =
-    return debianPackageMaintainer >>=
-    maybe (return cabalPackageMaintainer) (return . Just) >>=
-    maybe getDebianMaintainer (return . Just) >>=
-    return . maybe (Just haskellMaintainer) Just
+inputMaintainer :: DebT IO NameAddr
+inputMaintainer =
+    do specifiedMaintainer <- get >>= return . getL Lenses.maintainer
+       debianMaintainer <- liftIO getDebianMaintainer
+       changelogMaintainer <-
+           do log <- get >>= return . getL Lenses.changelog
+              case log of
+                Just (ChangeLog (entry : _)) ->
+                    case (parseMaintainer (logWho entry)) of
+                      Left _e -> return $ Nothing -- Just $ NameAddr (Just "Invalid signature in changelog") (show e)
+                      Right x -> return (Just x)
+                _ -> return Nothing
+       cabalMaintainer <- inputCabalization >>=
+                          either (\ _ -> return Nothing)
+                                 (\ pkgDesc ->
+                                      return $ case Cabal.maintainer pkgDesc of
+                                                 "" -> Nothing
+                                                 x -> either (const Nothing)
+                                                             Just
+                                                             (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x)))
+       return $ fromMaybe haskellMaintainer $ maybe changelogMaintainer Just $ maybe debianMaintainer Just $ maybe cabalMaintainer Just $ specifiedMaintainer
+{-
+       let maint' = maybe cabalPackageMaintainer Just debianPackageMaintainer
+           maint'' = maybe (liftIO getDebianMaintainer) (return . Just) >>=
+       return . maybe (Just haskellMaintainer) Just
     where
       debianPackageMaintainer :: Maybe NameAddr
       debianPackageMaintainer = getL Lenses.maintainer atoms
-      cabalPackageMaintainer :: Maybe NameAddr
-      cabalPackageMaintainer = case fmap Cabal.maintainer (getL Lenses.packageDescription atoms) of
-                                 Nothing -> Nothing
-                                 Just "" -> Nothing
-                                 Just x -> either (const Nothing) Just (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x))
+      cabalPackageMaintainer :: Either [Dependency] PackageDescription -> Maybe NameAddr
+      cabalPackageMaintainer (Left deps) = Nothing
+      cabalPackageMaintainer (Right pkgDesc) =
+          case Cabal.maintainer pkgDesc of
+            "" -> Nothing
+            x -> either (const Nothing) Just (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x))
+-}
+
+dataDir :: PackageDescription -> FilePath
+dataDir p =
+    let PackageName pkgname = pkgName . Cabal.package $ p in
+    "usr/share" </> map toLower pkgname

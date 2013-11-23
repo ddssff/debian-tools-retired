@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wall #-}
 module Debian.Debianize.Monad
-    ( Atoms
+    ( Atoms(top)
 
     , DebT
     , runDebT
@@ -23,6 +23,9 @@ module Debian.Debianize.Monad
     , doMapElem
     , doMapSet
 -}
+
+    -- * Location of unpacked cabal package
+    , askTop
 
      -- * Modes of operation
     , verbosity
@@ -54,7 +57,8 @@ module Debian.Debianize.Monad
     , changelog
     , comments
     , standards
-    , dataDir
+    -- , dataDir
+    -- , packageDescription -- Internal
     , rulesHead
     , rulesFragment
     , noProfilingLibrary
@@ -107,9 +111,7 @@ module Debian.Debianize.Monad
     -- * Unknown, Obsolete, or Internal
     , flags -- obsolete
     , validate -- obsolete
-    , packageDescription -- Internal
     , warning -- no-op?
-    , compiler
     , intermediateFile
     , packageInfo
     , control
@@ -125,7 +127,7 @@ import Data.Text as Text (Text)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog)
 import Debian.Debianize.ControlFile (SourceDebDescription)
-import Debian.Debianize.Lenses (Atoms, Flags)
+import Debian.Debianize.Lenses (Atoms(top), Flags)
 import qualified Debian.Debianize.Lenses as Lenses
 import Debian.Debianize.Types (DebAction(..), InstallFile(..), PackageInfo(..), Server(..), Site(..))
 import Debian.Debianize.VersionSplits (VersionSplits, makePackage, insertSplit)
@@ -135,8 +137,7 @@ import Debian.Relation (AndRelation, BinPkgName, Relation, Relations, SrcPkgName
 import Debian.Version (DebianVersion)
 import Distribution.License (License)
 import Distribution.Package (PackageName)
-import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
-import Distribution.Simple.Compiler (Compiler)
+import Distribution.PackageDescription as Cabal (FlagName)
 import Prelude hiding (init, log, unlines)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
@@ -160,6 +161,9 @@ evalDebM action atoms = evalState action atoms
 
 runDebM :: DebM a -> Atoms -> (a, Atoms)
 runDebM action atoms = runState action atoms
+
+askTop :: Monad m => DebT m FilePath
+askTop = get >>= return . Lenses.unTop . Lenses.top
 
 -- | Set the value to x regardless of its previous value
 doConst :: Monad m => Lens Atoms a -> a -> DebT m ()
@@ -197,14 +201,13 @@ compilerVersion f = doModify Lenses.compilerVersion f
 lookCompilerVersion :: Monad m => DebT m (Maybe Version)
 lookCompilerVersion = get >>= return . getL Lenses.compilerVersion
 
-packageDescription :: Monad m => PackageDescription -> DebT m ()
-packageDescription d = doConstJust Lenses.packageDescription d
+--packageDescription :: Monad m => PackageDescription -> DebT m ()
+--packageDescription d = doConstJust Lenses.packageDescription d
+--dataDir :: Monad m => FilePath -> DebT m ()
+--dataDir = doConstJust Lenses.dataDir
+
 buildDir :: Monad m => FilePath -> DebT m ()
 buildDir = doConstJust Lenses.buildDir
-dataDir :: Monad m => FilePath -> DebT m ()
-dataDir = doConstJust Lenses.dataDir
-compiler :: Monad m => Compiler -> DebT m ()
-compiler = doConstJust Lenses.compiler
 revision :: Monad m => Maybe String -> DebT m ()
 revision = doConst Lenses.revision
 debVersion :: Monad m => DebianVersion -> DebT m ()

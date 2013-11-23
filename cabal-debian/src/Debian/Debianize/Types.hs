@@ -1,6 +1,6 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 module Debian.Debianize.Types
-    ( Top(..)
-    , PackageInfo(..)
+    ( PackageInfo(..)
     , Site(..)
     , Server(..)
     , InstallFile(..)
@@ -13,8 +13,6 @@ import Debian.Relation (BinPkgName)
 import Debian.Version (DebianVersion)
 import Distribution.Package (PackageName)
 import Prelude hiding (init, unlines, log)
-
-newtype Top = Top {unTop :: FilePath}
 
 data PackageInfo = PackageInfo { cabalName :: PackageName
                                , devDeb :: Maybe (BinPkgName, DebianVersion)

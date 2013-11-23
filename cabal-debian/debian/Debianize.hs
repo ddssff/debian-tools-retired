@@ -9,11 +9,10 @@ import Debian.Debianize.ControlFile (SourceDebDescription(homepage))
 import Debian.Debianize.ControlFile hiding (conflicts, depends, description)
 import Debian.Debianize.Details (seereasonDefaultAtoms)
 import Debian.Debianize.Finalize (debianization)
-import qualified Debian.Debianize.Lenses as Lenses (changelog)
+import qualified Debian.Debianize.Lenses as Lenses (changelog, newAtoms)
 import Debian.Debianize.Monad (Atoms, changelog, compat, conflicts, control, DebT, depends, description, execDebM, installCabalExec,
-                               sourceFormat, standards, utilsPackageName)
+                               sourceFormat, standards, utilsPackageName, execDebT, evalDebT)
 import Debian.Debianize.Output (compareDebianization)
-import Debian.Debianize.Types (Top(Top))
 import Debian.Policy (SourceFormat(Native3), StandardsVersion(StandardsVersion))
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), VersionReq(SLT, GRE))
 import Debian.Version (parseDebianVersion)
@@ -25,10 +24,11 @@ main =
     do -- Copy the changelog into the top directory so that hackage
        -- will see it.
        copyFile "debian/changelog" "changelog"
-       log <- inputChangeLog (Top ".")
-       old <- inputDebianization (Top ".")
-       new <- debianization (Top ".") seereasonDefaultAtoms (changelog log >> customize >> copyFirstLogEntry old)
-       case compareDebianization old new of
+       log <- evalDebT inputChangeLog (Lenses.newAtoms ".")
+       old <- execDebT inputDebianization (Lenses.newAtoms ".")
+       new <- execDebT (debianization seereasonDefaultAtoms (either (const (return ())) changelog log >> customize >> copyFirstLogEntry old)) (Lenses.newAtoms ".")
+       diff <- compareDebianization old new
+       case diff of
          "" -> return ()
          s -> error $ "Debianization mismatch:\n" ++ s
        -- This would overwrite the existing debianization rather than

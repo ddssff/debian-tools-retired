@@ -5,7 +5,7 @@ module Main
     , main
     ) where
 
-import Control.Monad.State (lift, get, put)
+import Control.Monad.State (lift, get, put, modify)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Function (on)
@@ -20,16 +20,17 @@ import qualified Data.Text as T
 import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import qualified Debian.Debianize.Lenses as Lenses
-    (rulesHead, compat, sourceFormat, changelog, control, missingDependencies, revision, buildDeps, packageDescription)
+    (rulesHead, compat, sourceFormat, changelog, control, buildDeps)
 import qualified Debian.Debianize.ControlFile as Deb (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Finalize (debianization, finalizeDebianization)
 import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups, makeRulesHead)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
-import Debian.Debianize.Monad (Atoms, DebT, execDebM, execDebT, evalDebM, epochMap, mapCabal, splitCabal, changelog, compat, control,
+import Debian.Debianize.Lenses (newAtoms)
+import Debian.Debianize.Monad (Atoms, DebT, evalDebT, execDebM, execDebT, epochMap, mapCabal, splitCabal, changelog, compat, control,
                                copyright, rulesHead, sourceFormat, installData, debVersion, buildDeps, execMap, utilsPackageName,
-                               binaryArchitectures, depends, description)
-import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), Top(Top))
+                               binaryArchitectures, depends, description, revision, missingDependency)
+import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (modifyM)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
@@ -96,10 +97,11 @@ test1 label =
                           (do defaultAtoms
                               newDebianization (ChangeLog [testEntry]) level standards
                               copyright (Left BSD3)
-                              pkgDesc <- get >>= return . getL Lenses.packageDescription
-                              maybe (return ()) finalizeDebianization pkgDesc)
-                          mempty
-                 assertEqual label [] (diffDebianizations testDeb1 deb))
+                              Right pkgDesc <- inputCabalization
+                              finalizeDebianization pkgDesc)
+                          (newAtoms ".")
+                 diff <- diffDebianizations testDeb1 deb
+                 assertEqual label [] diff)
     where
       testDeb1 :: Atoms
       testDeb1 =
@@ -122,7 +124,7 @@ test1 label =
                                                     [Rel (BinPkgName "ghc") Nothing Nothing],
                                                     [Rel (BinPkgName "ghc-prof") Nothing Nothing]]
                                   , Deb.buildDependsIndep = [[Rel (BinPkgName "ghc-doc") Nothing Nothing]] }))
-            mempty
+            (newAtoms ".")
       log = ChangeLog [Entry { logPackage = "haskell-cabal-debian"
                              , logVersion = buildDebianVersion Nothing "2.6.2" Nothing
                              , logDists = [ReleaseName {relName = "unstable"}]
@@ -140,10 +142,11 @@ test2 label =
                           (do defaultAtoms
                               newDebianization (ChangeLog [testEntry]) level standards
                               copyright (Left BSD3)
-                              pkgDesc <- get >>= return . getL Lenses.packageDescription
-                              maybe (return ()) finalizeDebianization pkgDesc)
-                          mempty
-                 assertEqual label [] (diffDebianizations expect deb))
+                              Right pkgDesc <- inputCabalization
+                              finalizeDebianization pkgDesc)
+                          (newAtoms ".")
+                 diff <- diffDebianizations expect deb
+                 assertEqual label [] diff)
     where
       expect =
           execDebM
@@ -165,7 +168,7 @@ test2 label =
                                                     [Rel (BinPkgName "ghc") Nothing Nothing],
                                                     [Rel (BinPkgName "ghc-prof") Nothing Nothing]],
                                     Deb.buildDependsIndep = [[Rel (BinPkgName "ghc-doc") Nothing Nothing]] }))
-            mempty
+            (newAtoms ".")
       log = ChangeLog [Entry {logPackage = "haskell-cabal-debian",
                               logVersion = Debian.Version.parseDebianVersion ("2.6.2" :: String),
                               logDists = [ReleaseName {relName = "unstable"}],
@@ -178,8 +181,9 @@ test2 label =
 test3 :: String -> Test
 test3 label =
     TestLabel label $
-    TestCase (do deb <- inputDebianization (Top "test-data/haskell-devscripts")
-                 assertEqual label [] (diffDebianizations testDeb2 deb))
+    TestCase (do deb <- execDebT inputDebianization (newAtoms "test-data/haskell-devscripts")
+                 diff <- diffDebianizations testDeb2 deb
+                 assertEqual label [] diff)
     where
       testDeb2 :: Atoms
       testDeb2 =
@@ -237,7 +241,7 @@ test3 label =
                                                                                , Deb.provides_ = []
                                                                                , Deb.replaces_ = []
                                                                                , Deb.builtUsing = [] }}]}))
-            mempty
+            (newAtoms ".")
       log = ChangeLog [Entry { logPackage = "haskell-devscripts"
                              , logVersion = Debian.Version.parseDebianVersion ("0.8.13" :: String)
                              , logDists = [ReleaseName {relName = "experimental"}]
@@ -256,16 +260,28 @@ test3 label =
 test4 :: String -> Test
 test4 label =
     TestLabel label $
-    TestCase (do old <- inputDebianization (Top "test-data/clckwrks-dot-com/output")
+    TestCase (do old <- execDebT inputDebianization (newAtoms "test-data/clckwrks-dot-com/output")
                  let log = getL Lenses.changelog old
-                 new <- debianization (Top "test-data/clckwrks-dot-com/input") defaultAtoms (customize log)
-                 assertEqual label [] (diffDebianizations old ({-copyFirstLogEntry old-} new)))
+                 new <- execDebT (debianization defaultAtoms (customize log)) (newAtoms "test-data/clckwrks-dot-com/input")
+                 diff <- diffDebianizations old ({-copyFirstLogEntry old-} new)
+                 assertEqual label [] diff)
     where
       customize :: Maybe ChangeLog -> DebT IO ()
+      customize log =
+          do maybe (return ()) changelog log
+             tight
+             fixRules
+             doBackups (BinPkgName "clckwrks-dot-com-backups") "clckwrks-dot-com-backups"
+             doWebsite (BinPkgName "clckwrks-dot-com-production") (theSite (BinPkgName "clckwrks-dot-com-production"))
+             revision Nothing
+             missingDependency (BinPkgName "libghc-clckwrks-theme-clckwrks-doc")
+             sourceFormat Native3
+             control (\ y -> y {Deb.homepage = Just "http://www.clckwrks.com/"})
+             newDebianization' (Just 7) (Just (StandardsVersion 3 9 4 Nothing))
+{-
       customize log = modifyM (lift . customize' log)
       customize' :: Maybe ChangeLog -> Atoms -> IO Atoms
       customize' log atoms =
-          execDebT (inputCabalization (Top "test-data/clckwrks-dot-com/input")) atoms >>=
           execDebT (newDebianization' (Just 7) (Just (StandardsVersion 3 9 4 Nothing))) .
           modL Lenses.control (\ y -> y {Deb.homepage = Just "http://www.clckwrks.com/"}) .
           setL Lenses.sourceFormat (Just Native3) .
@@ -276,12 +292,13 @@ test4 label =
           fixRules .
           execDebM tight .
           setL Lenses.changelog log
+-}
       -- A log entry gets added when the Debianization is generated,
       -- it won't match so drop it for the comparison.
       serverNames = map BinPkgName ["clckwrks-dot-com-production"] -- , "clckwrks-dot-com-staging", "clckwrks-dot-com-development"]
       -- Insert a line just above the debhelper.mk include
-      fixRules deb =
-          modL Lenses.rulesHead (\ mt -> (Just . f) (fromMaybe (evalDebM makeRulesHead deb) mt)) deb
+      fixRules =
+          makeRulesHead >>= \ rh -> modify (modL Lenses.rulesHead (\ mt -> (Just . f) (fromMaybe rh mt)))
           where
             f t = T.unlines $ concat $
                   map (\ line -> if line == "include /usr/share/cdbs/1/rules/debhelper.mk"
@@ -351,11 +368,12 @@ anyrel b = Rel b Nothing Nothing
 test5 :: String -> Test
 test5 label =
     TestLabel label $
-    TestCase (do old <- inputDebianization (Top "test-data/creativeprompts/output")
+    TestCase (do old <- execDebT inputDebianization (newAtoms "test-data/creativeprompts/output")
                  let standards = Deb.standardsVersion (getL Lenses.control old)
                      level = getL Lenses.compat old
-                 new <- debianization (Top "test-data/creativeprompts/input") defaultAtoms (customize old level standards)
-                 assertEqual label [] (diffDebianizations old (copyFirstLogEntry old new)))
+                 new <- execDebT (debianization defaultAtoms (customize old level standards)) (newAtoms "test-data/creativeprompts/input")
+                 diff <- diffDebianizations old (copyFirstLogEntry old new)
+                 assertEqual label [] diff)
     where
       customize old level standards =
           do newDebianization' level standards
@@ -467,13 +485,16 @@ test7 label =
 test8 :: String -> Test
 test8 label =
     TestLabel label $
-    TestCase ( do old <- inputDebianization (Top "test-data/artvaluereport-data/output")
-                  log <- inputChangeLog (Top "test-data/artvaluereport-data/input")
-                  new <- debianization (Top "test-data/artvaluereport-data/input") defaultAtoms (modifyM (lift . customize log))
-                  assertEqual label [] (diffDebianizations old (copyChangelog old new))
+    TestCase ( do old <- execDebT inputDebianization (newAtoms "test-data/artvaluereport-data/output")
+                  log <- evalDebT inputChangeLog (newAtoms "test-data/artvaluereport-data/input")
+                  new <- execDebT (debianization defaultAtoms (modifyM (lift . customize log))) (newAtoms "test-data/artvaluereport-data/input")
+                  diff <- diffDebianizations old (copyChangelog old new)
+                  assertEqual label [] diff
              )
     where
-      customize log =      (return .
+      customize (Left e) = error (show e)
+      customize (Right log) =
+                           (return .
                             modL Lenses.buildDeps (Set.insert [[Rel (BinPkgName "haskell-hsx-utils") Nothing Nothing]]) .
                             modL Lenses.control (\ y -> y {Deb.homepage = Just "http://artvaluereportonline.com"}) .
                             setL Lenses.sourceFormat (Just Native3) .
@@ -483,9 +504,10 @@ test8 label =
 test9 :: String -> Test
 test9 label =
     TestLabel label $
-    TestCase ( do old <- inputDebianization (Top "test-data/alex/output")
-                  new <- debianization (Top "test-data/alex/input") defaultAtoms customize
-                  assertEqual label [] (diffDebianizations old (copyFirstLogEntry old new)))
+    TestCase ( do old <- execDebT inputDebianization (newAtoms "test-data/alex/output")
+                  new <- execDebT (debianization defaultAtoms customize) (newAtoms "test-data/alex/input")
+                  diff <- diffDebianizations old (copyFirstLogEntry old new)
+                  assertEqual label [] diff)
     where
       customize =
           do newDebianization' (Just 7) (Just (StandardsVersion 3 9 3 Nothing))
@@ -527,12 +549,12 @@ diffMaps old new =
       combine1 k a b = if a == b then Unchanged k a else Modified k a b
       combine2 _ _ _ = Nothing
 
-diffDebianizations :: Atoms -> Atoms -> String -- [Change FilePath T.Text]
+diffDebianizations :: Atoms -> Atoms -> IO String -- [Change FilePath T.Text]
 diffDebianizations old new =
-    show (mconcat (map prettyChange (filter (not . isUnchanged) (diffMaps old' new'))))
+    do old' <- debianizationFileMap (sortBinaryDebs old)
+       new' <- debianizationFileMap (sortBinaryDebs new)
+       return $ show $ mconcat $ map prettyChange $ filter (not . isUnchanged) $ diffMaps old' new'
     where
-      old' = debianizationFileMap (sortBinaryDebs old) -- (sortBinaryDebs (fromMaybe newSourceDebDescription . getL control $ old))
-      new' = debianizationFileMap (sortBinaryDebs new) -- (sortBinaryDebs (fromMaybe newSourceDebDescription . getL control $ new))
       isUnchanged (Unchanged _ _) = True
       isUnchanged _ = False
       prettyChange (Unchanged p _) = text ("Unchanged: " <> p <> "\n")

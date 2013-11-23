@@ -7,6 +7,7 @@ module Debian.Debianize.Files
     ) where
 
 import Control.Monad.State (get, modify)
+import Control.Monad.Trans (MonadIO)
 import Data.Lens.Lazy (getL, setL)
 import Data.List as List (map, unlines)
 import Data.Map as Map (Map, toList, fromListWithKey, mapKeys)
@@ -22,16 +23,16 @@ import qualified Debian.Debianize.Lenses as Lenses
     (compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
      intermediateFiles, install, installDir, installInit, logrotateStanza, link,
      rulesHead, rulesFragments, copyright)
-import Debian.Debianize.Monad (Atoms, DebT, evalDebM)
+import Debian.Debianize.Monad (DebT, Atoms, evalDebT)
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
-import Prelude hiding (init, unlines, writeFile)
+import Prelude hiding (init, unlines, writeFile, log)
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | If the rulesHead value is still Nothing, construct a suitable
 -- value, save it in the DebT state and return it.
-getRulesHead :: Monad m => DebT m ()
+getRulesHead :: MonadIO m => DebT m ()
 getRulesHead =
     do oldText <- get >>= return . getL Lenses.rulesHead
        newText <- maybe makeRulesHead return oldText
@@ -43,39 +44,46 @@ getRulesHead =
 -- considering building one into the other, but it is handy to look at
 -- the Debianization produced by finalizeDebianization in the unit
 -- tests.)
-debianizationFileMap :: Atoms -> Map FilePath Text
-debianizationFileMap atoms =
-    Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) $
-      [("debian/control", pack (show (pretty (controlFile d)))),
-       ("debian/changelog", pack (show (pretty (fromMaybe (error "Missing debian/changelog") (getL Lenses.changelog atoms))))),
-       ("debian/rules", rules atoms),
-       ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom - is debhelper installed?") $ getL Lenses.compat atoms) <> "\n")),
-       ("debian/copyright", either (\ x -> pack (show (pretty x))) id (fromMaybe (error ("No DebCopyright atom: " ++ show atoms)) $ getL Lenses.copyright atoms))] ++
-      sourceFormatFiles atoms ++
-      watchFile atoms ++
-      installs atoms ++
-      dirs atoms ++
-      init atoms ++
-      logrotate atoms ++
-      links atoms ++
-      postinstFiles atoms ++
-      postrmFiles atoms ++
-      preinstFiles atoms ++
-      prermFiles atoms ++
-      intermediates atoms
-    where d = getL Lenses.control atoms
+debianizationFileMap :: Atoms -> IO (Map FilePath Text)
+debianizationFileMap deb =
+    do let d = getL Lenses.control deb
+           log = getL Lenses.changelog deb
+           compat = getL Lenses.compat deb
+           copyrt = getL Lenses.copyright deb
+       prs <- sequence [return ("debian/control", pack (show (pretty (controlFile d)))),
+                        return ("debian/changelog", pack (show (pretty (fromMaybe (error "Missing debian/changelog") log)))),
+                        evalDebT rules deb,
+                        return ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom - is debhelper installed?") $ compat) <> "\n")),
+                        return ("debian/copyright", either (\ x -> pack (show (pretty x))) id (fromMaybe (error "No DebCopyright atom") $ copyrt))]
+       prs' <- sequence
+                 [return prs,
+                  evalDebT sourceFormatFiles deb,
+                  evalDebT watchFile deb,
+                  evalDebT installs deb,
+                  evalDebT dirs deb,
+                  evalDebT init deb,
+                  evalDebT logrotate deb,
+                  evalDebT links deb,
+                  evalDebT postinstFiles deb,
+                  evalDebT postrmFiles deb,
+                  evalDebT preinstFiles deb,
+                  evalDebT prermFiles deb,
+                  evalDebT intermediates deb] >>= return . concat
+       return $ Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) prs'
 
-sourceFormatFiles :: Atoms -> [(FilePath, Text)]
-sourceFormatFiles deb = maybe [] (\ x -> [("debian/source/format", pack (show (pretty x)))]) (getL Lenses.sourceFormat deb)
 
-watchFile :: Atoms -> [(FilePath, Text)]
-watchFile deb = maybe [] (\ x -> [("debian/watch", x)]) (getL Lenses.watch deb)
+sourceFormatFiles :: Monad m => DebT m [(FilePath, Text)]
+sourceFormatFiles = get >>= return . maybe [] (\ x -> [("debian/source/format", pack (show (pretty x)))]) . getL Lenses.sourceFormat
 
-intermediates :: Atoms -> [(FilePath, Text)]
-intermediates deb = Set.toList $ getL Lenses.intermediateFiles deb
+watchFile :: Monad m => DebT m [(FilePath, Text)]
+watchFile = get >>= return . maybe [] (\ x -> [("debian/watch", x)]) . getL Lenses.watch
 
-installs :: Atoms -> [(FilePath, Text)]
-installs deb =
+intermediates :: Monad m => DebT m [(FilePath, Text)]
+intermediates = get >>= return . Set.toList . getL Lenses.intermediateFiles
+
+installs :: Monad m => DebT m [(FilePath, Text)]
+installs =
+    get >>= \ deb -> return $
     map (\ (path, pairs) -> (path, pack (List.unlines (map (\ (src, dst) -> src <> " " <> dst) (Set.toList pairs))))) $
     Map.toList $
     mapKeys pathf $
@@ -83,28 +91,32 @@ installs deb =
     where
       pathf name = "debian" </> show (pretty name) ++ ".install"
 
-dirs :: Atoms -> [(FilePath, Text)]
-dirs deb =
+dirs :: Monad m => DebT m [(FilePath, Text)]
+dirs =
+    get >>= \ deb -> return $
     map (\ (path, dirs') -> (path, pack (List.unlines (Set.toList dirs')))) $ Map.toList $ mapKeys pathf $ getL Lenses.installDir deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".dirs"
 
-init :: Atoms -> [(FilePath, Text)]
-init deb =
+init :: Monad m => DebT m [(FilePath, Text)]
+init =
+    get >>= \ deb -> return $
     Map.toList $ mapKeys pathf $ getL Lenses.installInit deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".init"
 
 -- FIXME - use a map and insertWith, check for multiple entries
-logrotate :: Atoms -> [(FilePath, Text)]
-logrotate deb =
+logrotate :: Monad m => DebT m [(FilePath, Text)]
+logrotate =
+    get >>= \ deb -> return $
     map (\ (path, stanzas) -> (path, Text.unlines (Set.toList stanzas))) $ Map.toList $ mapKeys pathf $ getL Lenses.logrotateStanza deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".logrotate"
 
 -- | Assemble all the links by package and output one file each
-links :: Atoms -> [(FilePath, Text)]
-links deb =
+links :: Monad m => DebT m [(FilePath, Text)]
+links =
+    get >>= \ deb -> return $
     map (\ (path, pairs) -> (path, pack (List.unlines (map (\ (loc, txt) -> loc ++ " " ++ txt) (Set.toList pairs))))) $
     Map.toList $
     mapKeys pathf $
@@ -112,34 +124,39 @@ links deb =
     where
       pathf name = "debian" </> show (pretty name) ++ ".links"
 
-postinstFiles :: Atoms -> [(FilePath, Text)]
-postinstFiles deb =
+postinstFiles :: Monad m => DebT m [(FilePath, Text)]
+postinstFiles =
+    get >>= \ deb -> return $
     Map.toList $ mapKeys pathf $ getL Lenses.postInst deb
     where
       pathf (BinPkgName name) = "debian" </> show (pretty name) ++ ".postinst"
 
-postrmFiles :: Atoms -> [(FilePath, Text)]
-postrmFiles deb =
+postrmFiles :: Monad m => DebT m [(FilePath, Text)]
+postrmFiles =
+    get >>= \ deb -> return $
     Map.toList $ mapKeys pathf $ getL Lenses.postRm deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".postrm"
 
-preinstFiles :: Atoms -> [(FilePath, Text)]
-preinstFiles deb =
+preinstFiles :: Monad m => DebT m [(FilePath, Text)]
+preinstFiles =
+    get >>= \ deb -> return $
     Map.toList $ mapKeys pathf $ getL Lenses.preInst deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".preinst"
 
-prermFiles :: Atoms -> [(FilePath, Text)]
-prermFiles deb =
+prermFiles :: Monad m => DebT m [(FilePath, Text)]
+prermFiles =
+    get >>= \ deb -> return $
     Map.toList $ mapKeys pathf $ getL Lenses.preRm deb
     where
       pathf name = "debian" </> show (pretty name) ++ ".prerm"
 
-rules :: Atoms -> Text
-rules deb = Text.unlines (rh : reverse (Set.toList (getL Lenses.rulesFragments deb)))
-    where
-      rh = maybe (evalDebM makeRulesHead deb) id (getL Lenses.rulesHead deb)
+rules :: MonadIO m => DebT m (FilePath, Text)
+rules =
+    do rh <- get >>= return . getL Lenses.rulesHead >>= maybe makeRulesHead return
+       rl <- get >>= return . reverse . Set.toList . getL Lenses.rulesFragments
+       return ("debian/rules", Text.unlines (rh : rl))
 
 controlFile :: SourceDebDescription -> Control' String
 controlFile src =

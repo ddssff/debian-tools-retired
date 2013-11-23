@@ -67,7 +67,6 @@ module Debian.Debianize
     , Debian.Debianize.Input.inputDebianization
     , Debian.Debianize.Input.inputDebianizationFile
     , Debian.Debianize.Input.inputChangeLog
-    , Debian.Debianize.Input.inputCabalization
     , Debian.Debianize.Input.inputLicenseFile
     , Debian.Debianize.Input.inputMaintainer
 
@@ -155,9 +154,7 @@ module Debian.Debianize
     -- * Unknown, Obsolete, or Internal
     , flags -- obsolete
     , validate -- obsolete
-    , packageDescription -- Internal
     , warning -- no-op?
-    , compiler
     , intermediateFile
     , packageInfo
     , control

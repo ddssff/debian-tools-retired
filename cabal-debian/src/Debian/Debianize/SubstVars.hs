@@ -10,21 +10,22 @@ module Debian.Debianize.SubstVars
 import Control.Exception (SomeException, try)
 import Control.Monad (foldM)
 import Control.Monad.Reader (ReaderT(runReaderT))
-import Control.Monad.Trans (lift)
+import Control.Monad.State (get)
+import Control.Monad.Trans (MonadIO, lift)
 import Data.Lens.Lazy (getL, modL)
 import Data.List (intercalate, isPrefixOf, isSuffixOf, nub, partition, unlines)
 import Data.List as List (map)
 import qualified Data.Map as Map (insert, lookup, Map)
-import Data.Maybe (catMaybes, fromMaybe, listToMaybe)
+import Data.Maybe (catMaybes, listToMaybe)
 import qualified Data.Set as Set (member, Set, toList)
 import Data.Text (pack)
 import Debian.Control (Control'(unControl), ControlFunctions(lookupP, parseControl, stripWS), Field'(Field))
-import Debian.Debianize.Input (inputCabalization)
-import Debian.Debianize.Lenses (Atoms, compiler, dryRun, packageInfo)
-import qualified Debian.Debianize.Lenses as Lenses (extraLibMap, missingDependencies, packageDescription, packageInfo)
-import Debian.Debianize.Monad (execDebT)
-import Debian.Debianize.Types (DebType, DebType(Dev, Doc, Prof), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), Top(Top))
-import Debian.Debianize.Utility ((!), buildDebVersionMap, cond, DebMap, debOfFile, diffFile, dpkgFileMap, replaceFile, showDeps)
+import Debian.Debianize.Input (inputCompiler, inputCabalization)
+import Debian.Debianize.Lenses (Atoms, dryRun, packageInfo)
+import qualified Debian.Debianize.Lenses as Lenses (extraLibMap, missingDependencies, packageInfo)
+import Debian.Debianize.Monad (DebT)
+import Debian.Debianize.Types (DebType, DebType(Dev, Doc, Prof), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb))
+import Debian.Debianize.Utility ((!), buildDebVersionMap, cond, DebMap, debOfFile, diffFile, dpkgFileMap, replaceFile, showDeps, modifyM)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName(BinPkgName), Relation, Relations)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), ParseRelations(parseRelations), Relation(Rel), Relations, VersionReq(GRE))
@@ -48,19 +49,20 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- names, or examining the /var/lib/dpkg/info/\*.list files.  From
 -- these we can determine the source package name, and from that the
 -- documentation package name.
-substvars :: Atoms
-          -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
-          -> IO ()
-substvars atoms debType =
-    do atoms' <- execDebT (inputCabalization (Top ".")) atoms
-       debVersions <- buildDebVersionMap
-       atoms'' <- libPaths (fromMaybe (error "substvars") $ getL compiler atoms') debVersions atoms'
-       control <- readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
-       substvars' atoms'' debType control
+substvars :: DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
+          -> DebT IO ()
+substvars debType =
+    do debVersions <- lift buildDebVersionMap
+       comp <- inputCompiler
+       modifyM (lift . libPaths comp debVersions)
+       control <- lift $ readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
+       substvars' debType control
 
-substvars' :: Atoms -> DebType -> Control' String -> IO ()
-substvars' atoms debType control =
-    case (missingBuildDeps, path) of
+substvars' :: DebType -> Control' String -> DebT IO ()
+substvars' debType control =
+    get >>= return . getL packageInfo >>= \ info ->
+    cabalDependencies >>= \ cabalDeps ->
+    case (missingBuildDeps info cabalDeps, path) of
       -- There should already be a .substvars file produced by dh_haskell_prep,
       -- keep the relations listed there.  They will contain something like this:
       -- libghc-cabal-debian-prof.substvars:
@@ -70,37 +72,39 @@ substvars' atoms debType control =
       -- haskell-cabal-debian-doc.substvars:
       --    haskell:Depends=ghc-doc, haddock (>= 2.1.0), haddock (<< 2.1.0-999)
       ([], Just path') ->
-          readFile path' >>= \ old ->
-          let new = addDeps old in
-          diffFile path' (pack new) >>= maybe (putStrLn ("cabal-debian substvars: No updates found for " ++ show path'))
-                                              (\ diff -> if getL dryRun atoms then putStr diff else replaceFile path' new)
+          do old <- lift $ readFile path'
+             deps <- debDeps debType control
+             new <- addDeps old deps
+             dry <- get >>= return . getL dryRun
+             lift (diffFile path' (pack new) >>= maybe (putStrLn ("cabal-debian substvars: No updates found for " ++ show path'))
+                                                       (\ diff -> if dry then putStr diff else replaceFile path' new))
       ([], Nothing) -> return ()
       (missing, _) ->
-          die ("These debian packages need to be added to the build dependency list so the required cabal packages are available:\n  " ++ intercalate "\n  " (map (show . pretty . fst) missing) ++
-               "\nIf this is an obsolete package you may need to withdraw the old versions from the\n" ++
-               "upstream repository, and uninstall and purge it from your local system.")
+          lift $ die ("These debian packages need to be added to the build dependency list so the required cabal " ++
+                      "packages are available:\n  " ++ intercalate "\n  " (map (show . pretty . fst) missing) ++
+                      "\nIf this is an obsolete package you may need to withdraw the old versions from the\n" ++
+                      "upstream repository, and uninstall and purge it from your local system.")
     where
-      addDeps old =
+      addDeps old deps =
           case partition (isPrefixOf "haskell:Depends=") (lines old) of
-            ([], other) -> unlines (("haskell:Depends=" ++ showDeps (filterMissing atoms deps)) : other)
+            ([], other) -> filterMissing deps >>= \ deps' -> return $ unlines (("haskell:Depends=" ++ showDeps deps') : other)
             (hdeps, more) ->
                 case deps of
-                  [] -> unlines (hdeps ++ more)
-                  _ -> unlines (map (++ (", " ++ showDeps (filterMissing atoms deps))) hdeps ++ more)
+                  [] -> return $ unlines (hdeps ++ more)
+                  _ -> filterMissing deps >>= \ deps' -> return $ unlines (map (++ (", " ++ showDeps deps')) hdeps ++ more)
       path = fmap (\ (D.BinPkgName x) -> "debian/" ++ x ++ ".substvars") name
       name = debNameFromType control debType
-      deps = debDeps debType atoms control
       -- We must have build dependencies on the profiling and documentation packages
       -- of all the cabal packages.
-      missingBuildDeps =
+      missingBuildDeps info cabalDeps =
           let requiredDebs =
                   concat (map (\ (Dependency name _) ->
-                               case Map.lookup name (getL packageInfo atoms) of
-                                 Just info ->
-                                     let prof = maybe (devDeb info) Just (profDeb info) in
-                                     let doc = docDeb info in
+                               case Map.lookup name info of
+                                 Just info' ->
+                                     let prof = maybe (devDeb info') Just (profDeb info') in
+                                     let doc = docDeb info' in
                                      catMaybes [prof, doc]
-                                 Nothing -> []) (cabalDependencies atoms)) in
+                                 Nothing -> []) cabalDeps) in
           filter (not . (`elem` buildDepNames) . fst) requiredDebs
       buildDepNames :: [D.BinPkgName]
       buildDepNames = concat (map (map (\ (D.Rel s _ _) -> s)) buildDeps)
@@ -158,30 +162,37 @@ unboxDependency (ExtraLibs _) = Nothing -- Dependency (PackageName d) anyVersion
 
 -- Make a list of the debian devel packages corresponding to cabal packages
 -- which are build dependencies
-debDeps :: DebType -> Atoms -> Control' String -> D.Relations
-debDeps debType atoms control =
-    interdependencies ++ otherdependencies
+debDeps :: MonadIO m => DebType -> Control' String -> DebT m D.Relations
+debDeps debType control =
+    do info <- get >>= return . getL Lenses.packageInfo
+       cabalDeps <- cabalDependencies
+       return $ interdependencies ++ otherdependencies info cabalDeps
     where
       interdependencies =
           case debType of
             Prof -> maybe [] (\ name -> [[D.Rel name Nothing Nothing]]) (debNameFromType control Dev)
             _ -> []
-      otherdependencies =
+      otherdependencies info cabalDeps =
           catMaybes (map (\ (Dependency name _) ->
-                          case Map.lookup name (getL Lenses.packageInfo atoms) of
-                            Just p -> maybe Nothing (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing]) (case debType of
-                                                                                                             Dev -> devDeb p
-                                                                                                             Prof -> profDeb p
-                                                                                                             Doc -> docDeb p)
-                            Nothing -> Nothing) (cabalDependencies atoms))
+                          case Map.lookup name info of
+                            Just p -> maybe Nothing
+                                            (\ (s, v) -> Just [D.Rel s (Just (D.GRE v)) Nothing])
+                                            (case debType of
+                                               Dev -> devDeb p
+                                               Prof -> profDeb p
+                                               Doc -> docDeb p)
+                            Nothing -> Nothing) cabalDeps)
 
-cabalDependencies :: Atoms -> [Dependency]
-cabalDependencies atoms =
-    catMaybes $ map unboxDependency $ allBuildDepends atoms
-                  (Cabal.buildDepends (fromMaybe (error "cabalDependencies") $ getL Lenses.packageDescription atoms))
-                  (concatMap buildTools . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL Lenses.packageDescription atoms)
-                  (concatMap pkgconfigDepends . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL Lenses.packageDescription atoms)
-                  (concatMap extraLibs . allBuildInfo . fromMaybe (error "cabalDependencies") $ getL Lenses.packageDescription atoms)
+cabalDependencies :: MonadIO m => DebT m [Dependency]
+cabalDependencies =
+    do pkgDesc <- inputCabalization >>= either (error "cabalDependencies") return
+       atoms <- get
+       return $ catMaybes $ map unboxDependency $
+           allBuildDepends atoms
+                  (Cabal.buildDepends pkgDesc)
+                  (concatMap buildTools . allBuildInfo $ pkgDesc)
+                  (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc)
+                  (concatMap extraLibs . allBuildInfo $ pkgDesc)
 
 -- |Debian packages don't have per binary package build dependencies,
 -- so we just gather them all up here.
@@ -208,6 +219,7 @@ debNameFromType control debType =
     where
       debNames = map (\ (Field (_, s)) -> stripWS s) (catMaybes (map (lookupP "Package") (tail (unControl control))))
 
-filterMissing :: Atoms -> [[Relation]] -> [[Relation]]
-filterMissing atoms rels =
-    filter (/= []) (List.map (filter (\ (D.Rel name _ _) -> not (Set.member name (getL Lenses.missingDependencies atoms)))) rels)
+filterMissing :: Monad m => [[Relation]] -> DebT m [[Relation]]
+filterMissing rels =
+    do missing <- get >>= return . getL Lenses.missingDependencies
+       return $ filter (/= []) (List.map (filter (\ (D.Rel name _ _) -> not (Set.member name missing))) rels)

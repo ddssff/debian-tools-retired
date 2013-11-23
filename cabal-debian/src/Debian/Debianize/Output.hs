@@ -15,6 +15,8 @@ module Debian.Debianize.Output
     ) where
 
 import Control.Exception as E (throw)
+import Control.Monad.State (get, lift)
+import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Lens.Lazy (getL)
@@ -26,9 +28,8 @@ import qualified Debian.Debianize.ControlFile as D (BinaryDebDescription(package
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Input (inputDebianization)
 import qualified Debian.Debianize.Lenses as Lenses (changelog, control, dryRun, validate)
-import Debian.Debianize.Monad (Atoms)
+import Debian.Debianize.Monad (DebT, Atoms, askTop)
 import Debian.Debianize.Options (putEnvironmentArgs)
-import Debian.Debianize.Types (Top(unTop))
 import Debian.Debianize.Utility (indent, replaceFile, withCurrentDirectory, zipMaps)
 import Prelude hiding (unlines, writeFile)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getPermissions, Permissions(executable), setPermissions)
@@ -62,34 +63,46 @@ runDebianizeScript args =
 
 -- | Depending on the options in @atoms@, either validate, describe,
 -- or write the generated debianization.
-doDebianizeAction :: Top -> Atoms -> IO ()
-doDebianizeAction top new =
-    case () of
-      _ | getL Lenses.validate new -> inputDebianization top >>= \ old -> return (validateDebianization old new)
-      _ | getL Lenses.dryRun new -> inputDebianization top >>= \ old -> putStr ("Debianization (dry run):\n" ++ compareDebianization old new)
-      _ -> writeDebianization top new
+doDebianizeAction :: DebT IO ()
+doDebianizeAction =
+    do new <- get
+       case () of
+         _ | getL Lenses.validate new ->
+               do inputDebianization
+                  old <- get
+                  return $ validateDebianization old new
+         _ | getL Lenses.dryRun new ->
+               do inputDebianization
+                  old <- get
+                  diff <- lift $ compareDebianization old new
+                  lift $ putStr ("Debianization (dry run):\n" ++ diff)
+         _ -> writeDebianization
 
 -- | Write the files of the debianization @d@ to the directory @top@.
-writeDebianization :: Top -> Atoms -> IO ()
-writeDebianization top d =
-    withCurrentDirectory (unTop top) $
-      mapM_ (\ (path, text) ->
-                 createDirectoryIfMissing True (takeDirectory path) >>
-                 replaceFile path (unpack text))
-            (Map.toList (debianizationFileMap d)) >>
-      getPermissions "debian/rules" >>= setPermissions "debian/rules" . (\ p -> p {executable = True})
+writeDebianization :: DebT IO ()
+writeDebianization =
+    do top <- askTop
+       files <- get >>= lift . debianizationFileMap
+       lift $ withCurrentDirectory top $ mapM_ (uncurry doFile) (Map.toList files)
+       lift $ getPermissions (top </> "debian/rules") >>= setPermissions (top </> "debian/rules") . (\ p -> p {executable = True})
+    where
+      doFile path text =
+          do createDirectoryIfMissing True (takeDirectory path)
+             replaceFile path (unpack text)
 
 -- | Return a string describing the debianization - a list of file
 -- names and their contents in a somewhat human readable format.
-describeDebianization :: Atoms -> String
-describeDebianization atoms =
-    concatMap (\ (path, text) -> path ++ ":\n" ++ indent " > " (unpack text)) (Map.toList (debianizationFileMap atoms))
+describeDebianization :: MonadIO m => DebT m String
+describeDebianization =
+    get >>= liftIO . debianizationFileMap >>= return . concatMap (\ (path, text) -> path ++ ": " ++ indent " > " (unpack text)) . Map.toList
 
 -- | Compare the old and new debianizations, returning a string
 -- describing the differences.
-compareDebianization :: Atoms -> Atoms -> String
+compareDebianization :: Atoms -> Atoms -> IO String
 compareDebianization old new =
-    concat . Map.elems $ zipMaps doFile (debianizationFileMap old) (debianizationFileMap new)
+    do oldFiles <- debianizationFileMap old
+       newFiles <- debianizationFileMap new
+       return $ concat $ Map.elems $ zipMaps doFile oldFiles newFiles
     where
       doFile :: FilePath -> Maybe Text -> Maybe Text -> Maybe String
       doFile path (Just _) Nothing = Just (path ++ ": Deleted\n")

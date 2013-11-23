@@ -1,6 +1,9 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 module Debian.Debianize.Lenses
-    ( Atoms
+    ( Top(unTop)
+    , Atoms
+    , newAtoms
+
     , Flags(..)
     -- * Modes of operation
     , verbosity
@@ -11,10 +14,9 @@ module Debian.Debianize.Lenses
     , warning
     -- * Cabal info
     , compilerVersion
-    , packageDescription
     , buildDir
-    , dataDir
-    , compiler
+    -- , dataDir
+    , top
     , extraLibMap
     , execMap
     , cabalFlagAssignments
@@ -79,7 +81,6 @@ module Debian.Debianize.Lenses
     , intermediateFiles
     ) where
 
-import Data.Char (toLower)
 import Data.Generics (Data, Typeable)
 import Data.Lens.Lazy (Lens, lens, getL, modL)
 import Data.Map as Map (Map, fold, foldWithKey, insertWith, empty, insert)
@@ -97,12 +98,27 @@ import Debian.Policy (PackageArchitectures, SourceFormat, PackagePriority, Secti
 import Debian.Relation (SrcPkgName, BinPkgName, Relations, Relation(..))
 import Debian.Version (DebianVersion)
 import Distribution.License (License)
-import Distribution.Package (PackageName(PackageName), PackageIdentifier(..))
-import Distribution.PackageDescription as Cabal (PackageDescription(package), FlagName, PackageDescription)
-import Distribution.Simple.Compiler (Compiler)
+import Distribution.Package (PackageName)
+import Distribution.PackageDescription as Cabal (FlagName)
 import Prelude hiding (init, unlines, log)
-import System.FilePath ((</>))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
+
+-- | Bits and pieces of information about the mapping from cabal package
+-- names and versions to debian package names and versions.  In essence,
+-- an 'Atoms' value represents a package's debianization.  The lenses in
+-- this module are used to get and set the values hidden in this Atoms
+-- value.  Many of the values should be left alone to be set when the
+-- debianization is finalized.
+data Atoms
+    = Atoms
+      { top :: Top
+      , atomMap :: Map DebAtomKey (Set DebAtom)
+      } deriving (Eq, Show)
+
+newtype Top = Top {unTop :: FilePath} deriving (Eq, Ord, Show, Typeable)
+
+newAtoms :: FilePath -> Atoms
+newAtoms x = Atoms {top = Top x, atomMap = mempty}
 
 -- All the internals of this module is a steaming pile of poo, except
 -- for the stuff that is exported.
@@ -128,12 +144,6 @@ data DebAtom
       -- This is used to look up hard coded lists of packages bundled
       -- with the compiler and their version numbers.  (This could
       -- certainly be done in a more beautiful way.)
-    | DHPackageDescription PackageDescription
-    -- ^ The cabal package description record
-    | DHCompiler Compiler
-    -- ^ The Compiler value returned with the Cabal
-    -- PackageDescription, then used to determine what libraries
-    -- (i.e. dependencies) are provided by the compiler.
     | BuildDir FilePath
     -- ^ The build directory used by cabal, typically dist/build when
     -- building manually or dist-ghc/build when building using GHC and
@@ -141,9 +151,11 @@ data DebAtom
     -- produced by cabal so we can move them into the deb.  Note that
     -- the --builddir option of runhaskell Setup appends the "/build"
     -- to the value it receives, so, yes, try not to get confused.
+{-
     | DataDir FilePath
     -- ^ the pathname of the package's data directory, generally the
     -- value of the dataDirectory field in the PackageDescription.
+-}
     | DebSourceFormat SourceFormat                -- ^ Write debian/source/format
     | DebWatch Text                               -- ^ Write debian/watch
     | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
@@ -261,20 +273,6 @@ data Flags = Flags
     -- ^ What to do - Usage, Debianize or Substvar
     } deriving (Eq, Ord, Show)
 
--- | Bits and pieces of information about the mapping from cabal package
--- names and versions to debian package names and versions.  In essence,
--- an 'Atoms' value represents a package's debianization.  The lenses in
--- this module are used to get and set the values hidden in this Atoms
--- value.  Many of the values should be left alone to be set when the
--- debianization is finalized.
-newtype Atoms = Atoms (Map DebAtomKey (Set DebAtom)) deriving (Eq, Show)
-
-instance Monoid Atoms where
-    -- We need mempty to actually be an empty map because we test for
-    -- this in the expandAtoms recursion.
-    mempty = Atoms mempty -- defaultAtoms
-    mappend a b = foldAtoms insertAtom a b
-
 -- Lenses to access values in the Atoms type.  This is an old
 -- design which I plan to make private and turn into something
 -- nicer, so these will remain ugly and repetitive for now.
@@ -339,20 +337,6 @@ compilerVersion = lens g s
             f Source (CompilerVersion y) = Just y
             f _ _ = Nothing
 
--- | The information loaded from the cabal file.
-packageDescription :: Lens Atoms (Maybe PackageDescription)
-packageDescription = lens g s
-    where
-      g atoms = foldAtoms from Nothing atoms
-          where
-            from Source (DHPackageDescription x') (Just x) | x /= x' = error $ "Conflicting rulesHead values:" ++ show (x, x')
-            from Source (DHPackageDescription x) _ = Just x
-            from _ _ x = x
-      s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DHPackageDescription) x)) atoms
-          where
-            f Source (DHPackageDescription y) = Just y
-            f _ _ = Nothing
-
 -- | The build directory.  This can be set by an argument to the @Setup@ script.
 -- When @Setup@ is run manually it is just @dist@, when it is run by
 -- @dpkg-buildpackage@ the compiler name is appended, so it is typically
@@ -371,6 +355,7 @@ buildDir = lens g s
             f Source (BuildDir y) = Just y
             f _ _ = Nothing
 
+{-
 -- | The data directory for the package, generated from the packageDescription
 dataDir :: Lens Atoms (Maybe FilePath)
 dataDir = lens g s
@@ -379,21 +364,7 @@ dataDir = lens g s
           fmap (\ p -> let PackageName pkgname = pkgName . package $ p in
                        "usr/share" </> map toLower pkgname) (getL packageDescription atoms)
       s _ _ = error "setL dataDir"
-
-
--- | The Compiler value returned when the cabal file was loaded.
-compiler :: Lens Atoms (Maybe Compiler)
-compiler = lens g s
-    where
-      g atoms = foldAtoms from Nothing atoms
-          where
-            from Source (DHCompiler x') (Just x) | x /= x' = error $ "Conflicting compat values:" ++ show (x, x')
-            from Source (DHCompiler x) _ = Just x
-            from _ _ x = x
-      s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . DHCompiler) x)) atoms
-          where
-            f Source (DHCompiler y) = Just y
-            f _ _ = Nothing
+-}
 
 -- | Map from cabal Extra-Lib names to debian binary package names.
 extraLibMap :: Lens Atoms (Map String (Set Relations))
@@ -1216,7 +1187,7 @@ defaultFlags =
     }
 
 insertAtom :: DebAtomKey -> DebAtom -> Atoms -> Atoms
-insertAtom mbin atom (Atoms x) = Atoms (insertWith union mbin (singleton atom) x)
+insertAtom mbin atom atoms = atoms {atomMap = insertWith union mbin (singleton atom) (atomMap atoms)}
 
 insertAtoms :: Set (DebAtomKey, DebAtom) -> Atoms -> Atoms
 insertAtoms s atoms =
@@ -1225,12 +1196,12 @@ insertAtoms s atoms =
       Just ((k, a), s') -> insertAtoms s' (insertAtom k a atoms)
 
 foldAtoms :: (DebAtomKey -> DebAtom -> r -> r) -> r -> Atoms -> r
-foldAtoms f r0 (Atoms xs) = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 xs
+foldAtoms f r0 atoms = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (atomMap atoms)
 
 -- | Split atoms out of an Atoms by predicate.
 partitionAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> (Set (DebAtomKey, DebAtom), Atoms)
 partitionAtoms f deb =
-    foldAtoms g (mempty, Atoms mempty) deb
+    foldAtoms g (mempty, Atoms (top deb) mempty) deb
     where
       g k atom (atoms, deb') =
           case f k atom of
@@ -1243,7 +1214,7 @@ deleteAtoms p atoms = snd (partitionAtoms p atoms)
 -- | Split atoms out of a Atoms by predicate.
 partitionAtoms' :: (Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> (Set a, Atoms)
 partitionAtoms' f deb =
-    foldAtoms g (mempty, Atoms mempty) deb
+    foldAtoms g (mempty, Atoms (top deb) mempty) deb
     where
       g k atom (xs, deb') =
           case f k atom of

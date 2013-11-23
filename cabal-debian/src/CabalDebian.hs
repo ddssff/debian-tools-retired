@@ -5,17 +5,17 @@
 -- function directly, many sophisticated configuration options cannot
 -- be accessed using the command line interface.
 
+import Control.Monad.State (get, lift)
 import Data.Lens.Lazy (getL)
 import Data.List as List (unlines)
-import Data.Monoid (Monoid(mempty))
 import Debian.Debianize.Details (debianDefaultAtoms)
-import qualified Debian.Debianize.Lenses as Lenses (debAction)
+import Debian.Debianize.Lenses (newAtoms, debAction)
 import Debian.Debianize.Finalize (debianization)
-import Debian.Debianize.Monad (DebT, execDebT)
+import Debian.Debianize.Monad (DebT, evalDebT)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs, options)
 import Debian.Debianize.Output (doDebianizeAction)
 import Debian.Debianize.SubstVars (substvars)
-import Debian.Debianize.Types (DebAction(Debianize, SubstVar, Usage), Top(Top))
+import Debian.Debianize.Types (DebAction(Debianize, SubstVar, Usage))
 import Prelude hiding (unlines, writeFile, init)
 import System.Console.GetOpt (usageInfo)
 import System.Environment (getProgName)
@@ -28,12 +28,13 @@ cabalDebianMain :: DebT IO () -> IO ()
 cabalDebianMain init =
     -- This picks up the options required to decide what action we are
     -- taking.  Yes, it does get repeated in the call to debianize.
-    execDebT (init >> compileEnvironmentArgs >> compileCommandlineArgs) mempty >>= \ atoms ->
-    case getL Lenses.debAction atoms of
-        SubstVar debType -> substvars atoms debType
-        Debianize -> let top = Top "." in debianization top init (return ()) >>= doDebianizeAction top
-        Usage -> do
-          progName <- getProgName
+    evalDebT (init >> compileEnvironmentArgs >> compileCommandlineArgs >>
+              get >>= return . getL debAction >>= finish) (newAtoms ".")
+    where
+      finish (SubstVar debType) = substvars debType
+      finish Debianize = debianization init (return ()) >> doDebianizeAction
+      finish Usage = do
+          progName <- lift getProgName
           let info = unlines [ "Typical usage is to cd to the top directory of the package's unpacked source and run: "
                              , ""
                              , "    " ++ progName ++ " --maintainer 'Maintainer Name <maintainer@email>'."
@@ -45,4 +46,4 @@ cabalDebianMain init =
                              , "reason I recommend either using a pristine unpacked directory each time, or else"
                              , "using a revision control system to revert the package to a known state before running."
                              , "The following additional options are available:" ]
-          putStrLn (usageInfo info options)
+          lift $ putStrLn (usageInfo info options)

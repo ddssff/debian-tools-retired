@@ -7,10 +7,10 @@ import Debian.Changes (ChangeLog(..))
 import Debian.Debianize (binaryArchitectures, buildDepsIndep, changelog, compat, control, debianization, DebT, depends, description, doBackups, doExecutable, doServer, doWebsite, execDebM, inputChangeLog, inputDebianization, installCabalExec, installData, seereasonDefaultAtoms, sourcePackageName)
 import Debian.Debianize.ControlFile (SourceDebDescription(homepage, standardsVersion))
 import Debian.Debianize.ControlFile hiding (depends, description)
-import qualified Debian.Debianize.Lenses as Lenses (changelog)
-import Debian.Debianize.Monad (Atoms)
+import qualified Debian.Debianize.Lenses as Lenses (changelog, newAtoms)
+import Debian.Debianize.Monad (Atoms, execDebT, evalDebT)
 import Debian.Debianize.Output (compareDebianization)
-import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..), Top(Top))
+import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
 import Debian.Policy (databaseDirectory, PackageArchitectures(All), StandardsVersion(StandardsVersion))
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), SrcPkgName(..), VersionReq(SLT))
 import Debian.Version (parseDebianVersion)
@@ -23,16 +23,16 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 -- copyFirstLogEntry.
 main :: IO ()
 main =
-    do log <- inputChangeLog (Top "test-data/artvaluereport2/input")
-       new <- debianization (Top "test-data/artvaluereport2/input") seereasonDefaultAtoms (customize log)
-       old <- inputDebianization (Top "test-data/artvaluereport2/output")
+    do log <- evalDebT inputChangeLog (Lenses.newAtoms "test-data/artvaluereport2/input")
+       new <- execDebT (debianization seereasonDefaultAtoms (customize log)) (Lenses.newAtoms "test-data/artvaluereport2/input")
+       old <- execDebT inputDebianization (Lenses.newAtoms "test-data/artvaluereport2/output")
        -- The newest log entry gets modified when the Debianization is
        -- generated, it won't match so drop it for the comparison.
-       putStr $ compareDebianization old (copyFirstLogEntry old new)
+       compareDebianization old (copyFirstLogEntry old new) >>= putStr
     where
-      customize :: ChangeLog -> DebT IO ()
+      customize :: Either IOError ChangeLog -> DebT IO ()
       customize log =
-          do changelog log
+          do either (const (return ())) changelog log
              installCabalExec (BinPkgName "appraisalscope") "lookatareport" "usr/bin"
              doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"})
              doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development"))

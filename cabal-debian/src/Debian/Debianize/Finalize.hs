@@ -5,10 +5,10 @@ module Debian.Debianize.Finalize
     , finalizeDebianization -- external use deprecated - used in test script
     ) where
 
-import Control.Applicative ((<$>))
 import Control.Monad (when)
 import Control.Monad as List (mapM_)
-import Control.Monad.State (get, modify)
+import Control.Monad.State (get, modify, lift)
+import Control.Monad.Trans (MonadIO)
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Char (isSpace, toLower)
 import Data.Digest.Pure.MD5 (md5)
@@ -17,7 +17,7 @@ import Data.Lens.Lazy (getL, modL)
 import Data.List as List (filter, intercalate, map, minimumBy, nub, unlines)
 import Data.Map as Map (elems, lookup, Map, toList)
 import Data.Maybe (catMaybes, fromMaybe, isJust)
-import Data.Monoid ((<>), Monoid(mempty))
+import Data.Monoid ((<>))
 import Data.Set as Set (difference, filter, fromList, map, null, Set, singleton, toList, unions)
 import qualified Data.Set as Set (member)
 import Data.Set.Extra as Set (mapM_)
@@ -29,16 +29,17 @@ import Debian.Debianize.ControlFile as Debian (BinaryDebDescription(..), newBina
 import qualified Debian.Debianize.ControlFile as D (BinaryDebDescription(..), PackageRelations(..), PackageType(..), SourceDebDescription(..))
 import Debian.Debianize.Files2 (debianName, mkPkgName, mkPkgName')
 import Debian.Debianize.Goodies (backupAtoms, describe, execAtoms, serverAtoms, siteAtoms, watchAtom)
-import Debian.Debianize.Input (inputCabalization, inputChangeLog, inputLicenseFile, inputMaintainer)
-import qualified Debian.Debianize.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, changelog, comments, compat, compiler, conflicts, control, copyright, dataDir, debianNameMap, debVersion, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, maintainer, missingDependencies, noDocumentationLibrary, noProfilingLibrary, packageDescription, provides, replaces, revision, serverInfo, sourcePackageName, sourcePriority, sourceSection, utilsPackageNames, website)
-import Debian.Debianize.Monad (changelog, compat, copyright, execDebT, maintainer, sourcePackageName, sourcePriority, sourceSection, watch)
-import Debian.Debianize.Monad as Monad (Atoms, binaryArchitectures, control, DebT, evalDebM, file, install, installCabalExec, installData, installDir, installTo, intermediateFile, link, rulesFragment)
+import Debian.Debianize.Input (inputChangeLog, inputLicenseFile, inputMaintainer, inputCompiler, inputCabalization, dataDir)
+import qualified Debian.Debianize.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, changelog, comments, compat, conflicts, control, copyright, debianNameMap, debVersion, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, maintainer, missingDependencies, noDocumentationLibrary, noProfilingLibrary, provides, replaces, revision, serverInfo, sourcePackageName, sourcePriority, sourceSection, utilsPackageNames, website)
+import Debian.Debianize.Monad as Monad
+    (Atoms, binaryArchitectures, control, DebT, evalDebM, file, install, installCabalExec, installData, installDir, installTo, intermediateFile, link, rulesFragment,
+     askTop, changelog, compat, copyright, maintainer, sourcePackageName, sourcePriority, sourceSection, watch)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
-import Debian.Debianize.Types (InstallFile(..), Top(unTop))
+import Debian.Debianize.Types (InstallFile(..))
 import Debian.Debianize.Utility (foldEmpty, withCurrentDirectory)
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
-import Debian.Policy (getDebhelperCompatLevel, PackageArchitectures(Any, All), PackagePriority(Optional), parseMaintainer, Section(..))
+import Debian.Policy (getDebhelperCompatLevel, PackageArchitectures(Any, All), PackagePriority(Optional), Section(..))
 import Debian.Relation (BinPkgName, BinPkgName(BinPkgName), Relation, Relation(Rel), Relations, SrcPkgName)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(EEQ, GRE, LTE, SGR, SLT))
 import Debian.Release (parseReleaseName)
@@ -54,7 +55,6 @@ import Distribution.Version.Invert (invertVersionRange)
 import Prelude hiding (init, log, map, unlines, unlines, writeFile)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((<.>), (</>), makeRelative, splitFileName, takeDirectory, takeFileName)
-import System.IO.Error (catchIOError)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readProcessWithExitCode)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..))
@@ -65,27 +65,31 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-debianization :: Top -> DebT IO () -> DebT IO () -> IO Atoms
-debianization top init customize =
-    do atoms <- execDebT (init >> compileEnvironmentArgs >> compileCommandlineArgs >> customize >> inputCabalization top) mempty
-       log <- (Just <$> inputChangeLog top) `catchIOError` (\ _ -> return Nothing)
-       date <- getCurrentLocalRFC822Time
-       maint <- inputMaintainer atoms
-       level <- maybe getDebhelperCompatLevel (return . Just) (getL Lenses.compat atoms :: Maybe Int)
-       copyrt <- withCurrentDirectory (unTop top) $ inputLicenseFile (fromMaybe (error $ "cabalToDebianization: Failed to read cabal file in " ++ unTop top)
-                                                                                   (getL Lenses.packageDescription atoms))
-       execDebT (debianization' date copyrt maint level log) atoms
+debianization :: DebT IO () -> DebT IO () -> DebT IO ()
+debianization init customize =
+    do top <- askTop
+       init
+       compileEnvironmentArgs
+       compileCommandlineArgs
+       customize
+       log <- inputChangeLog
+       pkgDesc <- inputCabalization >>= either (error $ "cabalToDebianization: Failed to read cabal file in " ++ show top) return
+       date <- lift getCurrentLocalRFC822Time
+       maint <- inputMaintainer
+       level <- get >>= return. getL Lenses.compat >>= lift . maybe getDebhelperCompatLevel (return . Just)
+       copyrt <- lift . withCurrentDirectory top . inputLicenseFile $ pkgDesc
+       debianization' date copyrt maint level log
 
-debianization' :: Monad m =>
+debianization' :: MonadIO m =>
                   String              -- ^ current date
                -> Maybe Text          -- ^ copyright
-               -> Maybe NameAddr      -- ^ maintainer
+               -> NameAddr            -- ^ maintainer
                -> Maybe Int	      -- ^ Default standards version
-               -> Maybe ChangeLog
+               -> Either IOError ChangeLog
                -> DebT m ()
 debianization' date copy maint level log =
     do deb <- get
-       let pkgDesc = fromMaybe (error "debianization") (getL Lenses.packageDescription deb)
+       pkgDesc <- inputCabalization >>= either (error "debianization") return
        addExtraLibDependencies
        copyright (case getL Lenses.copyright deb of
                     Just x -> x
@@ -96,14 +100,14 @@ debianization' date copy maint level log =
        -- FIXME - sourceSection and sourcePriority should be settable
        sourceSection (MainSection "haskell")
        sourcePriority Optional
-       maybe (return ()) changelog log
+       either (\ _ -> return ()) changelog log
        maybe (return ()) compat level
        finalizeChangelog maint date
        finalizeControl
        modify (modL Lenses.copyright (maybe (Just (Left AllRightsReserved)) Just))
        finalizeDebianization pkgDesc
 
-dropFutureChangelogEntries :: Monad m => DebT m ()
+dropFutureChangelogEntries :: MonadIO m => DebT m ()
 dropFutureChangelogEntries =
     do deb <- get
        ver <- debianVersion
@@ -119,13 +123,13 @@ dropFutureChangelogEntries =
 -- the cabal version of the package.  Otherwise, the cabal version is
 -- combined with the given epoch number and revision string to create
 -- a version.
-debianVersion :: Monad m => DebT m DebianVersion
+debianVersion :: MonadIO m => DebT m DebianVersion
 debianVersion =
-    do deb <- get
-       let pkgDesc = fromMaybe (error "versionInfo: no PackageDescription") $ getL Lenses.packageDescription deb
-           pkgId = Cabal.package pkgDesc
+    do pkgDesc <- inputCabalization >>= either (error "versionInfo: no PackageDescription") return
+       let pkgId = Cabal.package pkgDesc
        epoch <- debianEpoch (pkgName pkgId)
-       case getL Lenses.debVersion deb of
+       debVer <- get >>= return . getL Lenses.debVersion
+       case debVer of
          Just override
              | override < parseDebianVersion (show (pretty (pkgVersion pkgId))) ->
                  error ("Version from --deb-version (" ++ show (pretty override) ++
@@ -133,9 +137,9 @@ debianVersion =
                         "), maybe you need to unpin this package?")
          Just override -> return override
          Nothing ->
-             let rev = foldEmpty Nothing Just (fromMaybe "" (getL Lenses.revision deb))
-                 ver = show (pretty (pkgVersion pkgId)) in
-             return $ buildDebianVersion epoch ver rev
+             do let ver = show (pretty (pkgVersion pkgId))
+                rev <- get >>= return . getL Lenses.revision >>= return . foldEmpty Nothing Just . fromMaybe ""
+                return $ buildDebianVersion epoch ver rev
 
 -- | Return the Debian epoch number assigned to the given cabal
 -- package - the 1 in version numbers like 1:3.5-2.
@@ -145,11 +149,11 @@ debianEpoch name = get >>= return . Map.lookup name . getL Lenses.epochMap
 -- | Compute and return the debian source package name, based on the
 -- sourcePackageName if it was specified, and constructed from the
 -- cabal name otherwise.
-sourceName :: Monad m => DebT m SrcPkgName
+sourceName :: MonadIO m => DebT m SrcPkgName
 sourceName =
     do deb <- get
-       let pkgDesc = fromMaybe (error "versionInfo: no PackageDescription") $ getL Lenses.packageDescription deb
-           pkgId = Cabal.package pkgDesc
+       pkgDesc <- inputCabalization >>= either (error "versionInfo: no PackageDescription") return
+       let pkgId = Cabal.package pkgDesc
            name = maybe (evalDebM (debianName D.Source' pkgId) deb) id (getL Lenses.sourcePackageName deb)
        sourcePackageName name
        return name
@@ -164,20 +168,12 @@ finalizeControl =
 -- source package name implied by the debianization.  This means
 -- either adding an entry or modifying the latest entry (if its
 -- version number is the exact one in our debianization.)
-finalizeChangelog :: Monad m => Maybe NameAddr -> String -> DebT m ()
+finalizeChangelog :: MonadIO m => NameAddr -> String -> DebT m ()
 finalizeChangelog maint date =
     do deb <- get
        ver <- debianVersion
        src <- sourceName
-       let (Just (ChangeLog (entry : _))) = getL Lenses.changelog deb
-           maint' :: NameAddr
-           maint' =
-               case maint of
-                 Just x -> x
-                 Nothing -> case (parseMaintainer (logWho entry)) of
-                              Left e -> NameAddr (Just "Invalid Maintainer String") (show e)
-                              Right x -> x
-       maintainer maint'
+       maintainer maint
        dropFutureChangelogEntries
        let newEntry = Entry { logPackage = show (pretty src)
                             , logVersion = ver
@@ -185,7 +181,7 @@ finalizeChangelog maint date =
                             , logUrgency = "low"
                             , logComments = List.unlines $ List.map (("  * " <>) . List.intercalate "\n    " . List.map unpack)
                                             (fromMaybe [["Debianization generated by cabal-debian"]] (getL Lenses.comments deb))
-                            , logWho = show (pretty maint')
+                            , logWho = show (pretty maint)
                             , logDate = date }
        case getL Lenses.changelog deb of
          -- If there is already a changelog entry with the exact
@@ -204,26 +200,24 @@ mergeChangelogEntries old new =
 -- | Convert the extraLibs field of the cabal build info into debian
 -- binary package names and make them dependendencies of the debian
 -- devel package (if there is one.)
-addExtraLibDependencies :: Monad m => DebT m ()
+addExtraLibDependencies :: MonadIO m => DebT m ()
 addExtraLibDependencies =
     do deb <- get
-       control (\ y -> y {D.binaryPackages = List.map (f deb) (D.binaryPackages (getL Lenses.control deb))})
+       pkgDesc <- inputCabalization >>= either (error "addExtraLibDependencies: no PackageDescription") return
+       control (\ y -> y {D.binaryPackages = List.map (f deb pkgDesc) (D.binaryPackages (getL Lenses.control deb))})
     where
-      f :: Atoms -> D.BinaryDebDescription -> D.BinaryDebDescription
-      f deb bin
-          | evalDebM (debianName D.Development (Cabal.package (pkgDesc deb))) deb == D.package bin
-              = bin { D.relations = g deb (D.relations bin) }
-      f _ bin = bin
-      g :: Atoms -> D.PackageRelations -> D.PackageRelations
-      g deb rels =
+      f deb pkgDesc bin
+          | evalDebM (debianName D.Development (Cabal.package pkgDesc)) deb == D.package bin
+              = bin { D.relations = g deb pkgDesc (D.relations bin) }
+      f _ _ bin = bin
+      g deb pkgDesc rels =
           rels { D.depends =
                      concat $
                           [D.depends rels] ++
                           concatMap (\ cab -> maybe [[[Rel (BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]]
                                                     Set.toList
                                                     (Map.lookup cab (getL Lenses.extraLibMap deb)))
-                                    (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc deb) }
-      pkgDesc deb = fromMaybe (error "addExtraLibDependencies: no PackageDescription") $ getL Lenses.packageDescription deb
+                                    (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc) }
 
 -- | Now that we know the build and data directories, we can expand
 -- some atoms into sets of simpler atoms which can eventually be
@@ -233,7 +227,7 @@ addExtraLibDependencies =
 -- this function is not idempotent.  (Exported for use in unit tests.)
 -- FIXME: we should be able to run this without a PackageDescription, change
 --        paramter type to Maybe PackageDescription and propagate down thru code
-finalizeDebianization  :: Monad m => PackageDescription -> DebT m ()
+finalizeDebianization  :: MonadIO m => PackageDescription -> DebT m ()
 finalizeDebianization pkgDesc =
     do expandAtoms
        f
@@ -244,13 +238,13 @@ finalizeDebianization pkgDesc =
        g
     where
       -- Create the binary packages for the web sites, servers, backup packges, and other executables
-      f :: Monad m => DebT m ()
+      f :: MonadIO m => DebT m ()
       f = do get >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList . getL Lenses.executable
              get >>= List.mapM_ (\ (b, _) -> binaryArchitectures b Any >> cabalExecBinaryPackage pkgDesc b) . Map.toList . getL Lenses.backups
              get >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList . getL Lenses.serverInfo
              get >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList . getL Lenses.website
       -- Turn atoms related to priority, section, and description into debianization elements
-      g :: Monad m  => DebT m ()
+      g :: MonadIO m  => DebT m ()
       g = do get >>= maybe (return ()) (\ x -> control (\ y -> y {priority = Just x})) . getL Lenses.sourcePriority
              get >>= maybe (return ()) (\ x -> control (\ y -> y {section = Just x})) . getL Lenses.sourceSection
              get >>= List.mapM_ (\ (b, x) -> control (\ y -> modifyBinaryDeb b ((\ bin -> bin {architecture = x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.binaryArchitectures
@@ -258,13 +252,13 @@ finalizeDebianization pkgDesc =
              get >>= List.mapM_ (\ (b, x) -> control (\ y -> modifyBinaryDeb b ((\ bin -> bin {binarySection = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.binarySections
              get >>= List.mapM_ (\ (b, x) -> control (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.description
 
-putBuildDeps :: Monad m => PackageDescription -> DebT m ()
+putBuildDeps :: MonadIO m => PackageDescription -> DebT m ()
 putBuildDeps pkgDesc =
     do deps <- debianBuildDeps pkgDesc
        depsIndep <- debianBuildDepsIndep pkgDesc
        Monad.control (\ y -> y { Debian.buildDepends = deps, buildDependsIndep = depsIndep })
 
-cabalExecBinaryPackage :: Monad m => PackageDescription -> BinPkgName -> DebT m ()
+cabalExecBinaryPackage :: MonadIO m => PackageDescription -> BinPkgName -> DebT m ()
 cabalExecBinaryPackage pkgDesc b =
     do rels <- binaryPackageRelations b Exec
        desc <- describe Exec (Cabal.package pkgDesc)
@@ -300,7 +294,7 @@ binaryPackageRelations b typ =
          }
 
 -- debLibProf haddock binaryPackageDeps extraDevDeps extraLibMap
-librarySpecs :: Monad m => PackageDescription -> DebT m ()
+librarySpecs :: MonadIO m => PackageDescription -> DebT m ()
 librarySpecs pkgDesc =
     do debName <- debianName Documentation (Cabal.package pkgDesc)
        let dev = isJust (Cabal.library pkgDesc)
@@ -321,7 +315,7 @@ librarySpecs pkgDesc =
       PackageName cabal = pkgName (Cabal.package pkgDesc)
       hoogle = List.map toLower cabal
 
-docSpecsParagraph :: Monad m => PackageIdentifier -> DebT m BinaryDebDescription
+docSpecsParagraph :: MonadIO m => PackageIdentifier -> DebT m BinaryDebDescription
 docSpecsParagraph pkgId =
     do name <- debianName Documentation pkgId
        rels <- binaryPackageRelations name Development
@@ -337,7 +331,7 @@ docSpecsParagraph pkgId =
             , relations = rels
             }
 
-librarySpec :: Monad m => PackageArchitectures -> PackageType -> PackageIdentifier -> DebT m BinaryDebDescription
+librarySpec :: MonadIO m => PackageArchitectures -> PackageType -> PackageIdentifier -> DebT m BinaryDebDescription
 librarySpec arch typ pkgId =
     do name <- debianName typ pkgId
        rels <- binaryPackageRelations name Development
@@ -411,14 +405,14 @@ makeUtilsAtoms p datas execs =
 -- finalizeAtoms atoms | atoms == mempty = atoms
 -- finalizeAtoms atoms = atoms <> finalizeAtoms (execDebM expandAtoms atoms)
 
-expandAtoms :: Monad m => DebT m ()
+expandAtoms :: MonadIO m => DebT m ()
 expandAtoms =
     do builddir <- get >>= return . fromMaybe "dist-ghc/build" . getL Lenses.buildDir
-       datadir <- get >>= return . fromMaybe (error "finalizeAtoms: no dataDir")  . getL Lenses.dataDir
+       dDir <- inputCabalization >>= either (error "expandAtoms") (return . dataDir)
        expandApacheSites
        expandInstallCabalExecs builddir
        expandInstallCabalExecTo builddir
-       expandInstallData datadir
+       expandInstallData dDir
        expandInstallTo
        expandFile
        expandWebsite
@@ -449,12 +443,12 @@ expandAtoms =
                                                                                  , "\tinstall -Dps " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty b) </> makeRelative "/" d) ])) pairs) (Map.toList mp)
 
       expandInstallData :: Monad m => FilePath -> DebT m ()
-      expandInstallData datadir =
+      expandInstallData dDir =
           do mp <- get >>= return . getL Lenses.installData
              List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (s, d) ->
                                                         if takeFileName s == takeFileName d
-                                                        then install b s (datadir </> makeRelative "/" (takeDirectory d))
-                                                        else installTo b s (datadir </> makeRelative "/" d)) pairs) (Map.toList mp)
+                                                        then install b s (dDir </> makeRelative "/" (takeDirectory d))
+                                                        else installTo b s (dDir </> makeRelative "/" d)) pairs) (Map.toList mp)
 
       expandInstallTo :: Monad m => DebT m ()
       expandInstallTo =
@@ -532,7 +526,7 @@ allBuildDepends buildDepends' buildTools' pkgconfigDepends' extraLibs' =
 
 -- The haskell-cdbs package contains the hlibrary.mk file with
 -- the rules for building haskell packages.
-debianBuildDeps :: Monad m => PackageDescription -> DebT m D.Relations
+debianBuildDeps :: MonadIO m => PackageDescription -> DebT m D.Relations
 debianBuildDeps pkgDesc =
     do deb <- get
        cDeps <- cabalDeps
@@ -555,17 +549,23 @@ debianBuildDeps pkgDesc =
                           (concatMap extraLibs . allBuildInfo $ pkgDesc)
              mapM buildDependencies (List.filter (not . selfDependency (Cabal.package pkgDesc)) deps) >>= return . concat
 
-debianBuildDepsIndep :: Monad m => PackageDescription -> DebT m D.Relations
+debianBuildDepsIndep :: MonadIO m => PackageDescription -> DebT m D.Relations
 debianBuildDepsIndep pkgDesc =
-    do deb <- get
-       doc <- get >>= return . not . getL Lenses.noDocumentationLibrary
+    do doc <- get >>= return . not . getL Lenses.noDocumentationLibrary
        bDeps <- get >>= return . getL Lenses.buildDepsIndep
-       let cDeps = cabalDeps deb
+       cDeps <- cabalDeps
        let xs = if doc
-                then nub $ [anyrel "ghc-doc"] ++ concat (Set.toList bDeps) ++ cDeps
+                then nub $ [anyrel "ghc-doc"] ++ concat (Set.toList bDeps) ++ concat cDeps
                 else []
        filterMissing xs
     where
+      cabalDeps =
+          do deps <- allBuildDepends
+                           (Cabal.buildDepends pkgDesc) (concatMap buildTools . allBuildInfo $ pkgDesc)
+                           (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc) (concatMap extraLibs . allBuildInfo $ pkgDesc)
+             let deps' = List.filter (not . selfDependency (Cabal.package pkgDesc)) deps
+             mapM docDependencies deps'
+{-
       cabalDeps deb =
           concat . List.map (\ x -> evalDebM (docDependencies x) deb)
                      $ List.filter (not . selfDependency (Cabal.package pkgDesc))
@@ -574,18 +574,19 @@ debianBuildDepsIndep pkgDesc =
                            (Cabal.buildDepends pkgDesc) (concatMap buildTools . allBuildInfo $ pkgDesc)
                            (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc) (concatMap extraLibs . allBuildInfo $ pkgDesc))
                          deb
+-}
 
 -- | The documentation dependencies for a package include the
 -- documentation package for any libraries which are build
 -- dependencies, so we have access to all the cross references.
-docDependencies :: Monad m => Dependency_ -> DebT m D.Relations
+docDependencies :: MonadIO m => Dependency_ -> DebT m D.Relations
 docDependencies (BuildDepends (Dependency name ranges)) = dependencies Documentation name ranges
 docDependencies _ = return []
 
 -- | The Debian build dependencies for a package include the profiling
 -- libraries and the documentation packages, used for creating cross
 -- references.  Also the packages associated with extra libraries.
-buildDependencies :: Monad m => Dependency_ -> DebT m D.Relations
+buildDependencies :: MonadIO m => Dependency_ -> DebT m D.Relations
 buildDependencies (BuildDepends (Dependency name ranges)) =
     do dev <- dependencies Development name ranges
        prof <- dependencies Profiling name ranges
@@ -638,7 +639,7 @@ anyrel' x = [D.Rel x Nothing Nothing]
 -- | Turn a cabal dependency into debian dependencies.  The result
 -- needs to correspond to a single debian package to be installed,
 -- so we will return just an OrRelation.
-dependencies :: Monad m => PackageType -> PackageName -> VersionRange -> DebT m Relations
+dependencies :: MonadIO m => PackageType -> PackageName -> VersionRange -> DebT m Relations
 dependencies typ name cabalRange =
     do atoms <- get
        -- Compute a list of alternative debian dependencies for
@@ -703,15 +704,12 @@ dependencies typ name cabalRange =
 -- compiler a substitute for that package.  If we were to
 -- specify the virtual package (e.g. libghc-base-dev) we would
 -- have to make sure not to specify a version number.
-doBundled :: Monad m => PackageType -> PackageName -> [D.Relation] -> DebT m [D.Relation]
+doBundled :: MonadIO m => PackageType -> PackageName -> [D.Relation] -> DebT m [D.Relation]
 doBundled typ name rels =
-    do atoms <- get
-       case getL Lenses.compiler atoms of
-         Nothing -> error "Compiler package name not set - can't decide what libaries are built in"
-         Just compiler ->
-             case ghcBuiltIn compiler name of
-               True -> return $ rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
-               False -> return rels
+    do comp <- inputCompiler
+       case ghcBuiltIn comp name of
+         True -> return $ rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
+         False -> return rels
     where
       compilerPackageName Documentation = D.BinPkgName "ghc-doc"
       compilerPackageName Profiling = D.BinPkgName "ghc-prof"
