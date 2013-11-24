@@ -51,7 +51,7 @@ Library
     Hs-Source-Dirs: ., ../cabal-debian/src
     Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff
   else
-    Build-Depends: cabal-debian >= 3.10.1
+    Build-Depends: cabal-debian >= 3.10.3
 
   Build-Depends:
         ansi-wl-pprint
@@ -134,7 +134,7 @@ Executable autobuilder-tests
     Hs-Source-Dirs: ., ../cabal-debian/src
     Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff
   else
-    Build-Depends: cabal-debian >= 3.10
+    Build-Depends: cabal-debian >= 3.10.3
   if flag(local-debian-repo)
     Hs-Source-Dirs: ., ../debian-repo
   else

@@ -17,11 +17,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
-import Debian.Debianize (compileArgs)
-import qualified Debian.Debianize as Cabal
-import Debian.Debianize.Atoms (runDebianize, writeDebianization)
-import Debian.Debianize.Monad (DebT)
-import Debian.Debianize.Types (Top(Top))
+import Debian.Debianize as Cabal hiding (package, verbosity, withCurrentDirectory)
 import Debian.Relation (prettyRelations)
 import Debian.Repo (sub)
 import Debian.Repo.Sync (rsync)
@@ -93,8 +89,10 @@ autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> DebT IO () -> I
 autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do -- This will be false if the package has no debian/Debianize.hs script
-       done <- collectPackageFlags cache pflags >>= runDebianize
-       when (not done) (withArgs [] (Cabal.debianization (Top ".") defaultAtoms (applyPackageFlags pflags) >>= writeDebianization (Top ".")))
+       done <- collectPackageFlags cache pflags >>= runDebianizeScript
+       when (not done) (withArgs [] (Cabal.evalDebT (debianization defaultAtoms (applyPackageFlags pflags) >>
+                                                     writeDebianization)
+                                                    (newAtoms ".")))
 
 applyPackageFlags :: [P.PackageFlag] -> DebT IO ()
 applyPackageFlags flags = mapM_ applyPackageFlag flags

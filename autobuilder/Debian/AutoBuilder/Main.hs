@@ -29,7 +29,7 @@ import Debian.AutoBuilder.Types.Download (Download)
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
-import Debian.Debianize.Monad (DebT)
+import Debian.Debianize (DebT)
 import Debian.Release (parseSection', releaseName')
 import Debian.Sources (SliceName(..))
 import Debian.Repo.AptImage(prepareAptEnv)

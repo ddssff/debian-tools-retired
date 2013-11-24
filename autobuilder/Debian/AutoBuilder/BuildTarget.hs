@@ -30,7 +30,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as C
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Debianize.Monad (DebT)
+import Debian.Debianize (DebT)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo (OSImage, rootPath, rootDir, findSourceTree, copySourceTree, SourceTree(dir'), topdir)
 import System.Directory (createDirectoryIfMissing)
