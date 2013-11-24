@@ -8,7 +8,7 @@ module Debian.Debianize.Finalize
 import Control.Monad (when)
 import Control.Monad as List (mapM_)
 import Control.Monad.State (get, modify, lift)
-import Control.Monad.Trans (MonadIO)
+import Control.Monad.Trans (MonadIO, liftIO)
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Char (isSpace, toLower)
 import Data.Digest.Pure.MD5 (md5)
@@ -30,7 +30,7 @@ import qualified Debian.Debianize.ControlFile as D (BinaryDebDescription(..), Pa
 import Debian.Debianize.Files2 (debianName, mkPkgName, mkPkgName')
 import Debian.Debianize.Goodies (backupAtoms, describe, execAtoms, serverAtoms, siteAtoms, watchAtom)
 import Debian.Debianize.Input (inputChangeLog, inputLicenseFile, inputMaintainer, inputCompiler, inputCabalization, dataDir)
-import qualified Debian.Debianize.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, changelog, comments, compat, conflicts, control, copyright, debianNameMap, debVersion, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, maintainer, missingDependencies, noDocumentationLibrary, noProfilingLibrary, provides, replaces, revision, serverInfo, sourcePackageName, sourcePriority, sourceSection, utilsPackageNames, website)
+import qualified Debian.Debianize.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, changelog, comments, compat, conflicts, control, copyright, debianNameMap, debVersion, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, maintainer, missingDependencies, noDocumentationLibrary, noProfilingLibrary, provides, replaces, revision, serverInfo, sourcePackageName, sourcePriority, sourceSection, utilsPackageNames, website, showAtoms)
 import Debian.Debianize.Monad as Monad
     (Atoms, binaryArchitectures, control, DebT, evalDebM, file, install, installCabalExec, installData, installDir, installTo, intermediateFile, link, rulesFragment,
      askTop, changelog, compat, copyright, maintainer, sourcePackageName, sourcePriority, sourceSection, watch)
@@ -106,6 +106,7 @@ debianization' date copy maint level log =
        finalizeControl
        modify (modL Lenses.copyright (maybe (Just (Left AllRightsReserved)) Just))
        finalizeDebianization pkgDesc
+       get >>= liftIO . Lenses.showAtoms
 
 dropFutureChangelogEntries :: MonadIO m => DebT m ()
 dropFutureChangelogEntries =

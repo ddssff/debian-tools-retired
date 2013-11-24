@@ -3,6 +3,7 @@ module Debian.Debianize.Lenses
     ( Top(unTop)
     , Atoms
     , newAtoms
+    , showAtoms
 
     , Flags(..)
     -- * Modes of operation
@@ -81,12 +82,14 @@ module Debian.Debianize.Lenses
     , intermediateFiles
     ) where
 
+import Control.Monad (when)
 import Data.Generics (Data, Typeable)
 import Data.Lens.Lazy (Lens, lens, getL, modL)
-import Data.Map as Map (Map, fold, foldWithKey, insertWith, empty, insert)
+import Data.List (intercalate)
+import Data.Map as Map (Map, fold, foldWithKey, insertWith, empty, insert, toList)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
-import Data.Set as Set (Set, maxView, empty, union, singleton, fold, insert)
+import Data.Set as Set (Set, maxView, empty, union, singleton, fold, insert, toList, null)
 import Data.Text (Text)
 import Data.Version (Version {-, showVersion-})
 import Debian.Changes (ChangeLog)
@@ -119,6 +122,16 @@ newtype Top = Top {unTop :: FilePath} deriving (Eq, Ord, Show, Typeable)
 
 newAtoms :: FilePath -> Atoms
 newAtoms x = Atoms {top = Top x, atomMap = mempty}
+
+showAtoms :: Atoms -> IO ()
+showAtoms x =
+    when (getL verbosity x > 0) $ do
+      putStrLn ("\nTop: " ++ show (top x))
+      mapM_ putAtoms (Map.toList (atomMap x))
+      putStrLn ""
+    where
+      putAtoms (_, s) | Set.null s = return ()
+      putAtoms (k, s) = putStrLn ("\n" ++ show k ++ ":\n  " ++ intercalate "\n  " (map show (Set.toList s)))
 
 -- All the internals of this module is a steaming pile of poo, except
 -- for the stuff that is exported.
