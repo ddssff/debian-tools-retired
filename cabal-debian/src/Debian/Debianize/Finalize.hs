@@ -106,7 +106,7 @@ debianization' date copy maint level log =
        modify (modL Lenses.copyright (maybe (Just (Left AllRightsReserved)) Just))
        finalizeDebianization pkgDesc
        vb <- access verbosity
-       when (vb > 0) (get >>= liftIO . showAtoms)
+       when (vb >= 3) (get >>= liftIO . showAtoms)
 
 dropFutureChangelogEntries :: MonadIO m => DebT m ()
 dropFutureChangelogEntries =
