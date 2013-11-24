@@ -276,24 +276,27 @@ modifyM f = get >>= f >>= put
 intToVerbosity' :: Int -> Verbosity
 intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
 
--- | Version of Data.Lens.Lazy.~= that returns () instead of a
+-- | Set a lens value.  (This is a version of Data.Lens.Lazy.~= that returns () instead of b.)
 (~=) :: Monad m => Lens a b -> b -> StateT a m ()
 lens ~= x = lens Lens.~= x >> return ()
 
--- | Version of Data.Lens.Lazy.~= that returns () instead of a
+-- | Modify a @b@ if the argument @isJust@.
 (~?=) :: Monad m => Lens a b -> Maybe b -> StateT a m ()
 lens ~?= (Just x) = lens Lens.~= x >> return ()
 _ ~?= Nothing = return ()
 
--- | Version of Data.Lens.Lazy.%= that returns () instead of a
+-- | Modify a value.  (This is a version of Data.Lens.Lazy.%= that returns () instead of a.)
 (%=) :: Monad m => Lens a b -> (b -> b) -> StateT a m ()
 lens %= f = lens Lens.%= f >> return ()
 
+-- | Insert an element into a @(Set b)@
 (+=) :: (Monad m, Ord b) => Lens a (Set b) -> b -> StateT a m ()
 lens += x = lens %= Set.insert x
 
+-- | Insert an element into a @(Map b c)@
 (++=) :: (Monad m, Ord b) => Lens a (Map b c) -> (b, c) -> StateT a m ()
 lens ++= (k, a) = lens %= Map.insert k a
 
+-- | Insert an element into a @(Map b (Set c))@
 (+++=) :: (Monad m, Ord b, Ord c) => Lens a (Map b (Set c)) -> (b, c) -> StateT a m ()
 lens +++= (k, a) = lens %= Map.insertWith union k (singleton a)
