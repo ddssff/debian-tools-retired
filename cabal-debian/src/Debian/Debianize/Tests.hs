@@ -29,7 +29,7 @@ import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabaliza
 import Debian.Debianize.Lenses (newAtoms)
 import Debian.Debianize.Monad (Atoms, DebT, evalDebT, execDebM, execDebT, epochMap, mapCabal, splitCabal, changelog, compat, control,
                                copyright, rulesHead, sourceFormat, installData, debVersion, buildDeps, execMap, utilsPackageName,
-                               binaryArchitectures, depends, description, revision, missingDependency)
+                               binaryArchitectures, depends, description, revision, missingDependency, installCabalExec)
 import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (modifyM)
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
@@ -86,7 +86,8 @@ tests = TestLabel "Debianization Tests" (TestList [test1 "test1",
                                                    test6 "test6 - test-data/artvaluereport2",
                                                    test7 "test7 - debian/Debianize.hs",
                                                    test8 "test8 - test-data/artvaluereport-data",
-                                                   test9 "test9 - test-data/alex"])
+                                                   test9 "test9 - test-data/alex",
+                                                   test10 "test10 - test-data/archive"])
 
 test1 :: String -> Test
 test1 label =
@@ -532,6 +533,20 @@ test9 label =
              doExecutable (BinPkgName "alex")
                           (InstallFile {execName = "alex", destName = "alex", sourceDir = Nothing, destDir = Nothing})
              buildDeps [[Rel (BinPkgName "alex") Nothing Nothing]]
+
+test10 :: String -> Test
+test10 label =
+    TestLabel label $
+    TestCase (do old <- execDebT inputDebianization (newAtoms "test-data/archive/output")
+                 new <- execDebT (debianization defaultAtoms customize) (newAtoms "test-data/archive/input")
+                 diff <- diffDebianizations old new
+                 assertEqual label [] diff)
+    where
+      customize :: DebT IO ()
+      customize =
+          do utilsPackageName utils
+             installCabalExec utils "seereason-darcs-backups" "/etc/cron.hourly"
+      utils = BinPkgName "seereason-darcs-backups"
 
 data Change k a
     = Created k a
