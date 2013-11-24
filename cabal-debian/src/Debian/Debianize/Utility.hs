@@ -3,7 +3,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 module Debian.Debianize.Utility
-    ( DebMap
+    ( curry3
+    , DebMap
     , buildDebVersionMap
     , (!)
     , trim
@@ -31,7 +32,11 @@ module Debian.Debianize.Utility
     , modifyM
     , intToVerbosity'
     , (~=)
+    , (~?=)
     , (%=)
+    , (+=)
+    , (++=)
+    , (+++=)
     ) where
 
 import Control.Applicative ((<$>))
@@ -43,9 +48,9 @@ import Data.Char (isSpace)
 import qualified Data.Lens.Lazy as Lens ((~=), (%=))
 import Data.List as List (isSuffixOf, intercalate, map, lines)
 import Data.Lens.Lazy (Lens, modL)
-import Data.Map as Map (Map, foldWithKey, empty, fromList, findWithDefault, insert, map, lookup)
+import Data.Map as Map (Map, foldWithKey, empty, fromList, findWithDefault, insert, map, lookup, insertWith)
 import Data.Maybe (catMaybes, mapMaybe, listToMaybe, fromMaybe, fromJust)
-import Data.Set (Set, toList)
+import Data.Set (Set, toList, union, singleton)
 import qualified Data.Set as Set
 import Data.Text as Text (Text, unpack, lines)
 import Data.Text.IO (hGetContents)
@@ -62,6 +67,9 @@ import System.IO (IOMode (ReadMode), withFile, openFile, hSetBinaryMode)
 import System.IO.Error (isDoesNotExistError, catchIOError)
 import System.Process (readProcessWithExitCode, showCommandForUser)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
+
+curry3 :: ((a, b, c) -> d) -> a -> b -> c -> d
+curry3 f a b c = f (a, b, c)
 
 type DebMap = Map D.BinPkgName (Maybe DebianVersion)
 
@@ -272,6 +280,20 @@ intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
 (~=) :: Monad m => Lens a b -> b -> StateT a m ()
 lens ~= x = lens Lens.~= x >> return ()
 
+-- | Version of Data.Lens.Lazy.~= that returns () instead of a
+(~?=) :: Monad m => Lens a b -> Maybe b -> StateT a m ()
+lens ~?= (Just x) = lens Lens.~= x >> return ()
+_ ~?= Nothing = return ()
+
 -- | Version of Data.Lens.Lazy.%= that returns () instead of a
 (%=) :: Monad m => Lens a b -> (b -> b) -> StateT a m ()
 lens %= f = lens Lens.%= f >> return ()
+
+(+=) :: (Monad m, Ord b) => Lens a (Set b) -> b -> StateT a m ()
+lens += x = lens %= Set.insert x
+
+(++=) :: (Monad m, Ord b) => Lens a (Map b c) -> (b, c) -> StateT a m ()
+lens ++= (k, a) = lens %= Map.insert k a
+
+(+++=) :: (Monad m, Ord b, Ord c) => Lens a (Map b (Set c)) -> (b, c) -> StateT a m ()
+lens +++= (k, a) = lens %= Map.insertWith union k (singleton a)

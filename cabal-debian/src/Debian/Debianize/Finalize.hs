@@ -13,7 +13,7 @@ import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Char (isSpace, toLower)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Function (on)
-import Data.Lens.Lazy (getL, modL)
+import Data.Lens.Lazy (getL, modL, access)
 import Data.List as List (filter, intercalate, map, minimumBy, nub, unlines)
 import Data.Map as Map (elems, lookup, Map, toList)
 import Data.Maybe (catMaybes, fromMaybe, isJust)
@@ -25,18 +25,17 @@ import Data.Text as Text (pack, Text, unlines, unpack)
 import Data.Version (showVersion, Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Bundled (ghcBuiltIn)
-import Debian.Debianize.ControlFile as Debian (BinaryDebDescription(..), newBinaryDebDescription, PackageRelations(..), PackageType(..), SourceDebDescription(binaryPackages, buildDependsIndep, priority, section, buildDepends))
-import qualified Debian.Debianize.ControlFile as D (BinaryDebDescription(..), PackageRelations(..), PackageType(..), SourceDebDescription(..))
+import Debian.Debianize.Facts.Types as Debian (BinaryDebDescription(..), newBinaryDebDescription, PackageRelations(..), PackageType(..), SourceDebDescription(binaryPackages, buildDependsIndep, priority, section, buildDepends))
+import qualified Debian.Debianize.Facts.Types as D (BinaryDebDescription(..), PackageRelations(..), PackageType(..), SourceDebDescription(..))
 import Debian.Debianize.Files2 (debianName, mkPkgName, mkPkgName')
 import Debian.Debianize.Goodies (backupAtoms, describe, execAtoms, serverAtoms, siteAtoms, watchAtom)
 import Debian.Debianize.Input (inputChangeLog, inputLicenseFile, inputMaintainer, inputCompiler, inputCabalization, dataDir)
-import qualified Debian.Debianize.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, changelog, comments, compat, conflicts, control, copyright, debianNameMap, debVersion, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, maintainer, missingDependencies, noDocumentationLibrary, noProfilingLibrary, provides, replaces, revision, serverInfo, sourcePackageName, sourcePriority, sourceSection, utilsPackageNames, website, showAtoms)
-import Debian.Debianize.Monad as Monad
-    (Atoms, binaryArchitectures, control, DebT, evalDebM, file, install, installCabalExec, installData, installDir, installTo, intermediateFile, link, rulesFragment,
-     askTop, changelog, compat, copyright, maintainer, sourcePackageName, sourcePriority, sourceSection, watch)
+import Debian.Debianize.Facts.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, changelog, comments, compat, conflicts, control, copyright, debianNameMap, debVersion, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, maintainer, missingDependencies, noDocumentationLibrary, noProfilingLibrary, provides, replaces, revision, serverInfo, sourcePackageName, sourcePriority, sourceSection, utilsPackageNames, website, binaryArchitectures, control, file, install, installCabalExec, installData, installDir, installTo, intermediateFiles, link, rulesFragments, changelog, compat, maintainer, sourcePackageName, sourcePriority, sourceSection, watch)
+import Debian.Debianize.Facts.Monad as Monad (Atoms, DebT, evalDebM, askTop)
+import Debian.Debianize.Facts.Types (showAtoms)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
-import Debian.Debianize.Types (InstallFile(..))
-import Debian.Debianize.Utility (foldEmpty, withCurrentDirectory)
+import Debian.Debianize.Facts.Types (InstallFile(..))
+import Debian.Debianize.Utility (foldEmpty, withCurrentDirectory, (+=), (~=), (+++=), (++=), (%=))
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
 import Debian.Policy (getDebhelperCompatLevel, PackageArchitectures(Any, All), PackagePriority(Optional), Section(..))
@@ -91,29 +90,29 @@ debianization' date copy maint level log =
     do deb <- get
        pkgDesc <- inputCabalization >>= either (error "debianization") return
        addExtraLibDependencies
-       copyright (case getL Lenses.copyright deb of
-                    Just x -> x
-                    Nothing -> case copy of
-                                 Just x -> Right x
-                                 Nothing -> Left (Cabal.license pkgDesc))
-       watch (watchAtom (pkgName $ Cabal.package $ pkgDesc))
+       copyright ~= (case getL Lenses.copyright deb of
+                       Just x -> Just x
+                       Nothing -> case copy of
+                                    Just x -> Just (Right x)
+                                    Nothing -> Just (Left (Cabal.license pkgDesc)))
+       watch ~= Just (watchAtom (pkgName $ Cabal.package $ pkgDesc))
        -- FIXME - sourceSection and sourcePriority should be settable
-       sourceSection (MainSection "haskell")
-       sourcePriority Optional
-       either (\ _ -> return ()) changelog log
-       maybe (return ()) compat level
+       sourceSection ~= Just (MainSection "haskell")
+       sourcePriority ~= Just Optional
+       either (\ _ -> return ()) ((changelog ~=) . Just) log
+       maybe (return ()) ((compat ~=) . Just) level
        finalizeChangelog maint date
        finalizeControl
        modify (modL Lenses.copyright (maybe (Just (Left AllRightsReserved)) Just))
        finalizeDebianization pkgDesc
-       get >>= liftIO . Lenses.showAtoms
+       get >>= liftIO . showAtoms
 
 dropFutureChangelogEntries :: MonadIO m => DebT m ()
 dropFutureChangelogEntries =
     do deb <- get
        ver <- debianVersion
        maybe (return ())
-             (\ (ChangeLog entries) -> changelog (ChangeLog (dropWhile (\ entry -> logVersion entry > ver) entries)))
+             (\ (ChangeLog entries) -> changelog ~= (Just (ChangeLog (dropWhile (\ entry -> logVersion entry > ver) entries))))
              (getL Lenses.changelog deb)
 
 
@@ -156,14 +155,14 @@ sourceName =
        pkgDesc <- inputCabalization >>= either (error "versionInfo: no PackageDescription") return
        let pkgId = Cabal.package pkgDesc
            name = maybe (evalDebM (debianName D.Source' pkgId) deb) id (getL Lenses.sourcePackageName deb)
-       sourcePackageName name
+       sourcePackageName ~= Just name
        return name
 
 finalizeControl :: Monad m => DebT m ()
 finalizeControl =
     do Just src <- get >>= return . getL Lenses.sourcePackageName
        Just maint <- get >>= return . getL Lenses.maintainer
-       control (\ y -> y { D.source = Just src, D.maintainer = Just maint })
+       control %= (\ y -> y { D.source = Just src, D.maintainer = Just maint })
 
 -- | Make sure there is a changelog entry with the version number and
 -- source package name implied by the debianization.  This means
@@ -174,7 +173,7 @@ finalizeChangelog maint date =
     do deb <- get
        ver <- debianVersion
        src <- sourceName
-       maintainer maint
+       maintainer ~= Just maint
        dropFutureChangelogEntries
        let newEntry = Entry { logPackage = show (pretty src)
                             , logVersion = ver
@@ -188,10 +187,10 @@ finalizeChangelog maint date =
          -- If there is already a changelog entry with the exact
          -- version number we need to create, modify it.
          Just (ChangeLog (oldEntry@(Entry {logVersion = d}) : older))
-             | d == ver -> changelog (ChangeLog (mergeChangelogEntries oldEntry newEntry : older))
+             | d == ver -> changelog ~= Just (ChangeLog (mergeChangelogEntries oldEntry newEntry : older))
          -- Otherwise create a new log entry
-         Just (ChangeLog entries) -> changelog (ChangeLog (newEntry : entries))
-         Nothing -> changelog (ChangeLog [newEntry])
+         Just (ChangeLog entries) -> changelog ~= Just (ChangeLog (newEntry : entries))
+         Nothing -> changelog ~= Just (ChangeLog [newEntry])
 
 mergeChangelogEntries :: ChangeLogEntry -> ChangeLogEntry -> ChangeLogEntry
 mergeChangelogEntries old new =
@@ -205,7 +204,7 @@ addExtraLibDependencies :: MonadIO m => DebT m ()
 addExtraLibDependencies =
     do deb <- get
        pkgDesc <- inputCabalization >>= either (error "addExtraLibDependencies: no PackageDescription") return
-       control (\ y -> y {D.binaryPackages = List.map (f deb pkgDesc) (D.binaryPackages (getL Lenses.control deb))})
+       control %= (\ y -> y {D.binaryPackages = List.map (f deb pkgDesc) (D.binaryPackages (getL Lenses.control deb))})
     where
       f deb pkgDesc bin
           | evalDebM (debianName D.Development (Cabal.package pkgDesc)) deb == D.package bin
@@ -241,29 +240,30 @@ finalizeDebianization pkgDesc =
       -- Create the binary packages for the web sites, servers, backup packges, and other executables
       f :: MonadIO m => DebT m ()
       f = do get >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList . getL Lenses.executable
-             get >>= List.mapM_ (\ (b, _) -> binaryArchitectures b Any >> cabalExecBinaryPackage pkgDesc b) . Map.toList . getL Lenses.backups
+             get >>= List.mapM_ (\ (b, _) -> binaryArchitectures ++= (b, Any) >>
+                                             cabalExecBinaryPackage pkgDesc b) . Map.toList . getL Lenses.backups
              get >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList . getL Lenses.serverInfo
              get >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList . getL Lenses.website
       -- Turn atoms related to priority, section, and description into debianization elements
       g :: MonadIO m  => DebT m ()
-      g = do get >>= maybe (return ()) (\ x -> control (\ y -> y {priority = Just x})) . getL Lenses.sourcePriority
-             get >>= maybe (return ()) (\ x -> control (\ y -> y {section = Just x})) . getL Lenses.sourceSection
-             get >>= List.mapM_ (\ (b, x) -> control (\ y -> modifyBinaryDeb b ((\ bin -> bin {architecture = x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.binaryArchitectures
-             get >>= List.mapM_ (\ (b, x) -> control (\ y -> modifyBinaryDeb b ((\ bin -> bin {binaryPriority = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.binaryPriorities
-             get >>= List.mapM_ (\ (b, x) -> control (\ y -> modifyBinaryDeb b ((\ bin -> bin {binarySection = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.binarySections
-             get >>= List.mapM_ (\ (b, x) -> control (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.description
+      g = do get >>= maybe (return ()) (\ x -> control %= (\ y -> y {priority = Just x})) . getL Lenses.sourcePriority
+             get >>= maybe (return ()) (\ x -> control %= (\ y -> y {section = Just x})) . getL Lenses.sourceSection
+             get >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {architecture = x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.binaryArchitectures
+             get >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {binaryPriority = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.binaryPriorities
+             get >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {binarySection = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.binarySections
+             get >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.description
 
 putBuildDeps :: MonadIO m => PackageDescription -> DebT m ()
 putBuildDeps pkgDesc =
     do deps <- debianBuildDeps pkgDesc
        depsIndep <- debianBuildDepsIndep pkgDesc
-       Monad.control (\ y -> y { Debian.buildDepends = deps, buildDependsIndep = depsIndep })
+       control %= (\ y -> y { Debian.buildDepends = deps, buildDependsIndep = depsIndep })
 
 cabalExecBinaryPackage :: MonadIO m => PackageDescription -> BinPkgName -> DebT m ()
 cabalExecBinaryPackage pkgDesc b =
     do rels <- binaryPackageRelations b Exec
        desc <- describe Exec (Cabal.package pkgDesc)
-       control (\ y -> y {binaryPackages = bin rels desc : binaryPackages y})
+       control %= (\ y -> y {binaryPackages = bin rels desc : binaryPackages y})
     where
       bin rels desc =
           BinaryDebDescription
@@ -288,7 +288,7 @@ binaryPackageRelations b typ =
          , suggests = [anyrel "${haskell:Suggests}"]
          , preDepends = []
          , breaks = []
-         , conflicts = [anyrel "${haskell:Conflicts}"] ++ evalDebM (binaryPackageConflicts b) deb
+         , D.conflicts = [anyrel "${haskell:Conflicts}"] ++ evalDebM (binaryPackageConflicts b) deb
          , provides_ = [anyrel "${haskell:Provides}"] ++ evalDebM (binaryPackageProvides b) deb
          , replaces_ = [anyrel "${haskell:Replaces}"] ++ evalDebM (binaryPackageReplaces b) deb
          , builtUsing = []
@@ -302,12 +302,12 @@ librarySpecs pkgDesc =
        doc <- get >>= return . not . getL Lenses.noDocumentationLibrary
        prof <- get >>= return . not . getL Lenses.noProfilingLibrary
        when (dev && doc)
-            (link debName ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt")
-                          ("/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt"))
+            (link +++= (debName, ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt",
+                                  "/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")))
        devSpec <- librarySpec Any Development (Cabal.package pkgDesc)
        profSpec <- librarySpec Any Profiling (Cabal.package pkgDesc)
        docSpec <- docSpecsParagraph (Cabal.package pkgDesc)
-       control (\ y -> y { binaryPackages =
+       control %= (\ y -> y { binaryPackages =
                                (if dev then [devSpec] else []) ++
                                (if dev && prof then [profSpec] else []) ++
                                (if dev && doc then [docSpec] else []) ++
@@ -364,15 +364,15 @@ makeUtilsPackages pkgDesc =
          (datas, execs) | Set.null datas && Set.null execs -> return ()
          (datas, execs) ->
              do name <- debianName Utilities (Cabal.package pkgDesc)
-                uname <- get >>= return . getL Lenses.utilsPackageNames
-                Set.mapM_ (makeUtilsPackage datas execs) (fromMaybe (singleton name) uname)
+                Lenses.utilsPackageNames %= (\ s -> if Set.null s then singleton name else s)
+                Set.mapM_ (makeUtilsPackage datas execs) =<< access Lenses.utilsPackageNames
     where
       makeUtilsPackage datas execs p =
           do makeUtilsAtoms p datas execs
              rels <- binaryPackageRelations p Utilities
              let bin = newBinaryDebDescription p (if Set.null execs then All else Any)
                  newbin = bin {binarySection = Just (MainSection "misc"), relations = rels}
-             control (\ y -> modifyBinaryDeb p (maybe newbin id) y)
+             control %= (\ y -> modifyBinaryDeb p (maybe newbin id) y)
 
       availableData = Set.fromList (Cabal.dataFiles pkgDesc)
       availableExec = Set.map Cabal.exeName (Set.filter (Cabal.buildable . Cabal.buildInfo) (Set.fromList (Cabal.executables pkgDesc)))
@@ -397,9 +397,9 @@ makeUtilsAtoms :: Monad m => BinPkgName -> Set FilePath -> Set String -> DebT m 
 makeUtilsAtoms p datas execs =
     if Set.null datas && Set.null execs
     then return ()
-    else Set.mapM_ (\ path -> installData p path path) datas >>
-         Set.mapM_ (\ name -> installCabalExec p name "usr/bin") execs >>
-         rulesFragment (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))
+    else Set.mapM_ (\ path -> installData +++= (p, (path, path))) datas >>
+         Set.mapM_ (\ name -> installCabalExec +++= (p, (name, "usr/bin"))) execs >>
+         rulesFragments += (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))
 
 -- finalizeAtoms :: Atoms -> Atoms
 -- finalizeAtoms atoms = execDebM expandAtoms atoms
@@ -427,36 +427,36 @@ expandAtoms =
              List.mapM_ expandApacheSite (Map.toList mp)
           where
             expandApacheSite (b, (dom, log, text)) =
-                do link b ("/etc/apache2/sites-available/" ++ dom) ("/etc/apache2/sites-enabled/" ++ dom)
-                   installDir b log
-                   file b ("/etc/apache2/sites-available" </> dom) text
+                do link +++= (b, ("/etc/apache2/sites-available/" ++ dom, "/etc/apache2/sites-enabled/" ++ dom))
+                   installDir +++= (b, log)
+                   file +++= (b, ("/etc/apache2/sites-available" </> dom, text))
 
       expandInstallCabalExecs :: Monad m => FilePath -> DebT m ()
       expandInstallCabalExecs builddir =
           do mp <- get >>= return . getL Lenses.installCabalExec
-             List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (name, dst) -> install b (builddir </> name </> name) dst) pairs) (Map.toList mp)
+             List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (name, dst) -> install +++= (b, (builddir </> name </> name, dst))) pairs) (Map.toList mp)
 
       expandInstallCabalExecTo :: Monad m => FilePath -> DebT m ()
       expandInstallCabalExecTo builddir =
           do mp <- get >>= return . getL Lenses.installCabalExecTo
-             List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (n, d) -> rulesFragment (Text.unlines
-                                                                                 [ pack ("binary-fixup" </> show (pretty b)) <> "::"
-                                                                                 , "\tinstall -Dps " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty b) </> makeRelative "/" d) ])) pairs) (Map.toList mp)
+             List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (n, d) -> rulesFragments += (Text.unlines
+                                                                                   [ pack ("binary-fixup" </> show (pretty b)) <> "::"
+                                                                                   , "\tinstall -Dps " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty b) </> makeRelative "/" d) ])) pairs) (Map.toList mp)
 
       expandInstallData :: Monad m => FilePath -> DebT m ()
       expandInstallData dDir =
           do mp <- get >>= return . getL Lenses.installData
              List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (s, d) ->
                                                         if takeFileName s == takeFileName d
-                                                        then install b s (dDir </> makeRelative "/" (takeDirectory d))
-                                                        else installTo b s (dDir </> makeRelative "/" d)) pairs) (Map.toList mp)
+                                                        then install +++= (b, (s, (dDir </> makeRelative "/" (takeDirectory d))))
+                                                        else installTo +++= (b, (s, (dDir </> makeRelative "/" d)))) pairs) (Map.toList mp)
 
       expandInstallTo :: Monad m => DebT m ()
       expandInstallTo =
           do mp <- get >>= return . getL Lenses.installTo
-             List.mapM_ (\ (p, pairs) -> Set.mapM_ (\ (s, d) -> rulesFragment (Text.unlines
-                                                                                 [ pack ("binary-fixup" </> show (pretty p)) <> "::"
-                                                                                 , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])) pairs) (Map.toList mp)
+             List.mapM_ (\ (p, pairs) -> Set.mapM_ (\ (s, d) -> rulesFragments += (Text.unlines
+                                                                                   [ pack ("binary-fixup" </> show (pretty p)) <> "::"
+                                                                                   , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])) pairs) (Map.toList mp)
 
       expandFile :: Monad m => DebT m ()
       expandFile =
@@ -465,8 +465,8 @@ expandAtoms =
                                                         do let (destDir', destName') = splitFileName path
                                                                tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
                                                                tmpPath = tmpDir </> destName'
-                                                           intermediateFile tmpPath s
-                                                           install p tmpPath destDir') pairs) (Map.toList mp)
+                                                           intermediateFiles += (tmpPath, s)
+                                                           install +++= (p, (tmpPath, destDir'))) pairs) (Map.toList mp)
 
       expandWebsite :: Monad m => DebT m ()
       expandWebsite =
@@ -604,10 +604,10 @@ buildDependencies dep =
           return []
 
 adapt :: Map.Map String Relations -> Dependency_ -> [Relations]
-adapt execMap (PkgConfigDepends (Dependency (PackageName pkg) _)) =
-    maybe (aptFile pkg) (: []) (Map.lookup pkg execMap)
-adapt execMap (BuildTools (Dependency (PackageName pkg) _)) =
-    maybe (aptFile pkg) (: []) (Map.lookup pkg execMap)
+adapt mp (PkgConfigDepends (Dependency (PackageName pkg) _)) =
+    maybe (aptFile pkg) (: []) (Map.lookup pkg mp)
+adapt mp (BuildTools (Dependency (PackageName pkg) _)) =
+    maybe (aptFile pkg) (: []) (Map.lookup pkg mp)
 adapt _flags (ExtraLibs x) = [x]
 adapt _flags (BuildDepends (Dependency (PackageName pkg) _)) = [[[D.Rel (D.BinPkgName pkg) Nothing Nothing]]]
 

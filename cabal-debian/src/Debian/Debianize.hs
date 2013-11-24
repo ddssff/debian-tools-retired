@@ -73,92 +73,8 @@ module Debian.Debianize
     -- * Deb monad - 'Debian.Debianize.Monad'
     , DebT, runDebT, execDebT, evalDebT, DebM, runDebM, execDebM, evalDebM
 
-    -- * Modes of operation
-    , verbosity
-    , lookVerbosity
-    , dryRun
-    , debAction
-    , cabalFlagAssignment
-    , lookCabalFlagAssignments
-
-    -- * Repository info
-    , execMap
-    , epochMap
-    , missingDependency
-    , Debian.Debianize.Monad.mapCabal
-    , Debian.Debianize.Monad.splitCabal
-    , extraLibMap
-
-    -- * Source Package Info
-    , sourcePackageName
-    , revision
-    , debVersion
-    , maintainer
-    , copyright
-    , sourceArchitecture
-    , sourcePriority
-    , sourceSection
-    , compat
-    , sourceFormat
-    , changelog
-    , comments
-    , standards
-    , dataDir
-    , rulesHead
-    , rulesFragment
-    , noProfilingLibrary
-    , noDocumentationLibrary
-    , utilsPackageName
-    , buildDir
-    , watch
-
-    -- * Source Package Build Dependencies
-    , buildDeps
-    , buildDepsIndep
-    , omitLTDeps
-    , compilerVersion
-    , lookCompilerVersion
-
-    -- * Binary Package Info
-    , binaryArchitectures
-    , description
-    , executable
-    , serverInfo
-    , website
-    , backups
-    , apacheSite
-    , extraDevDeps
-    , postInst
-    , postRm
-    , preInst
-    , preRm
-    , binaryPriorities
-    , binarySections
-    , installInit
-    -- * Binary Package Dependencies
-    , conflicts
-    , provides
-    , depends
-    , replaces
-    -- * Binary Package Files
-    , link
-    , install
-    , installTo
-    , installData
-    , file
-    , installDir
-    , logrotateStanza
-    , installCabalExec
-    , installCabalExecTo
-
-    -- * Unknown, Obsolete, or Internal
-    , flags -- obsolete
-    , validate -- obsolete
-    , warning -- no-op?
-    , intermediateFile
-    , packageInfo
-    , control
-
+    , Debian.Debianize.Facts.Monad.mapCabal
+    , Debian.Debianize.Facts.Monad.splitCabal
     , Debian.Debianize.Options.compileArgs
     , Debian.Debianize.SubstVars.substvars
 
@@ -171,7 +87,8 @@ module Debian.Debianize
 
     -- * TBD
 
-    , module Debian.Debianize.Types
+    , module Debian.Debianize.Facts.Lenses
+    , module Debian.Debianize.Facts.Types
     , module Debian.Policy
 {-
     , module Debian.Debianize.Bundled
@@ -184,18 +101,18 @@ module Debian.Debianize
     ) where
 
 -- import Debian.Debianize.Bundled
--- import Debian.Debianize.ControlFile hiding (depends, conflicts, maintainer, description, section)
 import Debian.Debianize.Details
 -- import Debian.Debianize.Files
 import Debian.Debianize.Finalize
 import Debian.Debianize.Goodies
 import Debian.Debianize.Input
 -- import Debian.Debianize.Interspersed
-import Debian.Debianize.Monad
+import Debian.Debianize.Facts.Lenses
+import Debian.Debianize.Facts.Monad
+import Debian.Debianize.Facts.Types hiding (maintainer, description, depends, conflicts)
 import Debian.Debianize.Options
 import Debian.Debianize.Output
 import Debian.Debianize.SubstVars
-import Debian.Debianize.Types
 import Debian.Debianize.Utility
 -- import Debian.Debianize.VersionSplits
 import Debian.Policy

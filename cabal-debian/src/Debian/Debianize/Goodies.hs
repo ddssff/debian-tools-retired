@@ -26,16 +26,17 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Set as Set (insert, union, singleton)
 import Data.Text as Text (Text, pack, unlines, intercalate)
-import qualified Debian.Debianize.Lenses as Lenses
+import qualified Debian.Debianize.Facts.Lenses as Lenses
     (rulesFragments, install, installTo, installCabalExecTo, logrotateStanza, postInst,
      installInit, installCabalExec, rulesFragments)
-import Debian.Debianize.ControlFile as Debian (PackageType(..))
+import Debian.Debianize.Facts.Types as Debian (PackageType(..))
 import Debian.Debianize.Files2 (debianName)
 import Debian.Debianize.Input (inputCabalization)
-import Debian.Debianize.Monad (Atoms, DebT, execDebM, executable, rulesFragment, installDir, link, file, logrotateStanza,
-                               serverInfo, website, backups, depends)
-import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
-import Debian.Debianize.Utility (trim)
+import Debian.Debianize.Facts.Lenses
+    (executable, rulesFragments, installDir, link, file, logrotateStanza, serverInfo, website, backups, depends)
+import Debian.Debianize.Facts.Monad (Atoms, DebT, execDebM)
+import Debian.Debianize.Facts.Types (InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.Utility (trim, (+=), (++=), (+++=))
 import Debian.Orphans ()
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel))
@@ -64,7 +65,7 @@ translate str =
 tightDependencyFixup :: Monad m => [(BinPkgName, BinPkgName)] -> BinPkgName -> DebT m ()
 tightDependencyFixup [] _ = return ()
 tightDependencyFixup pairs p =
-    rulesFragment
+    rulesFragments +=
           (Text.unlines $
                ([ "binary-fixup/" <> name <> "::"
                 , "\techo -n 'haskell:Depends=' >> debian/" <> name <> ".substvars" ] ++
@@ -81,21 +82,21 @@ tightDependencyFixup pairs p =
 
 -- | Add a debian binary package to the debianization containing a cabal executable file.
 doExecutable :: Monad m => BinPkgName -> InstallFile -> DebT m ()
-doExecutable = executable
+doExecutable p f = executable ++= (p, f)
 
 -- | Add a debian binary package to the debianization containing a cabal executable file set up to be a server.
 doServer :: Monad m => BinPkgName -> Server -> DebT m ()
-doServer = serverInfo
+doServer p s = serverInfo ++= (p, s)
 
 -- | Add a debian binary package to the debianization containing a cabal executable file set up to be a web site.
 doWebsite :: Monad m => BinPkgName -> Site -> DebT m ()
-doWebsite = website
+doWebsite p w = website ++= (p, w)
 
 -- | Add a debian binary package to the debianization containing a cabal executable file set up to be a backup script.
 doBackups :: Monad m => BinPkgName -> String -> DebT m ()
 doBackups bin s =
-    do backups bin s
-       depends bin (Rel (BinPkgName "anacron") Nothing Nothing)
+    do backups ++= (bin, s)
+       depends +++= (bin, Rel (BinPkgName "anacron") Nothing Nothing)
 
 describe :: MonadIO m => PackageType -> PackageIdentifier -> DebT m Text
 describe typ pkgId =
@@ -178,22 +179,22 @@ watchAtom (PackageName pkgname) =
 siteAtoms :: BinPkgName -> Site -> Atoms -> Atoms
 siteAtoms b site =
     execDebM
-      (do installDir b "/etc/apache2/sites-available"
-          link b ("/etc/apache2/sites-available/" ++ domain site) ("/etc/apache2/sites-enabled/" ++ domain site)
-          file b ("/etc/apache2/sites-available" </> domain site) apacheConfig
-          installDir b (apacheLogDirectory b)
-          logrotateStanza b (Text.unlines $ [ pack (apacheAccessLog b) <> " {"
-                                            , "  weekly"
-                                            , "  rotate 5"
-                                            , "  compress"
-                                            , "  missingok"
-                                            , "}"])
-          logrotateStanza b (Text.unlines $ [ pack (apacheErrorLog b) <> " {"
-                                            , "  weekly"
-                                            , "  rotate 5"
-                                            , "  compress"
-                                            , "  missingok"
-                                            , "}" ])) .
+      (do installDir +++= (b, "/etc/apache2/sites-available")
+          link +++= (b, ("/etc/apache2/sites-available/" ++ domain site, "/etc/apache2/sites-enabled/" ++ domain site))
+          file +++= (b, ("/etc/apache2/sites-available" </> domain site, apacheConfig))
+          installDir +++= (b, apacheLogDirectory b)
+          logrotateStanza +++= (b, (Text.unlines $ [ pack (apacheAccessLog b) <> " {"
+                                                   , "  weekly"
+                                                   , "  rotate 5"
+                                                   , "  compress"
+                                                   , "  missingok"
+                                                   , "}"]))
+          logrotateStanza +++= (b, (Text.unlines $ [ pack (apacheErrorLog b) <> " {"
+                                                   , "  weekly"
+                                                   , "  rotate 5"
+                                                   , "  compress"
+                                                   , "  missingok"
+                                                   , "}" ]))) .
       serverAtoms b (server site) True
     where
       -- An apache site configuration file.  This is installed via a line

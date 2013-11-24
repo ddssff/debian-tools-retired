@@ -4,13 +4,16 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 import Data.Text as Text (intercalate)
 import Debian.Changes (ChangeLog(..))
-import Debian.Debianize (binaryArchitectures, buildDepsIndep, changelog, compat, control, debianization, DebT, depends, description, doBackups, doExecutable, doServer, doWebsite, execDebM, inputChangeLog, inputDebianization, installCabalExec, installData, seereasonDefaultAtoms, sourcePackageName)
-import Debian.Debianize.ControlFile (SourceDebDescription(homepage, standardsVersion))
-import Debian.Debianize.ControlFile hiding (depends, description)
-import qualified Debian.Debianize.Lenses as Lenses (changelog, newAtoms)
-import Debian.Debianize.Monad (Atoms, execDebT, evalDebT)
+import Debian.Debianize (debianization, doBackups, doExecutable, doServer, doWebsite,
+                         inputChangeLog, inputDebianization, seereasonDefaultAtoms)
+import Debian.Debianize.Facts.Lenses as Lenses
+    (changelog, binaryArchitectures, buildDepsIndep, changelog, compat, control, depends, description,
+     installCabalExec, installData, sourcePackageName)
+import Debian.Debianize.Facts.Monad (execDebT, evalDebT, DebT, execDebM)
+import Debian.Debianize.Facts.Types (Atoms, newAtoms, SourceDebDescription(homepage, standardsVersion),
+                                     InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Output (compareDebianization)
-import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.Utility ((~=), (%=), (+=), (++=), (+++=), (~?=))
 import Debian.Policy (databaseDirectory, PackageArchitectures(All), StandardsVersion(StandardsVersion))
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), SrcPkgName(..), VersionReq(SLT))
 import Debian.Version (parseDebianVersion)
@@ -23,17 +26,17 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 -- copyFirstLogEntry.
 main :: IO ()
 main =
-    do log <- evalDebT inputChangeLog (Lenses.newAtoms "test-data/artvaluereport2/input")
-       new <- execDebT (debianization seereasonDefaultAtoms (customize log)) (Lenses.newAtoms "test-data/artvaluereport2/input")
-       old <- execDebT inputDebianization (Lenses.newAtoms "test-data/artvaluereport2/output")
+    do log <- evalDebT inputChangeLog (newAtoms "test-data/artvaluereport2/input")
+       new <- execDebT (debianization seereasonDefaultAtoms (customize log)) (newAtoms "test-data/artvaluereport2/input")
+       old <- execDebT inputDebianization (newAtoms "test-data/artvaluereport2/output")
        -- The newest log entry gets modified when the Debianization is
        -- generated, it won't match so drop it for the comparison.
        compareDebianization old (copyFirstLogEntry old new) >>= putStr
     where
       customize :: Either IOError ChangeLog -> DebT IO ()
       customize log =
-          do either (const (return ())) changelog log
-             installCabalExec (BinPkgName "appraisalscope") "lookatareport" "usr/bin"
+          do changelog ~?= either (const Nothing) (Just . Just) log
+             installCabalExec +++= (BinPkgName "appraisalscope", ("lookatareport", "usr/bin"))
              doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"})
              doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development"))
              doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging"))
@@ -41,39 +44,40 @@ main =
              doBackups (BinPkgName "artvaluereport2-backups") "artvaluereport2-backups"
              -- This should go into the "real" data directory.  And maybe a different icon for each server?
              -- install (BinPkgName "artvaluereport2-server") ("theme/ArtValueReport_SunsetSpectrum.ico", "usr/share/artvaluereport2-data")
-             description (BinPkgName "artvaluereport2-backups")
-                         (Text.intercalate "\n"
+             description ++=
+                         (BinPkgName "artvaluereport2-backups",
+                          Text.intercalate "\n"
                                   [ "backup program for the appraisalreportonline.com site"
                                   , "  Install this somewhere other than where the server is running get"
                                   , "  automated backups of the database." ])
              addDep (BinPkgName "artvaluereport2-production") (BinPkgName "apache2")
              addServerData
              addServerDeps
-             description (BinPkgName "appraisalscope") "Offline manipulation of appraisal database"
-             buildDepsIndep [[Rel (BinPkgName "libjs-jquery-ui") (Just (SLT (parseDebianVersion ("1.10" :: String)))) Nothing]]
-             buildDepsIndep [[Rel (BinPkgName "libjs-jquery") Nothing Nothing]]
-             buildDepsIndep [[Rel (BinPkgName "libjs-jcrop") Nothing Nothing]]
-             binaryArchitectures (BinPkgName "artvaluereport2-staging") All
-             binaryArchitectures (BinPkgName "artvaluereport2-production") All
-             binaryArchitectures (BinPkgName "artvaluereport2-development") All
+             description ++= (BinPkgName "appraisalscope", "Offline manipulation of appraisal database")
+             buildDepsIndep += [[Rel (BinPkgName "libjs-jquery-ui") (Just (SLT (parseDebianVersion ("1.10" :: String)))) Nothing]]
+             buildDepsIndep += [[Rel (BinPkgName "libjs-jquery") Nothing Nothing]]
+             buildDepsIndep += [[Rel (BinPkgName "libjs-jcrop") Nothing Nothing]]
+             binaryArchitectures ++= (BinPkgName "artvaluereport2-staging", All)
+             binaryArchitectures ++= (BinPkgName "artvaluereport2-production", All)
+             binaryArchitectures ++= (BinPkgName "artvaluereport2-development", All)
              -- utilsPackageNames [BinPkgName "artvaluereport2-server"]
-             sourcePackageName (SrcPkgName "haskell-artvaluereport2")
-             control (\ x -> x {standardsVersion = Just (StandardsVersion 3 9 1 Nothing)})
-             compat 7
-             control (\ y -> y {homepage = Just "http://appraisalreportonline.com"})
+             sourcePackageName ~= Just (SrcPkgName "haskell-artvaluereport2")
+             control %= (\ x -> x {standardsVersion = Just (StandardsVersion 3 9 1 Nothing)})
+             compat ~= Just 7
+             control %= (\ y -> y {homepage = Just "http://appraisalreportonline.com"})
 
       addServerDeps :: DebT IO ()
       addServerDeps = mapM_ addDeps (map BinPkgName ["artvaluereport2-development", "artvaluereport2-staging", "artvaluereport2-production"])
       addDeps p = mapM_ (addDep p) (map BinPkgName ["libjpeg-progs", "libjs-jcrop", "libjs-jquery", "libjs-jquery-ui", "netpbm", "texlive-fonts-extra", "texlive-fonts-recommended", "texlive-latex-extra", "texlive-latex-recommended"])
-      addDep p dep = depends p (Rel dep Nothing Nothing)
+      addDep p dep = depends +++= (p, Rel dep Nothing Nothing)
 
       addServerData :: DebT IO ()
       addServerData = mapM_ addData (map BinPkgName ["artvaluereport2-development", "artvaluereport2-staging", "artvaluereport2-production"])
       addData p =
-          do installData p "theme/ArtValueReport_SunsetSpectrum.ico" "ArtValueReport_SunsetSpectrum.ico"
+          do installData +++= (p, ("theme/ArtValueReport_SunsetSpectrum.ico", "ArtValueReport_SunsetSpectrum.ico"))
              mapM_ (addDataFile p) ["Udon.js", "flexbox.css", "DataTables-1.8.2", "html5sortable", "jGFeed", "searchMag.png",
                                     "Clouds.jpg", "tweaks.css", "verticalTabs.css", "blueprint", "jquery.blockUI", "jquery.tinyscrollbar"]
-      addDataFile p path = installData p path path
+      addDataFile p path = installData +++= (p, (path, path))
 
       theSite :: BinPkgName -> Site
       theSite deb =

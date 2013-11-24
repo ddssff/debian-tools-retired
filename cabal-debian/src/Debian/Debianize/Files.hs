@@ -16,14 +16,14 @@ import Data.Monoid ((<>))
 import Data.Set as Set (toList, member)
 import Data.Text as Text (Text, pack, unpack, lines, unlines, strip, null)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.ControlFile as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
+import Debian.Debianize.Facts.Types as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
                                                VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Goodies (makeRulesHead)
-import qualified Debian.Debianize.Lenses as Lenses
+import qualified Debian.Debianize.Facts.Lenses as Lenses
     (compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
      intermediateFiles, install, installDir, installInit, logrotateStanza, link,
      rulesHead, rulesFragments, copyright)
-import Debian.Debianize.Monad (DebT, Atoms, evalDebT)
+import Debian.Debianize.Facts.Monad (DebT, Atoms, evalDebT)
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
 import Prelude hiding (init, unlines, writeFile, log)
