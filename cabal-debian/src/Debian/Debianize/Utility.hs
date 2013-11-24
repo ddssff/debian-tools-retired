@@ -30,14 +30,17 @@ module Debian.Debianize.Utility
     , read'
     , modifyM
     , intToVerbosity'
+    , (~=)
+    , (%=)
     ) where
 
 import Control.Applicative ((<$>))
 import Control.Exception as E (catch, try, bracket, IOException)
 import Control.Monad (when)
 import Control.Monad.Reader (ReaderT, ask)
-import Control.Monad.State (MonadState, get, put)
+import Control.Monad.State (MonadState, StateT, get, put)
 import Data.Char (isSpace)
+import qualified Data.Lens.Lazy as Lens ((~=), (%=))
 import Data.List as List (isSuffixOf, intercalate, map, lines)
 import Data.Lens.Lazy (Lens, modL)
 import Data.Map as Map (Map, foldWithKey, empty, fromList, findWithDefault, insert, map, lookup)
@@ -264,3 +267,11 @@ modifyM f = get >>= f >>= put
 -- clamps its argument to the acceptable range (0-3).
 intToVerbosity' :: Int -> Verbosity
 intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
+
+-- | Version of Data.Lens.Lazy.~= that returns () instead of a
+(~=) :: Monad m => Lens a b -> b -> StateT a m ()
+lens ~= x = lens Lens.~= x >> return ()
+
+-- | Version of Data.Lens.Lazy.%= that returns () instead of a
+(%=) :: Monad m => Lens a b -> (b -> b) -> StateT a m ()
+lens %= f = lens Lens.%= f >> return ()
