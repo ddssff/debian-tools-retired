@@ -1,3 +1,10 @@
+haskell-cabal-debian (3.10.3) unstable; urgency=low
+
+  * Go back to using lens interface directly
+  * Collect debianization fact code in Facts/
+
+ -- David Fox <dsf@seereason.com>  Sun, 24 Nov 2013 10:40:02 -0800
+
 haskell-cabal-debian (3.10.2) unstable; urgency=low
 
   * Make some signatures in Monad.hs clearer
