@@ -30,12 +30,42 @@ data Atoms
     = Atoms
       { top :: Top
       , atomMap :: Map DebAtomKey (Set DebAtom)
+      , noDocumentationLibrary_ :: Set Bool
+      -- ^ Do not produce a libghc-foo-doc package.
+      , noProfilingLibrary_ :: Set Bool
+      -- ^ Do not produce a libghc-foo-prof package.
+      , omitLTDeps_ :: Set Bool
+      -- ^ If present, don't generate the << dependency when we see a cabal
+      -- equals dependency.  (The implementation of this was somehow lost.)
+      , compilerVersion_ :: Set Version
+      -- ^ Specify the version number of the GHC compiler in the build
+      -- environment.  The default is to assume that version is the same
+      -- as the one in the environment where cabal-debian is running.
+      -- This is used to look up hard coded lists of packages bundled
+      -- with the compiler and their version numbers.  (This could
+      -- certainly be done in a more beautiful way.)
+      , buildDir_ :: Set FilePath
+      -- ^ The build directory used by cabal, typically dist/build when
+      -- building manually or dist-ghc/build when building using GHC and
+      -- haskell-devscripts.  This value is used to locate files
+      -- produced by cabal so we can move them into the deb.  Note that
+      -- the --builddir option of runhaskell Setup appends the "/build"
+      -- to the value it receives, so, yes, try not to get confused.
       } deriving (Eq, Show)
 
 newtype Top = Top {unTop :: FilePath} deriving (Eq, Ord, Show, Typeable)
 
 newAtoms :: FilePath -> Atoms
-newAtoms x = Atoms {top = Top x, atomMap = mempty}
+newAtoms x
+    = Atoms
+      { top = Top x
+      , atomMap = mempty
+      , noDocumentationLibrary_ = mempty
+      , noProfilingLibrary_ = mempty
+      , omitLTDeps_ = mempty
+      , compilerVersion_ = mempty
+      , buildDir_ = mempty
+      }
 
 showAtoms :: Atoms -> IO ()
 showAtoms x =
@@ -59,30 +89,7 @@ data DebAtomKey
 -- become fragments of those files, and others are first converted
 -- into different DebAtom values as new information becomes available.
 data DebAtom
-    = NoDocumentationLibrary
-    -- ^ Do not produce a libghc-foo-doc package.
-    | NoProfilingLibrary
-    -- ^ Do not produce a libghc-foo-prof package.
-    | CompilerVersion Version
-      -- ^ Specify the version number of the GHC compiler in the build
-      -- environment.  The default is to assume that version is the same
-      -- as the one in the environment where cabal-debian is running.
-      -- This is used to look up hard coded lists of packages bundled
-      -- with the compiler and their version numbers.  (This could
-      -- certainly be done in a more beautiful way.)
-    | BuildDir FilePath
-    -- ^ The build directory used by cabal, typically dist/build when
-    -- building manually or dist-ghc/build when building using GHC and
-    -- haskell-devscripts.  This value is used to locate files
-    -- produced by cabal so we can move them into the deb.  Note that
-    -- the --builddir option of runhaskell Setup appends the "/build"
-    -- to the value it receives, so, yes, try not to get confused.
-{-
-    | DataDir FilePath
-    -- ^ the pathname of the package's data directory, generally the
-    -- value of the dataDirectory field in the PackageDescription.
--}
-    | DebSourceFormat SourceFormat                -- ^ Write debian/source/format
+    = DebSourceFormat SourceFormat                -- ^ Write debian/source/format
     | DebWatch Text                               -- ^ Write debian/watch
     | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
     | DebRulesHead Text				  -- ^ The header of the debian/rules file.  The remainder is assembled
@@ -105,8 +112,6 @@ data DebAtom
     | DebRevision String			  -- ^ Specify the revision string to use when converting the cabal
                                                   -- version to debian.
 
-    | OmitLTDeps				  -- ^ If present, don't generate the << dependency when we see a cabal
-                                                  -- equals dependency.  (The implementation of this was somehow lost.)
     | DebVersion DebianVersion			  -- ^ Specify the exact debian version of the resulting package,
                                                   -- including epoch.  One use case is to work around the the
                                                   -- "buildN" versions that are often uploaded to the debian and

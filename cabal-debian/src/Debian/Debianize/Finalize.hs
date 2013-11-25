@@ -35,7 +35,7 @@ import Debian.Debianize.Facts.Monad as Monad (Atoms, DebT, evalDebM, askTop)
 import Debian.Debianize.Facts.Types (showAtoms)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
 import Debian.Debianize.Facts.Types (InstallFile(..))
-import Debian.Debianize.Utility (foldEmpty, withCurrentDirectory, (+=), (~=), (+++=), (++=), (%=))
+import Debian.Debianize.Utility (foldEmpty, withCurrentDirectory, (+=), (~=), (+++=), (++=), (%=), fromEmpty, fromSingleton)
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
 import Debian.Policy (getDebhelperCompatLevel, PackageArchitectures(Any, All), PackagePriority(Optional), Section(..))
@@ -300,8 +300,8 @@ librarySpecs :: MonadIO m => PackageDescription -> DebT m ()
 librarySpecs pkgDesc =
     do debName <- debianName Documentation (Cabal.package pkgDesc)
        let dev = isJust (Cabal.library pkgDesc)
-       doc <- get >>= return . not . getL Lenses.noDocumentationLibrary
-       prof <- get >>= return . not . getL Lenses.noProfilingLibrary
+       doc <- get >>= return . (/= singleton True) . getL Lenses.noDocumentationLibrary
+       prof <- get >>= return . (/= singleton True) . getL Lenses.noProfilingLibrary
        when (dev && doc)
             (link +++= (debName, ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt",
                                   "/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")))
@@ -409,11 +409,11 @@ makeUtilsAtoms p datas execs =
 
 expandAtoms :: MonadIO m => DebT m ()
 expandAtoms =
-    do builddir <- get >>= return . fromMaybe "dist-ghc/build" . getL Lenses.buildDir
+    do builddir <- get >>= return . fromEmpty (singleton "dist-ghc/build") . getL Lenses.buildDir
        dDir <- inputCabalization >>= either (error "expandAtoms") (return . dataDir)
        expandApacheSites
-       expandInstallCabalExecs builddir
-       expandInstallCabalExecTo builddir
+       expandInstallCabalExecs (fromSingleton (error "no builddir") (\ xs -> error $ "multiple builddirs:" ++ show xs) builddir)
+       expandInstallCabalExecTo (fromSingleton (error "no builddir") (\ xs -> error $ "multiple builddirs:" ++ show xs) builddir)
        expandInstallData dDir
        expandInstallTo
        expandFile
@@ -533,7 +533,7 @@ debianBuildDeps pkgDesc =
     do deb <- get
        cDeps <- cabalDeps
        let bDeps = concat (Set.toList (getL Lenses.buildDeps deb))
-           prof = not $ getL Lenses.noProfilingLibrary deb
+           prof = (/= singleton True) $ getL Lenses.noProfilingLibrary deb
        let xs = nub $ [[D.Rel (D.BinPkgName "debhelper") (Just (D.GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
                        [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
                        anyrel "cdbs",
@@ -553,7 +553,7 @@ debianBuildDeps pkgDesc =
 
 debianBuildDepsIndep :: MonadIO m => PackageDescription -> DebT m D.Relations
 debianBuildDepsIndep pkgDesc =
-    do doc <- get >>= return . not . getL Lenses.noDocumentationLibrary
+    do doc <- get >>= return . (/= singleton True) . getL Lenses.noDocumentationLibrary
        bDeps <- get >>= return . getL Lenses.buildDepsIndep
        cDeps <- cabalDeps
        let xs = if doc

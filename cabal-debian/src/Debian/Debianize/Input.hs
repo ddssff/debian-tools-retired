@@ -21,7 +21,7 @@ import Control.Monad.Trans (MonadIO, liftIO, lift)
 import Data.Char (isSpace, toLower)
 import Data.Lens.Lazy (getL, access)
 import Data.Maybe (fromMaybe)
-import Data.Set as Set (toList, fromList, insert)
+import Data.Set as Set (Set, toList, fromList, insert)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Data.Version (Version)
@@ -299,14 +299,15 @@ inputCompiler =
 
 -- | Read the (GHC) compiler version specified by Cabal, optionally
 -- changing the version number.
-inputCompiler' :: MonadIO m => Verbosity -> Maybe Version -> DebT m Compiler
+inputCompiler' :: MonadIO m => Verbosity -> Set Version -> DebT m Compiler
 inputCompiler' vb mCompilerVersion =
     askTop >>= \ top -> liftIO $
     withCurrentDirectory top $ do
       (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
-      let compiler'' = case mCompilerVersion of
-                         (Just ver) -> compiler' {compilerId = CompilerId GHC ver}
-                         _ -> compiler'
+      let compiler'' = case Set.toList mCompilerVersion of
+                         [] -> compiler'
+                         [ver] -> compiler' {compilerId = CompilerId GHC ver}
+                         xs -> error $ "Conflicting ghc versions requestion: " ++ show xs
       return compiler''
 
 -- | Try to read the license file specified in the cabal package,

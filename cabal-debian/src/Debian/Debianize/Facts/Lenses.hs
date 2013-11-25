@@ -159,36 +159,16 @@ warning = lens g s
 
 
 -- | Set the compiler version, this is used when loading the cabal file to
-compilerVersion :: Lens Atoms (Maybe Version)
-compilerVersion = lens g s
-    where
-      g atoms = foldAtoms from Nothing atoms
-          where
-            from Source (CompilerVersion x') (Just x) | x /= x' = error $ "Conflicting compilerVersion values:" ++ show (x, x')
-            from Source (CompilerVersion x) _ = Just x
-            from _ _ x = x
-      s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . CompilerVersion) x)) atoms
-          where
-            f Source (CompilerVersion y) = Just y
-            f _ _ = Nothing
+compilerVersion :: Lens Atoms (Set Version)
+compilerVersion = lens compilerVersion_ (\ b a -> a {compilerVersion_ = b})
 
 -- | The build directory.  This can be set by an argument to the @Setup@ script.
 -- When @Setup@ is run manually it is just @dist@, when it is run by
 -- @dpkg-buildpackage@ the compiler name is appended, so it is typically
 -- @dist-ghc@.  Cabal-debian needs the correct value of buildDir to find
 -- the build results.
-buildDir :: Lens Atoms (Maybe FilePath)
-buildDir = lens g s
-    where
-      g atoms = foldAtoms from Nothing atoms
-          where
-            from Source (BuildDir x') (Just x) | x /= x' = error $ "Conflicting rulesHead values:" ++ show (x, x')
-            from Source (BuildDir x) _ = Just x
-            from _ _ x = x
-      s x atoms = modifyAtoms' f (const (maybe Set.empty (singleton . (Source,) . BuildDir) x)) atoms
-          where
-            f Source (BuildDir y) = Just y
-            f _ _ = Nothing
+buildDir :: Lens Atoms (Set FilePath)
+buildDir = lens buildDir_ (\ b a -> a {buildDir_ = b})
 
 {-
 -- | The data directory for the package, generated from the packageDescription
@@ -457,43 +437,16 @@ packageInfo = lens g s
 
 -- | Set this to filter any less-than dependencies out of the generated debian
 -- dependencies.  (Not sure if this is implemented.)
-omitLTDeps :: Lens Atoms Bool
-omitLTDeps = lens g s
-    where
-      g atoms = foldAtoms from False atoms
-          where
-            from Source OmitLTDeps _ = True
-            from _ _ x = x
-      s x atoms = (if x then insertAtom Source OmitLTDeps else id) (deleteAtoms p atoms)
-          where
-            p Source OmitLTDeps = True
-            p _ _ = False
+omitLTDeps :: Lens Atoms (Set Bool)
+omitLTDeps = lens omitLTDeps_ (\ b a -> a {omitLTDeps_ = b})
 
 -- | Set this to omit the prof library deb.
-noProfilingLibrary :: Lens Atoms Bool
-noProfilingLibrary = lens g s
-    where
-      g atoms = foldAtoms from False atoms
-          where
-            from Source NoProfilingLibrary _ = True
-            from _ _ x = x
-      s x atoms = (if x then insertAtom Source NoProfilingLibrary else id) (deleteAtoms p atoms)
-          where
-            p Source NoProfilingLibrary = True
-            p _ _ = False
+noProfilingLibrary :: Lens Atoms (Set Bool)
+noProfilingLibrary = lens noProfilingLibrary_ (\ b a -> a {noProfilingLibrary_ = b})
 
 -- | Set this to omit the doc library deb.
-noDocumentationLibrary :: Lens Atoms Bool
-noDocumentationLibrary = lens g s
-    where
-      g atoms = foldAtoms from False atoms
-          where
-            from Source NoDocumentationLibrary _ = True
-            from _ _ x = x
-      s x atoms = (if x then insertAtom Source NoDocumentationLibrary else id) (deleteAtoms p atoms)
-          where
-            p Source NoDocumentationLibrary = True
-            p _ _ = False
+noDocumentationLibrary :: Lens Atoms (Set Bool)
+noDocumentationLibrary = lens noDocumentationLibrary_ (\ b a -> a {noDocumentationLibrary_ = b})
 
 -- | The copyright information
 copyright :: Lens Atoms (Maybe (Either License Text))
@@ -1035,7 +988,7 @@ foldAtoms f r0 atoms = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (atomM
 -- | Split atoms out of an Atoms by predicate.
 partitionAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> (Set (DebAtomKey, DebAtom), Atoms)
 partitionAtoms f deb =
-    foldAtoms g (mempty, Atoms (top deb) mempty) deb
+    foldAtoms g (mempty, newAtoms (unTop (top deb))) deb
     where
       g k atom (atoms, deb') =
           case f k atom of
@@ -1048,7 +1001,7 @@ deleteAtoms p atoms = snd (partitionAtoms p atoms)
 -- | Split atoms out of a Atoms by predicate.
 partitionAtoms' :: (Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> (Set a, Atoms)
 partitionAtoms' f deb =
-    foldAtoms g (mempty, Atoms (top deb) mempty) deb
+    foldAtoms g (mempty, newAtoms (unTop (top deb))) deb
     where
       g k atom (xs, deb') =
           case f k atom of

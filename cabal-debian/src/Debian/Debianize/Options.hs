@@ -9,6 +9,7 @@ module Debian.Debianize.Options
 
 import Control.Monad.State (lift)
 import Data.Char (toLower, isDigit, ord)
+import Data.Set (singleton)
 import Data.Version (parseVersion)
 import Debian.Debianize.Goodies (doExecutable)
 import Debian.Debianize.Facts.Lenses
@@ -73,14 +74,14 @@ options =
       Option "" ["executable"] (ReqArg (\ path -> executableOption path (\ bin e -> doExecutable bin e)) "SOURCEPATH or SOURCEPATH:DESTDIR")
              (unlines [ "Create an individual binary package to hold this executable.  Other executables "
                       , " and data files are gathered into a single utils package named 'haskell-packagename-utils'."]),
-      Option "" ["ghc-version"] (ReqArg (\ ver -> compilerVersion ~= (Just (last (map fst (readP_to_S parseVersion ver))))) "VERSION")
+      Option "" ["ghc-version"] (ReqArg (\ ver -> compilerVersion ~= (singleton (last (map fst (readP_to_S parseVersion ver))))) "VERSION")
              (unlines [ "Version of GHC in build environment.  Without this option it is assumed that"
                       , "the version of GHC in the build environment is the same as the one in the"
                       , "environment in which cabal-debian is running. (the usual case.)  The GHC"
                       , "version is used to determine which packages are bundled with GHC - if a"
                       , "package is bundled with GHC it is not necessary to add a build dependency for"
                       , "that package to the debian/control file."]),
-      Option "" ["disable-haddock"] (NoArg (noDocumentationLibrary ~= True))
+      Option "" ["disable-haddock"] (NoArg (noDocumentationLibrary ~= singleton True))
              (unlines [ "Don't generate API documentation packages, usually named"
                       , "libghc-packagename-doc.  Use this if your build is crashing due to a"
                       , "haddock bug."]),
@@ -94,7 +95,7 @@ options =
              (unlines [ "Use this name for the debian source package, the name in the Source field at the top of the"
                       , "debian control file, and also at the very beginning of the debian/changelog file.  By default"
                       , "this is haskell-<cabalname>, where the cabal package name is downcased."]),
-      Option "" ["disable-library-profiling"] (NoArg (noProfilingLibrary ~= True))
+      Option "" ["disable-library-profiling"] (NoArg (noProfilingLibrary ~= singleton True))
              (unlines [ "Don't generate profiling (-prof) library packages.  This has been used in one case"
                       , "where the package code triggered a compiler bug."]),
       Option "" ["maintainer"] (ReqArg (\ maint -> either (error ("Invalid maintainer string: " ++ show maint)) ((maintainer ~=) . Just) (parseMaintainer maint)) "Maintainer Name <email addr>")
@@ -153,14 +154,14 @@ options =
                                                (cab, (_ : deb)) -> execMap ++= (cab, rels deb)
                                                _ -> error "usage: --exec-map EXECNAME=RELATIONS") "EXECNAME=RELATIONS")
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
-      Option "" ["omit-lt-deps"] (NoArg (omitLTDeps ~= True))
+      Option "" ["omit-lt-deps"] (NoArg (omitLTDeps ~= singleton True))
              (unlines [ "Remove all less-than dependencies from the generated control file.  Less-than"
                       , "dependencies are less useful and more troublesome for debian packages than cabal,"
                       , "because you can't install multiple versions of a given debian package.  For more"
                       , "google 'cabal hell'."]),
       Option "" ["quilt"] (NoArg (sourceFormat ~= Just Quilt3))
              "The package has an upstream tarball, write '3.0 (quilt)' into source/format.",
-      Option "" ["builddir"] (ReqArg (\ s -> buildDir ~= Just (s </> "build")) "PATH")
+      Option "" ["builddir"] (ReqArg (\ s -> buildDir ~= singleton (s </> "build")) "PATH")
              (unlines [ "Subdirectory where cabal does its build, dist/build by default, dist-ghc when"
                       , "run by haskell-devscripts.  The build subdirectory is added to match the"
                       , "behavior of the --builddir option in the Setup script."]),

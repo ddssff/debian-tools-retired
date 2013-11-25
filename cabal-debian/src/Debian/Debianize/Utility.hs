@@ -37,6 +37,8 @@ module Debian.Debianize.Utility
     , (+=)
     , (++=)
     , (+++=)
+    , fromEmpty
+    , fromSingleton
     ) where
 
 import Control.Applicative ((<$>))
@@ -50,7 +52,7 @@ import Data.List as List (isSuffixOf, intercalate, map, lines)
 import Data.Lens.Lazy (Lens, modL)
 import Data.Map as Map (Map, foldWithKey, empty, fromList, findWithDefault, insert, map, lookup, insertWith)
 import Data.Maybe (catMaybes, mapMaybe, listToMaybe, fromMaybe, fromJust)
-import Data.Set (Set, toList, union, singleton)
+import Data.Set as Set (Set, toList, union, singleton)
 import qualified Data.Set as Set
 import Data.Text as Text (Text, unpack, lines)
 import Data.Text.IO (hGetContents)
@@ -300,3 +302,14 @@ lens ++= (k, a) = lens %= Map.insert k a
 -- | Insert an element into a @(Map b (Set c))@
 (+++=) :: (Monad m, Ord b, Ord c) => Lens a (Map b (Set c)) -> (b, c) -> StateT a m ()
 lens +++= (k, a) = lens %= Map.insertWith union k (singleton a)
+
+fromEmpty :: Set a -> Set a -> Set a
+fromEmpty d s | Set.null s = d
+fromEmpty _ s = s
+
+fromSingleton :: a -> ([a] -> a) -> Set a -> a
+fromSingleton empty multiple s =
+    case toList s of
+      [x] -> x
+      [] -> empty
+      xs -> multiple xs
