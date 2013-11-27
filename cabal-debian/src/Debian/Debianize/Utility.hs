@@ -308,8 +308,8 @@ fromEmpty d s | Set.null s = d
 fromEmpty _ s = s
 
 fromSingleton :: a -> ([a] -> a) -> Set a -> a
-fromSingleton empty multiple s =
+fromSingleton e multiple s =
     case toList s of
       [x] -> x
-      [] -> empty
+      [] -> e
       xs -> multiple xs
