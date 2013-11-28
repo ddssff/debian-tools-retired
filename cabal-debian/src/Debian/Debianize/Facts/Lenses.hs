@@ -88,7 +88,8 @@ module Debian.Debianize.Facts.Lenses
     , control -- obsolete
     ) where
 
-import Data.Lens.Lazy (getL, lens, Lens, modL)
+import Control.Category ((.))
+import Data.Lens.Lazy (lens, Lens)
 import Data.Map as Map (empty, foldWithKey, insertWith, Map)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
@@ -105,7 +106,7 @@ import Debian.Version (DebianVersion)
 import Distribution.License (License)
 import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName)
-import Prelude hiding (init, log, unlines)
+import Prelude hiding (init, log, unlines, (.))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 -- Lenses to access values in the Atoms type.  This is an old
@@ -114,21 +115,21 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 -- | Set how much progress messages get generated.
 verbosity :: Lens Atoms Int
-verbosity = lens (\ a -> verbosity_ (getL flags a)) (\ b a -> modL flags (\ x -> x {verbosity_ = b}) a)
+verbosity = lens verbosity_ (\ b a -> a {verbosity_ = b}) . flags
 
 -- | Don't write anything, just output a description of what would have happened
 dryRun :: Lens Atoms Bool
-dryRun = lens (\ a -> dryRun_ (getL flags a)) (\ b a -> modL flags (\ x -> x {dryRun_ = b}) a)
+dryRun = lens dryRun_ (\ b a -> a {dryRun_ = b}) . flags
 
 -- | Make sure the version number and package names of the supplied
 -- and generated debianizations match.
 validate :: Lens Atoms Bool
-validate = lens (\ a -> validate_ (getL flags a)) (\ b a -> modL flags (\ x -> x {validate_ = b}) a)
+validate = lens validate_ (\ b a -> a {validate_ = b}) . flags
 
 -- | Debianize, SubstVars, or Usage.  I'm no longer sure what SubstVars does, but someone
 -- may still be using it.
 debAction :: Lens Atoms DebAction
-debAction = lens (\ a -> debAction_ (getL flags a)) (\ b a -> modL flags (\ x -> x {debAction_ = b}) a)
+debAction = lens debAction_ (\ b a -> a {debAction_ = b}) . flags
 
 -- Build a value with a default
 getter1 :: forall a. (Eq a) => a -> (DebAtom -> Maybe a) -> Atoms -> a
@@ -593,7 +594,7 @@ control = lens g s
 
 -- | The @Standards-Version@ field of the @debian/control@ file
 standards :: Lens Atoms (Maybe StandardsVersion)
-standards = lens (\ a -> standardsVersion (getL control a)) (\ b a -> modL control (\ x -> x {standardsVersion = b}) a)
+standards = lens standardsVersion (\ b a -> a {standardsVersion = b}) . control
 
 -- | Add a stanza to the binary package's logrotate script.
 logrotateStanza :: Lens Atoms (Map BinPkgName (Set Text))
