@@ -713,7 +713,7 @@ foldAtoms lns f r0 atoms = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (g
 -- | Split atoms out of an Atoms by predicate.
 partitionAtoms :: Lens Atoms AtomMap -> (DebAtomKey -> DebAtom -> Bool) -> Atoms -> (Set (DebAtomKey, DebAtom), Atoms)
 partitionAtoms lns f deb =
-    foldAtoms lns g (mempty, newAtoms (unTop (top deb))) deb
+    foldAtoms lns g (mempty, setL lns mempty deb) deb
     where
       g k atom (atoms, deb') =
           case f k atom of
@@ -726,7 +726,7 @@ deleteAtoms lns p atoms = snd (partitionAtoms lns p atoms)
 -- | Split atoms out of a Atoms by predicate.
 partitionAtoms' :: (Ord a) => Lens Atoms AtomMap -> (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> (Set a, Atoms)
 partitionAtoms' lns f deb =
-    foldAtoms lns g (mempty, newAtoms (unTop (top deb))) deb
+    foldAtoms lns g (mempty, setL lns mempty deb) deb
     where
       g k atom (xs, deb') =
           case f k atom of
