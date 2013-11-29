@@ -1,4 +1,5 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections, TypeFamilies #-}
+{-# OPTIONS_GHC -Wall #-}
 module Debian.Debianize.Facts.Lenses
     (
     -- * Location of unpacked cabal package
