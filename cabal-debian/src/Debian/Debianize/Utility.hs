@@ -1,7 +1,7 @@
 -- | Functions used by but not related to cabal-debian, these could
 -- conceivably be moved into more general libraries.
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Debian.Debianize.Utility
     ( curry3
     , DebMap
@@ -39,6 +39,7 @@ module Debian.Debianize.Utility
     , (+++=)
     , fromEmpty
     , fromSingleton
+    , Pretty(pretty)
     ) where
 
 import Control.Applicative ((<$>))
@@ -52,14 +53,17 @@ import Data.List as List (isSuffixOf, intercalate, map, lines)
 import Data.Lens.Lazy (Lens, modL)
 import Data.Map as Map (Map, foldWithKey, empty, fromList, findWithDefault, insert, map, lookup, insertWith)
 import Data.Maybe (catMaybes, mapMaybe, listToMaybe, fromMaybe, fromJust)
+import Data.Monoid ((<>))
 import Data.Set as Set (Set, toList, union, singleton)
 import qualified Data.Set as Set
 import Data.Text as Text (Text, unpack, lines)
 import Data.Text.IO (hGetContents)
 import Debian.Control (parseControl, lookupP, Field'(Field), unControl, stripWS)
+import Debian.Orphans ()
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Debian.Version.String (parseDebianVersion)
 import qualified Debian.Relation as D
+import Distribution.Package (PackageIdentifier(..), PackageName(..))
 import Distribution.Verbosity (Verbosity, intToVerbosity)
 import Prelude hiding (map, lookup)
 import System.Directory (doesFileExist, doesDirectoryExist, removeFile, renameFile, removeDirectory, getDirectoryContents, getCurrentDirectory, setCurrentDirectory)
@@ -68,7 +72,7 @@ import System.FilePath ((</>), dropExtension)
 import System.IO (IOMode (ReadMode), withFile, openFile, hSetBinaryMode)
 import System.IO.Error (isDoesNotExistError, catchIOError)
 import System.Process (readProcessWithExitCode, showCommandForUser)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
+import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), text)
 
 curry3 :: ((a, b, c) -> d) -> a -> b -> c -> d
 curry3 f a b c = f (a, b, c)
@@ -99,10 +103,10 @@ strictReadF f path = withFile path ReadMode (\h -> hGetContents h >>= (\x -> ret
 -- | Write a file which we might still be reading from in
 -- order to compute the text argument.
 replaceFile :: FilePath -> String -> IO ()
-replaceFile path text =
+replaceFile path s =
     do removeFile back `E.catch` (\ (e :: IOException) -> when (not (isDoesNotExistError e)) (ioError e))
        renameFile path back `E.catch` (\ (e :: IOException) -> when (not (isDoesNotExistError e)) (ioError e))
-       writeFile path text
+       writeFile path s
     where
       back = path ++ "~"
 
@@ -120,12 +124,12 @@ modifyFile path f =
       back = path ++ "~"
 
 diffFile :: FilePath -> Text -> IO (Maybe String)
-diffFile path text =
-    readProcessWithExitCode cmd args (unpack text) >>= \ (code, out, _err) ->
+diffFile path s =
+    readProcessWithExitCode cmd args (unpack s) >>= \ (code, out, _err) ->
     case code of
       ExitSuccess -> return Nothing
       ExitFailure 1 -> return (Just out)
-      _ -> error (showCommandForUser cmd args {- ++ " < " ++ show text -} ++ " -> " ++ show code)
+      _ -> error (showCommandForUser cmd args {- ++ " < " ++ show s -} ++ " -> " ++ show code)
     where
       cmd = "diff"
       args = ["-ruw", path, "-"]
@@ -255,7 +259,7 @@ maybeL :: Lens a (Maybe b) -> Maybe b -> a -> a
 maybeL lens mb x = modL lens (maybe mb Just) x
 
 indent :: [Char] -> String -> String
-indent prefix text = unlines (List.map (prefix ++) (List.lines text))
+indent prefix s = unlines (List.map (prefix ++) (List.lines s))
 
 maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . listToMaybe . reads
@@ -313,3 +317,9 @@ fromSingleton e multiple s =
       [x] -> x
       [] -> e
       xs -> multiple xs
+
+instance Pretty PackageIdentifier where
+    pretty p = pretty (pkgName p) <> text "-" <> pretty (pkgVersion p)
+
+instance Pretty PackageName where
+    pretty (PackageName s) = text s
