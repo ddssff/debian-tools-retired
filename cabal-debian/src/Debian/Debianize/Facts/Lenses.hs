@@ -111,14 +111,12 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 amap1 :: Lens Atoms AtomMap
 amap1 = lens atomMap (\ x a -> a {atomMap = x})
-{-
 amap2 :: Lens Atoms AtomMap
 amap2 = lens flags_ (\ x a -> a {flags_ = x})
 amap3 :: Lens Atoms AtomMap
 amap3 = lens debianNameMap_ (\ x a -> a {debianNameMap_ = x})
-amap4 :: Lens Atoms AtomMap
-amap4 = lens control_ (\ x a -> a {control_ = x})
--}
+-- amap4 :: Lens Atoms AtomMap
+-- amap4 = lens control_ (\ x a -> a {control_ = x})
 
 -- Lenses to access values in the Atoms type.  This is an old
 -- design which I plan to make private and turn into something
