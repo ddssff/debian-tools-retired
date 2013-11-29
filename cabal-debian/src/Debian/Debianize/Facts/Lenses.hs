@@ -721,7 +721,7 @@ partitionAtoms lns f deb =
 deleteAtoms :: Lens Atoms AtomMap -> (DebAtomKey -> DebAtom -> Bool) -> Atoms -> Atoms
 deleteAtoms lns p atoms = snd (partitionAtoms lns p atoms)
 
--- | Split atoms out of a Atoms by predicate.
+-- | Split atoms out of an Atoms by predicate.
 partitionAtoms' :: (Ord a) => Lens Atoms AtomMap -> (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> (Set a, Atoms)
 partitionAtoms' lns f deb =
     foldAtoms lns g (mempty, setL lns mempty deb) deb
@@ -731,7 +731,6 @@ partitionAtoms' lns f deb =
             Just x -> (Set.insert x xs, deb')
             Nothing -> (xs, insertAtom lns k atom deb')
 
--- | Like modifyAtoms, but...
 modifyAtoms' :: (Ord a) =>
                 Lens Atoms AtomMap
              -> (DebAtomKey -> DebAtom -> Maybe a)

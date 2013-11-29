@@ -76,6 +76,7 @@ mapCabal pname dname =
       f :: Maybe VersionSplits -> Maybe VersionSplits
       f Nothing = Just (makePackage dname)
       f (Just sp) = error $ "mapCabal - already mapped: " ++ show sp
+
 -- | Map versions less than ver of Cabal Package pname to Debian package ltname
 splitCabal :: Monad m => PackageName -> String -> Version -> DebT m ()
 splitCabal pname ltname ver =
