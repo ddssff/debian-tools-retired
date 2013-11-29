@@ -89,7 +89,7 @@ module Debian.Debianize.Facts.Lenses
     ) where
 
 import Control.Category ((.))
-import Data.Lens.Lazy (lens, Lens)
+import Data.Lens.Lazy (lens, Lens, setL, getL)
 import Data.Map as Map (empty, foldWithKey, insertWith, Map)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
@@ -108,6 +108,17 @@ import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName)
 import Prelude hiding (init, log, unlines, (.))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
+
+amap1 :: Lens Atoms AtomMap
+amap1 = lens atomMap (\ x a -> a {atomMap = x})
+{-
+amap2 :: Lens Atoms AtomMap
+amap2 = lens flags_ (\ x a -> a {flags_ = x})
+amap3 :: Lens Atoms AtomMap
+amap3 = lens debianNameMap_ (\ x a -> a {debianNameMap_ = x})
+amap4 :: Lens Atoms AtomMap
+amap4 = lens control_ (\ x a -> a {control_ = x})
+-}
 
 -- Lenses to access values in the Atoms type.  This is an old
 -- design which I plan to make private and turn into something
@@ -132,70 +143,69 @@ debAction :: Lens Atoms DebAction
 debAction = lens debAction_ (\ b a -> a {debAction_ = b}) . flags
 
 -- Build a value with a default
-getter1 :: forall a. (Eq a) => a -> (DebAtom -> Maybe a) -> Atoms -> a
-getter1 def un atoms = fromMaybe def $ getter6 un atoms
+getter1 :: forall a. (Eq a) => Lens Atoms AtomMap -> a -> (DebAtom -> Maybe a) -> Atoms -> a
+getter1 lns def un atoms = fromMaybe def $ getter6 lns un atoms
 
-setter1 :: forall a. Ord a => (DebAtomKey -> DebAtom -> Maybe a) -> (a -> DebAtom) -> a -> Atoms -> Atoms
-setter1 un mk x atoms = modifyAtoms' un (const ((singleton . (Source,) . mk) x)) atoms
+setter1 :: forall a. Ord a => Lens Atoms AtomMap -> (DebAtomKey -> DebAtom -> Maybe a) -> (a -> DebAtom) -> a -> Atoms -> Atoms
+setter1 lns un mk x atoms = modifyAtoms' lns un (const ((singleton . (Source,) . mk) x)) atoms
 
 -- Build a maybe value
-getter6 :: forall a. (Eq a) => (DebAtom -> Maybe a) -> Atoms -> Maybe a
-getter6 un atoms = foldAtoms from Nothing atoms
+getter6 :: forall a. (Eq a) => Lens Atoms AtomMap -> (DebAtom -> Maybe a) -> Atoms -> Maybe a
+getter6 lns un atoms = foldAtoms lns from Nothing atoms
     where
       from Source y (Just x) | maybe False (/= x) (un y) = error "Conflicting values"
       from Source y z = maybe z Just (un y)
       from _ _ x = x
 
-setter6 :: Ord a => (DebAtomKey -> DebAtom -> Maybe a) -> (a -> DebAtom) -> Maybe a -> Atoms -> Atoms
-setter6 un mk x atoms = modifyAtoms' un (const (maybe Set.empty (singleton . (Source,) . mk) x)) atoms
+setter6 :: Ord a => Lens Atoms AtomMap -> (DebAtomKey -> DebAtom -> Maybe a) -> (a -> DebAtom) -> Maybe a -> Atoms -> Atoms
+setter6 lns un mk x atoms = modifyAtoms' lns un (const (maybe Set.empty (singleton . (Source,) . mk) x)) atoms
 
 -- Build a set
 getter2 :: Ord a => (DebAtom -> Maybe a) -> Atoms -> Set a
-getter2 un atoms = foldAtoms from Set.empty atoms
+getter2 un atoms = foldAtoms amap1 from Set.empty atoms
     where
       from Source t x = maybe x (`Set.insert` x) (un t)
       from _ _ x = x
 
 -- Insert set elements
 setter2 :: Ord a => (DebAtomKey -> DebAtom -> Bool) -> (a -> DebAtom) -> Set a -> Atoms -> Atoms
-setter2 p mk x atoms = Set.fold (\ text atoms' -> insertAtom Source (mk text) atoms') (deleteAtoms p atoms) x
-
+setter2 p mk x atoms = Set.fold (\ text atoms' -> insertAtom amap1 Source (mk text) atoms') (deleteAtoms amap1 p atoms) x
 -- Build a set from many sets
 getter4 :: Ord a => (DebAtom -> Maybe (Set a)) -> Atoms -> Set a
-getter4 un atoms = foldAtoms from Set.empty atoms
+getter4 un atoms = foldAtoms amap1 from Set.empty atoms
     where
       from Source t x = maybe x (union x) (un t)
       from _ _ x = x
 
 setter4 :: (DebAtomKey -> DebAtom -> Bool) -> (a -> DebAtom) -> a -> Atoms -> Atoms
-setter4 p mk x atoms = insertAtom Source (mk x) (deleteAtoms p atoms)
+setter4 p mk x atoms = insertAtom amap1 Source (mk x) (deleteAtoms amap1 p atoms)
 
 -- Build a map, error on conflicting values
 getter5 :: forall a b. (Ord a) => (DebAtom -> Maybe (a, b)) -> Atoms -> Map a b
-getter5 un atoms = foldAtoms from Map.empty atoms
+getter5 un atoms = foldAtoms amap1 from Map.empty atoms
     where
       from :: DebAtomKey -> DebAtom -> Map a b -> Map a b
       from Source y x = maybe x (\ (a, b) -> Map.insertWith (error "Conflict in map") a b x) (un y)
       from _ _ x = x
 
 setter5 :: (DebAtomKey -> DebAtom -> Bool) -> (a -> b -> DebAtom) -> Map a b -> Atoms -> Atoms
-setter5 p mk x atoms = Map.foldWithKey (\ cabal debian atoms' -> insertAtom Source (mk cabal debian) atoms') (deleteAtoms p atoms) x
+setter5 p mk x atoms = Map.foldWithKey (\ cabal debian atoms' -> insertAtom amap1 Source (mk cabal debian) atoms') (deleteAtoms amap1 p atoms) x
 
 
 -- Build a binary map, error on conflicting values
 getter7 :: forall b. (DebAtom -> Maybe b) -> Atoms -> Map BinPkgName b
-getter7 un atoms = foldAtoms from Map.empty atoms
+getter7 un atoms = foldAtoms amap1 from Map.empty atoms
     where
       from :: DebAtomKey -> DebAtom -> Map BinPkgName b -> Map BinPkgName b
       from (Binary b) y x = maybe x (\ v -> Map.insertWith (error "Conflict in map") b v x) (un y)
       from _ _ x = x
 
 setter7 :: (DebAtomKey -> DebAtom -> Bool) -> (a -> DebAtom) -> Map BinPkgName a -> Atoms -> Atoms
-setter7 p mk x atoms = Map.foldWithKey (\ b y atoms'-> insertAtom (Binary b) (mk y) atoms') (deleteAtoms p atoms) x
+setter7 p mk x atoms = Map.foldWithKey (\ b y atoms'-> insertAtom amap1 (Binary b) (mk y) atoms') (deleteAtoms amap1 p atoms) x
 
 -- Build a map of sets
 getter3 :: forall a b. (Ord a, Ord b) => (DebAtom -> Maybe (a, b)) -> Atoms -> Map a (Set b)
-getter3 un atoms = foldAtoms from Map.empty atoms
+getter3 un atoms = foldAtoms amap1 from Map.empty atoms
     where
       from :: DebAtomKey -> DebAtom -> Map a (Set b) -> Map a (Set b)
       from Source y x = maybe x (\ (a, b) -> Map.insertWith union a (singleton b) x) (un y)
@@ -203,26 +213,26 @@ getter3 un atoms = foldAtoms from Map.empty atoms
 
 
 setter3 :: (a ~ String, b ~ Relations) => (DebAtomKey -> DebAtom -> Bool) -> (a -> b -> DebAtom) ->  Map a (Set b) -> Atoms -> Atoms
-setter3 p mk x atoms = Map.foldWithKey (\ k a atoms' -> Set.fold (\ debian' atoms'' -> insertAtom Source (mk k debian') atoms'') atoms' a) (deleteAtoms p atoms) x
+setter3 p mk x atoms = Map.foldWithKey (\ k a atoms' -> Set.fold (\ debian' atoms'' -> insertAtom amap1 Source (mk k debian') atoms'') atoms' a) (deleteAtoms amap1 p atoms) x
 
 -- Build a map of sets
 getter8 :: forall b. (Ord b) => (DebAtom -> Maybe b) -> Atoms -> Map BinPkgName (Set b)
-getter8 un atoms = foldAtoms from Map.empty atoms
+getter8 un atoms = foldAtoms amap1 from Map.empty atoms
     where
       from :: DebAtomKey -> DebAtom -> Map BinPkgName (Set b) -> Map BinPkgName (Set b)
       from (Binary b) y x = maybe x (\ v -> Map.insertWith union b (singleton v) x) (un y)
       from _ _ x = x
 
 setter8 :: (DebAtomKey -> DebAtom -> Bool) -> (a -> DebAtom) -> Map BinPkgName (Set a) -> Atoms -> Atoms
-setter8 p mk x atoms = Map.foldWithKey (\ b rels atoms' -> Set.fold (\ rel atoms'' -> insertAtom (Binary b) (mk rel) atoms'') atoms' rels) (deleteAtoms p atoms) x
+setter8 p mk x atoms = Map.foldWithKey (\ b rels atoms' -> Set.fold (\ rel atoms'' -> insertAtom amap1 (Binary b) (mk rel) atoms'') atoms' rels) (deleteAtoms amap1 p atoms) x
 
 -- | Obsolete record containing verbosity, dryRun, validate, and debAction.
 flags :: Lens Atoms Flags
 flags = lens g s
     where
       g :: Atoms -> Flags
-      g = getter1 defaultFlags (\ y -> case y of DHFlags x -> Just x; _ -> Nothing)
-      s = setter1 (\ k y -> case (k, y) of (Source, DHFlags x) -> Just x; _ -> Nothing) DHFlags
+      g = getter1 amap1 defaultFlags (\ y -> case y of DHFlags x -> Just x; _ -> Nothing)
+      s = setter1 amap1 (\ k y -> case (k, y) of (Source, DHFlags x) -> Just x; _ -> Nothing) DHFlags
 
 -- | Unused
 warning :: Lens Atoms (Set Text)
@@ -272,8 +282,8 @@ cabalFlagAssignments = lens g s
 debianNameMap :: Lens Atoms (Map PackageName VersionSplits)
 debianNameMap = lens g s
     where
-      g = getter1 mempty (\ y -> case y of DebianNameMap mp -> Just mp; _ -> Nothing)
-      s = setter1 (\ k y -> case (k, y) of (Source, DebianNameMap x) -> Just x; _ -> Nothing) DebianNameMap
+      g = getter1 amap1 mempty (\ y -> case y of DebianNameMap mp -> Just mp; _ -> Nothing)
+      s = setter1 amap1 (\ k y -> case (k, y) of (Source, DebianNameMap x) -> Just x; _ -> Nothing) DebianNameMap
 
 -- | Map of Debian epoch numbers assigned to cabal packages.
 epochMap :: Lens Atoms (Map PackageName Int)
@@ -345,7 +355,7 @@ utilsPackageNames :: Lens Atoms (Set BinPkgName)
 utilsPackageNames = lens g s
     where
       g = getter2 (\ y -> case y of UtilsPackageName b -> Just b; _ -> Nothing)
-      s x atoms = Set.fold (\ d atoms' -> insertAtom Source (UtilsPackageName d) atoms') (deleteAtoms p atoms) x
+      s x atoms = Set.fold (\ d atoms' -> insertAtom amap1 Source (UtilsPackageName d) atoms') (deleteAtoms amap1 p atoms) x
           where
             p Source (UtilsPackageName _) = True
             p _ _ = False
@@ -354,30 +364,30 @@ utilsPackageNames = lens g s
 sourcePackageName :: Lens Atoms (Maybe SrcPkgName)
 sourcePackageName = lens g s
     where
-      g = getter6 (\ y -> case y of SourcePackageName x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, SourcePackageName y) -> Just y; _ -> Nothing) SourcePackageName
+      g = getter6 amap1 (\ y -> case y of SourcePackageName x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, SourcePackageName y) -> Just y; _ -> Nothing) SourcePackageName
 
 -- | Revision string used in constructing the debian verison number from the cabal version
 revision :: Lens Atoms (Maybe String)
 revision = lens g s
     where
-      g = getter6 (\ y -> case y of DebRevision x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DebRevision y) -> Just y; _ -> Nothing) DebRevision
+      g = getter6 amap1 (\ y -> case y of DebRevision x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DebRevision y) -> Just y; _ -> Nothing) DebRevision
 
 -- | Exact debian version number, overrides the version generated from the cabal version
 debVersion :: Lens Atoms (Maybe DebianVersion)
 debVersion = lens g s
     where
-      g = getter6 (\ y -> case y of DebVersion x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DebVersion y) -> Just y; _ -> Nothing) DebVersion
+      g = getter6 amap1 (\ y -> case y of DebVersion x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DebVersion y) -> Just y; _ -> Nothing) DebVersion
 
 -- | Maintainer field.  Overrides any value found in the cabal file, or
 -- in the DEBIANMAINTAINER environment variable.
 maintainer :: Lens Atoms (Maybe NameAddr)
 maintainer = lens g s
     where
-      g = getter6 (\ y -> case y of DHMaintainer x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DHMaintainer y) -> Just y; _ -> Nothing) DHMaintainer
+      g = getter6 amap1 (\ y -> case y of DHMaintainer x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DHMaintainer y) -> Just y; _ -> Nothing) DHMaintainer
 
 -- | No longer sure what the purpose of this lens is.
 packageInfo :: Lens Atoms (Map PackageName PackageInfo)
@@ -403,15 +413,15 @@ noDocumentationLibrary = lens noDocumentationLibrary_ (\ b a -> a {noDocumentati
 copyright :: Lens Atoms (Maybe (Either License Text))
 copyright = lens g s
     where
-      g = getter6 (\ y -> case y of DebCopyright x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DebCopyright y) -> Just y; _ -> Nothing) DebCopyright
+      g = getter6 amap1 (\ y -> case y of DebCopyright x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DebCopyright y) -> Just y; _ -> Nothing) DebCopyright
 
 -- | The source package architecture - @Any@, @All@, or some list of specific architectures.
 sourceArchitecture :: Lens Atoms (Maybe PackageArchitectures)
 sourceArchitecture = lens g s
     where
-      g = getter6 (\ y -> case y of DHArch x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DHArch y) -> Just y; _ -> Nothing) DHArch
+      g = getter6 amap1 (\ y -> case y of DHArch x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DHArch y) -> Just y; _ -> Nothing) DHArch
 
 -- | Map of the binary package architectures
 binaryArchitectures :: Lens Atoms (Map BinPkgName PackageArchitectures)
@@ -424,8 +434,8 @@ binaryArchitectures = lens g s
 sourcePriority :: Lens Atoms (Maybe PackagePriority)
 sourcePriority = lens g s
     where
-      g = getter6 (\ y -> case y of DHPriority x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DHPriority y) -> Just y; _ -> Nothing) DHPriority
+      g = getter6 amap1 (\ y -> case y of DHPriority x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DHPriority y) -> Just y; _ -> Nothing) DHPriority
 
 -- | Map of the binary package priorities
 binaryPriorities :: Lens Atoms (Map BinPkgName PackagePriority)
@@ -438,8 +448,8 @@ binaryPriorities = lens g s
 sourceSection :: Lens Atoms (Maybe Section)
 sourceSection = lens g s
     where
-      g = getter6 (\ y -> case y of DHSection x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DHSection y) -> Just y; _ -> Nothing) DHSection
+      g = getter6 amap1 (\ y -> case y of DHSection x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DHSection y) -> Just y; _ -> Nothing) DHSection
 
 -- | Map of the binary deb section assignments
 binarySections :: Lens Atoms (Map BinPkgName Section)
@@ -512,8 +522,8 @@ extraDevDeps = lens g s
 rulesHead :: Lens Atoms (Maybe Text)
 rulesHead = lens g s
     where
-      g = getter6 (\ y -> case y of DebRulesHead x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DebRulesHead y) -> Just y; _ -> Nothing) DebRulesHead
+      g = getter6 amap1 (\ y -> case y of DebRulesHead x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DebRulesHead y) -> Just y; _ -> Nothing) DebRulesHead
 
 -- | Additional fragments of the rules file
 rulesFragments :: Lens Atoms (Set Text)
@@ -554,43 +564,43 @@ preRm = lens g s
 compat :: Lens Atoms (Maybe Int)
 compat = lens g s
     where
-      g = getter6 (\ y -> case y of DebCompat x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DebCompat y) -> Just y; _ -> Nothing) DebCompat
+      g = getter6 amap1 (\ y -> case y of DebCompat x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DebCompat y) -> Just y; _ -> Nothing) DebCompat
 
 -- | The @debian/source/format@ file.
 sourceFormat :: Lens Atoms (Maybe SourceFormat)
 sourceFormat = lens g s
     where
-      g = getter6 (\ y -> case y of DebSourceFormat x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DebSourceFormat y) -> Just y; _ -> Nothing) DebSourceFormat
+      g = getter6 amap1 (\ y -> case y of DebSourceFormat x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DebSourceFormat y) -> Just y; _ -> Nothing) DebSourceFormat
 
 -- | the @debian/watch@ file
 watch :: Lens Atoms (Maybe Text)
 watch = lens g s
     where
-      g = getter6 (\ y -> case y of DebWatch x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DebWatch y) -> Just y; _ -> Nothing) DebWatch
+      g = getter6 amap1 (\ y -> case y of DebWatch x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DebWatch y) -> Just y; _ -> Nothing) DebWatch
 
 -- | the @debian/changelog@ file
 changelog :: Lens Atoms (Maybe ChangeLog)
 changelog = lens g s
     where
-      g = getter6 (\ y -> case y of DebChangeLog x -> Just x; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DebChangeLog y) -> Just y; _ -> Nothing) DebChangeLog
+      g = getter6 amap1 (\ y -> case y of DebChangeLog x -> Just x; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DebChangeLog y) -> Just y; _ -> Nothing) DebChangeLog
 
 -- | Comment entries for the latest changelog entry (DebLogComments [[Text]])
 comments :: Lens Atoms (Maybe [[Text]])
 comments = lens g s
     where
-      g = getter6 (\ y -> case y of (DebLogComments xss') -> Just xss'; _ -> Nothing)
-      s = setter6 (\ k a -> case (k, a) of (Source, DebLogComments y) -> Just y; _ -> Nothing) DebLogComments
+      g = getter6 amap1 (\ y -> case y of (DebLogComments xss') -> Just xss'; _ -> Nothing)
+      s = setter6 amap1 (\ k a -> case (k, a) of (Source, DebLogComments y) -> Just y; _ -> Nothing) DebLogComments
 
 -- | The @debian/control@ file.
 control :: Lens Atoms SourceDebDescription
 control = lens g s
     where
-      g = getter1 newSourceDebDescription (\ y -> case y of DebControl x -> Just x; _ -> Nothing)
-      s = setter1 (\ k y -> case (k, y) of (Source, DebControl x) -> Just x; _ -> Nothing) DebControl
+      g = getter1 amap1 newSourceDebDescription (\ y -> case y of DebControl x -> Just x; _ -> Nothing)
+      s = setter1 amap1 (\ k y -> case (k, y) of (Source, DebControl x) -> Just x; _ -> Nothing) DebControl
 
 -- | The @Standards-Version@ field of the @debian/control@ file
 standards :: Lens Atoms (Maybe StandardsVersion)
@@ -687,48 +697,50 @@ defaultFlags =
     , validate_ = False
     }
 
-insertAtom :: DebAtomKey -> DebAtom -> Atoms -> Atoms
-insertAtom mbin atom atoms = atoms {atomMap = insertWith union mbin (singleton atom) (atomMap atoms)}
+insertAtom :: Lens Atoms AtomMap -> DebAtomKey -> DebAtom -> Atoms -> Atoms
+-- insertAtom mbin atom atoms = atoms {atomMap = insertWith union mbin (singleton atom) (atomMap atoms)}
+insertAtom lns mbin atom atoms = setL lns (insertWith union mbin (singleton atom) (getL lns atoms)) atoms
 
-insertAtoms :: Set (DebAtomKey, DebAtom) -> Atoms -> Atoms
-insertAtoms s atoms =
+insertAtoms :: Lens Atoms AtomMap -> Set (DebAtomKey, DebAtom) -> Atoms -> Atoms
+insertAtoms lns s atoms =
     case maxView s of
       Nothing -> atoms
-      Just ((k, a), s') -> insertAtoms s' (insertAtom k a atoms)
+      Just ((k, a), s') -> insertAtoms lns s' (insertAtom lns k a atoms)
 
-foldAtoms :: (DebAtomKey -> DebAtom -> r -> r) -> r -> Atoms -> r
-foldAtoms f r0 atoms = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (atomMap atoms)
+foldAtoms :: Lens Atoms AtomMap -> (DebAtomKey -> DebAtom -> r -> r) -> r -> Atoms -> r
+foldAtoms lns f r0 atoms = Map.foldWithKey (\ k s r -> Set.fold (f k) r s) r0 (getL lns atoms)
 
 -- | Split atoms out of an Atoms by predicate.
-partitionAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> (Set (DebAtomKey, DebAtom), Atoms)
-partitionAtoms f deb =
-    foldAtoms g (mempty, newAtoms (unTop (top deb))) deb
+partitionAtoms :: Lens Atoms AtomMap -> (DebAtomKey -> DebAtom -> Bool) -> Atoms -> (Set (DebAtomKey, DebAtom), Atoms)
+partitionAtoms lns f deb =
+    foldAtoms lns g (mempty, newAtoms (unTop (top deb))) deb
     where
       g k atom (atoms, deb') =
           case f k atom of
             True -> (Set.insert (k, atom) atoms, deb')
-            False -> (atoms, insertAtom k atom deb')
+            False -> (atoms, insertAtom lns k atom deb')
 
-deleteAtoms :: (DebAtomKey -> DebAtom -> Bool) -> Atoms -> Atoms
-deleteAtoms p atoms = snd (partitionAtoms p atoms)
+deleteAtoms :: Lens Atoms AtomMap -> (DebAtomKey -> DebAtom -> Bool) -> Atoms -> Atoms
+deleteAtoms lns p atoms = snd (partitionAtoms lns p atoms)
 
 -- | Split atoms out of a Atoms by predicate.
-partitionAtoms' :: (Ord a) => (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> (Set a, Atoms)
-partitionAtoms' f deb =
-    foldAtoms g (mempty, newAtoms (unTop (top deb))) deb
+partitionAtoms' :: (Ord a) => Lens Atoms AtomMap -> (DebAtomKey -> DebAtom -> Maybe a) -> Atoms -> (Set a, Atoms)
+partitionAtoms' lns f deb =
+    foldAtoms lns g (mempty, newAtoms (unTop (top deb))) deb
     where
       g k atom (xs, deb') =
           case f k atom of
             Just x -> (Set.insert x xs, deb')
-            Nothing -> (xs, insertAtom k atom deb')
+            Nothing -> (xs, insertAtom lns k atom deb')
 
 -- | Like modifyAtoms, but...
 modifyAtoms' :: (Ord a) =>
-               (DebAtomKey -> DebAtom -> Maybe a)
-            -> (Set a -> Set (DebAtomKey, DebAtom))
-            -> Atoms
-            -> Atoms
-modifyAtoms' f g atoms =
-    insertAtoms (g s) atoms'
+                Lens Atoms AtomMap
+             -> (DebAtomKey -> DebAtom -> Maybe a)
+             -> (Set a -> Set (DebAtomKey, DebAtom))
+             -> Atoms
+             -> Atoms
+modifyAtoms' lns f g atoms =
+    insertAtoms lns (g s) atoms'
     where
-      (s, atoms') = partitionAtoms' f atoms
+      (s, atoms') = partitionAtoms' lns f atoms

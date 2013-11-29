@@ -20,6 +20,8 @@ import Distribution.PackageDescription as Cabal (FlagName)
 import Prelude hiding (init, init, log, log, unlines)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
+type AtomMap = Map DebAtomKey (Set DebAtom)
+
 -- | Bits and pieces of information about the mapping from cabal package
 -- names and versions to debian package names and versions.  In essence,
 -- an 'Atoms' value represents a package's debianization.  The lenses in
@@ -29,7 +31,7 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 data Atoms
     = Atoms
       { top :: Top
-      , atomMap :: Map DebAtomKey (Set DebAtom)
+      , atomMap :: AtomMap
       , noDocumentationLibrary_ :: Set Bool
       -- ^ Do not produce a libghc-foo-doc package.
       , noProfilingLibrary_ :: Set Bool
@@ -51,6 +53,14 @@ data Atoms
       -- produced by cabal so we can move them into the deb.  Note that
       -- the --builddir option of runhaskell Setup appends the "/build"
       -- to the value it receives, so, yes, try not to get confused.
+      , flags_ :: Map DebAtomKey (Set DebAtom)
+      -- ^ Information regarding mode of operation - verbosity, dry-run, usage, etc
+      , debianNameMap_ :: Map DebAtomKey (Set DebAtom)
+      -- ^ Mapping from cabal package name and version to debian source
+      -- package name.  This allows different ranges of cabal versions to
+      -- map to different debian source package names.
+      , control_ :: Map DebAtomKey (Set DebAtom)
+      -- ^ The parsed contents of the control file
       } deriving (Eq, Show)
 
 newtype Top = Top {unTop :: FilePath} deriving (Eq, Ord, Show, Typeable)
@@ -65,6 +75,9 @@ newAtoms x
       , omitLTDeps_ = mempty
       , compilerVersion_ = mempty
       , buildDir_ = mempty
+      , flags_ = mempty
+      , debianNameMap_ = mempty
+      , control_ = mempty
       }
 
 showAtoms :: Atoms -> IO ()
