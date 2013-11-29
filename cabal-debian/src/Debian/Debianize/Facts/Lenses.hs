@@ -229,8 +229,8 @@ flags :: Lens Atoms Flags
 flags = lens g s
     where
       g :: Atoms -> Flags
-      g = getter1 amap1 defaultFlags (\ y -> case y of DHFlags x -> Just x; _ -> Nothing)
-      s = setter1 amap1 (\ k y -> case (k, y) of (Source, DHFlags x) -> Just x; _ -> Nothing) DHFlags
+      g = getter1 amap2 defaultFlags (\ y -> case y of DHFlags x -> Just x; _ -> Nothing)
+      s = setter1 amap2 (\ k y -> case (k, y) of (Source, DHFlags x) -> Just x; _ -> Nothing) DHFlags
 
 -- | Unused
 warning :: Lens Atoms (Set Text)
@@ -280,8 +280,8 @@ cabalFlagAssignments = lens g s
 debianNameMap :: Lens Atoms (Map PackageName VersionSplits)
 debianNameMap = lens g s
     where
-      g = getter1 amap1 mempty (\ y -> case y of DebianNameMap mp -> Just mp; _ -> Nothing)
-      s = setter1 amap1 (\ k y -> case (k, y) of (Source, DebianNameMap x) -> Just x; _ -> Nothing) DebianNameMap
+      g = getter1 amap3 mempty (\ y -> case y of DebianNameMap mp -> Just mp; _ -> Nothing)
+      s = setter1 amap3 (\ k y -> case (k, y) of (Source, DebianNameMap x) -> Just x; _ -> Nothing) DebianNameMap
 
 -- | Map of Debian epoch numbers assigned to cabal packages.
 epochMap :: Lens Atoms (Map PackageName Int)
