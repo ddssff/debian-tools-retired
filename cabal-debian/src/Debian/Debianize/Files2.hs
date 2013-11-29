@@ -30,23 +30,23 @@ data Dependency_
     deriving (Eq, Show)
 
 debianName :: (Monad m, PkgName name) => PackageType -> PackageIdentifier -> DebT m name
-debianName typ pkgDesc =
+debianName typ pkgId =
     do atoms <- get
-       return $ debianName' (Map.lookup (pkgName pkgDesc) (getL Lenses.debianNameMap atoms)) typ pkgDesc
+       return $ debianName' (Map.lookup (pkgName pkgId) (getL Lenses.debianNameMap atoms)) typ pkgId
 
 -- | Function that applies the mapping from cabal names to debian
 -- names based on version numbers.  If a version split happens at v,
 -- this will return the ltName if < v, and the geName if the relation
 -- is >= v.
 debianName' :: (PkgName name) => Maybe VersionSplits -> PackageType -> PackageIdentifier -> name
-debianName' msplits typ pkgDesc =
+debianName' msplits typ pkgId =
     case msplits of
       Nothing -> mkPkgName pname typ
       Just splits -> (\ s -> mkPkgName' s typ) $ doSplits splits version
     where
       -- def = mkPkgName pname typ
-      pname@(PackageName _) = pkgName pkgDesc
-      version = (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion pkgDesc)))))
+      pname@(PackageName _) = pkgName pkgId
+      version = (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion pkgId)))))
 
 -- | Build a debian package name from a cabal package name and a
 -- debian package type.  Unfortunately, this does not enforce the
