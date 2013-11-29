@@ -152,7 +152,7 @@ getter6 :: forall a. (Eq a) => Lens Atoms AtomMap -> (DebAtom -> Maybe a) -> Ato
 getter6 lns un atoms = foldAtoms lns from Nothing atoms
     where
       from Source y (Just x) | maybe False (/= x) (un y) = error "Conflicting values"
-      from Source y z = maybe z Just (un y)
+      from Source y Nothing = maybe Nothing Just (un y)
       from _ _ x = x
 
 setter6 :: Ord a => Lens Atoms AtomMap -> (DebAtomKey -> DebAtom -> Maybe a) -> (a -> DebAtom) -> Maybe a -> Atoms -> Atoms
