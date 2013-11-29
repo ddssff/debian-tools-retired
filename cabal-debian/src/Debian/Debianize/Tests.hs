@@ -5,11 +5,12 @@ module Main
     , main
     ) where
 
-import Control.Monad.State (lift, get, put)
+import Control.Monad.State (get, put)
+import Control.Monad.Trans (MonadIO)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Function (on)
-import Data.Lens.Lazy (setL, getL, modL)
+import Data.Lens.Lazy (getL, modL)
 import Data.List (sortBy)
 import Data.Map as Map (differenceWithKey, intersectionWithKey)
 import qualified Data.Map as Map
@@ -20,19 +21,19 @@ import qualified Data.Text as T
 import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Facts.Lenses as Lenses
-    (changelog, compat, control, copyright, rulesHead, sourceFormat, installData, debVersion, buildDeps,
+    (changelog, compat, control, copyright, debianNameMap, rulesHead, sourceFormat, installData, debVersion, buildDeps,
      execMap, utilsPackageNames, binaryArchitectures, depends, description, revision, missingDependencies,
      installCabalExec, rulesHead, compat, sourceFormat, changelog, control, buildDeps, epochMap)
 import Debian.Debianize.Facts.Monad
     (Atoms, DebT, evalDebT, execDebM, execDebT, mapCabal, splitCabal)
 import Debian.Debianize.Facts.Types as Deb
-    (InstallFile(..), Server(..), Site(..), newAtoms,
+    (InstallFile(..), Server(..), Site(..), Atoms(top), newAtoms,
      SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Finalize (debianization, finalizeDebianization)
 import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups, makeRulesHead)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
-import Debian.Debianize.Utility (modifyM, (~=), (%=), (+=), (++=), (+++=), (~?=))
+import Debian.Debianize.Utility ((~=), (%=), (+=), (++=), (+++=), (~?=))
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
                       SourceFormat(Native3), Section(..), parseMaintainer)
@@ -75,7 +76,7 @@ newDebianization _ _ _ = error "Invalid changelog"
 
 newDebianization' :: Monad m => Maybe Int -> Maybe StandardsVersion -> DebT m ()
 newDebianization' level standards =
-    do compat ~?= Just level
+    do compat ~= level
        control %= (\ x -> x { Deb.standardsVersion = standards })
 
 tests :: Test
@@ -453,13 +454,13 @@ copyFirstLogEntry :: Atoms -> Atoms -> Atoms
 copyFirstLogEntry deb1 deb2 =
     modL Lenses.changelog (const (Just (ChangeLog (hd1 : tl2)))) deb2
     where
-      ChangeLog (hd1 : _) = fromMaybe (error "Missing debian/changelog") (getL Lenses.changelog deb1)
-      ChangeLog (_ : tl2) = fromMaybe (error "Missing debian/changelog") (getL Lenses.changelog deb2)
+      ChangeLog (hd1 : _) = fromMaybe (error $ "1. Missing debian/changelog in " ++ show (top deb1)) (getL Lenses.changelog deb1)
+      ChangeLog (_ : tl2) = fromMaybe (error $ "2. Missing debian/changelog in " ++ show (top deb2)) (getL Lenses.changelog deb2)
 
 copyFirstLogEntry' :: Monad m => Atoms -> DebT m ()
 copyFirstLogEntry' deb1 =
     do deb2 <- get
-       let ChangeLog (hd1 : _) = fromMaybe (error "Missing debian/changelog") (getL Lenses.changelog deb1)
+       let ChangeLog (hd1 : _) = fromMaybe (error $ "3. Missing debian/changelog in " ++ show (top deb1)) (getL Lenses.changelog deb1)
            tl2 = case (getL Lenses.changelog deb2) of
                    Just (ChangeLog (_ : x)) -> x
                    _ -> []
@@ -489,19 +490,18 @@ test8 label =
     TestLabel label $
     TestCase ( do old <- execDebT inputDebianization (newAtoms "test-data/artvaluereport-data/output")
                   log <- evalDebT inputChangeLog (newAtoms "test-data/artvaluereport-data/input")
-                  new <- execDebT (debianization defaultAtoms (modifyM (lift . customize log))) (newAtoms "test-data/artvaluereport-data/input")
+                  new <- execDebT (debianization defaultAtoms (customize log)) (newAtoms "test-data/artvaluereport-data/input")
                   diff <- diffDebianizations old (copyChangelog old new)
                   assertEqual label [] diff
              )
     where
       customize (Left e) = error (show e)
       customize (Right log) =
-                           (return .
-                            modL Lenses.buildDeps (Set.insert [[Rel (BinPkgName "haskell-hsx-utils") Nothing Nothing]]) .
-                            modL Lenses.control (\ y -> y {Deb.homepage = Just "http://artvaluereportonline.com"}) .
-                            setL Lenses.sourceFormat (Just Native3) .
-                            setL Lenses.changelog (Just log) .
-                            execDebM (newDebianization' (Just 7) (Just (StandardsVersion 3 9 3 Nothing))))
+          do Lenses.buildDeps %= Set.insert [[Rel (BinPkgName "haskell-hsx-utils") Nothing Nothing]]
+             Lenses.control %= (\ y -> y {Deb.homepage = Just "http://artvaluereportonline.com"})
+             Lenses.sourceFormat ~= Just Native3
+             Lenses.changelog ~= Just log
+             newDebianization' (Just 7) (Just (StandardsVersion 3 9 3 Nothing))
 
 test9 :: String -> Test
 test9 label =
