@@ -6,7 +6,6 @@ module Main
     ) where
 
 import Control.Monad.State (get, put)
-import Control.Monad.Trans (MonadIO)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Function (on)
@@ -21,7 +20,7 @@ import qualified Data.Text as T
 import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Facts.Lenses as Lenses
-    (changelog, compat, control, copyright, debianNameMap, rulesHead, sourceFormat, installData, debVersion, buildDeps,
+    (changelog, compat, control, copyright, rulesHead, sourceFormat, installData, debVersion, buildDeps,
      execMap, utilsPackageNames, binaryArchitectures, depends, description, revision, missingDependencies,
      installCabalExec, rulesHead, compat, sourceFormat, changelog, control, buildDeps, epochMap)
 import Debian.Debianize.Facts.Monad

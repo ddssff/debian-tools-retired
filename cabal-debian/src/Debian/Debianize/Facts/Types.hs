@@ -2,10 +2,9 @@
 module Debian.Debianize.Facts.Types where
 
 import Data.Generics (Data, Typeable)
-import Data.List (intercalate)
-import Data.Map as Map (Map, toList)
+import Data.Map as Map (Map)
 import Data.Monoid (Monoid(..))
-import Data.Set as Set (empty, null, Set, toList)
+import Data.Set as Set (empty, Set)
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog)
@@ -20,8 +19,6 @@ import Distribution.PackageDescription as Cabal (FlagName)
 import Prelude hiding (init, init, log, log, unlines)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
-type AtomMap = Map DebAtomKey (Set DebAtom)
-
 -- | Bits and pieces of information about the mapping from cabal package
 -- names and versions to debian package names and versions.  In essence,
 -- an 'Atoms' value represents a package's debianization.  The lenses in
@@ -31,7 +28,6 @@ type AtomMap = Map DebAtomKey (Set DebAtom)
 data Atoms
     = Atoms
       { top :: Top
-      , atomMap :: AtomMap
       , noDocumentationLibrary_ :: Set Bool
       -- ^ Do not produce a libghc-foo-doc package.
       , noProfilingLibrary_ :: Set Bool
@@ -53,14 +49,151 @@ data Atoms
       -- produced by cabal so we can move them into the deb.  Note that
       -- the --builddir option of runhaskell Setup appends the "/build"
       -- to the value it receives, so, yes, try not to get confused.
-      , flags_ :: Map DebAtomKey (Set DebAtom)
+      , flags_ :: Flags
       -- ^ Information regarding mode of operation - verbosity, dry-run, usage, etc
-      , debianNameMap_ :: Map DebAtomKey (Set DebAtom)
+      , debianNameMap_ :: Map PackageName VersionSplits
       -- ^ Mapping from cabal package name and version to debian source
       -- package name.  This allows different ranges of cabal versions to
       -- map to different debian source package names.
-      , control_ :: Map DebAtomKey (Set DebAtom)
+      , control_ :: SourceDebDescription
       -- ^ The parsed contents of the control file
+      , sourcePackageName_ :: Maybe SrcPkgName
+      -- ^ Name to give to the debian source package.  If not supplied
+      -- the name is constructed from the cabal package name.  Note that
+      -- DebianNameMap could encode this information if we already knew
+      -- the cabal package name, but we can't assume that.
+      , revision_ :: Maybe String
+      -- ^ Specify the revision string to use when converting the
+      -- cabal version to debian.
+      , debVersion_ :: Maybe DebianVersion
+      -- ^ Specify the exact debian version of the resulting package,
+      -- including epoch.  One use case is to work around the the
+      -- "buildN" versions that are often uploaded to the debian and
+      -- ubuntu repositories.  Say the latest cabal version of
+      -- transformers is 0.3.0.0, but the debian repository contains
+      -- version 0.3.0.0-1build3, we need to specify
+      -- debVersion="0.3.0.0-1build3" or the version we produce will
+      -- look older than the one already available upstream.
+      , maintainer_ :: Maybe NameAddr
+      -- ^ Value for the maintainer field in the control file.  Note that
+      -- the cabal maintainer field can have multiple addresses, but debian
+      -- only one.  If this is not explicitly set, it is obtained from the
+      -- cabal file, and if it is not there then from the environment.  As a
+      -- last resort, there is a hard coded string in here somewhere.
+      , cabalFlagAssignments_ :: Set (FlagName, Bool)
+      -- ^ Flags to pass to Cabal function finalizePackageDescription, this
+      -- can be used to control the flags in the cabal file.
+      , sourceFormat_ :: Maybe SourceFormat
+      -- ^ Write debian/source/format
+      , watch_ :: Maybe Text
+      -- ^ Write debian/watch
+      , intermediateFiles_ :: Set (FilePath, Text)
+      -- ^ Put this text into a file with the given name in the debianization.
+      , rulesHead_ :: Maybe Text
+      -- ^ The header of the debian/rules file.  The remainder is assembled
+      -- from DebRulesFragment values in the atom list.
+      , rulesFragments_ :: Set Text
+      -- ^ A Fragment of debian/rules
+      , warning_ :: Set Text
+      -- ^ A warning to be reported later
+      , utilsPackageNames_ :: Set BinPkgName
+      -- ^ Name of a package that will get left-over data files and executables.
+      -- If there are more than one, each package will get those files.
+      , changelog_ :: Maybe ChangeLog
+      -- ^ The changelog, first entry contains the source package name and version
+      , comments_ :: Maybe [[Text]]
+      -- ^ Each element is a comment to be added to the changelog, where the
+      -- element's text elements are the lines of the comment.
+      , buildDeps_ :: Set Relations
+      -- ^ Add build dependencies
+      , buildDepsIndep_ :: Set Relations
+      -- ^ Add arch independent build dependencies
+      , missingDependencies_ :: Set BinPkgName
+      -- ^ Lets cabal-debian know that a package it might expect to exist
+      -- actually does not, so omit all uses in resulting debianization.
+      , extraLibMap_ :: Map String (Set Relations)
+      -- ^ Map a cabal Extra-Library name to a debian binary package name,
+      -- e.g. @ExtraLibMapping extraLibMap "cryptopp" "libcrypto-dev"@ adds a
+      -- build dependency *and* a regular dependency on @libcrypto-dev@ to
+      -- any package that has @cryptopp@ in its cabal Extra-Library list.
+      , execMap_ :: Map String Relations
+      -- ^ Map a cabal Build-Tool name to a debian binary package name,
+      -- e.g. @ExecMapping "trhsx" "haskell-hsx-utils"@ adds a build
+      -- dependency on @haskell-hsx-utils@ to any package that has @trhsx@ in its
+      -- cabal build-tool list.
+      , epochMap_ :: Map PackageName Int
+      -- ^ Specify epoch numbers for the debian package generated from a
+      -- cabal package.  Example: @EpochMapping (PackageName "HTTP") 1@.
+      , packageInfo_ :: Map PackageName PackageInfo
+      -- ^ Supply some info about a cabal package.
+      , compat_ :: Maybe Int
+      -- ^ The debhelper compatibility level, from debian/compat.
+      , copyright_ :: Maybe (Either License Text)
+      -- ^ Copyright information, either as a Cabal License value or
+      -- the full text.
+      , apacheSite_ :: Map BinPkgName (String, FilePath, Text)
+      -- ^ Have Apache configure a site using PACKAGE, DOMAIN, LOGDIR, and APACHECONFIGFILE
+      , logrotateStanza_ :: Map BinPkgName (Set Text)
+      -- ^ Add a stanza of a logrotate file to the binary package
+      , link_ :: Map BinPkgName (Set (FilePath, FilePath))
+      -- ^ Create a symbolic link in the binary package
+      , postInst_ :: Map BinPkgName Text
+      -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
+      , postRm_ :: Map BinPkgName Text
+      -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
+      , preInst_ :: Map BinPkgName Text
+      -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
+      , preRm_ :: Map BinPkgName Text
+      -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
+      , sourceArchitecture_ :: Maybe PackageArchitectures
+      -- ^ Set the Architecture field of the source package
+      , binaryArchitectures_ :: Map BinPkgName PackageArchitectures
+      -- ^ Set the Architecture field of a binary package
+      , sourcePriority_ :: Maybe PackagePriority
+      -- ^ Set the Priority field of the source package
+      , binaryPriorities_ :: Map BinPkgName PackagePriority
+      -- ^ Set the Priority field of a binary package
+      , sourceSection_ :: Maybe Section
+      -- ^ Set the Section field of the source package
+      , binarySections_ :: Map BinPkgName Section
+      -- ^ Set the Section field of a binary package
+      , description_ :: Map BinPkgName Text
+      -- ^ Set the description of source or binary
+      , install_ :: Map BinPkgName (Set (FilePath, FilePath))
+      -- ^ Install a build file into the binary package
+      , installTo_ :: Map BinPkgName (Set (FilePath, FilePath))
+      -- ^ Install a build file into the binary package at an exact location
+      , installData_ :: Map BinPkgName (Set (FilePath, FilePath))
+      -- ^ DHInstallTo somewhere relative to DataDir (see above)
+      , file_ :: Map BinPkgName (Set (FilePath, Text))
+      -- ^ Create a file with the given text at the given path
+      , installCabalExec_ :: Map BinPkgName (Set (String, FilePath))
+      -- ^ Install a cabal executable into the binary package
+      , installCabalExecTo_ :: Map BinPkgName (Set (String, FilePath))
+      -- ^ Install a cabal executable into the binary package at an exact location
+      , installDir_ :: Map BinPkgName (Set FilePath)
+      -- ^ Create a directory in the binary package
+      , installInit_ :: Map BinPkgName Text
+      -- ^ Add an init.d file to the binary package
+      , executable_ :: Map BinPkgName InstallFile
+      -- ^ Create a binary package to hold a cabal executable
+      , serverInfo_ :: Map BinPkgName Server
+      -- ^ Like DHExecutable, but configure the executable as a server process
+      , website_ :: Map BinPkgName Site
+      -- ^ Like DHServer, but configure the server as a web server
+      , backups_ :: Map BinPkgName String
+      -- ^ Configure the executable to do incremental backups
+      , depends_ :: Map BinPkgName (Set Relation)
+      -- ^ Says that the debian package should have this relation in Depends
+      , conflicts_ :: Map BinPkgName (Set Relation)
+      -- ^ Says that the debian package should have this relation in Conflicts
+      , providesMap_ :: Map BinPkgName (Set Relation)
+      -- ^ Says that the debian package should have this relation in Provides
+      , replacesMap_ :: Map BinPkgName (Set Relation)
+      -- ^ Says that the debian package should have this relation in Replaces
+      , extraDevDeps_ :: Set Relation
+      -- ^ Limited version of Depends, put a dependency on the dev library package.  The only
+      -- reason to use this is because we don't yet know the name of the dev library package.
       } deriving (Eq, Show)
 
 newtype Top = Top {unTop :: FilePath} deriving (Eq, Ord, Show, Typeable)
@@ -69,131 +202,81 @@ newAtoms :: FilePath -> Atoms
 newAtoms x
     = Atoms
       { top = Top x
-      , atomMap = mempty
       , noDocumentationLibrary_ = mempty
       , noProfilingLibrary_ = mempty
       , omitLTDeps_ = mempty
       , compilerVersion_ = mempty
       , buildDir_ = mempty
-      , flags_ = mempty
+      , flags_ = defaultFlags
       , debianNameMap_ = mempty
-      , control_ = mempty
+      , control_ = newSourceDebDescription
+      , sourcePackageName_ = Nothing
+      , revision_ = Nothing
+      , debVersion_ = Nothing
+      , maintainer_ = Nothing
+      , cabalFlagAssignments_ = mempty
+      , sourceFormat_ = Nothing
+      , watch_ = Nothing
+      , intermediateFiles_ = mempty
+      , rulesHead_ = Nothing
+      , rulesFragments_ = mempty
+      , warning_ = mempty
+      , utilsPackageNames_ = mempty
+      , changelog_ = Nothing
+      , comments_ = Nothing
+      , buildDeps_ = mempty
+      , buildDepsIndep_ = mempty
+      , missingDependencies_ = mempty
+      , extraLibMap_ = mempty
+      , execMap_ = mempty
+      , epochMap_ = mempty
+      , packageInfo_ = mempty
+      , compat_ = Nothing
+      , copyright_ = Nothing
+      , apacheSite_ = mempty
+      , logrotateStanza_ = mempty
+      , link_ = mempty
+      , postInst_ = mempty
+      , postRm_ = mempty
+      , preInst_ = mempty
+      , preRm_ = mempty
+      , sourceArchitecture_ = Nothing
+      , binaryArchitectures_ = mempty
+      , sourcePriority_ = Nothing
+      , binaryPriorities_ = mempty
+      , sourceSection_ = Nothing
+      , binarySections_ = mempty
+      , description_ = mempty
+      , install_ = mempty
+      , installTo_ = mempty
+      , installData_ = mempty
+      , file_ = mempty
+      , installCabalExec_ = mempty
+      , installCabalExecTo_ = mempty
+      , installDir_ = mempty
+      , installInit_ = mempty
+      , executable_ = mempty
+      , serverInfo_ = mempty
+      , website_ = mempty
+      , backups_ = mempty
+      , depends_ = mempty
+      , conflicts_ = mempty
+      , providesMap_ = mempty
+      , replacesMap_ = mempty
+      , extraDevDeps_ = mempty
       }
 
+defaultFlags :: Flags
+defaultFlags =
+    Flags {
+      verbosity_ = 1
+    , debAction_ = Debianize
+    , dryRun_ = False
+    , validate_ = False
+    }
+
 showAtoms :: Atoms -> IO ()
-showAtoms x =
-    do putStrLn ("\nTop: " ++ show (top x))
-       mapM_ putAtoms (Map.toList (atomMap x))
-       putStrLn ""
-    where
-      putAtoms (_, s) | Set.null s = return ()
-      putAtoms (k, s) = putStrLn ("\n" ++ show k ++ ":\n  " ++ intercalate "\n  " (map show (Set.toList s)))
-
--- All the internals of this module is a steaming pile of poo, except
--- for the stuff that is exported.
-
-data DebAtomKey
-    = Source
-    | Binary BinPkgName
-    deriving (Eq, Ord, Show, Typeable)
-
--- | The smallest pieces of debhelper information.  Some of these are
--- converted directly into files in the debian directory, others
--- become fragments of those files, and others are first converted
--- into different DebAtom values as new information becomes available.
-data DebAtom
-    = DebSourceFormat SourceFormat                -- ^ Write debian/source/format
-    | DebWatch Text                               -- ^ Write debian/watch
-    | DHIntermediate FilePath Text                -- ^ Put this text into a file with the given name in the debianization.
-    | DebRulesHead Text				  -- ^ The header of the debian/rules file.  The remainder is assembled
-                                                  -- from DebRulesFragment values in the atom list.
-    | DebRulesFragment Text                       -- ^ A Fragment of debian/rules
-    | Warning Text                                -- ^ A warning to be reported later
-    | UtilsPackageName BinPkgName                 -- ^ Name of a package that will get left-over data files and executables.
-                                                  -- If there are more than one, each package will get those files.
-    | DebChangeLog ChangeLog			  -- ^ The changelog, first entry contains the source package name and version
-    | DebLogComments [[Text]]			  -- ^ Each element is a comment to be added to the changelog, where the
-                                                  -- element's text elements are the lines of the comment.
-    | DHMaintainer NameAddr			  -- ^ Value for the maintainer field in the control file.  Note that
-                                                  -- the cabal maintainer field can have multiple addresses, but debian
-                                                  -- only one.  If this is not explicitly set, it is obtained from the
-                                                  -- cabal file, and if it is not there then from the environment.  As a
-                                                  -- last resort, there is a hard coded string in here somewhere.
-    | DHCabalFlagAssignments (Set (FlagName, Bool)) -- ^ Flags to pass to Cabal function finalizePackageDescription, this
-                                                  -- can be used to control the flags in the cabal file.
-    | DHFlags Flags                               -- ^ Information regarding mode of operation - verbosity, dry-run, usage, etc
-    | DebRevision String			  -- ^ Specify the revision string to use when converting the cabal
-                                                  -- version to debian.
-
-    | DebVersion DebianVersion			  -- ^ Specify the exact debian version of the resulting package,
-                                                  -- including epoch.  One use case is to work around the the
-                                                  -- "buildN" versions that are often uploaded to the debian and
-                                                  -- ubuntu repositories.  Say the latest cabal version of
-                                                  -- transformers is 0.3.0.0, but the debian repository contains
-                                                  -- version 0.3.0.0-1build3, we need to specify
-                                                  -- debVersion="0.3.0.0-1build3" or the version we produce will
-                                                  -- look older than the one already available upstream.
-    | DebianNameMap (Map PackageName VersionSplits)
-						  -- ^ Mapping from cabal package name and version to debian source
-                                                  -- package name.  This allows different ranges of cabal versions to
-                                                  -- map to different debian source package names.
-    | SourcePackageName SrcPkgName                -- ^ Name to give to the debian source package.  If not supplied
-                                                  -- the name is constructed from the cabal package name.  Note that
-                                                  -- DebianNameMap could encode this information if we already knew
-                                                  -- the cabal package name, but we can't assume that.
-    | BuildDep Relations			  -- ^ Add build dependencies
-    | BuildDepIndep Relations			  -- ^ Add arch independent build dependencies
-    | MissingDependency BinPkgName		  -- ^ Lets cabal-debian know that a package it might expect to exist
-                                                  -- actually does not, so omit all uses in resulting debianization.
-    | ExtraLibMapping String Relations		  -- ^ Map a cabal Extra-Library name to a debian binary package name,
-                                                  -- e.g. @ExtraLibMapping extraLibMap "cryptopp" "libcrypto-dev"@ adds a
-                                                  -- build dependency *and* a regular dependency on @libcrypto-dev@ to
-                                                  -- any package that has @cryptopp@ in its cabal Extra-Library list.
-    | ExecMapping String Relations		  -- ^ Map a cabal Build-Tool name to a debian binary package name,
-                                                  -- e.g. @ExecMapping "trhsx" "haskell-hsx-utils"@ adds a build
-                                                  -- dependency on @haskell-hsx-utils@ to any package that has @trhsx@ in its
-                                                  -- cabal build-tool list.
-    | EpochMapping PackageName Int		  -- ^ Specify epoch numbers for the debian package generated from a
-                                                  -- cabal package.  Example: @EpochMapping (PackageName "HTTP") 1@.
-    | DebPackageInfo PackageInfo		  -- ^ Supply some info about a cabal package.
-    | DebCompat Int				  -- ^ The debhelper compatibility level, from debian/compat.
-    | DebCopyright (Either License Text)	  -- ^ Copyright information, either as a Cabal License value or
-                                                  -- the full text.
-    | DebControl SourceDebDescription		  -- ^ The parsed contents of the control file
-
-    -- From here down are atoms to be associated with a Debian binary
-    -- package.  This could be done with more type safety, separate
-    -- maps for the Source atoms and the Binary atoms.
-    | DHApacheSite String FilePath Text           -- ^ Have Apache configure a site using PACKAGE, DOMAIN, LOGDIR, and APACHECONFIGFILE
-    | DHLogrotateStanza Text		          -- ^ Add a stanza of a logrotate file to the binary package
-    | DHLink FilePath FilePath          	  -- ^ Create a symbolic link in the binary package
-    | DHPostInst Text			 	  -- ^ Script to run after install, should contain #DEBHELPER# line before exit 0
-    | DHPostRm Text                     	  -- ^ Script to run after remove, should contain #DEBHELPER# line before exit 0
-    | DHPreInst Text                    	  -- ^ Script to run before install, should contain #DEBHELPER# line before exit 0
-    | DHPreRm Text                      	  -- ^ Script to run before remove, should contain #DEBHELPER# line before exit 0
-    | DHArch PackageArchitectures       	  -- ^ Set the Architecture field of source or binary
-    | DHPriority PackagePriority	       	  -- ^ Set the Priority field of source or binary
-    | DHSection Section			       	  -- ^ Set the Section field of source or binary
-    | DHDescription Text		       	  -- ^ Set the description of source or binary
-    | DHInstall FilePath FilePath       	  -- ^ Install a build file into the binary package
-    | DHInstallTo FilePath FilePath     	  -- ^ Install a build file into the binary package at an exact location
-    | DHInstallData FilePath FilePath   	  -- ^ DHInstallTo somewhere relative to DataDir (see above)
-    | DHFile FilePath Text              	  -- ^ Create a file with the given text at the given path
-    | DHInstallCabalExec String FilePath	  -- ^ Install a cabal executable into the binary package
-    | DHInstallCabalExecTo String FilePath	  -- ^ Install a cabal executable into the binary package at an exact location
-    | DHInstallDir FilePath             	  -- ^ Create a directory in the binary package
-    | DHInstallInit Text                	  -- ^ Add an init.d file to the binary package
-    | DHExecutable InstallFile                    -- ^ Create a binary package to hold a cabal executable
-    | DHServer Server                             -- ^ Like DHExecutable, but configure the executable as a server process
-    | DHWebsite Site                              -- ^ Like DHServer, but configure the server as a web server
-    | DHBackups String                            -- ^ Configure the executable to do incremental backups
-    | Depends Relation				  -- ^ Says that the debian package should have this relation in Depends
-    | Conflicts Relation			  -- ^ Says that the debian package should have this relation in Conflicts
-    | Provides Relation				  -- ^ Says that the debian package should have this relation in Provides
-    | Replaces Relation				  -- ^ Says that the debian package should have this relation in Replaces
-    | DevDepends Relation			  -- ^ Limited version of Depends, put a dependency on the dev library package.  The only
-                                                  -- reason to use this is because we don't yet know the name of the dev library package.
-    deriving (Eq, Ord, Show, Typeable)
+showAtoms x = putStrLn ("\nTop: " ++ show x ++ "\n")
 
 -- | This record supplies information about the task we want done -
 -- debianization, validataion, help message, etc.
