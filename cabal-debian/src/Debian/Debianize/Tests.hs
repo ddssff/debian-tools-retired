@@ -5,7 +5,7 @@ module Main
     , main
     ) where
 
-import Control.Monad.State (get, put)
+-- import Control.Monad.State (get, put)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Function (on)
@@ -26,7 +26,7 @@ import Debian.Debianize.Facts.Lenses as Lenses
 import Debian.Debianize.Facts.Monad
     (Atoms, DebT, evalDebT, execDebM, execDebT, mapCabal, splitCabal)
 import Debian.Debianize.Facts.Types as Deb
-    (InstallFile(..), Server(..), Site(..), Atoms(top), newAtoms,
+    (InstallFile(..), Server(..), Site(..), {-Atoms(top),-} newAtoms,
      SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Finalize (debianization, finalizeDebianization)
@@ -374,7 +374,7 @@ test5 label =
                  let standards = Deb.standardsVersion (getL Lenses.control old)
                      level = getL Lenses.compat old
                  new <- execDebT (debianization defaultAtoms (customize old level standards)) (newAtoms "test-data/creativeprompts/input")
-                 diff <- diffDebianizations old (copyFirstLogEntry old new)
+                 diff <- diffDebianizations old new
                  assertEqual label [] diff)
     where
       customize old level standards =
@@ -448,30 +448,6 @@ test5 label =
       jstreePath = "/usr/share/clckwrks-0.13.2/jstree"
       json2Path = "/usr/share/clckwrks-0.13.2/json2"
 
-
-copyFirstLogEntry :: Atoms -> Atoms -> Atoms
-copyFirstLogEntry deb1 deb2 =
-    modL Lenses.changelog (const (Just (ChangeLog (hd1 : tl2)))) deb2
-    where
-      ChangeLog (hd1 : _) = fromMaybe (error $ "1. Missing debian/changelog in " ++ show (top deb1)) (getL Lenses.changelog deb1)
-      ChangeLog (_ : tl2) = fromMaybe (error $ "2. Missing debian/changelog in " ++ show (top deb2)) (getL Lenses.changelog deb2)
-
-copyFirstLogEntry' :: Monad m => Atoms -> DebT m ()
-copyFirstLogEntry' deb1 =
-    do deb2 <- get
-       let ChangeLog (hd1 : _) = fromMaybe (error $ "3. Missing debian/changelog in " ++ show (top deb1)) (getL Lenses.changelog deb1)
-           tl2 = case (getL Lenses.changelog deb2) of
-                   Just (ChangeLog (_ : x)) -> x
-                   _ -> []
-       put $ modL Lenses.changelog (const (Just (ChangeLog (hd1 : tl2)))) deb2
-
-copyChangelog :: Atoms -> Atoms -> Atoms
-copyChangelog deb1 deb2 = modL Lenses.changelog (const (getL Lenses.changelog deb1)) deb2
-
-copyChangelog' :: Monad m => Atoms -> DebT m ()
-copyChangelog' deb1 =
-    get >>= put . modL Lenses.changelog (const (getL Lenses.changelog deb1))
-
 test6 :: String -> Test
 test6 label =
     TestLabel label $
@@ -490,7 +466,7 @@ test8 label =
     TestCase ( do old <- execDebT inputDebianization (newAtoms "test-data/artvaluereport-data/output")
                   log <- evalDebT inputChangeLog (newAtoms "test-data/artvaluereport-data/input")
                   new <- execDebT (debianization defaultAtoms (customize log)) (newAtoms "test-data/artvaluereport-data/input")
-                  diff <- diffDebianizations old (copyChangelog old new)
+                  diff <- diffDebianizations old new
                   assertEqual label [] diff
              )
     where
@@ -507,7 +483,7 @@ test9 label =
     TestLabel label $
     TestCase ( do old <- execDebT inputDebianization (newAtoms "test-data/alex/output")
                   new <- execDebT (debianization defaultAtoms customize) (newAtoms "test-data/alex/input")
-                  diff <- diffDebianizations old (copyFirstLogEntry old new)
+                  diff <- diffDebianizations old new
                   assertEqual label [] diff)
     where
       customize =

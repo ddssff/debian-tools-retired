@@ -17,18 +17,17 @@ import Data.Set as Set (toList, member)
 import Data.Text as Text (Text, pack, unpack, lines, unlines, strip, null)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.Facts.Types as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                               VersionControlSpec(..), XField(..), XFieldDest(..), Atoms(top))
+                                               VersionControlSpec(..), XField(..), XFieldDest(..), Atoms)
 import Debian.Debianize.Goodies (makeRulesHead)
 import qualified Debian.Debianize.Facts.Lenses as Lenses
     (compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
      intermediateFiles, install, installDir, installInit, logrotateStanza, link,
      rulesHead, rulesFragments, copyright)
-import Debian.Debianize.Facts.Types (Top(unTop))
 import Debian.Debianize.Facts.Monad (DebT, evalDebT)
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
 import Prelude hiding (init, unlines, writeFile, log)
-import System.Directory (getCurrentDirectory)
+--import System.Directory (getCurrentDirectory)
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
@@ -48,13 +47,13 @@ getRulesHead =
 -- tests.)
 debianizationFileMap :: Atoms -> IO (Map FilePath Text)
 debianizationFileMap deb =
-    do here <- getCurrentDirectory
+    do -- here <- getCurrentDirectory
        let d = getL Lenses.control deb
            log = getL Lenses.changelog deb
            compat = getL Lenses.compat deb
            copyrt = getL Lenses.copyright deb
        prs <- sequence [return ("debian/control", pack (show (pretty (controlFile d)))),
-                        return ("debian/changelog", pack (show (pretty (fromMaybe (error $ "4. Missing debian/changelog in " ++ show (here </> unTop (top deb))) log)))),
+                        return ("debian/changelog", pack (show (pretty (fromMaybe (error "No changelog in debianization") log)))),
                         evalDebT rules deb,
                         return ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom - is debhelper installed?") $ compat) <> "\n")),
                         return ("debian/copyright", either (\ x -> pack (show (pretty x))) id (fromMaybe (error "No DebCopyright atom") $ copyrt))]

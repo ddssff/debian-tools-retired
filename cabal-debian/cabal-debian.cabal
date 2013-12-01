@@ -60,6 +60,7 @@ Library
    Debian.Policy
    Distribution.Version.Invert
    Debian.Debianize.Bundled
+   Debian.Debianize.Changelog
    Debian.Debianize.Details
    Debian.Debianize.Facts.Lenses
    Debian.Debianize.Facts.Monad
