@@ -102,7 +102,7 @@ test1 label =
                               copyright ~= Just (Left BSD3)
                               inputCabalization top
                               Just pkgDesc <- access packageDescription
-                              finalizeDebianization top pkgDesc)
+                              finalizeDebianization pkgDesc)
                           newAtoms
                  diff <- diffDebianizations testDeb1 deb
                  assertEqual label [] diff)
@@ -149,7 +149,7 @@ test2 label =
                               copyright ~= Just (Left BSD3)
                               inputCabalization top
                               Just pkgDesc <- access packageDescription
-                              finalizeDebianization top pkgDesc)
+                              finalizeDebianization pkgDesc)
                           newAtoms
                  diff <- diffDebianizations expect deb
                  assertEqual label [] diff)

@@ -30,8 +30,8 @@ import Debian.Debianize.Facts.Types as Debian (Top(unTop), BinaryDebDescription(
 import qualified Debian.Debianize.Facts.Types as D (BinaryDebDescription(..), PackageRelations(..), PackageType(..), SourceDebDescription(..))
 import Debian.Debianize.Files2 (debianName, mkPkgName, mkPkgName')
 import Debian.Debianize.Goodies (backupAtoms, describe, execAtoms, serverAtoms, siteAtoms, watchAtom)
-import Debian.Debianize.Input (inputChangeLog, inputLicenseFile, inputMaintainer, inputCompiler, inputCabalization, dataDir)
-import Debian.Debianize.Facts.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, changelog, comments, compat, conflicts, control, copyright, debianNameMap, debVersion, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, maintainer, missingDependencies, noDocumentationLibrary, noProfilingLibrary, provides, replaces, revision, serverInfo, sourcePackageName, sourcePriority, sourceSection, utilsPackageNames, website, binaryArchitectures, control, file, install, installCabalExec, installData, installDir, installTo, intermediateFiles, link, rulesFragments, changelog, compat, maintainer, sourcePackageName, sourcePriority, sourceSection, watch, verbosity, packageDescription)
+import Debian.Debianize.Input (inputChangeLog, inputLicenseFile, inputMaintainer, inputCabalization, dataDir)
+import Debian.Debianize.Facts.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, changelog, comments, compat, conflicts, control, copyright, debianNameMap, debVersion, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, maintainer, missingDependencies, noDocumentationLibrary, noProfilingLibrary, provides, replaces, revision, serverInfo, sourcePackageName, sourcePriority, sourceSection, utilsPackageNames, website, binaryArchitectures, control, file, install, installCabalExec, installData, installDir, installTo, intermediateFiles, link, rulesFragments, changelog, compat, maintainer, sourcePackageName, sourcePriority, sourceSection, watch, verbosity, packageDescription, compiler)
 import Debian.Debianize.Facts.Monad as Monad (Atoms, DebT, evalDebM)
 import Debian.Debianize.Facts.Types (showAtoms)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
@@ -81,7 +81,7 @@ debianization top init customize =
        finalizeChangelog top
        finalizeControl
        finalizeCopyright top pkgDesc
-       finalizeDebianization top pkgDesc
+       finalizeDebianization pkgDesc
 
 -- | Now that we know the build and data directories, we can expand
 -- some atoms into sets of simpler atoms which can eventually be
@@ -91,15 +91,15 @@ debianization top init customize =
 -- this function is not idempotent.  (Exported for use in unit tests.)
 -- FIXME: we should be able to run this without a PackageDescription, change
 --        paramter type to Maybe PackageDescription and propagate down thru code
-finalizeDebianization  :: MonadIO m => Top -> PackageDescription -> DebT m ()
-finalizeDebianization top pkgDesc =
+finalizeDebianization  :: MonadIO m => PackageDescription -> DebT m ()
+finalizeDebianization pkgDesc =
     do expandAtoms
        -- Create the binary packages for the web sites, servers, backup packges, and other executables
        access Lenses.executable >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList
        access Lenses.backups >>= List.mapM_ (\ (b, _) -> binaryArchitectures ++= (b, Any) >> cabalExecBinaryPackage pkgDesc b) . Map.toList
        access Lenses.serverInfo >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList
        access Lenses.website >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList
-       putBuildDeps top pkgDesc
+       putBuildDeps pkgDesc
        librarySpecs pkgDesc
        makeUtilsPackages pkgDesc
        expandAtoms
@@ -229,10 +229,10 @@ addExtraLibDependencies =
                                                     (Map.lookup cab (getL Lenses.extraLibMap deb)))
                                     (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc) }
 
-putBuildDeps :: MonadIO m => Top -> PackageDescription -> DebT m ()
-putBuildDeps top pkgDesc =
-    do deps <- debianBuildDeps top pkgDesc
-       depsIndep <- debianBuildDepsIndep top pkgDesc
+putBuildDeps :: MonadIO m => PackageDescription -> DebT m ()
+putBuildDeps pkgDesc =
+    do deps <- debianBuildDeps pkgDesc
+       depsIndep <- debianBuildDepsIndep pkgDesc
        control %= (\ y -> y { Debian.buildDepends = deps, buildDependsIndep = depsIndep })
 
 cabalExecBinaryPackage :: MonadIO m => PackageDescription -> BinPkgName -> DebT m ()
@@ -503,8 +503,8 @@ allBuildDepends buildDepends' buildTools' pkgconfigDepends' extraLibs' =
 
 -- The haskell-cdbs package contains the hlibrary.mk file with
 -- the rules for building haskell packages.
-debianBuildDeps :: MonadIO m => Top -> PackageDescription -> DebT m D.Relations
-debianBuildDeps top pkgDesc =
+debianBuildDeps :: MonadIO m => PackageDescription -> DebT m D.Relations
+debianBuildDeps pkgDesc =
     do deb <- get
        cDeps <- cabalDeps
        let bDeps = concat (Set.toList (getL Lenses.buildDeps deb))
@@ -524,10 +524,10 @@ debianBuildDeps top pkgDesc =
                           (concatMap buildTools . allBuildInfo $ pkgDesc)
                           (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc)
                           (concatMap extraLibs . allBuildInfo $ pkgDesc)
-             mapM (buildDependencies top) (List.filter (not . selfDependency (Cabal.package pkgDesc)) deps) >>= return . concat
+             mapM buildDependencies (List.filter (not . selfDependency (Cabal.package pkgDesc)) deps) >>= return . concat
 
-debianBuildDepsIndep :: MonadIO m => Top -> PackageDescription -> DebT m D.Relations
-debianBuildDepsIndep top pkgDesc =
+debianBuildDepsIndep :: MonadIO m => PackageDescription -> DebT m D.Relations
+debianBuildDepsIndep pkgDesc =
     do doc <- get >>= return . (/= singleton True) . getL Lenses.noDocumentationLibrary
        bDeps <- get >>= return . getL Lenses.buildDepsIndep
        cDeps <- cabalDeps
@@ -541,7 +541,7 @@ debianBuildDepsIndep top pkgDesc =
                            (Cabal.buildDepends pkgDesc) (concatMap buildTools . allBuildInfo $ pkgDesc)
                            (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc) (concatMap extraLibs . allBuildInfo $ pkgDesc)
              let deps' = List.filter (not . selfDependency (Cabal.package pkgDesc)) deps
-             mapM (docDependencies top) deps'
+             mapM docDependencies deps'
 {-
       cabalDeps deb =
           concat . List.map (\ x -> evalDebM (docDependencies x) deb)
@@ -556,22 +556,22 @@ debianBuildDepsIndep top pkgDesc =
 -- | The documentation dependencies for a package include the
 -- documentation package for any libraries which are build
 -- dependencies, so we have access to all the cross references.
-docDependencies :: MonadIO m => Top -> Dependency_ -> DebT m D.Relations
-docDependencies top (BuildDepends (Dependency name ranges)) = dependencies top Documentation name ranges
-docDependencies _ _ = return []
+docDependencies :: MonadIO m => Dependency_ -> DebT m D.Relations
+docDependencies (BuildDepends (Dependency name ranges)) = dependencies Documentation name ranges
+docDependencies _ = return []
 
 -- | The Debian build dependencies for a package include the profiling
 -- libraries and the documentation packages, used for creating cross
 -- references.  Also the packages associated with extra libraries.
-buildDependencies :: MonadIO m => Top -> Dependency_ -> DebT m D.Relations
-buildDependencies top (BuildDepends (Dependency name ranges)) =
-    do dev <- dependencies top Development name ranges
-       prof <- dependencies top Profiling name ranges
+buildDependencies :: MonadIO m => Dependency_ -> DebT m D.Relations
+buildDependencies (BuildDepends (Dependency name ranges)) =
+    do dev <- dependencies Development name ranges
+       prof <- dependencies Profiling name ranges
        return $ dev ++ prof
-buildDependencies _ dep@(ExtraLibs _) =
+buildDependencies dep@(ExtraLibs _) =
     do mp <- get >>= return . getL Lenses.execMap
        return $ concat $ adapt mp dep
-buildDependencies _ dep =
+buildDependencies dep =
     case unboxDependency dep of
       Just (Dependency _name _ranges) ->
           do mp <- get >>= return . getL Lenses.execMap
@@ -616,8 +616,8 @@ anyrel' x = [D.Rel x Nothing Nothing]
 -- | Turn a cabal dependency into debian dependencies.  The result
 -- needs to correspond to a single debian package to be installed,
 -- so we will return just an OrRelation.
-dependencies :: MonadIO m => Top -> PackageType -> PackageName -> VersionRange -> DebT m Relations
-dependencies top typ name cabalRange =
+dependencies :: MonadIO m => PackageType -> PackageName -> VersionRange -> DebT m Relations
+dependencies typ name cabalRange =
     do atoms <- get
        -- Compute a list of alternative debian dependencies for
        -- satisfying a cabal dependency.  The only caveat is that
@@ -628,7 +628,7 @@ dependencies top typ name cabalRange =
                     Nothing -> [(mkPkgName name typ, cabalRange')]
                     -- If there are splits create a list of (debian package name, VersionRange) pairs
                     Just splits' -> List.map (\ (n, r) -> (mkPkgName' n typ, r)) (packageRangesFromVersionSplits splits')
-       mapM convert alts >>= mapM (doBundled top typ name) . convert' . canonical . Or . catMaybes
+       mapM convert alts >>= mapM (doBundled typ name) . convert' . canonical . Or . catMaybes
     where
       convert :: Monad m => (BinPkgName, VersionRange) -> DebT m (Maybe (Rels Relation))
       convert (dname, range) =
@@ -681,9 +681,9 @@ dependencies top typ name cabalRange =
 -- compiler a substitute for that package.  If we were to
 -- specify the virtual package (e.g. libghc-base-dev) we would
 -- have to make sure not to specify a version number.
-doBundled :: MonadIO m => Top -> PackageType -> PackageName -> [D.Relation] -> DebT m [D.Relation]
-doBundled top typ name rels =
-    do comp <- inputCompiler top
+doBundled :: MonadIO m => PackageType -> PackageName -> [D.Relation] -> DebT m [D.Relation]
+doBundled typ name rels =
+    do comp <- access compiler >>= return . fromMaybe (error "no Compiler value")
        case ghcBuiltIn comp name of
          True -> return $ rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
          False -> return rels

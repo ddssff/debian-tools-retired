@@ -10,6 +10,7 @@ module Debian.Debianize.Facts.Lenses
 
     -- * Cabal package info
     , packageDescription
+    , compiler
 
     -- * Repository info
     , execMap
@@ -105,6 +106,7 @@ import Debian.Version (DebianVersion)
 import Distribution.License (License)
 import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
+import Distribution.Simple.Compiler (Compiler)
 import Prelude hiding (init, log, unlines, (.))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
@@ -165,6 +167,10 @@ cabalFlagAssignments = lens cabalFlagAssignments_ (\ a b -> b {cabalFlagAssignme
 -- | The result of loading a .cabal file
 packageDescription :: Lens Atoms (Maybe PackageDescription)
 packageDescription = lens packageDescription_ (\ a b -> b {packageDescription_ = a})
+
+-- | Another result of loading a .cabal file
+compiler :: Lens Atoms (Maybe Compiler)
+compiler = lens compiler_ (\ a b -> b {compiler_ = a})
 
 -- | Map from cabal version number ranges to debian package names.  This is a
 -- result of the fact that only one version of a debian package can be

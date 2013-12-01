@@ -32,7 +32,7 @@ import Debian.Debianize.Facts.Types as Debian
     (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Facts.Lenses
-    (control, warning, sourceFormat, watch, rulesHead, compat, packageDescription,
+    (control, warning, sourceFormat, watch, rulesHead, compat, packageDescription, compiler,
      copyright, changelog, installInit, postInst, postRm, preInst, preRm,
      logrotateStanza, link, install, installDir, intermediateFiles, compilerVersion, cabalFlagAssignments, verbosity)
 import Debian.Debianize.Facts.Monad (Atoms, DebT, execDebT)
@@ -263,6 +263,7 @@ inputCabalization :: MonadIO m => Top -> DebT m ()
 inputCabalization top =
     do vb <- access verbosity >>= return . intToVerbosity'
        comp <- inputCompiler top
+       compiler ~= Just comp
        flags <- access cabalFlagAssignments
        pkgDesc <- liftIO $ withCurrentDirectory (unTop top) $ do
          descPath <- defaultPackageDesc vb
