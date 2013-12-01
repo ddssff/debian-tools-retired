@@ -22,14 +22,14 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Facts.Lenses as Lenses
     (changelog, compat, control, copyright, rulesHead, sourceFormat, installData, debVersion, buildDeps,
      execMap, utilsPackageNames, binaryArchitectures, depends, description, revision, missingDependencies,
-     installCabalExec, rulesHead, compat, sourceFormat, changelog, control, buildDeps, epochMap,  packageDescription)
+     installCabalExec, rulesHead, compat, sourceFormat, changelog, control, buildDeps, epochMap)
 import Debian.Debianize.Facts.Monad
     (Atoms, DebT, evalDebT, execDebM, execDebT, mapCabal, splitCabal)
 import Debian.Debianize.Facts.Types as Deb
     (Top(..), InstallFile(..), Server(..), Site(..), {-Atoms(top),-} newAtoms,
      SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Files (debianizationFileMap)
-import Debian.Debianize.Finalize (debianization, finalizeDebianization)
+import Debian.Debianize.Finalize (debianization, finalizeDebianization')
 import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups, makeRulesHead)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
 import Debian.Debianize.Utility ((~=), (%=), (+=), (++=), (+++=))
@@ -100,9 +100,8 @@ test1 label =
                               defaultAtoms
                               newDebianization (ChangeLog [testEntry]) level standards
                               copyright ~= Just (Left BSD3)
-                              inputCabalization top
-                              Just pkgDesc <- access packageDescription
-                              finalizeDebianization pkgDesc)
+                              -- inputCabalization top
+                              finalizeDebianization')
                           newAtoms
                  diff <- diffDebianizations testDeb1 deb
                  assertEqual label [] diff)
@@ -147,9 +146,8 @@ test2 label =
                               defaultAtoms
                               newDebianization (ChangeLog [testEntry]) level standards
                               copyright ~= Just (Left BSD3)
-                              inputCabalization top
-                              Just pkgDesc <- access packageDescription
-                              finalizeDebianization pkgDesc)
+                              -- inputCabalization top
+                              finalizeDebianization')
                           newAtoms
                  diff <- diffDebianizations expect deb
                  assertEqual label [] diff)
@@ -468,14 +466,14 @@ test8 :: String -> Test
 test8 label =
     TestLabel label $
     TestCase ( do old <- execDebT (inputDebianization (Top "test-data/artvaluereport-data/output")) newAtoms
-                  log <- evalDebT (inputChangeLog (Top "test-data/artvaluereport-data/input")) newAtoms
+                  log <- evalDebT (inputChangeLog (Top "test-data/artvaluereport-data/input") >> access changelog) newAtoms
                   new <- execDebT (debianization (Top "test-data/artvaluereport-data/input") defaultAtoms (customize log)) newAtoms
                   diff <- diffDebianizations old new
                   assertEqual label [] diff
              )
     where
-      customize (Left e) = error (show e)
-      customize (Right log) =
+      customize Nothing = error "Missing changelog"
+      customize (Just log) =
           do Lenses.buildDeps %= Set.insert [[Rel (BinPkgName "haskell-hsx-utils") Nothing Nothing]]
              Lenses.control %= (\ y -> y {Deb.homepage = Just "http://artvaluereportonline.com"})
              Lenses.sourceFormat ~= Just Native3

@@ -98,7 +98,7 @@ doBackups bin s =
     do backups ++= (bin, s)
        depends +++= (bin, Rel (BinPkgName "anacron") Nothing Nothing)
 
-describe :: MonadIO m => PackageType -> PackageIdentifier -> DebT m Text
+describe :: Monad m => PackageType -> PackageIdentifier -> DebT m Text
 describe typ pkgId =
     do pkgDesc <- access Lenses.packageDescription >>= maybe (error $ "describe " ++ show pkgId) return
        return $ debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc)

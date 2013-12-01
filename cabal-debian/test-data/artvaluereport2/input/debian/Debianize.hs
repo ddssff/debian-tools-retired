@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, OverloadedStrings #-}
-import Data.Lens.Lazy (getL, modL)
+import Data.Lens.Lazy (getL, modL, access)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 import Data.Text as Text (intercalate)
@@ -26,16 +26,16 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 -- copyFirstLogEntry.
 main :: IO ()
 main =
-    do log <- evalDebT (inputChangeLog (Top "test-data/artvaluereport2/input")) newAtoms
+    do log <- evalDebT (inputChangeLog (Top "test-data/artvaluereport2/input") >> access changelog) newAtoms
        new <- execDebT (debianization (Top "test-data/artvaluereport2/input") seereasonDefaultAtoms (customize log)) newAtoms
        old <- execDebT (inputDebianization (Top "test-data/artvaluereport2/output")) newAtoms
        -- The newest log entry gets modified when the Debianization is
        -- generated, it won't match so drop it for the comparison.
        compareDebianization old (copyFirstLogEntry old new) >>= putStr
     where
-      customize :: Either IOError ChangeLog -> DebT IO ()
+      customize :: Maybe ChangeLog -> DebT IO ()
       customize log =
-          do changelog ~?= either (const Nothing) Just log
+          do changelog ~?= log
              installCabalExec +++= (BinPkgName "appraisalscope", ("lookatareport", "usr/bin"))
              doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"})
              doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development"))

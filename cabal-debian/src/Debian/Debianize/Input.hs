@@ -37,10 +37,10 @@ import Debian.Debianize.Facts.Lenses
      logrotateStanza, link, install, installDir, intermediateFiles, compilerVersion, cabalFlagAssignments, verbosity)
 import Debian.Debianize.Facts.Monad (Atoms, DebT, execDebT)
 import Debian.Debianize.Facts.Types (Top(unTop), newAtoms)
-import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (+=), (++=), (+++=))
+import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (~?=), (+=), (++=), (+++=))
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
-                      parseUploaders, readSourceFormat, getDebianMaintainer, haskellMaintainer)
+                      parseUploaders, readSourceFormat, getDebianMaintainer)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
 import Distribution.Package (Package(packageId), PackageIdentifier(..), PackageName(PackageName))
 import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer, package))
@@ -59,7 +59,7 @@ import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeExtension, dropExtension)
 import System.Posix.Files (setFileCreationMask)
 import System.IO.Error (catchIOError, tryIOError)
-import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
+-- import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 inputDebianization :: Top -> DebT IO ()
 inputDebianization top =
@@ -180,9 +180,10 @@ yes "yes" = True
 yes "no" = False
 yes x = error $ "Expecting yes or no: " ++ x
 
-inputChangeLog :: MonadIO m => Top -> DebT m (Either IOError ChangeLog)
+inputChangeLog :: MonadIO m => Top -> DebT m ()
 inputChangeLog top =
-    liftIO $ tryIOError (readFile (unTop top </> "debian/changelog") >>= return . parseChangeLog . unpack)
+    do log <- liftIO $ tryIOError (readFile (unTop top </> "debian/changelog") >>= return . parseChangeLog . unpack)
+       changelog ~?= either (\ _ -> Nothing) Just log
 
 inputAtomsFromDirectory :: Top -> DebT IO () -- .install files, .init files, etc.
 inputAtomsFromDirectory top =
@@ -308,8 +309,11 @@ inputCompiler' top vb mCompilerVersion =
 
 -- | Try to read the license file specified in the cabal package,
 -- otherwise return a text representation of the License field.
-inputLicenseFile :: PackageDescription -> IO (Maybe Text)
-inputLicenseFile pkgDesc = readFileMaybe (licenseFile pkgDesc)
+inputLicenseFile :: MonadIO m => Top -> DebT m ()
+inputLicenseFile top =
+    do pkgDesc <- access packageDescription
+       text <- liftIO $ maybe (return Nothing) (readFileMaybe . ((unTop top) </>) . licenseFile) pkgDesc
+       copyright ~?= fmap Right text
 
 -- | Try to compute a string for the the debian "Maintainer:" field using, in this order
 --    1. the maintainer explicitly specified using 'Debian.Debianize.Monad.maintainer'
@@ -317,10 +321,19 @@ inputLicenseFile pkgDesc = readFileMaybe (licenseFile pkgDesc)
 --    3. the value returned by getDebianMaintainer, which looks in several environment variables,
 --    4. the signature from the latest entry in debian/changelog,
 --    5. the Debian Haskell Group, pkg-haskell-maintainers@lists.alioth.debian.org
-inputMaintainer :: MonadIO m => DebT m NameAddr
+inputMaintainer :: MonadIO m => DebT m ()
 inputMaintainer =
-    do specifiedMaintainer <- get >>= return . getL Lenses.maintainer
+    do cabalMaintainer <- access packageDescription >>=
+                          maybe (return Nothing)
+                                (\ pkgDesc ->
+                                      return $ case Cabal.maintainer pkgDesc of
+                                                 "" -> Nothing
+                                                 x -> either (const Nothing)
+                                                             Just
+                                                             (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x)))
+       Lenses.maintainer ~?= cabalMaintainer
        debianMaintainer <- liftIO getDebianMaintainer
+       Lenses.maintainer ~?= debianMaintainer
        changelogMaintainer <-
            do log <- get >>= return . getL Lenses.changelog
               case log of
@@ -329,15 +342,7 @@ inputMaintainer =
                       Left _e -> return $ Nothing -- Just $ NameAddr (Just "Invalid signature in changelog") (show e)
                       Right x -> return (Just x)
                 _ -> return Nothing
-       cabalMaintainer <- access packageDescription >>=
-                          maybe (return Nothing)
-                                (\ pkgDesc ->
-                                      return $ case Cabal.maintainer pkgDesc of
-                                                 "" -> Nothing
-                                                 x -> either (const Nothing)
-                                                             Just
-                                                             (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x)))
-       return $ fromMaybe haskellMaintainer $ maybe changelogMaintainer Just $ maybe debianMaintainer Just $ maybe cabalMaintainer Just $ specifiedMaintainer
+       Lenses.maintainer ~?= changelogMaintainer
 
 -- | Compute the Cabal data directory for a Linux install from a Cabal
 -- package description.  This needs to match the path cabal assigns to

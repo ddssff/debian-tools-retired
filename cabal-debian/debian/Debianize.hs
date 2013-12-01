@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Control.Monad.State (get)
-import Data.Lens.Lazy (getL)
+import Data.Lens.Lazy (getL, access)
 import Data.Monoid (mempty)
 import Data.Text as Text (intercalate)
 import Debian.Changes (ChangeLog(ChangeLog))
@@ -26,9 +26,9 @@ main =
        -- Copy the changelog into the top directory so that hackage
        -- will see it.
        copyFile "debian/changelog" "changelog"
-       log <- evalDebT (inputChangeLog top) newAtoms
+       log <- evalDebT (inputChangeLog top >> access changelog) newAtoms
        old <- execDebT (inputDebianization top) newAtoms
-       new <- execDebT (debianization top seereasonDefaultAtoms (changelog ~?= either (const Nothing) Just log >> customize >> copyFirstLogEntry old)) newAtoms
+       new <- execDebT (debianization top seereasonDefaultAtoms (changelog ~?= log >> customize >> copyFirstLogEntry old)) newAtoms
        diff <- compareDebianization old new
        case diff of
          "" -> return ()
