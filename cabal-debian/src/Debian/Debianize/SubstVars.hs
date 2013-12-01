@@ -12,7 +12,7 @@ import Control.Monad (foldM)
 import Control.Monad.Reader (ReaderT(runReaderT))
 import Control.Monad.State (get)
 import Control.Monad.Trans (MonadIO, lift)
-import Data.Lens.Lazy (getL, modL)
+import Data.Lens.Lazy (getL, modL, access)
 import Data.List (intercalate, isPrefixOf, isSuffixOf, nub, partition, unlines)
 import Data.List as List (map)
 import qualified Data.Map as Map (insert, lookup, Map)
@@ -21,10 +21,10 @@ import qualified Data.Set as Set (member, Set, toList)
 import Data.Text (pack)
 import Debian.Control (Control'(unControl), ControlFunctions(lookupP, parseControl, stripWS), Field'(Field))
 import Debian.Debianize.Input (inputCompiler, inputCabalization)
-import Debian.Debianize.Facts.Lenses (dryRun, packageInfo)
+import Debian.Debianize.Facts.Lenses (dryRun, packageInfo, packageDescription)
 import Debian.Debianize.Facts.Monad (DebT)
 import qualified Debian.Debianize.Facts.Lenses as Lenses (extraLibMap, missingDependencies, packageInfo)
-import Debian.Debianize.Facts.Types (Atoms, DebType, DebType(Dev, Doc, Prof), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb))
+import Debian.Debianize.Facts.Types (Top, Atoms, DebType, DebType(Dev, Doc, Prof), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb))
 import Debian.Debianize.Utility ((!), buildDebVersionMap, cond, DebMap, debOfFile, diffFile, dpkgFileMap, replaceFile, showDeps, modifyM)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName(BinPkgName), Relation, Relations)
@@ -49,10 +49,12 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- names, or examining the /var/lib/dpkg/info/\*.list files.  From
 -- these we can determine the source package name, and from that the
 -- documentation package name.
-substvars :: DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
+substvars :: Top
+          -> DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> DebT IO ()
-substvars debType =
-    do debVersions <- lift buildDebVersionMap
+substvars top debType =
+    do inputCabalization top
+       debVersions <- lift buildDebVersionMap
        comp <- inputCompiler
        modifyM (lift . libPaths comp debVersions)
        control <- lift $ readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
@@ -185,7 +187,7 @@ debDeps debType control =
 
 cabalDependencies :: MonadIO m => DebT m [Dependency]
 cabalDependencies =
-    do pkgDesc <- inputCabalization >>= either (error "cabalDependencies") return
+    do pkgDesc <- access packageDescription >>= maybe (error "cabalDependencies") return
        atoms <- get
        return $ catMaybes $ map unboxDependency $
            allBuildDepends atoms

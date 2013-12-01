@@ -15,7 +15,7 @@ import Debian.Relation (BinPkgName, Relation(..), Relations, SrcPkgName)
 import Debian.Version (DebianVersion)
 import Distribution.License (License)
 import Distribution.Package (PackageName)
-import Distribution.PackageDescription as Cabal (FlagName)
+import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Prelude hiding (init, init, log, log, unlines)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
@@ -194,6 +194,8 @@ data Atoms
       , extraDevDeps_ :: Set Relation
       -- ^ Limited version of Depends, put a dependency on the dev library package.  The only
       -- reason to use this is because we don't yet know the name of the dev library package.
+      , packageDescription_ :: Maybe PackageDescription
+      -- ^ The result of reading a cabal configuration file.
       } deriving (Eq, Show)
 
 newtype Top = Top {unTop :: FilePath} deriving (Eq, Ord, Show, Typeable)
@@ -264,6 +266,7 @@ newAtoms x
       , providesMap_ = mempty
       , replacesMap_ = mempty
       , extraDevDeps_ = mempty
+      , packageDescription_ = Nothing
       }
 
 defaultFlags :: Flags

@@ -19,7 +19,7 @@ module Debian.Debianize.Goodies
     ) where
 
 import Control.Monad.Trans (MonadIO)
-import Data.Lens.Lazy (modL)
+import Data.Lens.Lazy (modL, access)
 import Data.List as List (map, intersperse, intercalate)
 import Data.Map as Map (insertWith)
 import Data.Maybe (fromMaybe)
@@ -28,12 +28,12 @@ import Data.Set as Set (insert, union, singleton)
 import Data.Text as Text (Text, pack, unlines, intercalate)
 import qualified Debian.Debianize.Facts.Lenses as Lenses
     (rulesFragments, install, installTo, installCabalExecTo, logrotateStanza, postInst,
-     installInit, installCabalExec, rulesFragments)
+     installInit, installCabalExec, rulesFragments, packageDescription)
 import Debian.Debianize.Facts.Types as Debian (PackageType(..))
 import Debian.Debianize.Files2 (debianName)
-import Debian.Debianize.Input (inputCabalization)
 import Debian.Debianize.Facts.Lenses
-    (executable, rulesFragments, installDir, link, file, logrotateStanza, serverInfo, website, backups, depends)
+    (executable, rulesFragments, installDir, link, file, logrotateStanza, serverInfo, website, backups,
+     depends, packageDescription)
 import Debian.Debianize.Facts.Monad (Atoms, DebT, execDebM)
 import Debian.Debianize.Facts.Types (InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (trim, (+=), (++=), (+++=))
@@ -100,7 +100,7 @@ doBackups bin s =
 
 describe :: MonadIO m => PackageType -> PackageIdentifier -> DebT m Text
 describe typ pkgId =
-    do pkgDesc <- inputCabalization >>= either (error $ "describe " ++ show pkgId) return
+    do pkgDesc <- access Lenses.packageDescription >>= maybe (error $ "describe " ++ show pkgId) return
        return $ debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc)
     where
       debianDescription :: String -> String -> String -> String -> String -> Text
@@ -360,7 +360,7 @@ fileAtoms' b sourceDir' execName' destDir' destName' r =
 -- | Build a suitable value for the head of the rules file.
 makeRulesHead :: MonadIO m => DebT m Text
 makeRulesHead =
-    do pkgDesc <- inputCabalization >>= return . either (const Nothing) Just
+    do pkgDesc <- access packageDescription
        ls <- maybe (return [])
                    (\ p -> do b <- debianName Cabal (Cabal.package p)
                               return ["DEB_CABAL_PACKAGE = " <> pack (show (pretty (b :: BinPkgName))), ""])

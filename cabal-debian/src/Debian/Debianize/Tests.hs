@@ -9,7 +9,7 @@ module Main
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Function (on)
-import Data.Lens.Lazy (getL, modL)
+import Data.Lens.Lazy (getL, modL, access)
 import Data.List (sortBy)
 import Data.Map as Map (differenceWithKey, intersectionWithKey)
 import qualified Data.Map as Map
@@ -22,11 +22,11 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Facts.Lenses as Lenses
     (changelog, compat, control, copyright, rulesHead, sourceFormat, installData, debVersion, buildDeps,
      execMap, utilsPackageNames, binaryArchitectures, depends, description, revision, missingDependencies,
-     installCabalExec, rulesHead, compat, sourceFormat, changelog, control, buildDeps, epochMap)
+     installCabalExec, rulesHead, compat, sourceFormat, changelog, control, buildDeps, epochMap,  packageDescription)
 import Debian.Debianize.Facts.Monad
     (Atoms, DebT, evalDebT, execDebM, execDebT, mapCabal, splitCabal)
 import Debian.Debianize.Facts.Types as Deb
-    (InstallFile(..), Server(..), Site(..), {-Atoms(top),-} newAtoms,
+    (Top(..), InstallFile(..), Server(..), Site(..), {-Atoms(top),-} newAtoms,
      SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Finalize (debianization, finalizeDebianization)
@@ -99,7 +99,8 @@ test1 label =
                           (do defaultAtoms
                               newDebianization (ChangeLog [testEntry]) level standards
                               copyright ~= Just (Left BSD3)
-                              Right pkgDesc <- inputCabalization
+                              inputCabalization (Top ".")
+                              Just pkgDesc <- access packageDescription
                               finalizeDebianization pkgDesc)
                           (newAtoms ".")
                  diff <- diffDebianizations testDeb1 deb
@@ -144,7 +145,8 @@ test2 label =
                           (do defaultAtoms
                               newDebianization (ChangeLog [testEntry]) level standards
                               copyright ~= Just (Left BSD3)
-                              Right pkgDesc <- inputCabalization
+                              inputCabalization (Top ".")
+                              Just pkgDesc <- access packageDescription
                               finalizeDebianization pkgDesc)
                           (newAtoms ".")
                  diff <- diffDebianizations expect deb
@@ -264,7 +266,7 @@ test4 label =
     TestLabel label $
     TestCase (do old <- execDebT inputDebianization (newAtoms "test-data/clckwrks-dot-com/output")
                  let log = getL changelog old
-                 new <- execDebT (debianization defaultAtoms (customize log)) (newAtoms "test-data/clckwrks-dot-com/input")
+                 new <- execDebT (debianization (Top "test-data/clckwrks-dot-com/input") defaultAtoms (customize log)) (newAtoms "test-data/clckwrks-dot-com/input")
                  diff <- diffDebianizations old ({-copyFirstLogEntry old-} new)
                  assertEqual label [] diff)
     where
@@ -373,7 +375,7 @@ test5 label =
     TestCase (do old <- execDebT inputDebianization (newAtoms "test-data/creativeprompts/output")
                  let standards = Deb.standardsVersion (getL Lenses.control old)
                      level = getL Lenses.compat old
-                 new <- execDebT (debianization defaultAtoms (customize old level standards)) (newAtoms "test-data/creativeprompts/input")
+                 new <- execDebT (debianization (Top "test-data/creativeprompts/input") defaultAtoms (customize old level standards)) (newAtoms "test-data/creativeprompts/input")
                  diff <- diffDebianizations old new
                  assertEqual label [] diff)
     where
@@ -465,7 +467,7 @@ test8 label =
     TestLabel label $
     TestCase ( do old <- execDebT inputDebianization (newAtoms "test-data/artvaluereport-data/output")
                   log <- evalDebT inputChangeLog (newAtoms "test-data/artvaluereport-data/input")
-                  new <- execDebT (debianization defaultAtoms (customize log)) (newAtoms "test-data/artvaluereport-data/input")
+                  new <- execDebT (debianization (Top "test-data/artvaluereport-data/input") defaultAtoms (customize log)) (newAtoms "test-data/artvaluereport-data/input")
                   diff <- diffDebianizations old new
                   assertEqual label [] diff
              )
@@ -482,7 +484,7 @@ test9 :: String -> Test
 test9 label =
     TestLabel label $
     TestCase ( do old <- execDebT inputDebianization (newAtoms "test-data/alex/output")
-                  new <- execDebT (debianization defaultAtoms customize) (newAtoms "test-data/alex/input")
+                  new <- execDebT (debianization (Top "test-data/alex/input") defaultAtoms customize) (newAtoms "test-data/alex/input")
                   diff <- diffDebianizations old new
                   assertEqual label [] diff)
     where
@@ -514,7 +516,7 @@ test10 :: String -> Test
 test10 label =
     TestLabel label $
     TestCase (do old <- execDebT inputDebianization (newAtoms "test-data/archive/output")
-                 new <- execDebT (debianization defaultAtoms customize) (newAtoms "test-data/archive/input")
+                 new <- execDebT (debianization (Top "test-data/archive/input") defaultAtoms customize) (newAtoms "test-data/archive/input")
                  diff <- diffDebianizations old new
                  assertEqual label [] diff)
     where

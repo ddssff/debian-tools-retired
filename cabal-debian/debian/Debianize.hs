@@ -11,7 +11,7 @@ import Debian.Debianize.Facts.Lenses as Lenses
     (changelog, changelog, compat, conflicts, control, depends, description,
      installCabalExec, sourceFormat, standards, utilsPackageNames)
 import Debian.Debianize.Facts.Monad (Atoms, DebT, execDebT, evalDebT, execDebM)
-import Debian.Debianize.Facts.Types (newAtoms, SourceDebDescription(homepage))
+import Debian.Debianize.Facts.Types (Top(Top), newAtoms, SourceDebDescription(homepage))
 import Debian.Debianize.Output (compareDebianization)
 import Debian.Debianize.Utility ((~=), (~?=), (%=), (+=), (++=), (+++=))
 import Debian.Policy (SourceFormat(Native3), StandardsVersion(StandardsVersion))
@@ -27,7 +27,7 @@ main =
        copyFile "debian/changelog" "changelog"
        log <- evalDebT inputChangeLog (newAtoms ".")
        old <- execDebT inputDebianization (newAtoms ".")
-       new <- execDebT (debianization seereasonDefaultAtoms (changelog ~?= either (const Nothing) Just log >> customize >> copyFirstLogEntry old)) (newAtoms ".")
+       new <- execDebT (debianization (Top ".") seereasonDefaultAtoms (changelog ~?= either (const Nothing) Just log >> customize >> copyFirstLogEntry old)) (newAtoms ".")
        diff <- compareDebianization old new
        case diff of
          "" -> return ()

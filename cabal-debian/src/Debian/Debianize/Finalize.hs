@@ -26,12 +26,12 @@ import Data.Version (showVersion, Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.Changelog (dropFutureEntries)
-import Debian.Debianize.Facts.Types as Debian (BinaryDebDescription(..), newBinaryDebDescription, PackageRelations(..), PackageType(..), SourceDebDescription(binaryPackages, buildDependsIndep, priority, section, buildDepends))
+import Debian.Debianize.Facts.Types as Debian (Top(unTop), BinaryDebDescription(..), newBinaryDebDescription, PackageRelations(..), PackageType(..), SourceDebDescription(binaryPackages, buildDependsIndep, priority, section, buildDepends))
 import qualified Debian.Debianize.Facts.Types as D (BinaryDebDescription(..), PackageRelations(..), PackageType(..), SourceDebDescription(..))
 import Debian.Debianize.Files2 (debianName, mkPkgName, mkPkgName')
 import Debian.Debianize.Goodies (backupAtoms, describe, execAtoms, serverAtoms, siteAtoms, watchAtom)
 import Debian.Debianize.Input (inputChangeLog, inputLicenseFile, inputMaintainer, inputCompiler, inputCabalization, dataDir)
-import Debian.Debianize.Facts.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, changelog, comments, compat, conflicts, control, copyright, debianNameMap, debVersion, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, maintainer, missingDependencies, noDocumentationLibrary, noProfilingLibrary, provides, replaces, revision, serverInfo, sourcePackageName, sourcePriority, sourceSection, utilsPackageNames, website, binaryArchitectures, control, file, install, installCabalExec, installData, installDir, installTo, intermediateFiles, link, rulesFragments, changelog, compat, maintainer, sourcePackageName, sourcePriority, sourceSection, watch, verbosity)
+import Debian.Debianize.Facts.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, changelog, comments, compat, conflicts, control, copyright, debianNameMap, debVersion, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, maintainer, missingDependencies, noDocumentationLibrary, noProfilingLibrary, provides, replaces, revision, serverInfo, sourcePackageName, sourcePriority, sourceSection, utilsPackageNames, website, binaryArchitectures, control, file, install, installCabalExec, installData, installDir, installTo, intermediateFiles, link, rulesFragments, changelog, compat, maintainer, sourcePackageName, sourcePriority, sourceSection, watch, verbosity, packageDescription)
 import Debian.Debianize.Facts.Monad as Monad (Atoms, DebT, evalDebM, askTop)
 import Debian.Debianize.Facts.Types (showAtoms)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
@@ -65,14 +65,14 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-debianization :: DebT IO () -> DebT IO () -> DebT IO ()
-debianization init customize =
-    do top <- askTop
+debianization :: Top -> DebT IO () -> DebT IO () -> DebT IO ()
+debianization top init customize =
+    do inputCabalization top
+       pkgDesc <- access packageDescription >>= maybe (error $ "cabalToDebianization: Failed to read cabal file in " ++ show (unTop top)) return
        init
        compileEnvironmentArgs
        compileCommandlineArgs
        customize
-       pkgDesc <- inputCabalization >>= either (error $ "cabalToDebianization: Failed to read cabal file in " ++ show top) return
        addExtraLibDependencies
        watch ~?= Just (watchAtom (pkgName $ Cabal.package $ pkgDesc))
        sourceSection ~?= Just (MainSection "haskell")
@@ -136,7 +136,7 @@ finalizeCopyright pkgDesc =
 -- a version.
 debianVersion :: MonadIO m => DebT m DebianVersion
 debianVersion =
-    do pkgDesc <- inputCabalization >>= either (error "versionInfo: no PackageDescription") return
+    do pkgDesc <- access packageDescription >>= maybe (error "debianVersion: no PackageDescription") return
        let pkgId = Cabal.package pkgDesc
        epoch <- debianEpoch (pkgName pkgId)
        debVer <- get >>= return . getL Lenses.debVersion
@@ -163,7 +163,7 @@ debianEpoch name = get >>= return . Map.lookup name . getL Lenses.epochMap
 sourceName :: MonadIO m => DebT m SrcPkgName
 sourceName =
     do deb <- get
-       pkgDesc <- inputCabalization >>= either (error "versionInfo: no PackageDescription") return
+       pkgDesc <- access packageDescription >>= maybe (error "sourceName: no PackageDescription") return
        let pkgId = Cabal.package pkgDesc
            name = maybe (evalDebM (debianName D.Source' pkgId) deb) id (getL Lenses.sourcePackageName deb)
        sourcePackageName ~= Just name
@@ -214,7 +214,7 @@ finalizeChangelog =
 addExtraLibDependencies :: MonadIO m => DebT m ()
 addExtraLibDependencies =
     do deb <- get
-       pkgDesc <- inputCabalization >>= either (error "addExtraLibDependencies: no PackageDescription") return
+       pkgDesc <- access packageDescription >>= maybe (error "addExtraLibDependencies: no PackageDescription") return
        control %= (\ y -> y {D.binaryPackages = List.map (f deb pkgDesc) (D.binaryPackages (getL Lenses.control deb))})
     where
       f deb pkgDesc bin
@@ -386,7 +386,7 @@ makeUtilsAtoms p datas execs =
 expandAtoms :: MonadIO m => DebT m ()
 expandAtoms =
     do builddir <- get >>= return . fromEmpty (singleton "dist-ghc/build") . getL Lenses.buildDir
-       dDir <- inputCabalization >>= either (error "expandAtoms") (return . dataDir)
+       dDir <- access packageDescription >>= maybe (error "expandAtoms") (return . dataDir)
        expandApacheSites
        expandInstallCabalExecs (fromSingleton (error "no builddir") (\ xs -> error $ "multiple builddirs:" ++ show xs) builddir)
        expandInstallCabalExecTo (fromSingleton (error "no builddir") (\ xs -> error $ "multiple builddirs:" ++ show xs) builddir)

@@ -10,7 +10,7 @@ import Debian.Debianize.Facts.Lenses as Lenses
     (changelog, binaryArchitectures, buildDepsIndep, changelog, compat, control, depends, description,
      installCabalExec, installData, sourcePackageName)
 import Debian.Debianize.Facts.Monad (execDebT, evalDebT, DebT, execDebM)
-import Debian.Debianize.Facts.Types (Atoms, newAtoms, SourceDebDescription(homepage, standardsVersion),
+import Debian.Debianize.Facts.Types (Top(Top), Atoms, newAtoms, SourceDebDescription(homepage, standardsVersion),
                                      InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Output (compareDebianization)
 import Debian.Debianize.Utility ((~=), (%=), (+=), (++=), (+++=), (~?=))
@@ -27,7 +27,7 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 main :: IO ()
 main =
     do log <- evalDebT inputChangeLog (newAtoms "test-data/artvaluereport2/input")
-       new <- execDebT (debianization seereasonDefaultAtoms (customize log)) (newAtoms "test-data/artvaluereport2/input")
+       new <- execDebT (debianization (Top "test-data/artvaluereport2/input") seereasonDefaultAtoms (customize log)) (newAtoms "test-data/artvaluereport2/input")
        old <- execDebT inputDebianization (newAtoms "test-data/artvaluereport2/output")
        -- The newest log entry gets modified when the Debianization is
        -- generated, it won't match so drop it for the comparison.

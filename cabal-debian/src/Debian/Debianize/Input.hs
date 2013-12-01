@@ -32,17 +32,17 @@ import Debian.Debianize.Facts.Types as Debian
     (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Facts.Lenses
-    (control, warning, sourceFormat, watch, rulesHead, compat,
+    (control, warning, sourceFormat, watch, rulesHead, compat, packageDescription,
      copyright, changelog, installInit, postInst, postRm, preInst, preRm,
      logrotateStanza, link, install, installDir, intermediateFiles, compilerVersion, cabalFlagAssignments, verbosity)
 import Debian.Debianize.Facts.Monad (Atoms, askTop, DebT, execDebT)
-import Debian.Debianize.Facts.Types (newAtoms)
+import Debian.Debianize.Facts.Types (Top(unTop), newAtoms)
 import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (+=), (++=), (+++=))
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer, haskellMaintainer)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
-import Distribution.Package (Package(packageId), Dependency(..), PackageIdentifier(..), PackageName(PackageName))
+import Distribution.Package (Package(packageId), PackageIdentifier(..), PackageName(PackageName))
 import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer, package))
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.PackageDescription.Parse (readPackageDescription)
@@ -263,20 +263,20 @@ readInstall p line =
 readDir :: Monad m => BinPkgName -> Text -> DebT m ()
 readDir p line = installDir +++= (p, unpack line)
 
-inputCabalization :: MonadIO m => DebT m (Either [Dependency] PackageDescription)
-inputCabalization =
+inputCabalization :: MonadIO m => Top -> DebT m ()
+inputCabalization top =
     do vb <- access verbosity >>= return . intToVerbosity'
        comp <- inputCompiler
        flags <- access cabalFlagAssignments
-       top <- askTop
-       liftIO $ withCurrentDirectory top $ do
+       pkgDesc <- liftIO $ withCurrentDirectory (unTop top) $ do
          descPath <- defaultPackageDesc vb
          genPkgDesc <- readPackageDescription vb descPath
          case finalizePackageDescription (toList flags) (const True) (Platform buildArch buildOS) (compilerId comp) [] genPkgDesc of
-           Left deps -> return $ Left deps
+           Left deps -> error $ "Missing dependencies in cabal package at " ++ show (unTop top) ++ ": " ++ show deps
            Right (pkgDesc, _) ->
                do bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
-                  return $ Right pkgDesc
+                  return pkgDesc
+       packageDescription ~= Just pkgDesc
 
 -- | Run the package's configuration script.
 autoreconf :: Verbosity -> PackageDescription -> IO ()
@@ -333,9 +333,9 @@ inputMaintainer =
                       Left _e -> return $ Nothing -- Just $ NameAddr (Just "Invalid signature in changelog") (show e)
                       Right x -> return (Just x)
                 _ -> return Nothing
-       cabalMaintainer <- inputCabalization >>=
-                          either (\ _ -> return Nothing)
-                                 (\ pkgDesc ->
+       cabalMaintainer <- access packageDescription >>=
+                          maybe (return Nothing)
+                                (\ pkgDesc ->
                                       return $ case Cabal.maintainer pkgDesc of
                                                  "" -> Nothing
                                                  x -> either (const Nothing)

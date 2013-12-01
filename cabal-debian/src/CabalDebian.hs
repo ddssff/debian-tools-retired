@@ -11,7 +11,7 @@ import Data.List as List (unlines)
 import Debian.Debianize.Details (debianDefaultAtoms)
 import Debian.Debianize.Facts.Lenses (debAction)
 import Debian.Debianize.Facts.Monad (DebT, evalDebT)
-import Debian.Debianize.Facts.Types (DebAction(Debianize, SubstVar, Usage), newAtoms)
+import Debian.Debianize.Facts.Types (Top(Top), DebAction(Debianize, SubstVar, Usage), newAtoms)
 import Debian.Debianize.Finalize (debianization)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs, options)
 import Debian.Debianize.Output (doDebianizeAction)
@@ -31,8 +31,8 @@ cabalDebianMain init =
     evalDebT (init >> compileEnvironmentArgs >> compileCommandlineArgs >>
               get >>= return . getL debAction >>= finish) (newAtoms ".")
     where
-      finish (SubstVar debType) = substvars debType
-      finish Debianize = debianization init (return ()) >> doDebianizeAction
+      finish (SubstVar debType) = substvars (Top ".") debType
+      finish Debianize = debianization (Top ".") init (return ()) >> doDebianizeAction
       finish Usage = do
           progName <- lift getProgName
           let info = unlines [ "Typical usage is to cd to the top directory of the package's unpacked source and run: "
