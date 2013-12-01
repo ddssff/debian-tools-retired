@@ -96,13 +96,14 @@ test1 label =
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion :: IO (Maybe StandardsVersion)
                  deb <- execDebT
-                          (do defaultAtoms
+                          (do let top = Top "."
+                              defaultAtoms
                               newDebianization (ChangeLog [testEntry]) level standards
                               copyright ~= Just (Left BSD3)
-                              inputCabalization (Top ".")
+                              inputCabalization top
                               Just pkgDesc <- access packageDescription
-                              finalizeDebianization pkgDesc)
-                          (newAtoms ".")
+                              finalizeDebianization top pkgDesc)
+                          newAtoms
                  diff <- diffDebianizations testDeb1 deb
                  assertEqual label [] diff)
     where
@@ -127,7 +128,7 @@ test1 label =
                                                            [Rel (BinPkgName "ghc") Nothing Nothing],
                                                            [Rel (BinPkgName "ghc-prof") Nothing Nothing]]
                                      , Deb.buildDependsIndep = [[Rel (BinPkgName "ghc-doc") Nothing Nothing]] }))
-            (newAtoms ".")
+            newAtoms
       log = ChangeLog [Entry { logPackage = "haskell-cabal-debian"
                              , logVersion = buildDebianVersion Nothing "2.6.2" Nothing
                              , logDists = [ReleaseName {relName = "unstable"}]
@@ -142,13 +143,14 @@ test2 label =
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion
                  deb <- execDebT
-                          (do defaultAtoms
+                          (do let top = Top "."
+                              defaultAtoms
                               newDebianization (ChangeLog [testEntry]) level standards
                               copyright ~= Just (Left BSD3)
-                              inputCabalization (Top ".")
+                              inputCabalization top
                               Just pkgDesc <- access packageDescription
-                              finalizeDebianization pkgDesc)
-                          (newAtoms ".")
+                              finalizeDebianization top pkgDesc)
+                          newAtoms
                  diff <- diffDebianizations expect deb
                  assertEqual label [] diff)
     where
@@ -172,7 +174,7 @@ test2 label =
                                                            [Rel (BinPkgName "ghc") Nothing Nothing],
                                                            [Rel (BinPkgName "ghc-prof") Nothing Nothing]],
                                        Deb.buildDependsIndep = [[Rel (BinPkgName "ghc-doc") Nothing Nothing]] }))
-            (newAtoms ".")
+            newAtoms
       log = ChangeLog [Entry {logPackage = "haskell-cabal-debian",
                               logVersion = Debian.Version.parseDebianVersion ("2.6.2" :: String),
                               logDists = [ReleaseName {relName = "unstable"}],
@@ -185,7 +187,7 @@ test2 label =
 test3 :: String -> Test
 test3 label =
     TestLabel label $
-    TestCase (do deb <- execDebT inputDebianization (newAtoms "test-data/haskell-devscripts")
+    TestCase (do deb <- execDebT (inputDebianization (Top "test-data/haskell-devscripts")) newAtoms
                  diff <- diffDebianizations testDeb2 deb
                  assertEqual label [] diff)
     where
@@ -245,7 +247,7 @@ test3 label =
                                                                                             , Deb.provides_ = []
                                                                                             , Deb.replaces_ = []
                                                                                             , Deb.builtUsing = [] }}]}))
-            (newAtoms ".")
+            newAtoms
       log = ChangeLog [Entry { logPackage = "haskell-devscripts"
                              , logVersion = Debian.Version.parseDebianVersion ("0.8.13" :: String)
                              , logDists = [ReleaseName {relName = "experimental"}]
@@ -264,9 +266,9 @@ test3 label =
 test4 :: String -> Test
 test4 label =
     TestLabel label $
-    TestCase (do old <- execDebT inputDebianization (newAtoms "test-data/clckwrks-dot-com/output")
+    TestCase (do old <- execDebT (inputDebianization (Top "test-data/clckwrks-dot-com/output")) newAtoms
                  let log = getL changelog old
-                 new <- execDebT (debianization (Top "test-data/clckwrks-dot-com/input") defaultAtoms (customize log)) (newAtoms "test-data/clckwrks-dot-com/input")
+                 new <- execDebT (debianization (Top "test-data/clckwrks-dot-com/input") defaultAtoms (customize log)) newAtoms
                  diff <- diffDebianizations old ({-copyFirstLogEntry old-} new)
                  assertEqual label [] diff)
     where
@@ -372,10 +374,10 @@ anyrel b = Rel b Nothing Nothing
 test5 :: String -> Test
 test5 label =
     TestLabel label $
-    TestCase (do old <- execDebT inputDebianization (newAtoms "test-data/creativeprompts/output")
+    TestCase (do old <- execDebT (inputDebianization (Top "test-data/creativeprompts/output")) newAtoms
                  let standards = Deb.standardsVersion (getL Lenses.control old)
                      level = getL Lenses.compat old
-                 new <- execDebT (debianization (Top "test-data/creativeprompts/input") defaultAtoms (customize old level standards)) (newAtoms "test-data/creativeprompts/input")
+                 new <- execDebT (debianization (Top "test-data/creativeprompts/input") defaultAtoms (customize old level standards)) newAtoms
                  diff <- diffDebianizations old new
                  assertEqual label [] diff)
     where
@@ -465,9 +467,9 @@ test7 label =
 test8 :: String -> Test
 test8 label =
     TestLabel label $
-    TestCase ( do old <- execDebT inputDebianization (newAtoms "test-data/artvaluereport-data/output")
-                  log <- evalDebT inputChangeLog (newAtoms "test-data/artvaluereport-data/input")
-                  new <- execDebT (debianization (Top "test-data/artvaluereport-data/input") defaultAtoms (customize log)) (newAtoms "test-data/artvaluereport-data/input")
+    TestCase ( do old <- execDebT (inputDebianization (Top "test-data/artvaluereport-data/output")) newAtoms
+                  log <- evalDebT (inputChangeLog (Top "test-data/artvaluereport-data/input")) newAtoms
+                  new <- execDebT (debianization (Top "test-data/artvaluereport-data/input") defaultAtoms (customize log)) newAtoms
                   diff <- diffDebianizations old new
                   assertEqual label [] diff
              )
@@ -483,8 +485,8 @@ test8 label =
 test9 :: String -> Test
 test9 label =
     TestLabel label $
-    TestCase ( do old <- execDebT inputDebianization (newAtoms "test-data/alex/output")
-                  new <- execDebT (debianization (Top "test-data/alex/input") defaultAtoms customize) (newAtoms "test-data/alex/input")
+    TestCase ( do old <- execDebT (inputDebianization (Top "test-data/alex/output")) newAtoms
+                  new <- execDebT (debianization (Top "test-data/alex/input") defaultAtoms customize) newAtoms
                   diff <- diffDebianizations old new
                   assertEqual label [] diff)
     where
@@ -515,8 +517,8 @@ test9 label =
 test10 :: String -> Test
 test10 label =
     TestLabel label $
-    TestCase (do old <- execDebT inputDebianization (newAtoms "test-data/archive/output")
-                 new <- execDebT (debianization (Top "test-data/archive/input") defaultAtoms customize) (newAtoms "test-data/archive/input")
+    TestCase (do old <- execDebT (inputDebianization (Top "test-data/archive/output")) newAtoms
+                 new <- execDebT (debianization (Top "test-data/archive/input") defaultAtoms customize) newAtoms
                  diff <- diffDebianizations old new
                  assertEqual label [] diff)
     where

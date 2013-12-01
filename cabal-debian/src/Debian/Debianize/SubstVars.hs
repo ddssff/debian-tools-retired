@@ -55,7 +55,7 @@ substvars :: Top
 substvars top debType =
     do inputCabalization top
        debVersions <- lift buildDebVersionMap
-       comp <- inputCompiler
+       comp <- inputCompiler top
        modifyM (lift . libPaths comp debVersions)
        control <- lift $ readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
        substvars' debType control

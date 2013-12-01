@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wall #-}
 module Debian.Debianize.Facts.Monad
-    ( Atoms(top)
+    ( Atoms
 
     , DebT
     , runDebT
@@ -24,17 +24,16 @@ module Debian.Debianize.Facts.Monad
     , doMapSet
 -}
 
-    -- * Location of unpacked cabal package
-    , askTop
+    -- * modify cabal to debian package version map
     , mapCabal
     , splitCabal
     ) where
 
-import Control.Monad.State (evalState, evalStateT, execState, execStateT, MonadState(get), runState, State, StateT(runStateT))
+import Control.Monad.State (evalState, evalStateT, execState, execStateT, runState, State, StateT(runStateT))
 import Data.Map as Map (alter)
 import Data.Version (Version)
 import Debian.Debianize.Facts.Lenses (debianNameMap)
-import Debian.Debianize.Facts.Types (Atoms(top), Top(unTop))
+import Debian.Debianize.Facts.Types (Atoms)
 import Debian.Debianize.Utility ((%=))
 import Debian.Debianize.VersionSplits (insertSplit, makePackage, VersionSplits)
 import Debian.Orphans ()
@@ -61,9 +60,6 @@ evalDebM action atoms = evalState action atoms
 
 runDebM :: DebM a -> Atoms -> (a, Atoms)
 runDebM action atoms = runState action atoms
-
-askTop :: Monad m => DebT m FilePath
-askTop = get >>= return . unTop . top
 
 -- | Map all versions of Cabal package pname to Debian package dname.
 -- Not really a debian package name, but the name of a cabal package

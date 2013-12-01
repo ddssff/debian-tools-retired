@@ -26,9 +26,9 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 -- copyFirstLogEntry.
 main :: IO ()
 main =
-    do log <- evalDebT inputChangeLog (newAtoms "test-data/artvaluereport2/input")
-       new <- execDebT (debianization (Top "test-data/artvaluereport2/input") seereasonDefaultAtoms (customize log)) (newAtoms "test-data/artvaluereport2/input")
-       old <- execDebT inputDebianization (newAtoms "test-data/artvaluereport2/output")
+    do log <- evalDebT (inputChangeLog (Top "test-data/artvaluereport2/input")) newAtoms
+       new <- execDebT (debianization (Top "test-data/artvaluereport2/input") seereasonDefaultAtoms (customize log)) newAtoms
+       old <- execDebT (inputDebianization (Top "test-data/artvaluereport2/output")) newAtoms
        -- The newest log entry gets modified when the Debianization is
        -- generated, it won't match so drop it for the comparison.
        compareDebianization old (copyFirstLogEntry old new) >>= putStr

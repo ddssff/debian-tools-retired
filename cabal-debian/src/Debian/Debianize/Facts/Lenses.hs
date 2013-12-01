@@ -2,11 +2,8 @@
 {-# OPTIONS_GHC -Wall #-}
 module Debian.Debianize.Facts.Lenses
     (
-    -- * Location of unpacked cabal package
-      top
-
     -- * Modes of operation
-    , verbosity
+      verbosity
     , dryRun
     , debAction
     , cabalFlagAssignments

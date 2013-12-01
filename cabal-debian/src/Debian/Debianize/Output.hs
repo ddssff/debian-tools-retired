@@ -25,10 +25,11 @@ import Data.Maybe (fromMaybe)
 import Data.Text as Text (split, Text, unpack)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import qualified Debian.Debianize.Facts.Types as D (BinaryDebDescription(package), SourceDebDescription(binaryPackages, source))
+import Debian.Debianize.Facts.Types (Top(unTop))
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Input (inputDebianization)
 import qualified Debian.Debianize.Facts.Lenses as Lenses (changelog, control, dryRun, validate)
-import Debian.Debianize.Facts.Monad (DebT, Atoms, askTop)
+import Debian.Debianize.Facts.Monad (DebT, Atoms)
 import Debian.Debianize.Options (putEnvironmentArgs)
 import Debian.Debianize.Utility (indent, replaceFile, withCurrentDirectory, zipMaps)
 import Prelude hiding (unlines, writeFile)
@@ -63,28 +64,27 @@ runDebianizeScript args =
 
 -- | Depending on the options in @atoms@, either validate, describe,
 -- or write the generated debianization.
-doDebianizeAction :: DebT IO ()
-doDebianizeAction =
+doDebianizeAction :: Top -> DebT IO ()
+doDebianizeAction top =
     do new <- get
        case () of
          _ | getL Lenses.validate new ->
-               do inputDebianization
+               do inputDebianization top
                   old <- get
                   return $ validateDebianization old new
          _ | getL Lenses.dryRun new ->
-               do inputDebianization
+               do inputDebianization top
                   old <- get
                   diff <- lift $ compareDebianization old new
                   lift $ putStr ("Debianization (dry run):\n" ++ diff)
-         _ -> writeDebianization
+         _ -> writeDebianization top
 
 -- | Write the files of the debianization @d@ to the directory @top@.
-writeDebianization :: DebT IO ()
-writeDebianization =
-    do top <- askTop
-       files <- get >>= lift . debianizationFileMap
-       lift $ withCurrentDirectory top $ mapM_ (uncurry doFile) (Map.toList files)
-       lift $ getPermissions (top </> "debian/rules") >>= setPermissions (top </> "debian/rules") . (\ p -> p {executable = True})
+writeDebianization :: Top -> DebT IO ()
+writeDebianization top =
+    do files <- get >>= lift . debianizationFileMap
+       lift $ withCurrentDirectory (unTop top) $ mapM_ (uncurry doFile) (Map.toList files)
+       lift $ getPermissions (unTop top </> "debian/rules") >>= setPermissions (unTop top </> "debian/rules") . (\ p -> p {executable = True})
     where
       doFile path text =
           do createDirectoryIfMissing True (takeDirectory path)

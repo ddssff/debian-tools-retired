@@ -27,8 +27,7 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 -- debianization is finalized.
 data Atoms
     = Atoms
-      { top :: Top
-      , noDocumentationLibrary_ :: Set Bool
+      { noDocumentationLibrary_ :: Set Bool
       -- ^ Do not produce a libghc-foo-doc package.
       , noProfilingLibrary_ :: Set Bool
       -- ^ Do not produce a libghc-foo-prof package.
@@ -200,11 +199,10 @@ data Atoms
 
 newtype Top = Top {unTop :: FilePath} deriving (Eq, Ord, Show, Typeable)
 
-newAtoms :: FilePath -> Atoms
-newAtoms x
+newAtoms :: Atoms
+newAtoms
     = Atoms
-      { top = Top x
-      , noDocumentationLibrary_ = mempty
+      { noDocumentationLibrary_ = mempty
       , noProfilingLibrary_ = mempty
       , omitLTDeps_ = mempty
       , compilerVersion_ = mempty

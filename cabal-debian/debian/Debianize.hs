@@ -22,12 +22,13 @@ import System.Directory (copyFile)
 
 main :: IO ()
 main =
-    do -- Copy the changelog into the top directory so that hackage
+    do let top = Top "."
+       -- Copy the changelog into the top directory so that hackage
        -- will see it.
        copyFile "debian/changelog" "changelog"
-       log <- evalDebT inputChangeLog (newAtoms ".")
-       old <- execDebT inputDebianization (newAtoms ".")
-       new <- execDebT (debianization (Top ".") seereasonDefaultAtoms (changelog ~?= either (const Nothing) Just log >> customize >> copyFirstLogEntry old)) (newAtoms ".")
+       log <- evalDebT (inputChangeLog top) newAtoms
+       old <- execDebT (inputDebianization top) newAtoms
+       new <- execDebT (debianization top seereasonDefaultAtoms (changelog ~?= either (const Nothing) Just log >> customize >> copyFirstLogEntry old)) newAtoms
        diff <- compareDebianization old new
        case diff of
          "" -> return ()

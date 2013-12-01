@@ -35,7 +35,7 @@ import Debian.Debianize.Facts.Lenses
     (control, warning, sourceFormat, watch, rulesHead, compat, packageDescription,
      copyright, changelog, installInit, postInst, postRm, preInst, preRm,
      logrotateStanza, link, install, installDir, intermediateFiles, compilerVersion, cabalFlagAssignments, verbosity)
-import Debian.Debianize.Facts.Monad (Atoms, askTop, DebT, execDebT)
+import Debian.Debianize.Facts.Monad (Atoms, DebT, execDebT)
 import Debian.Debianize.Facts.Types (Top(unTop), newAtoms)
 import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (+=), (++=), (+++=))
 import Debian.Orphans ()
@@ -61,25 +61,23 @@ import System.Posix.Files (setFileCreationMask)
 import System.IO.Error (catchIOError, tryIOError)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
-inputDebianization :: DebT IO ()
-inputDebianization =
+inputDebianization :: Top -> DebT IO ()
+inputDebianization top =
     do -- Erase any the existing information
-       askTop >>= put . newAtoms
-       (ctl, _) <- inputSourceDebDescription
-       inputAtomsFromDirectory
+       put newAtoms
+       (ctl, _) <- inputSourceDebDescription top
+       inputAtomsFromDirectory top
        control ~= ctl
 
 -- | Try to input a file and if successful add it to the debianization.
-inputDebianizationFile :: FilePath -> DebT IO ()
-inputDebianizationFile path =
-    do inputAtomsFromDirectory
-       top <- askTop
-       lift (readFileMaybe (top </> path)) >>= maybe (return ()) (\ text -> intermediateFiles += (path, text))
+inputDebianizationFile :: Top -> FilePath -> DebT IO ()
+inputDebianizationFile top path =
+    do inputAtomsFromDirectory top
+       lift (readFileMaybe (unTop top </> path)) >>= maybe (return ()) (\ text -> intermediateFiles += (path, text))
 
-inputSourceDebDescription :: DebT IO (SourceDebDescription, [Field])
-inputSourceDebDescription =
-    do top <- askTop
-       paras <- lift $ parseControlFromFile (top </> "debian/control") >>= either (error . show) (return . unControl)
+inputSourceDebDescription :: Top -> DebT IO (SourceDebDescription, [Field])
+inputSourceDebDescription top =
+    do paras <- lift $ parseControlFromFile (unTop top </> "debian/control") >>= either (error . show) (return . unControl)
        case paras of
          [] -> error "Missing source paragraph"
          [_] -> error "Missing binary paragraph"
@@ -182,27 +180,25 @@ yes "yes" = True
 yes "no" = False
 yes x = error $ "Expecting yes or no: " ++ x
 
-inputChangeLog :: MonadIO m => DebT m (Either IOError ChangeLog)
-inputChangeLog =
-    do top <- askTop
-       liftIO $ tryIOError (readFile (top </> "debian/changelog") >>= return . parseChangeLog . unpack)
+inputChangeLog :: MonadIO m => Top -> DebT m (Either IOError ChangeLog)
+inputChangeLog top =
+    liftIO $ tryIOError (readFile (unTop top </> "debian/changelog") >>= return . parseChangeLog . unpack)
 
-inputAtomsFromDirectory :: DebT IO () -- .install files, .init files, etc.
-inputAtomsFromDirectory =
+inputAtomsFromDirectory :: Top -> DebT IO () -- .install files, .init files, etc.
+inputAtomsFromDirectory top =
     do atoms <- get
-       top <- askTop
-       atoms' <- lift $ findFiles top atoms
-       atoms'' <- lift $ doFiles (top </> "debian/cabalInstall") atoms'
+       atoms' <- lift $ findFiles atoms
+       atoms'' <- lift $ doFiles (unTop top </> "debian/cabalInstall") atoms'
        put atoms''
     where
       -- Find regular files matching debian/* and debian/source/format and
       -- add them to the debianization.
-      findFiles :: FilePath -> Atoms -> IO Atoms
-      findFiles top atoms =
-          getDirectoryContents' (top </> "debian") >>=
+      findFiles :: Atoms -> IO Atoms
+      findFiles atoms =
+          getDirectoryContents' (unTop top </> "debian") >>=
           return . (++ ["source/format"]) >>=
-          filterM (doesFileExist . ((top </> "debian") </>)) >>=
-          foldM (\ atoms' name -> inputAtoms (top </> "debian") name atoms') atoms
+          filterM (doesFileExist . ((unTop top </> "debian") </>)) >>=
+          foldM (\ atoms' name -> inputAtoms (unTop top </> "debian") name atoms') atoms
       doFiles :: FilePath -> Atoms -> IO Atoms
       doFiles tmp atoms =
           do sums <- getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
@@ -266,7 +262,7 @@ readDir p line = installDir +++= (p, unpack line)
 inputCabalization :: MonadIO m => Top -> DebT m ()
 inputCabalization top =
     do vb <- access verbosity >>= return . intToVerbosity'
-       comp <- inputCompiler
+       comp <- inputCompiler top
        flags <- access cabalFlagAssignments
        pkgDesc <- liftIO $ withCurrentDirectory (unTop top) $ do
          descPath <- defaultPackageDesc vb
@@ -291,18 +287,17 @@ autoreconf verbose pkgDesc = do
               ExitSuccess -> return ()
               ExitFailure n -> die ("autoreconf failed with status " ++ show n)
 
-inputCompiler :: MonadIO m => DebT m Compiler
-inputCompiler =
+inputCompiler :: MonadIO m => Top -> DebT m Compiler
+inputCompiler top =
     do vb <- access verbosity >>= return . intToVerbosity'
        mCompilerVersion <- access compilerVersion
-       inputCompiler' vb mCompilerVersion
+       inputCompiler' top vb mCompilerVersion
 
 -- | Read the (GHC) compiler version specified by Cabal, optionally
 -- changing the version number.
-inputCompiler' :: MonadIO m => Verbosity -> Set Version -> DebT m Compiler
-inputCompiler' vb mCompilerVersion =
-    askTop >>= \ top -> liftIO $
-    withCurrentDirectory top $ do
+inputCompiler' :: MonadIO m => Top -> Verbosity -> Set Version -> DebT m Compiler
+inputCompiler' top vb mCompilerVersion =
+    liftIO $ withCurrentDirectory (unTop top) $ do
       (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
       let compiler'' = case Set.toList mCompilerVersion of
                          [] -> compiler'

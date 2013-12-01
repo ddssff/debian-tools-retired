@@ -20,6 +20,9 @@ import Prelude hiding (unlines, writeFile, init)
 import System.Console.GetOpt (usageInfo)
 import System.Environment (getProgName)
 
+top :: Top
+top = Top "."
+
 main :: IO ()
 main = cabalDebianMain debianDefaultAtoms
 
@@ -29,10 +32,10 @@ cabalDebianMain init =
     -- This picks up the options required to decide what action we are
     -- taking.  Yes, it does get repeated in the call to debianize.
     evalDebT (init >> compileEnvironmentArgs >> compileCommandlineArgs >>
-              get >>= return . getL debAction >>= finish) (newAtoms ".")
+              get >>= return . getL debAction >>= finish) newAtoms
     where
-      finish (SubstVar debType) = substvars (Top ".") debType
-      finish Debianize = debianization (Top ".") init (return ()) >> doDebianizeAction
+      finish (SubstVar debType) = substvars top debType
+      finish Debianize = debianization top init (return ()) >> doDebianizeAction top
       finish Usage = do
           progName <- lift getProgName
           let info = unlines [ "Typical usage is to cd to the top directory of the package's unpacked source and run: "
