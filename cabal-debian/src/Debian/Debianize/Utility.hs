@@ -286,10 +286,12 @@ intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
 (~=) :: Monad m => Lens a b -> b -> StateT a m ()
 lens ~= x = lens Lens.~= x >> return ()
 
--- | Modify a @b@ if the argument @isJust@.
-(~?=) :: Monad m => Lens a b -> Maybe b -> StateT a m ()
-lens ~?= (Just x) = lens Lens.~= x >> return ()
-_ ~?= Nothing = return ()
+-- | Set @b@ if it currently isNothing and the argument isJust, that is
+--  1. Nothing happens if the argument isNothing
+--  2. Nothing happens if the current value isJust
+(~?=) :: Monad m => Lens a (Maybe b) -> Maybe b -> StateT a m ()
+lens ~?= (Just x) = lens Lens.%= maybe (Just x) Just >> return ()
+_ ~?= _ = return ()
 
 -- | Modify a value.  (This is a version of Data.Lens.Lazy.%= that returns () instead of a.)
 (%=) :: Monad m => Lens a b -> (b -> b) -> StateT a m ()

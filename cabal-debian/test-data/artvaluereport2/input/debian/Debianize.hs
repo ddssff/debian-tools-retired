@@ -35,7 +35,7 @@ main =
     where
       customize :: Either IOError ChangeLog -> DebT IO ()
       customize log =
-          do changelog ~?= either (const Nothing) (Just . Just) log
+          do changelog ~?= either (const Nothing) Just log
              installCabalExec +++= (BinPkgName "appraisalscope", ("lookatareport", "usr/bin"))
              doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"})
              doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development"))

@@ -182,10 +182,10 @@ yes "yes" = True
 yes "no" = False
 yes x = error $ "Expecting yes or no: " ++ x
 
-inputChangeLog :: DebT IO (Either IOError ChangeLog)
+inputChangeLog :: MonadIO m => DebT m (Either IOError ChangeLog)
 inputChangeLog =
     do top <- askTop
-       lift $ tryIOError (readFile (top </> "debian/changelog") >>= return . parseChangeLog . unpack)
+       liftIO $ tryIOError (readFile (top </> "debian/changelog") >>= return . parseChangeLog . unpack)
 
 inputAtomsFromDirectory :: DebT IO () -- .install files, .init files, etc.
 inputAtomsFromDirectory =
@@ -321,7 +321,7 @@ inputLicenseFile pkgDesc = readFileMaybe (licenseFile pkgDesc)
 --    3. the value returned by getDebianMaintainer, which looks in several environment variables,
 --    4. the signature from the latest entry in debian/changelog,
 --    5. the Debian Haskell Group, pkg-haskell-maintainers@lists.alioth.debian.org
-inputMaintainer :: DebT IO NameAddr
+inputMaintainer :: MonadIO m => DebT m NameAddr
 inputMaintainer =
     do specifiedMaintainer <- get >>= return . getL Lenses.maintainer
        debianMaintainer <- liftIO getDebianMaintainer

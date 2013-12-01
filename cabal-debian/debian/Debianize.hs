@@ -27,7 +27,7 @@ main =
        copyFile "debian/changelog" "changelog"
        log <- evalDebT inputChangeLog (newAtoms ".")
        old <- execDebT inputDebianization (newAtoms ".")
-       new <- execDebT (debianization seereasonDefaultAtoms (changelog ~?= either (const Nothing) (Just . Just) log >> customize >> copyFirstLogEntry old)) (newAtoms ".")
+       new <- execDebT (debianization seereasonDefaultAtoms (changelog ~?= either (const Nothing) Just log >> customize >> copyFirstLogEntry old)) (newAtoms ".")
        diff <- compareDebianization old new
        case diff of
          "" -> return ()

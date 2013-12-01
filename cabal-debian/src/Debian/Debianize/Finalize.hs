@@ -7,7 +7,7 @@ module Debian.Debianize.Finalize
 
 import Control.Monad (when)
 import Control.Monad as List (mapM_)
-import Control.Monad.State (get, modify, lift)
+import Control.Monad.State (get, modify)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Char (isSpace, toLower)
@@ -16,12 +16,12 @@ import Data.Function (on)
 import Data.Lens.Lazy (getL, modL, access)
 import Data.List as List (filter, intercalate, map, minimumBy, nub, unlines)
 import Data.Map as Map (elems, lookup, Map, toList)
-import Data.Maybe (catMaybes, fromMaybe, isJust)
+import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing)
 import Data.Monoid ((<>))
 import Data.Set as Set (difference, filter, fromList, map, null, Set, singleton, toList, unions)
 import qualified Data.Set as Set (member)
 import Data.Set.Extra as Set (mapM_)
-import Data.Text as Text (pack, Text, unlines, unpack)
+import Data.Text as Text (pack, unlines, unpack)
 import Data.Version (showVersion, Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Bundled (ghcBuiltIn)
@@ -36,7 +36,7 @@ import Debian.Debianize.Facts.Monad as Monad (Atoms, DebT, evalDebM, askTop)
 import Debian.Debianize.Facts.Types (showAtoms)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
 import Debian.Debianize.Facts.Types (InstallFile(..))
-import Debian.Debianize.Utility (foldEmpty, withCurrentDirectory, (+=), (~=), (+++=), (++=), (%=), fromEmpty, fromSingleton)
+import Debian.Debianize.Utility (foldEmpty, withCurrentDirectory, (+=), (~=), (+++=), (++=), (%=), (~?=), fromEmpty, fromSingleton)
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
 import Debian.Policy (getDebhelperCompatLevel, PackageArchitectures(Any, All), PackagePriority(Optional), Section(..))
@@ -57,7 +57,7 @@ import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((<.>), (</>), makeRelative, splitFileName, takeDirectory, takeFileName)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readProcessWithExitCode)
-import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..))
+--import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | Given an Atoms value, get any additional configuration
@@ -72,42 +72,60 @@ debianization init customize =
        compileEnvironmentArgs
        compileCommandlineArgs
        customize
-       log <- inputChangeLog
        pkgDesc <- inputCabalization >>= either (error $ "cabalToDebianization: Failed to read cabal file in " ++ show top) return
-       date <- lift getCurrentLocalRFC822Time
-       maint <- inputMaintainer
-       level <- get >>= return. getL Lenses.compat >>= lift . maybe getDebhelperCompatLevel (return . Just)
-       copyrt <- lift . withCurrentDirectory top . inputLicenseFile $ pkgDesc
-       debianization' date copyrt maint level log
-
-debianization' :: MonadIO m =>
-                  String              -- ^ current date
-               -> Maybe Text          -- ^ copyright
-               -> NameAddr            -- ^ maintainer
-               -> Maybe Int	      -- ^ Default standards version
-               -> Either IOError ChangeLog
-               -> DebT m ()
-debianization' date copy maint level log =
-    do deb <- get
-       pkgDesc <- inputCabalization >>= either (error "debianization") return
        addExtraLibDependencies
-       copyright ~= (case getL Lenses.copyright deb of
-                       Just x -> Just x
-                       Nothing -> case copy of
-                                    Just x -> Just (Right x)
-                                    Nothing -> Just (Left (Cabal.license pkgDesc)))
-       watch ~= Just (watchAtom (pkgName $ Cabal.package $ pkgDesc))
-       -- FIXME - sourceSection and sourcePriority should be settable
-       sourceSection ~= Just (MainSection "haskell")
-       sourcePriority ~= Just Optional
-       either (\ _ -> return ()) ((changelog ~=) . Just) log
-       maybe (return ()) ((compat ~=) . Just) level
-       finalizeChangelog maint date
+       watch ~?= Just (watchAtom (pkgName $ Cabal.package $ pkgDesc))
+       sourceSection ~?= Just (MainSection "haskell")
+       sourcePriority ~?= Just Optional
+       finalizeCompat
+       finalizeChangelog
        finalizeControl
-       modify (modL Lenses.copyright (maybe (Just (Left AllRightsReserved)) Just))
+       finalizeCopyright pkgDesc
        finalizeDebianization pkgDesc
-       vb <- access verbosity
-       when (vb >= 3) (get >>= liftIO . showAtoms)
+
+-- | Now that we know the build and data directories, we can expand
+-- some atoms into sets of simpler atoms which can eventually be
+-- turned into the files of the debianization.  The original atoms are
+-- not removed from the list because they may contribute to the
+-- debianization in other ways, so be careful not to do this twice,
+-- this function is not idempotent.  (Exported for use in unit tests.)
+-- FIXME: we should be able to run this without a PackageDescription, change
+--        paramter type to Maybe PackageDescription and propagate down thru code
+finalizeDebianization  :: MonadIO m => PackageDescription -> DebT m ()
+finalizeDebianization pkgDesc =
+    do expandAtoms
+       -- Create the binary packages for the web sites, servers, backup packges, and other executables
+       access Lenses.executable >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList
+       access Lenses.backups >>= List.mapM_ (\ (b, _) -> binaryArchitectures ++= (b, Any) >> cabalExecBinaryPackage pkgDesc b) . Map.toList
+       access Lenses.serverInfo >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList
+       access Lenses.website >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList
+       putBuildDeps pkgDesc
+       librarySpecs pkgDesc
+       makeUtilsPackages pkgDesc
+       expandAtoms
+       -- Turn atoms related to priority, section, and description into debianization elements
+       access Lenses.sourcePriority >>= maybe (return ()) (\ x -> control %= (\ y -> y {priority = Just x}))
+       access Lenses.sourceSection >>= maybe (return ()) (\ x -> control %= (\ y -> y {section = Just x}))
+       access Lenses.binaryArchitectures >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {architecture = x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList
+       access Lenses.binaryPriorities >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {binaryPriority = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList
+       access Lenses.binarySections >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {binarySection = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList
+       access Lenses.description >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList
+       access verbosity >>= \ vb -> when (vb >= 3) (get >>= liftIO . showAtoms)
+
+finalizeCompat :: MonadIO m => DebT m ()
+finalizeCompat =
+    do current <- liftIO getDebhelperCompatLevel
+       setting <- access compat
+       when (isNothing setting) (compat ~= current)
+
+finalizeCopyright :: MonadIO m => PackageDescription -> DebT m ()
+finalizeCopyright pkgDesc =
+    do top <- askTop
+       copyrt <- liftIO . withCurrentDirectory top . inputLicenseFile $ pkgDesc
+       access copyright >>= maybe (copyright ~= case copyrt of
+                                                  Just x -> Just (Right x)
+                                                  Nothing -> Just (Left (Cabal.license pkgDesc))) (\ _ -> return ())
+       modify (modL Lenses.copyright (maybe (Just (Left AllRightsReserved)) Just))
 
 -- | Combine various bits of information to produce the debian version
 -- which will be used for the debian package.  If the override
@@ -161,23 +179,26 @@ finalizeControl =
 -- source package name implied by the debianization.  This means
 -- either adding an entry or modifying the latest entry (if its
 -- version number is the exact one in our debianization.)
-finalizeChangelog :: MonadIO m => NameAddr -> String -> DebT m ()
-finalizeChangelog maint date =
-    do ver <- debianVersion
+finalizeChangelog :: MonadIO m => DebT m ()
+finalizeChangelog =
+    do inputChangeLog >>= either (\ _ -> return ()) (\ log -> changelog ~= Just log)
+       ver <- debianVersion
        src <- sourceName
+       date <- liftIO getCurrentLocalRFC822Time
+       maint <- inputMaintainer
        maintainer ~= Just maint
        cmts <- access Lenses.comments
        Lenses.changelog %= fmap (dropFutureEntries ver)
-       Lenses.changelog %= fmap (fixLog src ver cmts)
+       Lenses.changelog %= fmap (fixLog src ver cmts date maint)
     where
       -- Ensure that the package name is correct in the first log entry.
-      fixLog src ver cmts (ChangeLog (entry : older)) | logVersion entry == ver =
+      fixLog src ver cmts _date _maint (ChangeLog (entry : older)) | logVersion entry == ver =
           ChangeLog (entry { logPackage = show (pretty src)
                            , logComments = logComments entry ++ "\n" ++
                                            (List.unlines $ List.map (("  * " <>) . List.intercalate "\n    " . List.map unpack) (fromMaybe [] cmts))
                            } : older)
       -- The newest log entry isn't exactly ver, build a new entry.
-      fixLog src ver cmts (ChangeLog entries) =
+      fixLog src ver cmts date maint (ChangeLog entries) =
           ChangeLog (Entry { logPackage = show (pretty src)
                            , logVersion = ver
                            , logDists = [parseReleaseName "unstable"]
@@ -208,40 +229,6 @@ addExtraLibDependencies =
                                                     Set.toList
                                                     (Map.lookup cab (getL Lenses.extraLibMap deb)))
                                     (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc) }
-
--- | Now that we know the build and data directories, we can expand
--- some atoms into sets of simpler atoms which can eventually be
--- turned into the files of the debianization.  The original atoms are
--- not removed from the list because they may contribute to the
--- debianization in other ways, so be careful not to do this twice,
--- this function is not idempotent.  (Exported for use in unit tests.)
--- FIXME: we should be able to run this without a PackageDescription, change
---        paramter type to Maybe PackageDescription and propagate down thru code
-finalizeDebianization  :: MonadIO m => PackageDescription -> DebT m ()
-finalizeDebianization pkgDesc =
-    do expandAtoms
-       f
-       putBuildDeps pkgDesc
-       librarySpecs pkgDesc
-       makeUtilsPackages pkgDesc
-       expandAtoms
-       g
-    where
-      -- Create the binary packages for the web sites, servers, backup packges, and other executables
-      f :: MonadIO m => DebT m ()
-      f = do get >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList . getL Lenses.executable
-             get >>= List.mapM_ (\ (b, _) -> binaryArchitectures ++= (b, Any) >>
-                                             cabalExecBinaryPackage pkgDesc b) . Map.toList . getL Lenses.backups
-             get >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList . getL Lenses.serverInfo
-             get >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList . getL Lenses.website
-      -- Turn atoms related to priority, section, and description into debianization elements
-      g :: MonadIO m  => DebT m ()
-      g = do get >>= maybe (return ()) (\ x -> control %= (\ y -> y {priority = Just x})) . getL Lenses.sourcePriority
-             get >>= maybe (return ()) (\ x -> control %= (\ y -> y {section = Just x})) . getL Lenses.sourceSection
-             get >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {architecture = x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.binaryArchitectures
-             get >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {binaryPriority = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.binaryPriorities
-             get >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {binarySection = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.binarySections
-             get >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList . getL Lenses.description
 
 putBuildDeps :: MonadIO m => PackageDescription -> DebT m ()
 putBuildDeps pkgDesc =

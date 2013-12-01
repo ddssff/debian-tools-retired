@@ -32,7 +32,7 @@ import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Finalize (debianization, finalizeDebianization)
 import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups, makeRulesHead)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCabalization)
-import Debian.Debianize.Utility ((~=), (%=), (+=), (++=), (+++=), (~?=))
+import Debian.Debianize.Utility ((~=), (%=), (+=), (++=), (+++=))
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
                       SourceFormat(Native3), Section(..), parseMaintainer)
@@ -67,7 +67,7 @@ newDebianization :: Monad m => ChangeLog -> Maybe Int -> Maybe StandardsVersion 
 newDebianization (ChangeLog (WhiteSpace {} : _)) _ _ = error "defaultDebianization: Invalid changelog entry"
 newDebianization (log@(ChangeLog (entry : _))) level standards =
     do changelog ~= Just log
-       compat ~?= Just level
+       compat ~= level
        control %= (\ x -> x { Deb.source = Just (SrcPkgName (logPackage entry))
                             , Deb.maintainer = (either error Just (parseMaintainer (logWho entry)))
                             , Deb.standardsVersion = standards })
@@ -270,7 +270,7 @@ test4 label =
     where
       customize :: Maybe ChangeLog -> DebT IO ()
       customize log =
-          do changelog ~?= Just log
+          do changelog ~= log
              tight
              fixRules
              doBackups (BinPkgName "clckwrks-dot-com-backups") "clckwrks-dot-com-backups"
