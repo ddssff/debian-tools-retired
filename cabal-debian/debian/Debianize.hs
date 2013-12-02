@@ -59,6 +59,7 @@ main =
              depends +++= (BinPkgName "cabal-debian", Rel (BinPkgName "debhelper") Nothing Nothing)
              depends +++= (BinPkgName "cabal-debian", Rel (BinPkgName "haskell-devscripts") (Just (GRE (parseDebianVersion ("0.8.19" :: String)))) Nothing)
              installCabalExec +++= (BinPkgName "cabal-debian-tests", ("cabal-debian-tests", "/usr/bin"))
+             installCabalExec +++= (BinPkgName "cabal-debian", ("cabal-debian", "/usr/bin"))
              utilsPackageNames += BinPkgName "cabal-debian"
              -- extraDevDeps (BinPkgName "debian-policy")
              control %= (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"})

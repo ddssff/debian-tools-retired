@@ -22,8 +22,8 @@ import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Facts.Lenses as Lenses
     (changelog, compat, control, copyright, rulesHead, sourceFormat, installData, debVersion, buildDeps,
      execMap, utilsPackageNames, binaryArchitectures, depends, description, revision, missingDependencies,
-     installCabalExec, rulesHead, compat, sourceFormat, changelog, control, buildDeps, epochMap,
-     sourcePackageName, maintainer, sourceSection)
+     installCabalExec, installCabalExecTo, rulesHead, compat, sourceFormat, changelog, control, buildDeps, epochMap,
+     sourcePackageName, maintainer, sourceSection, standards)
 import Debian.Debianize.Facts.Monad
     (Atoms, DebT, evalDebT, execDebM, execDebT, mapCabal, splitCabal)
 import Debian.Debianize.Facts.Types as Deb
@@ -529,7 +529,9 @@ test10 label =
       customize =
           do sourcePackageName ~= Just (SrcPkgName "seereason-darcs-backups")
              compat ~= Just 5
+             standards ~= Just (StandardsVersion 3 8 1 Nothing)
              Lenses.maintainer ~= either (const Nothing) Just (parseMaintainer "David Fox <dsf@seereason.com>")
+             Lenses.depends +++= (BinPkgName "seereason-darcs-backups", Rel (BinPkgName "anacron") Nothing Nothing)
              sourceSection ~= Just (MainSection "haskell")
              utilsPackageNames += utils
              installCabalExec +++= (utils, ("seereason-darcs-backups", "/etc/cron.hourly"))

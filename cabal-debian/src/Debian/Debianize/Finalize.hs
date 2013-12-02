@@ -5,6 +5,9 @@ module Debian.Debianize.Finalize
     , finalizeDebianization' -- external use deprecated - used in test script
     ) where
 
+-- import Debug.Trace
+
+import Control.Applicative ((<$>))
 import Control.Monad (when)
 import Control.Monad as List (mapM_)
 import Control.Monad.State (get, modify)
@@ -15,10 +18,10 @@ import Data.Digest.Pure.MD5 (md5)
 import Data.Function (on)
 import Data.Lens.Lazy (getL, access)
 import Data.List as List (filter, intercalate, map, minimumBy, nub, unlines)
-import Data.Map as Map (elems, lookup, Map, toList)
+import Data.Map as Map (Map, elems, lookup, toList, map, unionsWith, delete)
 import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Data.Monoid ((<>))
-import Data.Set as Set (difference, filter, fromList, map, null, Set, singleton, toList, unions)
+import Data.Set as Set (difference, filter, fromList, map, null, Set, singleton, toList, union, unions)
 import qualified Data.Set as Set (member)
 import Data.Set.Extra as Set (mapM_)
 import Data.Text as Text (pack, unlines, unpack)
@@ -78,7 +81,7 @@ debianization top init customize =
        finalizeDebianization'
 
 -- | Do some light IO and call finalizeDebianization.
-finalizeDebianization' :: MonadIO m => DebT m ()
+finalizeDebianization' :: (MonadIO m, Functor m) => DebT m ()
 finalizeDebianization' =
     do date <- liftIO getCurrentLocalRFC822Time
        debhelperCompat <- liftIO getDebhelperCompatLevel
@@ -93,7 +96,7 @@ finalizeDebianization' =
 -- this function is not idempotent.  (Exported for use in unit tests.)
 -- FIXME: we should be able to run this without a PackageDescription, change
 --        paramter type to Maybe PackageDescription and propagate down thru code
-finalizeDebianization  :: Monad m => String -> Maybe Int -> DebT m ()
+finalizeDebianization  :: (Monad m, Functor m) => String -> Maybe Int -> DebT m ()
 finalizeDebianization date debhelperCompat =
     do addExtraLibDependencies
        Just pkgDesc <- access packageDescription
@@ -333,58 +336,106 @@ librarySpec arch typ =
             , relations = rels
             }
 
--- | Create a package to hold any executables and data files not
--- assigned to some other package.
-makeUtilsPackages :: Monad m => PackageDescription -> DebT m ()
+-- | Make sure all data and executable files are assigned to at least
+-- one binary package and make sure all binary packages are in the
+-- package list in the source deb description.  If there are left over
+-- files, assign them to the packages returned by the
+-- utilsPackageNames lens, and make sure those packages are in the
+-- source deb description.
+makeUtilsPackages :: forall m. (Monad m, Functor m) => PackageDescription -> DebT m ()
 makeUtilsPackages pkgDesc =
-    do installedData <-
-           get >>= \ deb -> return $ Set.map fst ((unions . elems . getL Lenses.install $ deb) <>
-                                                  (unions . elems . getL Lenses.installTo $ deb) <>
-                                                  (unions . elems . getL Lenses.installData $ deb))
-       installedExec <-
-           get >>= \ deb -> return $ Set.map fst ((unions . elems . getL Lenses.installCabalExec $ deb) <>
-                                                  (unions . elems . getL Lenses.installCabalExecTo $ deb)) <>
-                                     Set.map ename (Set.fromList . elems . getL Lenses.executable $ deb)
+    do -- Files the cabal package expects to be installed
+       -- Files that are already assigned to any binary deb
+       installedDataMap <- Map.unionsWith Set.union
+                           <$> (sequence [(Map.map (Set.map fst) <$> access Lenses.install),
+                                          (Map.map (Set.map fst) <$> access Lenses.installTo),
+                                          (Map.map (Set.map fst) <$> access Lenses.installData)]) :: DebT m (Map BinPkgName (Set FilePath))
+       installedExecMap <- Map.unionsWith Set.union
+                           <$> (sequence [(Map.map (Set.map fst) <$> access Lenses.installCabalExec),
+                                          (Map.map (Set.map fst) <$> access Lenses.installCabalExecTo)]) :: DebT m (Map BinPkgName (Set String))
+
+       -- The names of cabal executables that go into eponymous debs
+       insExecPkg <- access Lenses.executable >>= return . Set.map ename . Set.fromList . elems
+
+       let installedData = Set.unions (Map.elems installedDataMap)
+           installedExec = Set.unions (Map.elems installedExecMap)
+
+       let availableData = Set.union installedData (Set.fromList (Cabal.dataFiles pkgDesc)) :: Set FilePath
+           availableExec = Set.union installedExec (Set.map Cabal.exeName (Set.filter (Cabal.buildable . Cabal.buildInfo) (Set.fromList (Cabal.executables pkgDesc)))) :: Set FilePath
+
+       utilsPackages <- access Lenses.utilsPackageNames
+
+       -- Files that are installed into packages other than the utils packages
+       let installedDataOther = Set.unions $ Map.elems $ foldr (Map.delete) installedDataMap (Set.toList utilsPackages)
+           installedExecOther =
+               Set.union (tr "insExecPkg: " insExecPkg) $
+                                Set.unions $ Map.elems $ foldr (Map.delete) (tr "installedExec: " installedExecMap) (Set.toList utilsPackages)
+
+       -- Files that will be in utils packages
+       let utilsData = Set.difference availableData installedDataOther
+           utilsExec = Set.difference (tr "availableExec: " availableExec) (tr "installedExecOther: " installedExecOther)
+       -- Files that still need to be assigned to the utils packages
+       let utilsDataMissing = Set.difference utilsData installedData
+           utilsExecMissing = Set.difference utilsExec installedExec
+       -- If any files belong in the utils packages, make sure they exist
+       when (not (Set.null utilsData && Set.null (tr "utilsExec: " utilsExec)))
+            (Set.mapM_ (\ p -> do rels <- binaryPackageRelations p Utilities
+                                  -- This is really for all binary debs except the libraries - I'm not sure why
+                                  Lenses.rulesFragments += (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp"))
+                                  control %= (modifyBinaryDeb p (maybe (newbin utilsExec rels p) (\ b -> b {relations = rels})))) utilsPackages)
+       -- Add the unassigned files to the utils packages
+       Set.mapM_ (\ p -> Set.mapM_ (\ path -> installData +++= (p, (path, path))) utilsDataMissing) utilsPackages
+       Set.mapM_ (\ p -> Set.mapM_ (\ name -> installCabalExec +++= (p, (name, "usr/bin"))) (tr "utilsExecMissing: " utilsExecMissing)) utilsPackages
+{-
        case (Set.difference availableData installedData, Set.difference availableExec installedExec) of
          (datas, execs) | Set.null datas && Set.null execs -> return ()
          (datas, execs) ->
              do name <- debianName Utilities
                 Lenses.utilsPackageNames %= (\ s -> if Set.null s then singleton name else s)
-                Set.mapM_ (makeUtilsPackage datas execs) =<< access Lenses.utilsPackageNames
+                Set.mapM_ (makeUtilsPackage datas execs) utilsPackages
+-}
     where
+      newbin execs rels p =
+          let b = newBinaryDebDescription p (if Set.null execs then All else Any) in
+          b {binarySection = Just (MainSection "misc"), relations = rels}
+{-
       makeUtilsPackage datas execs p =
           do makeUtilsAtoms p datas execs
              rels <- binaryPackageRelations p Utilities
-             let bin = newBinaryDebDescription p (if Set.null execs then All else Any)
-                 newbin = bin {binarySection = Just (MainSection "misc"), relations = rels}
-             control %= (\ y -> modifyBinaryDeb p (maybe newbin id) y)
-
-      availableData = Set.fromList (Cabal.dataFiles pkgDesc)
-      availableExec = Set.map Cabal.exeName (Set.filter (Cabal.buildable . Cabal.buildInfo) (Set.fromList (Cabal.executables pkgDesc)))
+             control %= (\ y -> let f (Just b) = b
+                                    f Nothing = let b = newBinaryDebDescription p (if Set.null execs then All else Any) in
+                                                b {binarySection = Just (MainSection "misc"), relations = rels} in
+                                modifyBinaryDeb p f y)
+-}
       ename i =
           case sourceDir i of
             (Nothing) -> execName i
             (Just s) ->  s </> execName i
 
+tr :: Show a => String -> a -> a
+tr _label x = {- trace ("(trace " ++ _label ++ show x ++ ")") -} x
+
 -- | Modify or create a binary debs without otherwise changing the
 -- package order.
 modifyBinaryDeb :: BinPkgName -> (Maybe BinaryDebDescription -> BinaryDebDescription) -> SourceDebDescription -> SourceDebDescription
 modifyBinaryDeb bin f deb =
-    deb {binaryPackages = bins'}
+    deb {binaryPackages = bins}
     where
-      bins' = if any (\ x -> package x == bin) bins
+      bins = if any (\ x -> package x == bin) (binaryPackages deb)
              then List.map g (binaryPackages deb)
              else binaryPackages deb ++ [f Nothing]
       g x = if package x == bin then f (Just x) else x
-      bins = binaryPackages deb
 
+{-
 makeUtilsAtoms :: Monad m => BinPkgName -> Set FilePath -> Set String -> DebT m ()
 makeUtilsAtoms p datas execs =
-    if Set.null datas && Set.null execs
-    then return ()
-    else Set.mapM_ (\ path -> installData +++= (p, (path, path))) datas >>
-         Set.mapM_ (\ name -> installCabalExec +++= (p, (name, "usr/bin"))) execs >>
-         rulesFragments += (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n"))
+    do Set.mapM_ (\ path -> installData +++= (p, (path, path))) datas
+       -- The executables that are not already assigned to this package
+       execs' <- access installCabalExec >>= return . (maybe empty (Set.difference execs . Set.map fst)) . Map.lookup p
+       Set.mapM_ (\ name -> installCabalExec +++= (p, (name, "usr/bin"))) execs'
+       when (not (Set.null datas && Set.null execs'))
+            (rulesFragments += (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n")))
+-}
 
 -- finalizeAtoms :: Atoms -> Atoms
 -- finalizeAtoms atoms = execDebM expandAtoms atoms
