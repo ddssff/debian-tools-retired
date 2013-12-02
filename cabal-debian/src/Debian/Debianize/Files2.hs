@@ -6,13 +6,12 @@ module Debian.Debianize.Files2
     , mkPkgName'
     ) where
 
-import Control.Monad.State (get)
 import Data.Char (toLower)
-import Data.Lens.Lazy (getL)
+import Data.Lens.Lazy (access)
 import Data.Map as Map (lookup)
 import Data.Version (showVersion)
 import Debian.Debianize.Facts.Types as Debian (PackageType(..))
-import qualified Debian.Debianize.Facts.Lenses as Lenses (debianNameMap)
+import Debian.Debianize.Facts.Lenses as Lenses (debianNameMap, packageDescription)
 import Debian.Debianize.Facts.Monad (DebT)
 import Debian.Debianize.VersionSplits (doSplits, VersionSplits)
 import Debian.Orphans ()
@@ -20,6 +19,7 @@ import Debian.Relation (PkgName(..), Relations)
 import qualified Debian.Relation as D (VersionReq(EEQ))
 import Debian.Version (parseDebianVersion)
 import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
+import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (unlines)
 
 data Dependency_
@@ -29,10 +29,12 @@ data Dependency_
   | ExtraLibs Relations
     deriving (Eq, Show)
 
-debianName :: (Monad m, PkgName name) => PackageType -> PackageIdentifier -> DebT m name
-debianName typ pkgId =
-    do atoms <- get
-       return $ debianName' (Map.lookup (pkgName pkgId) (getL Lenses.debianNameMap atoms)) typ pkgId
+debianName :: (Monad m, PkgName name) => PackageType -> DebT m name
+debianName typ =
+    do Just pkgDesc <- access packageDescription
+       let pkgId = Cabal.package pkgDesc
+       nameMap <- access Lenses.debianNameMap
+       return $ debianName' (Map.lookup (pkgName pkgId) nameMap) typ pkgId
 
 -- | Function that applies the mapping from cabal names to debian
 -- names based on version numbers.  If a version split happens at v,

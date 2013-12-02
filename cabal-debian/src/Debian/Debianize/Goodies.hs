@@ -32,8 +32,7 @@ import qualified Debian.Debianize.Facts.Lenses as Lenses
 import Debian.Debianize.Facts.Types as Debian (PackageType(..))
 import Debian.Debianize.Files2 (debianName)
 import Debian.Debianize.Facts.Lenses
-    (executable, rulesFragments, installDir, link, file, logrotateStanza, serverInfo, website, backups,
-     depends, packageDescription)
+    (executable, rulesFragments, installDir, link, file, logrotateStanza, serverInfo, website, backups, depends)
 import Debian.Debianize.Facts.Monad (Atoms, DebT, execDebM)
 import Debian.Debianize.Facts.Types (InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Utility (trim, (+=), (++=), (+++=))
@@ -41,7 +40,7 @@ import Debian.Orphans ()
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel))
 import Distribution.Package (PackageIdentifier(..), PackageName(PackageName))
-import qualified Distribution.PackageDescription as Cabal
+import Distribution.PackageDescription as Cabal (PackageDescription(package, synopsis, description, author, maintainer, pkgUrl))
 import Distribution.Text (display)
 import Prelude hiding (writeFile, init, unlines, log, map)
 import System.FilePath ((</>))
@@ -98,14 +97,11 @@ doBackups bin s =
     do backups ++= (bin, s)
        depends +++= (bin, Rel (BinPkgName "anacron") Nothing Nothing)
 
-describe :: Monad m => PackageType -> PackageIdentifier -> DebT m Text
-describe typ pkgId =
-    do pkgDesc <- access Lenses.packageDescription >>= maybe (error $ "describe " ++ show pkgId) return
-       return $ debianDescription (Cabal.synopsis pkgDesc) (Cabal.description pkgDesc) (Cabal.author pkgDesc) (Cabal.maintainer pkgDesc) (Cabal.pkgUrl pkgDesc)
-    where
-      debianDescription :: String -> String -> String -> String -> String -> Text
-      debianDescription synopsis' description' author' maintainer' url =
-          debianDescriptionBase synopsis' description' author' maintainer' url <> "\n" <>
+describe :: Monad m => PackageType -> DebT m Text
+describe typ =
+    do Just p <- access Lenses.packageDescription
+       return $ 
+          debianDescriptionBase p <> "\n" <>
           case typ of
             Profiling ->
                 Text.intercalate "\n"
@@ -126,7 +122,7 @@ describe typ pkgId =
             Exec ->
                 Text.intercalate "\n"
                         [" .",
-                         " An executable built from the " <> pack (display (pkgName pkgId)) <> " package."]
+                         " An executable built from the " <> pack (display (pkgName (Cabal.package p))) <> " package."]
       {-    ServerPackage ->
                 Text.intercalate "\n"
                         [" .",
@@ -134,7 +130,7 @@ describe typ pkgId =
             Utilities ->
                 Text.intercalate "\n"
                         [" .",
-                         " Utility files associated with the " <> pack (display (pkgName pkgId)) <> " package."]
+                         " Utility files associated with the " <> pack (display (pkgName (Cabal.package p))) <> " package."]
             x -> error $ "Unexpected library package name suffix: " ++ show x
 
 -- | The Cabal package has one synopsis and one description field
@@ -142,16 +138,16 @@ describe typ pkgId =
 -- description field (of which the first line is synopsis) in
 -- each binary package.  So the cabal description forms the base
 -- of the debian description, each of which is amended.
-debianDescriptionBase :: String -> String -> String -> String -> String -> Text
-debianDescriptionBase synopsis' description' author' maintainer' url =
-    (pack . unwords . words $ synopsis') <>
-    case description' of
+debianDescriptionBase :: PackageDescription -> Text
+debianDescriptionBase p =
+    (pack . unwords . words $ Cabal.synopsis p) <>
+    case Cabal.description p of
       "" -> ""
       text ->
           let text' = text ++ "\n" ++
-                      list "" ("\n Author: " ++) author' ++
-                      list "" ("\n Upstream-Maintainer: " ++) maintainer' ++
-                      list "" ("\n Url: " ++) url in
+                      list "" ("\n Author: " ++) (Cabal.author p) ++
+                      list "" ("\n Upstream-Maintainer: " ++) (Cabal.maintainer p) ++
+                      list "" ("\n Url: " ++) (Cabal.pkgUrl p) in
           "\n " <> (pack . trim . List.intercalate "\n " . List.map addDot . lines $ text')
     where
       addDot line = if all (flip elem " \t") line then "." else line
@@ -360,11 +356,8 @@ fileAtoms' b sourceDir' execName' destDir' destName' r =
 -- | Build a suitable value for the head of the rules file.
 makeRulesHead :: MonadIO m => DebT m Text
 makeRulesHead =
-    do pkgDesc <- access packageDescription
-       ls <- maybe (return [])
-                   (\ p -> do b <- debianName Cabal (Cabal.package p)
-                              return ["DEB_CABAL_PACKAGE = " <> pack (show (pretty (b :: BinPkgName))), ""])
-                   pkgDesc
+    do b <- debianName Cabal
+       let ls = ["DEB_CABAL_PACKAGE = " <> pack (show (pretty (b :: BinPkgName))), ""]
        return $
           Text.unlines $
             ["#!/usr/bin/make -f", ""] ++

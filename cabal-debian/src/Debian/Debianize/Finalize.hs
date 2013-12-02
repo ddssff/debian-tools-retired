@@ -106,10 +106,10 @@ finalizeDebianization date debhelperCompat =
        finalizeCopyright pkgDesc
        expandAtoms
        -- Create the binary packages for the web sites, servers, backup packges, and other executables
-       access Lenses.executable >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList
-       access Lenses.backups >>= List.mapM_ (\ (b, _) -> binaryArchitectures ++= (b, Any) >> cabalExecBinaryPackage pkgDesc b) . Map.toList
-       access Lenses.serverInfo >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList
-       access Lenses.website >>= List.mapM_ (cabalExecBinaryPackage pkgDesc . fst) . Map.toList
+       access Lenses.executable >>= List.mapM_ (cabalExecBinaryPackage . fst) . Map.toList
+       access Lenses.backups >>= List.mapM_ (\ (b, _) -> binaryArchitectures ++= (b, Any) >> cabalExecBinaryPackage b) . Map.toList
+       access Lenses.serverInfo >>= List.mapM_ (cabalExecBinaryPackage . fst) . Map.toList
+       access Lenses.website >>= List.mapM_ (cabalExecBinaryPackage . fst) . Map.toList
        putBuildDeps pkgDesc
        librarySpecs pkgDesc
        makeUtilsPackages pkgDesc
@@ -168,8 +168,7 @@ debianEpoch name = get >>= return . Map.lookup name . getL Lenses.epochMap
 -- cabal name otherwise.
 finalizeSourceName :: Monad m => DebT m ()
 finalizeSourceName =
-    do pkgDesc <- access packageDescription >>= maybe (error "sourceName: no PackageDescription") return
-       debName <- debianName D.Source' (Cabal.package pkgDesc)
+    do debName <- debianName D.Source'
        Lenses.sourcePackageName ~?= Just debName
 
 finalizeMaintainer :: Monad m => DebT m ()
@@ -222,9 +221,9 @@ finalizeChangelog date =
 addExtraLibDependencies :: Monad m => DebT m ()
 addExtraLibDependencies =
     do pkgDesc <- access packageDescription >>= maybe (error "addExtraLibDependencies: no PackageDescription") return
-       devName <- debianName D.Development (Cabal.package pkgDesc)
+       devName <- debianName D.Development
        libMap <- access Lenses.extraLibMap
-       control %= (\ y -> y {D.binaryPackages = List.map (f pkgDesc devName libMap) (D.binaryPackages y)})
+       control %= (\ y -> y {binaryPackages = List.map (f pkgDesc devName libMap) (binaryPackages y)})
     where
       f pkgDesc devName libMap bin
           | devName == D.package bin =
@@ -245,10 +244,10 @@ putBuildDeps pkgDesc =
        depsIndep <- debianBuildDepsIndep pkgDesc
        control %= (\ y -> y { Debian.buildDepends = deps, buildDependsIndep = depsIndep })
 
-cabalExecBinaryPackage :: Monad m => PackageDescription -> BinPkgName -> DebT m ()
-cabalExecBinaryPackage pkgDesc b =
+cabalExecBinaryPackage :: Monad m => BinPkgName -> DebT m ()
+cabalExecBinaryPackage b =
     do rels <- binaryPackageRelations b Exec
-       desc <- describe Exec (Cabal.package pkgDesc)
+       desc <- describe Exec
        control %= (\ y -> y {binaryPackages = bin rels desc : binaryPackages y})
     where
       bin rels desc =
@@ -283,16 +282,16 @@ binaryPackageRelations b typ =
 -- debLibProf haddock binaryPackageDeps extraDevDeps extraLibMap
 librarySpecs :: Monad m => PackageDescription -> DebT m ()
 librarySpecs pkgDesc =
-    do debName <- debianName Documentation (Cabal.package pkgDesc)
+    do debName <- debianName Documentation
        let dev = isJust (Cabal.library pkgDesc)
        doc <- get >>= return . (/= singleton True) . getL Lenses.noDocumentationLibrary
        prof <- get >>= return . (/= singleton True) . getL Lenses.noProfilingLibrary
        when (dev && doc)
             (link +++= (debName, ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt",
                                   "/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")))
-       devSpec <- librarySpec Any Development (Cabal.package pkgDesc)
-       profSpec <- librarySpec Any Profiling (Cabal.package pkgDesc)
-       docSpec <- docSpecsParagraph (Cabal.package pkgDesc)
+       devSpec <- librarySpec Any Development
+       profSpec <- librarySpec Any Profiling
+       docSpec <- docSpecsParagraph
        control %= (\ y -> y { binaryPackages =
                                (if dev then [devSpec] else []) ++
                                (if dev && prof then [profSpec] else []) ++
@@ -302,11 +301,11 @@ librarySpecs pkgDesc =
       PackageName cabal = pkgName (Cabal.package pkgDesc)
       hoogle = List.map toLower cabal
 
-docSpecsParagraph :: Monad m => PackageIdentifier -> DebT m BinaryDebDescription
-docSpecsParagraph pkgId =
-    do name <- debianName Documentation pkgId
+docSpecsParagraph :: Monad m => DebT m BinaryDebDescription
+docSpecsParagraph =
+    do name <- debianName Documentation
        rels <- binaryPackageRelations name Development
-       desc <- describe Documentation pkgId
+       desc <- describe Documentation
        return $
           BinaryDebDescription
             { Debian.package = name
@@ -318,11 +317,11 @@ docSpecsParagraph pkgId =
             , relations = rels
             }
 
-librarySpec :: Monad m => PackageArchitectures -> PackageType -> PackageIdentifier -> DebT m BinaryDebDescription
-librarySpec arch typ pkgId =
-    do name <- debianName typ pkgId
+librarySpec :: Monad m => PackageArchitectures -> PackageType -> DebT m BinaryDebDescription
+librarySpec arch typ =
+    do name <- debianName typ
        rels <- binaryPackageRelations name Development
-       desc <- describe typ pkgId
+       desc <- describe typ
        return $
           BinaryDebDescription
             { Debian.package = name
@@ -349,7 +348,7 @@ makeUtilsPackages pkgDesc =
        case (Set.difference availableData installedData, Set.difference availableExec installedExec) of
          (datas, execs) | Set.null datas && Set.null execs -> return ()
          (datas, execs) ->
-             do name <- debianName Utilities (Cabal.package pkgDesc)
+             do name <- debianName Utilities
                 Lenses.utilsPackageNames %= (\ s -> if Set.null s then singleton name else s)
                 Set.mapM_ (makeUtilsPackage datas execs) =<< access Lenses.utilsPackageNames
     where
@@ -367,8 +366,8 @@ makeUtilsPackages pkgDesc =
             (Nothing) -> execName i
             (Just s) ->  s </> execName i
 
--- | Modify the description of one of the binary debs without changing
--- the package order.
+-- | Modify or create a binary debs without otherwise changing the
+-- package order.
 modifyBinaryDeb :: BinPkgName -> (Maybe BinaryDebDescription -> BinaryDebDescription) -> SourceDebDescription -> SourceDebDescription
 modifyBinaryDeb bin f deb =
     deb {binaryPackages = bins'}
