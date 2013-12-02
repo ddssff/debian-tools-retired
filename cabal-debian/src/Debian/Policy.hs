@@ -245,6 +245,8 @@ haskellMaintainer =
     NameAddr { nameAddr_name = Just "Debian Haskell Group"
              , nameAddr_addr = "pkg-haskell-maintainers@lists.alioth.debian.org"}
 
+-- | Turn the uploaders field of a cabal package into a list of
+-- RFC2822 NameAddr values.
 parseUploaders :: String -> Either String [NameAddr]
 parseUploaders x =
     either (Left . show) fixNameAddrs (parse address "" ("Names: " ++ map fixWhite x ++ ";"))
@@ -262,6 +264,7 @@ parseUploaders x =
             Nothing -> Nothing
             _ -> Just y
 
+-- | Parse a string containing a single NameAddr value.
 parseMaintainer :: String -> Either String NameAddr
 parseMaintainer x =
     case parseUploaders x of

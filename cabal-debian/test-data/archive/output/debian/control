@@ -1,10 +1,25 @@
 Source: seereason-darcs-backups
 Priority: optional
 Maintainer: David Fox <dsf@seereason.com>
-Build-Depends: debhelper (>= 5.0),
-               haskell-devscripts,
-               ghc-prof,
-               libghc-archive-prof (>= 1.2.9)
+Section: haskell
+Build-Depends: debhelper (>= 7.0)
+               , haskell-devscripts (>= 0.8)
+               , cdbs
+               , ghc
+	       , ghc-prof
+               , libghc-extra-dev
+               , libghc-extra-prof
+               , libghc-archive-dev (>= 1.7)
+               , libghc-archive-prof (>= 1.7)
+               , libghc-base-dev | ghc
+               , libghc-base-prof | ghc-prof
+               , libghc-network-dev
+               , libghc-network-prof
+Build-Depends-Indep: ghc-doc
+                     , libghc-extra-doc
+                     , libghc-archive-doc (>= 1.7)
+                     , libghc-base-doc | ghc-doc
+                     , libghc-network-doc
 Standards-Version: 3.8.1
 
 Package: seereason-darcs-backups
