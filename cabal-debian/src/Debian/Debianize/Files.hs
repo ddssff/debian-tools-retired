@@ -12,7 +12,7 @@ import Data.Lens.Lazy (getL, setL)
 import Data.List as List (map, unlines)
 import Data.Map as Map (Map, toList, fromListWithKey, mapKeys)
 import Data.Maybe
-import Data.Monoid ((<>))
+import Data.Monoid ((<>), mempty)
 import Data.Set as Set (toList, member)
 import Data.Text as Text (Text, pack, unpack, lines, unlines, strip, null)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
@@ -22,10 +22,11 @@ import Debian.Debianize.Goodies (makeRulesHead)
 import qualified Debian.Debianize.Facts.Lenses as Lenses
     (compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
      intermediateFiles, install, installDir, installInit, logrotateStanza, link,
-     rulesHead, rulesFragments, copyright)
+     rulesHead, rulesFragments, copyright, license, licenseFile)
 import Debian.Debianize.Facts.Monad (DebT, evalDebT)
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
+import Distribution.License (License(AllRightsReserved))
 import Prelude hiding (init, unlines, writeFile, log)
 --import System.Directory (getCurrentDirectory)
 import System.FilePath ((</>))
@@ -52,11 +53,17 @@ debianizationFileMap deb =
            log = getL Lenses.changelog deb
            compat = getL Lenses.compat deb
            copyrt = getL Lenses.copyright deb
+           license = getL Lenses.license deb
+           licenseFile = getL Lenses.licenseFile deb
        prs <- sequence [return ("debian/control", pack (show (pretty (controlFile d)))),
                         return ("debian/changelog", pack (show (pretty (fromMaybe (error "No changelog in debianization") log)))),
                         evalDebT rules deb,
                         return ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom - is debhelper installed?") $ compat) <> "\n")),
-                        return ("debian/copyright", either (\ x -> pack (show (pretty x))) id (fromMaybe (error "No DebCopyright atom") $ copyrt))]
+                        return ("debian/copyright", case (licenseFile, copyrt, license) of
+                                                      (Just x, _, _) -> x <> "\n"
+                                                      (_, Just x, y) -> x <> "\n" <> maybe mempty (\ z -> pack ("License: " <> (show  (pretty z)) <> "\n")) y
+                                                      (_, _, Just x) -> pack ("License: " <> show (pretty x) <> "\n")
+                                                      _ -> pack ("License: " <> show (pretty AllRightsReserved)))]
        prs' <- sequence
                  [return prs,
                   evalDebT sourceFormatFiles deb,

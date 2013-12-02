@@ -33,8 +33,8 @@ import Debian.Debianize.Facts.Types as Debian (Top, BinaryDebDescription(..), ne
 import qualified Debian.Debianize.Facts.Types as D (BinaryDebDescription(..), PackageRelations(..), PackageType(..), SourceDebDescription(..))
 import Debian.Debianize.Files2 (debianName, mkPkgName, mkPkgName')
 import Debian.Debianize.Goodies (backupAtoms, describe, execAtoms, serverAtoms, siteAtoms, watchAtom)
-import Debian.Debianize.Input (inputChangeLog, inputLicenseFile, inputMaintainer, inputCabalization, dataDir)
-import Debian.Debianize.Facts.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, changelog, comments, compat, conflicts, control, copyright, debianNameMap, debVersion, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, maintainer, missingDependencies, noDocumentationLibrary, noProfilingLibrary, provides, replaces, revision, serverInfo, sourcePackageName, sourcePriority, sourceSection, utilsPackageNames, website, binaryArchitectures, control, file, install, installCabalExec, installData, installDir, installTo, intermediateFiles, link, rulesFragments, changelog, compat, maintainer, sourcePackageName, sourcePriority, sourceSection, watch, verbosity, packageDescription, compiler)
+import Debian.Debianize.Input (inputChangeLog, inputMaintainer, inputCabalization, dataDir)
+import Debian.Debianize.Facts.Lenses as Lenses (apacheSite, backups, binaryArchitectures, binaryPriorities, binarySections, buildDeps, buildDepsIndep, buildDir, changelog, comments, compat, conflicts, control, debianNameMap, debVersion, depends, description, epochMap, execMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installTo, maintainer, missingDependencies, noDocumentationLibrary, noProfilingLibrary, provides, replaces, revision, serverInfo, sourcePackageName, sourcePriority, sourceSection, utilsPackageNames, website, binaryArchitectures, control, file, install, installCabalExec, installData, installDir, installTo, intermediateFiles, link, rulesFragments, changelog, compat, maintainer, sourcePackageName, sourcePriority, sourceSection, watch, verbosity, packageDescription, compiler, license)
 import Debian.Debianize.Facts.Monad as Monad (Atoms, DebT, evalDebM)
 import Debian.Debianize.Facts.Types (showAtoms)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
@@ -71,7 +71,6 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 debianization :: Top -> DebT IO () -> DebT IO () -> DebT IO ()
 debianization top init customize =
     do inputCabalization top
-       inputLicenseFile top
        inputChangeLog top
        inputMaintainer
        init
@@ -133,7 +132,7 @@ finalizeCompat debhelperCompat =
 
 finalizeCopyright :: Monad m => PackageDescription -> DebT m ()
 finalizeCopyright pkgDesc =
-    copyright %= maybe (Just (Left (Cabal.license pkgDesc))) Just
+    license ~?= Just (Cabal.license pkgDesc)
        -- if no PackageDescription: (Left AllRightsReserved)
 
 -- | Combine various bits of information to produce the debian version

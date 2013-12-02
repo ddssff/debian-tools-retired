@@ -25,6 +25,8 @@ module Debian.Debianize.Facts.Lenses
     , debVersion
     , maintainer
     , copyright
+    , license
+    , licenseFile
     , sourceArchitecture
     , sourcePriority
     , sourceSection
@@ -257,9 +259,17 @@ noProfilingLibrary = lens noProfilingLibrary_ (\ b a -> a {noProfilingLibrary_ =
 noDocumentationLibrary :: Lens Atoms (Set Bool)
 noDocumentationLibrary = lens noDocumentationLibrary_ (\ b a -> a {noDocumentationLibrary_ = b})
 
--- | The copyright information
-copyright :: Lens Atoms (Maybe (Either License Text))
+-- | The copyright information from the cabal file
+copyright :: Lens Atoms (Maybe Text)
 copyright = lens copyright_ (\ a b -> b {copyright_ = a})
+
+-- | The license information from the cabal file
+license :: Lens Atoms (Maybe License)
+license = lens license_ (\ a b -> b {license_ = a})
+
+-- | The license information from the cabal file
+licenseFile :: Lens Atoms (Maybe Text)
+licenseFile = lens licenseFile_ (\ a b -> b {licenseFile_ = a})
 
 -- | The source package architecture - @Any@, @All@, or some list of specific architectures.
 sourceArchitecture :: Lens Atoms (Maybe PackageArchitectures)

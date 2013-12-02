@@ -1,11 +1,14 @@
 Name:             seereason-darcs-backups
 Version:          0.9
 License:          AllRightsReserved
+License-File:     debian/copyright
 Copyright:        (c) 2010-2011, SeeReason Partners LLC
 Author:           SeeReason Partners <partners@seereason.com>
 Maintainer:       SeeReason Partners <partners@seereason.com>
 Synopsis:         Backups of the seereason darcs repositories
 Description:      Install on a machine other than src.seereason.com to perform automated timed incremental backups.
+  Install this somewhere other than where the server is running get
+  automated backups of the database.
 Build-Type:       Custom
 Category:         Web, Language
 Cabal-version:    >= 1.2

@@ -7,7 +7,7 @@ module Debian.Debianize.Input
     , inputChangeLog
     , inputCompiler
     , inputCabalization
-    , inputLicenseFile
+    -- , inputLicenseFile
     , inputMaintainer
     , dataDir
     ) where
@@ -33,7 +33,7 @@ import Debian.Debianize.Facts.Types as Debian
      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
 import Debian.Debianize.Facts.Lenses
     (control, warning, sourceFormat, watch, rulesHead, compat, packageDescription, compiler,
-     copyright, changelog, installInit, postInst, postRm, preInst, preRm,
+     license, licenseFile, copyright, changelog, installInit, postInst, postRm, preInst, preRm,
      logrotateStanza, link, install, installDir, intermediateFiles, compilerVersion, cabalFlagAssignments, verbosity)
 import Debian.Debianize.Facts.Monad (Atoms, DebT, execDebT)
 import Debian.Debianize.Facts.Types (Top(unTop), newAtoms)
@@ -43,7 +43,7 @@ import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSect
                       parseUploaders, readSourceFormat, getDebianMaintainer)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
 import Distribution.Package (Package(packageId), PackageIdentifier(..), PackageName(PackageName))
-import Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer, package))
+import qualified Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer, package, license, copyright, synopsis, description))
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), Compiler(..))
@@ -218,7 +218,7 @@ inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ tex
 inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> execDebT (watch ~= Just text) xs
 inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> execDebT (rulesHead ~= (Just text)) xs
 inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> execDebT (compat ~= Just (read' (\ s -> error $ "compat: " ++ show s) (unpack text))) xs
-inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> execDebT (copyright ~= Just (Right text)) xs
+inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> execDebT (copyright ~= Just text) xs
 inputAtoms debian name@"changelog" xs =
     readFile (debian </> name) >>= return . parseChangeLog . unpack >>= \ log -> execDebT (changelog ~= Just log) xs
 inputAtoms debian name xs =
@@ -275,9 +275,20 @@ inputCabalization top =
                do bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
                   return pkgDesc
        packageDescription ~= Just pkgDesc
+       -- This will contain either the contents of the file given in
+       -- the license-file: field or the contents of the license:
+       -- field.
+       license ~?= (Just (Cabal.license pkgDesc))
+       licenseFileText <- liftIO $ case Cabal.licenseFile pkgDesc of
+                                     "" -> return Nothing
+                                     path -> readFileMaybe (unTop top </> path)
+       licenseFile ~?= licenseFileText
+       copyright ~?= (case Cabal.copyright pkgDesc of
+                           "" -> Nothing
+                           s -> Just (pack s))
 
 -- | Run the package's configuration script.
-autoreconf :: Verbosity -> PackageDescription -> IO ()
+autoreconf :: Verbosity -> Cabal.PackageDescription -> IO ()
 autoreconf verbose pkgDesc = do
     ac <- doesFileExist "configure.ac"
     when ac $ do
@@ -309,11 +320,13 @@ inputCompiler' top vb mCompilerVersion =
 
 -- | Try to read the license file specified in the cabal package,
 -- otherwise return a text representation of the License field.
+{-
 inputLicenseFile :: MonadIO m => Top -> DebT m ()
 inputLicenseFile top =
     do pkgDesc <- access packageDescription
-       text <- liftIO $ maybe (return Nothing) (readFileMaybe . ((unTop top) </>) . licenseFile) pkgDesc
-       copyright ~?= fmap Right text
+       text <- liftIO $ maybe (return Nothing) (readFileMaybe . ((unTop top) </>) . Cabal.licenseFile) pkgDesc
+       copyright ~?= text
+-}
 
 -- | Try to compute a string for the the debian "Maintainer:" field using, in this order
 --    1. the maintainer explicitly specified using 'Debian.Debianize.Monad.maintainer'
@@ -348,7 +361,7 @@ inputMaintainer =
 -- package description.  This needs to match the path cabal assigns to
 -- datadir in the dist/build/autogen/Paths_packagename.hs module, or
 -- perhaps the path in the cabal_debian_datadir environment variable.
-dataDir :: PackageDescription -> FilePath
+dataDir :: Cabal.PackageDescription -> FilePath
 dataDir p =
     let PackageName pkgname = pkgName . Cabal.package $ p in
     "usr/share" </> map toLower pkgname

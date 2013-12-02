@@ -20,7 +20,7 @@ import qualified Data.Text as T
 import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.Facts.Lenses as Lenses
-    (changelog, compat, control, copyright, rulesHead, sourceFormat, installData, debVersion, buildDeps,
+    (changelog, compat, control, copyright, license, rulesHead, sourceFormat, installData, debVersion, buildDeps,
      execMap, utilsPackageNames, binaryArchitectures, depends, description, revision, missingDependencies,
      installCabalExec, installCabalExecTo, rulesHead, compat, sourceFormat, changelog, control, buildDeps, epochMap,
      sourcePackageName, maintainer, sourceSection, standards)
@@ -102,7 +102,7 @@ test1 label =
                           (do -- let top = Top "."
                               defaultAtoms
                               newDebianization (ChangeLog [testEntry]) level standards
-                              copyright ~= Just (Left BSD3)
+                              license ~= Just BSD3
                               -- inputCabalization top
                               finalizeDebianization')
                           newAtoms
@@ -120,7 +120,7 @@ test1 label =
                                                 , "include /usr/share/cdbs/1/rules/debhelper.mk"
                                                 , "include /usr/share/cdbs/1/class/hlibrary.mk" ])))
                 compat ~= Just 9 -- This will change as new version of debhelper are released
-                copyright ~= Just (Left BSD3)
+                license ~= Just BSD3
                 control %= (\ y -> y { Deb.source = Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"})
                                      , Deb.maintainer = Just (NameAddr (Just "David Fox") "dsf@seereason.com")
                                      , Deb.standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)) -- This will change as new versions of debian-policy are released
@@ -148,7 +148,7 @@ test2 label =
                           (do -- let top = Top "."
                               defaultAtoms
                               newDebianization (ChangeLog [testEntry]) level standards
-                              copyright ~= Just (Left BSD3)
+                              license ~= Just BSD3
                               -- inputCabalization top
                               finalizeDebianization')
                           newAtoms
@@ -165,7 +165,7 @@ test2 label =
                                                  "include /usr/share/cdbs/1/rules/debhelper.mk",
                                                  "include /usr/share/cdbs/1/class/hlibrary.mk"])))
                 compat ~= Just 9
-                copyright ~= Just (Left BSD3)
+                license ~= Just BSD3
                 control %= (\ y -> y { Deb.source = Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"}),
                                        Deb.maintainer = Just (NameAddr {nameAddr_name = Just "David Fox", nameAddr_addr = "dsf@seereason.com"}),
                                        Deb.standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)),
@@ -200,7 +200,7 @@ test3 label =
                 sourceFormat ~= Just Native3
                 rulesHead %= (const (Just "#!/usr/bin/make -f\n# -*- makefile -*-\n\n# Uncomment this to turn on verbose mode.\n#export DH_VERBOSE=1\n\nDEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')\n\nmanpages = $(shell cat debian/manpages)\n\n%.1: %.pod\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n%.1: %\n\tpod2man -c 'Haskell devscripts documentation' -r 'Haskell devscripts $(DEB_VERSION)' $< > $@\n\n.PHONY: build\nbuild: $(manpages)\n\ninstall-stamp:\n\tdh install\n\n.PHONY: install\ninstall: install-stamp\n\nbinary-indep-stamp: install-stamp\n\tdh binary-indep\n\ttouch $@\n\n.PHONY: binary-indep\nbinary-indep: binary-indep-stamp\n\n.PHONY: binary-arch\nbinary-arch: install-stamp\n\n.PHONY: binary\nbinary: binary-indep-stamp\n\n.PHONY: clean\nclean:\n\tdh clean\n\trm -f $(manpages)\n\n\n"))
                 compat ~= Just 7
-                copyright ~= Just (Right "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n")
+                copyright ~= Just "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n"
                 control %= (\ y -> y { Deb.source = Just (SrcPkgName {unSrcPkgName = "haskell-devscripts"})
                                      , Deb.maintainer = Just (NameAddr {nameAddr_name = Just "Debian Haskell Group", nameAddr_addr = "pkg-haskell-maintainers@lists.alioth.debian.org"})
                                      , Deb.uploaders = [NameAddr {nameAddr_name = Just "Marco Silva", nameAddr_addr = "marcot@debian.org"},NameAddr {nameAddr_name = Just "Joachim Breitner", nameAddr_addr = "nomeata@debian.org"}]

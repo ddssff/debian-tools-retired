@@ -1,15 +1,15 @@
-{-# LANGUAGE OverloadedStrings #-}
 import Control.Monad.State (get)
 import Data.Lens.Lazy (getL, access)
+import Data.List (intercalate)
 import Data.Monoid (mempty)
-import Data.Text as Text (intercalate)
+import Data.Text as Text (pack)
 import Debian.Changes (ChangeLog(ChangeLog))
 import Debian.Debianize (inputChangeLog, inputDebianization)
 import Debian.Debianize.Details (seereasonDefaultAtoms)
 import Debian.Debianize.Finalize (debianization)
 import Debian.Debianize.Facts.Lenses as Lenses
     (changelog, changelog, compat, conflicts, control, depends, description,
-     installCabalExec, sourceFormat, standards, utilsPackageNames)
+     installCabalExec, sourceFormat, standards, utilsPackageNames, copyright)
 import Debian.Debianize.Facts.Monad (Atoms, DebT, execDebT, evalDebT, execDebM)
 import Debian.Debianize.Facts.Types (Top(Top), newAtoms, SourceDebDescription(homepage))
 import Debian.Debianize.Output (compareDebianization)
@@ -42,16 +42,20 @@ main =
           do sourceFormat ~= Just Native3
              standards ~= Just (StandardsVersion 3 9 3 Nothing)
              compat ~= Just 7
+             copyright ~= Just (pack (unlines [ "This package is not part of the Debian GNU/Linux distribution."
+                                              , ""
+                                              , "Copyright: (c) 2010-2011, SeeReason Partners LLC"
+                                              , "License: All Rights Reserved"]))
              description ++=
                          (BinPkgName "cabal-debian",
-                          Text.intercalate "\n"
+                          pack (intercalate "\n"
                                   [ "Create a debianization for a cabal package"
                                   , " Tool for creating debianizations of Haskell packages based on the .cabal"
                                   , " file.  If apt-file is installed it will use it to discover what is the"
                                   , " debian package name of a C library."
                                   , " ."
                                   , "  Author: David Fox <dsf@seereason.com>"
-                                  , "  Upstream-Maintainer: David Fox <dsf@seereason.com>" ])
+                                  , "  Upstream-Maintainer: David Fox <dsf@seereason.com>" ]))
              conflicts +++= (BinPkgName "cabal-debian", Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing)
              depends +++= (BinPkgName "cabal-debian", Rel (BinPkgName "apt-file") Nothing Nothing)
              depends +++= (BinPkgName "cabal-debian", Rel (BinPkgName "debian-policy") Nothing Nothing)
@@ -62,7 +66,7 @@ main =
              installCabalExec +++= (BinPkgName "cabal-debian", ("cabal-debian", "/usr/bin"))
              utilsPackageNames += BinPkgName "cabal-debian"
              -- extraDevDeps (BinPkgName "debian-policy")
-             control %= (\ y -> y {homepage = Just "http://src.seereason.com/cabal-debian"})
+             control %= (\ y -> y {homepage = Just (pack "http://src.seereason.com/cabal-debian")})
 
 -- | This copies the first log entry of deb1 into deb2.  Because the
 -- debianization process updates that log entry, we need to undo that

@@ -128,9 +128,12 @@ data Atoms
       -- ^ Supply some info about a cabal package.
       , compat_ :: Maybe Int
       -- ^ The debhelper compatibility level, from debian/compat.
-      , copyright_ :: Maybe (Either License Text)
-      -- ^ Copyright information, either as a Cabal License value or
-      -- the full text.
+      , copyright_ :: Maybe Text
+      -- ^ Copyright information
+      , license_ :: Maybe License
+      -- ^ License information Cabal License value
+      , licenseFile_ :: Maybe Text
+      -- ^ The contents of the file specified in the cabal license-file: field
       , apacheSite_ :: Map BinPkgName (String, FilePath, Text)
       -- ^ Have Apache configure a site using PACKAGE, DOMAIN, LOGDIR, and APACHECONFIGFILE
       , logrotateStanza_ :: Map BinPkgName (Set Text)
@@ -236,6 +239,8 @@ newAtoms
       , packageInfo_ = mempty
       , compat_ = Nothing
       , copyright_ = Nothing
+      , license_ = Nothing
+      , licenseFile_ = mempty
       , apacheSite_ = mempty
       , logrotateStanza_ = mempty
       , link_ = mempty
