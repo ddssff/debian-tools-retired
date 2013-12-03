@@ -42,8 +42,9 @@ import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
-import Distribution.Package (Package(packageId), PackageIdentifier(..), PackageName(PackageName))
+import Distribution.Package (Package(packageId), PackageIdentifier(..), PackageName(PackageName), Dependency)
 import qualified Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer, package, license, copyright, synopsis, description))
+import Distribution.PackageDescription as Cabal (PackageDescription, FlagName)
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), Compiler(..))
@@ -266,26 +267,33 @@ inputCabalization top =
        comp <- inputCompiler top
        compiler ~= Just comp
        flags <- access cabalFlagAssignments
-       pkgDesc <- liftIO $ withCurrentDirectory (unTop top) $ do
+       ePkgDesc <- liftIO $ inputCabalization' top vb (compilerId comp) flags
+       either (\ deps -> error $ "Missing dependencies in cabal package at " ++ show (unTop top) ++ ": " ++ show deps)
+              (\ pkgDesc -> do
+                 packageDescription ~= Just pkgDesc
+                 -- This will contain either the contents of the file given in
+                 -- the license-file: field or the contents of the license:
+                 -- field.
+                 license ~?= (Just (Cabal.license pkgDesc))
+                 licenseFileText <- liftIO $ case Cabal.licenseFile pkgDesc of
+                                               "" -> return Nothing
+                                               path -> readFileMaybe (unTop top </> path)
+                 licenseFile ~?= licenseFileText
+                 copyright ~?= (case Cabal.copyright pkgDesc of
+                                  "" -> Nothing
+                                  s -> Just (pack s)))
+              ePkgDesc
+
+inputCabalization' :: Top -> Verbosity -> CompilerId -> Set (FlagName, Bool) -> IO (Either [Dependency] PackageDescription)
+inputCabalization' top vb compId flags =
+    withCurrentDirectory (unTop top) $ do
          descPath <- defaultPackageDesc vb
          genPkgDesc <- readPackageDescription vb descPath
-         case finalizePackageDescription (toList flags) (const True) (Platform buildArch buildOS) (compilerId comp) [] genPkgDesc of
-           Left deps -> error $ "Missing dependencies in cabal package at " ++ show (unTop top) ++ ": " ++ show deps
+         case finalizePackageDescription (toList flags) (const True) (Platform buildArch buildOS) compId [] genPkgDesc of
+           Left deps -> return (Left deps)
            Right (pkgDesc, _) ->
                do bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
-                  return pkgDesc
-       packageDescription ~= Just pkgDesc
-       -- This will contain either the contents of the file given in
-       -- the license-file: field or the contents of the license:
-       -- field.
-       license ~?= (Just (Cabal.license pkgDesc))
-       licenseFileText <- liftIO $ case Cabal.licenseFile pkgDesc of
-                                     "" -> return Nothing
-                                     path -> readFileMaybe (unTop top </> path)
-       licenseFile ~?= licenseFileText
-       copyright ~?= (case Cabal.copyright pkgDesc of
-                           "" -> Nothing
-                           s -> Just (pack s))
+                  return (Right pkgDesc)
 
 -- | Run the package's configuration script.
 autoreconf :: Verbosity -> Cabal.PackageDescription -> IO ()
@@ -304,19 +312,18 @@ inputCompiler :: MonadIO m => Top -> DebT m Compiler
 inputCompiler top =
     do vb <- access verbosity >>= return . intToVerbosity'
        mCompilerVersion <- access compilerVersion
-       inputCompiler' top vb mCompilerVersion
+       liftIO $ inputCompiler' top vb mCompilerVersion
 
 -- | Read the (GHC) compiler version specified by Cabal, optionally
 -- changing the version number.
-inputCompiler' :: MonadIO m => Top -> Verbosity -> Set Version -> DebT m Compiler
+inputCompiler' :: Top -> Verbosity -> Set Version -> IO Compiler
 inputCompiler' top vb mCompilerVersion =
-    liftIO $ withCurrentDirectory (unTop top) $ do
+    withCurrentDirectory (unTop top) $ do
       (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
-      let compiler'' = case Set.toList mCompilerVersion of
+      return $ case Set.toList mCompilerVersion of
                          [] -> compiler'
                          [ver] -> compiler' {compilerId = CompilerId GHC ver}
                          xs -> error $ "Conflicting ghc versions requestion: " ++ show xs
-      return compiler''
 
 -- | Try to read the license file specified in the cabal package,
 -- otherwise return a text representation of the License field.
