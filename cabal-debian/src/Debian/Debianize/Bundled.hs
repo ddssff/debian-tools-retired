@@ -10,7 +10,7 @@ import qualified Data.Map as Map
 import Data.Set (fromList, member)
 import Data.Version (Version(..))
 import Debian.Relation.ByteString()
-import Distribution.Simple.Compiler (Compiler(..), CompilerId(..), CompilerFlavor(..), {-PackageDB(GlobalPackageDB), compilerFlavor-})
+import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), {-PackageDB(GlobalPackageDB), compilerFlavor-})
 import Distribution.Package (PackageIdentifier(..), PackageName(..) {-, Dependency(..)-})
 
 type Bundled = (CompilerFlavor, Version, [PackageIdentifier])
@@ -26,8 +26,8 @@ type Bundled = (CompilerFlavor, Version, [PackageIdentifier])
 --               (v, n) = (reverse (tail n'), reverse v') in
 --           PackageIdentifier (PackageName n) (Version (map read (filter (/= ".") (groupBy (\ a b -> (a == '.') == (b == '.')) v))) [])
 
-ghcBuiltIns :: Compiler -> Bundled
-ghcBuiltIns (Compiler {compilerId = CompilerId GHC compilerVersion}) =
+ghcBuiltIns :: CompilerId -> Bundled
+ghcBuiltIns (CompilerId GHC compilerVersion) =
     case Map.lookup compilerVersion
              (Map.fromList (map (\ (cmp, ver, lst) -> (ver, (cmp, ver, lst)))
                             [ (GHC, Version [7,6,3] [], ghc763BuiltIns)
@@ -49,9 +49,9 @@ ghcBuiltIns (Compiler {compilerId = CompilerId GHC compilerVersion}) =
                             , (GHC, Version [6,6] [], ghc66BuiltIns) ])) of
       Nothing -> error $ "cabal-debian: No bundled package list for ghc " ++ show compilerVersion
       Just x -> x
-ghcBuiltIns (Compiler {compilerId = _}) = error "ghcBuiltIns: Only GHC is supported"
+ghcBuiltIns _ = error "ghcBuiltIns: Only GHC is supported"
 
-ghcBuiltIn :: Compiler -> PackageName -> Bool
+ghcBuiltIn :: CompilerId -> PackageName -> Bool
 ghcBuiltIn compiler package =
     Data.Set.member
         package

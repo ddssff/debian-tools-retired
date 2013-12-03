@@ -43,7 +43,7 @@ import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSect
                       parseUploaders, readSourceFormat, getDebianMaintainer)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
 import Distribution.Package (Package(packageId), PackageIdentifier(..), PackageName(PackageName), Dependency)
-import qualified Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer, package, license, copyright, synopsis, description))
+import qualified Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer, package, license, copyright {-, synopsis, description-}))
 import Distribution.PackageDescription as Cabal (PackageDescription, FlagName)
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.PackageDescription.Parse (readPackageDescription)
@@ -267,7 +267,7 @@ inputCabalization top =
        comp <- inputCompiler top
        compiler ~= Just comp
        flags <- access cabalFlagAssignments
-       ePkgDesc <- liftIO $ inputCabalization' top vb (compilerId comp) flags
+       ePkgDesc <- liftIO $ inputCabalization' top vb comp flags
        either (\ deps -> error $ "Missing dependencies in cabal package at " ++ show (unTop top) ++ ": " ++ show deps)
               (\ pkgDesc -> do
                  packageDescription ~= Just pkgDesc
@@ -308,7 +308,7 @@ autoreconf verbose pkgDesc = do
               ExitSuccess -> return ()
               ExitFailure n -> die ("autoreconf failed with status " ++ show n)
 
-inputCompiler :: MonadIO m => Top -> DebT m Compiler
+inputCompiler :: MonadIO m => Top -> DebT m CompilerId
 inputCompiler top =
     do vb <- access verbosity >>= return . intToVerbosity'
        mCompilerVersion <- access compilerVersion
@@ -316,13 +316,13 @@ inputCompiler top =
 
 -- | Read the (GHC) compiler version specified by Cabal, optionally
 -- changing the version number.
-inputCompiler' :: Top -> Verbosity -> Set Version -> IO Compiler
+inputCompiler' :: Top -> Verbosity -> Set Version -> IO CompilerId
 inputCompiler' top vb mCompilerVersion =
     withCurrentDirectory (unTop top) $ do
       (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
       return $ case Set.toList mCompilerVersion of
-                         [] -> compiler'
-                         [ver] -> compiler' {compilerId = CompilerId GHC ver}
+                         [] -> compilerId compiler'
+                         [ver] -> CompilerId GHC ver
                          xs -> error $ "Conflicting ghc versions requestion: " ++ show xs
 
 -- | Try to read the license file specified in the cabal package,

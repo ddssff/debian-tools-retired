@@ -31,7 +31,7 @@ import Debian.Relation (BinPkgName(BinPkgName), Relation, Relations)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), ParseRelations(parseRelations), Relation(Rel), Relations, VersionReq(GRE))
 import Distribution.Package (Dependency(..), PackageName(PackageName))
 import Distribution.PackageDescription as Cabal (allBuildInfo, buildTools, extraLibs, PackageDescription(..), pkgconfigDepends)
-import Distribution.Simple.Compiler (Compiler(..), compilerFlavor, CompilerFlavor(..))
+import Distribution.Simple.Compiler (CompilerId(CompilerId))
 import Distribution.Simple.Utils (die)
 import Distribution.Text (display)
 import Prelude hiding (unlines)
@@ -116,18 +116,16 @@ substvars' debType control =
       bd = maybe "" (\ (Field (_a, b)) -> stripWS b) . lookupP "Build-Depends" . head . unControl $ control
       bdi = maybe "" (\ (Field (_a, b)) -> stripWS b) . lookupP "Build-Depends-Indep" . head . unControl $ control
 
-libPaths :: Compiler -> DebMap -> Atoms -> IO Atoms
-libPaths compiler debVersions atoms
-    | compilerFlavor compiler == GHC =
-        do a <- getDirPaths "/usr/lib"
-           b <- getDirPaths "/usr/lib/haskell-packages/ghc/lib"
-           -- Build a map from names of installed debs to version numbers
-           dpkgFileMap >>= runReaderT (foldM (packageInfo' compiler debVersions) atoms (a ++ b))
-    | True = error $ "Can't handle compiler flavor: " ++ show (compilerFlavor compiler)
+libPaths :: CompilerId -> DebMap -> Atoms -> IO Atoms
+libPaths compiler@(CompilerId comp _) debVersions atoms =
+    do a <- getDirPaths "/usr/lib"
+       b <- getDirPaths ("/usr/lib/haskell-packages" </> display comp </> "lib")
+       -- Build a map from names of installed debs to version numbers
+       dpkgFileMap >>= runReaderT (foldM (packageInfo' compiler debVersions) atoms (a ++ b))
     where
       getDirPaths path = try (getDirectoryContents path) >>= return . map (\ x -> (path, x)) . either (\ (_ :: SomeException) -> []) id
 
-packageInfo' :: Compiler ->  DebMap -> Atoms -> (FilePath, String) -> ReaderT (Map.Map FilePath (Set.Set D.BinPkgName)) IO Atoms
+packageInfo' :: CompilerId ->  DebMap -> Atoms -> (FilePath, String) -> ReaderT (Map.Map FilePath (Set.Set D.BinPkgName)) IO Atoms
 packageInfo' compiler debVersions atoms (d, f) =
     case parseNameVersion f of
       Nothing -> return atoms
@@ -137,7 +135,7 @@ packageInfo' compiler debVersions atoms (d, f) =
           case (break (== '-') (reverse s)) of
             (_a, "") -> Nothing
             (a, b) -> Just (reverse (tail b), reverse a)
-      cdir = display (compilerId compiler)
+      cdir = display compiler
       info (p, v) =
           do dev <- debOfFile ("^" ++ d </> p ++ "-" ++ v </> cdir </> "libHS" ++ p ++ "-" ++ v ++ ".a$")
              prof <- debOfFile ("^" ++ d </> p ++ "-" ++ v </> cdir </> "libHS" ++ p ++ "-" ++ v ++ "_p.a$")
