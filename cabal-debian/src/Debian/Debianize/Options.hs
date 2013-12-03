@@ -74,7 +74,7 @@ options =
       Option "" ["executable"] (ReqArg (\ path -> executableOption path (\ bin e -> doExecutable bin e)) "SOURCEPATH or SOURCEPATH:DESTDIR")
              (unlines [ "Create an individual binary package to hold this executable.  Other executables "
                       , " and data files are gathered into a single utils package named 'haskell-packagename-utils'."]),
-      Option "" ["ghc-version"] (ReqArg (\ ver -> compilerVersion ~= (singleton (last (map fst (readP_to_S parseVersion ver))))) "VERSION")
+      Option "" ["ghc-version"] (ReqArg (\ ver -> compilerVersion ~= Just (last (map fst (readP_to_S parseVersion ver)))) "VERSION")
              (unlines [ "Version of GHC in build environment.  Without this option it is assumed that"
                       , "the version of GHC in the build environment is the same as the one in the"
                       , "environment in which cabal-debian is running. (the usual case.)  The GHC"

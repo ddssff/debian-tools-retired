@@ -35,7 +35,7 @@ data Atoms
       , omitLTDeps_ :: Set Bool
       -- ^ If present, don't generate the << dependency when we see a cabal
       -- equals dependency.  (The implementation of this was somehow lost.)
-      , compilerVersion_ :: Set Version
+      , compilerVersion_ :: Maybe Version
       -- ^ Specify the version number of the GHC compiler in the build
       -- environment.  The default is to assume that version is the same
       -- as the one in the environment where cabal-debian is running.
@@ -81,8 +81,10 @@ data Atoms
       -- cabal file, and if it is not there then from the environment.  As a
       -- last resort, there is a hard coded string in here somewhere.
       , cabalFlagAssignments_ :: Set (FlagName, Bool)
-      -- ^ Flags to pass to Cabal function finalizePackageDescription, this
-      -- can be used to control the flags in the cabal file.
+      -- ^ Flags to pass to Cabal function finalizePackageDescription,
+      -- this can be used to control the flags in the cabal file.  It
+      -- can be supplied to the cabal-debian binary using the --flags
+      -- option.
       , sourceFormat_ :: Maybe SourceFormat
       -- ^ Write debian/source/format
       , watch_ :: Maybe Text
@@ -211,7 +213,7 @@ newAtoms
       { noDocumentationLibrary_ = mempty
       , noProfilingLibrary_ = mempty
       , omitLTDeps_ = mempty
-      , compilerVersion_ = mempty
+      , compilerVersion_ = Nothing
       , buildDir_ = mempty
       , flags_ = defaultFlags
       , debianNameMap_ = mempty

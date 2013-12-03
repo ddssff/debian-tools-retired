@@ -143,7 +143,7 @@ warning :: Lens Atoms (Set Text)
 warning = lens warning_ (\ a b -> b {warning_ = a})
 
 -- | Set the compiler version, this is used when loading the cabal file to
-compilerVersion :: Lens Atoms (Set Version)
+compilerVersion :: Lens Atoms (Maybe Version)
 compilerVersion = lens compilerVersion_ (\ b a -> a {compilerVersion_ = b})
 
 -- | The build directory.  This can be set by an argument to the @Setup@ script.

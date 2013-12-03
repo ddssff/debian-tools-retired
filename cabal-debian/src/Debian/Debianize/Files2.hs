@@ -29,6 +29,7 @@ data Dependency_
   | ExtraLibs Relations
     deriving (Eq, Show)
 
+-- | Build the Debian package name for a given package type.
 debianName :: (Monad m, PkgName name) => PackageType -> DebT m name
 debianName typ =
     do Just pkgDesc <- access packageDescription

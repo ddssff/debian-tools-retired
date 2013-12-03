@@ -7,6 +7,7 @@ module Debian.Debianize.SubstVars
     ( substvars
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Exception (SomeException, try)
 import Control.Monad (foldM)
 import Control.Monad.Reader (ReaderT(runReaderT))
@@ -16,7 +17,7 @@ import Data.Lens.Lazy (getL, modL, access)
 import Data.List (intercalate, isPrefixOf, isSuffixOf, nub, partition, unlines)
 import Data.List as List (map)
 import qualified Data.Map as Map (insert, lookup, Map)
-import Data.Maybe (catMaybes, listToMaybe)
+import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
 import qualified Data.Set as Set (member, Set, toList)
 import Data.Text (pack)
 import Debian.Control (Control'(unControl), ControlFunctions(lookupP, parseControl, stripWS), Field'(Field))
@@ -162,7 +163,7 @@ unboxDependency (ExtraLibs _) = Nothing -- Dependency (PackageName d) anyVersion
 
 -- Make a list of the debian devel packages corresponding to cabal packages
 -- which are build dependencies
-debDeps :: MonadIO m => DebType -> Control' String -> DebT m D.Relations
+debDeps :: (MonadIO m, Functor m) => DebType -> Control' String -> DebT m D.Relations
 debDeps debType control =
     do info <- get >>= return . getL Lenses.packageInfo
        cabalDeps <- cabalDependencies
@@ -183,9 +184,9 @@ debDeps debType control =
                                                Doc -> docDeb p)
                             Nothing -> Nothing) cabalDeps)
 
-cabalDependencies :: MonadIO m => DebT m [Dependency]
+cabalDependencies :: (MonadIO m, Functor m) => DebT m [Dependency]
 cabalDependencies =
-    do pkgDesc <- access packageDescription >>= maybe (error "cabalDependencies") return
+    do pkgDesc <- fromMaybe (error "cabalDependencies") <$> access packageDescription
        atoms <- get
        return $ catMaybes $ map unboxDependency $
            allBuildDepends atoms

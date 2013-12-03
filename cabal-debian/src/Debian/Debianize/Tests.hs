@@ -32,7 +32,7 @@ import Debian.Debianize.Facts.Types as Deb
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Finalize (debianization, finalizeDebianization')
 import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups, makeRulesHead)
-import Debian.Debianize.Input (inputChangeLog, inputDebianization)
+import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCompiler', inputCabalization')
 import Debian.Debianize.Utility ((~=), (%=), (+=), (++=), (+++=))
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),
@@ -42,6 +42,7 @@ import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Version (buildDebianVersion, parseDebianVersion)
 import Distribution.License (License(BSD3))
 import Distribution.Package (PackageName(PackageName))
+import Distribution.Verbosity (normal)
 import Prelude hiding (log)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>))
@@ -93,6 +94,7 @@ tests = TestLabel "Debianization Tests" (TestList [-- 1 and 2 do not input a cab
                                                    test9 "test9 - test-data/alex",
                                                    test10 "test10 - test-data/archive"])
 
+{-
 test1 :: String -> Test
 test1 label =
     TestLabel label $
@@ -184,11 +186,13 @@ test2 label =
                                                      "    files that were supposed to be installed into packages."],
                               logWho = "David Fox <dsf@seereason.com>",
                               logDate = "Thu, 20 Dec 2012 06:49:25 -0800"}]
+-}
 
 test3 :: String -> Test
 test3 label =
     TestLabel label $
-    TestCase (do deb <- execDebT (inputDebianization (Top "test-data/haskell-devscripts")) newAtoms
+    TestCase (do let top = Top "test-data/haskell-devscripts"
+                 deb <- execDebT (inputDebianization top) newAtoms
                  diff <- diffDebianizations testDeb2 deb
                  assertEqual label [] diff)
     where
@@ -267,9 +271,11 @@ test3 label =
 test4 :: String -> Test
 test4 label =
     TestLabel label $
-    TestCase (do old <- execDebT (inputDebianization (Top "test-data/clckwrks-dot-com/output")) newAtoms
+    TestCase (do let inTop = Top "test-data/clckwrks-dot-com/input"
+                     outTop = Top "test-data/clckwrks-dot-com/output"
+                 old <- execDebT (inputDebianization outTop) newAtoms
                  let log = getL changelog old
-                 new <- execDebT (debianization (Top "test-data/clckwrks-dot-com/input") defaultAtoms (customize log)) newAtoms
+                 new <- execDebT (debianization inTop defaultAtoms (customize log)) newAtoms
                  diff <- diffDebianizations old ({-copyFirstLogEntry old-} new)
                  assertEqual label [] diff)
     where
@@ -375,10 +381,12 @@ anyrel b = Rel b Nothing Nothing
 test5 :: String -> Test
 test5 label =
     TestLabel label $
-    TestCase (do old <- execDebT (inputDebianization (Top "test-data/creativeprompts/output")) newAtoms
+    TestCase (do let inTop = (Top "test-data/creativeprompts/input")
+                     outTop = (Top "test-data/creativeprompts/output")
+                 old <- execDebT (inputDebianization outTop) newAtoms
                  let standards = Deb.standardsVersion (getL Lenses.control old)
                      level = getL Lenses.compat old
-                 new <- execDebT (debianization (Top "test-data/creativeprompts/input") defaultAtoms (customize old level standards)) newAtoms
+                 new <- execDebT (debianization inTop defaultAtoms (customize old level standards)) newAtoms
                  diff <- diffDebianizations old new
                  assertEqual label [] diff)
     where
@@ -468,9 +476,11 @@ test7 label =
 test8 :: String -> Test
 test8 label =
     TestLabel label $
-    TestCase ( do old <- execDebT (inputDebianization (Top "test-data/artvaluereport-data/output")) newAtoms
-                  log <- evalDebT (inputChangeLog (Top "test-data/artvaluereport-data/input") >> access changelog) newAtoms
-                  new <- execDebT (debianization (Top "test-data/artvaluereport-data/input") defaultAtoms (customize log)) newAtoms
+    TestCase ( do let inTop = Top "test-data/artvaluereport-data/input"
+                      outTop = Top "test-data/artvaluereport-data/output"
+                  old <- execDebT (inputDebianization outTop) newAtoms
+                  log <- evalDebT (inputChangeLog inTop >> access changelog) newAtoms
+                  new <- execDebT (debianization inTop defaultAtoms (customize log)) newAtoms
                   diff <- diffDebianizations old new
                   assertEqual label [] diff
              )
@@ -486,9 +496,11 @@ test8 label =
 test9 :: String -> Test
 test9 label =
     TestLabel label $
-    TestCase (do old <- execDebT (inputDebianization (Top "test-data/alex/output")) newAtoms
+    TestCase (do let inTop = Top "test-data/alex/input"
+                     outTop = Top "test-data/alex/output"
+                 old <- execDebT (inputDebianization outTop) newAtoms
                  let Just (ChangeLog (entry : _)) = getL changelog old
-                 new <- execDebT (debianization (Top "test-data/alex/input") defaultAtoms customize >> copyChangelogDate (logDate entry)) newAtoms
+                 new <- execDebT (debianization inTop defaultAtoms customize >> copyChangelogDate (logDate entry)) newAtoms
                  diff <- diffDebianizations old new
                  assertEqual label [] diff)
     where
@@ -519,9 +531,11 @@ test9 label =
 test10 :: String -> Test
 test10 label =
     TestLabel label $
-    TestCase (do old <- execDebT (inputDebianization (Top "test-data/archive/output")) newAtoms
+    TestCase (do let inTop = Top "test-data/archive/input"
+                     outTop = Top "test-data/archive/output"
+                 old <- execDebT (inputDebianization outTop) newAtoms
                  let Just (ChangeLog (entry : _)) = getL changelog old
-                 new <- execDebT (debianization (Top "test-data/archive/input") defaultAtoms customize >> copyChangelogDate (logDate entry)) newAtoms
+                 new <- execDebT (debianization inTop defaultAtoms customize >> copyChangelogDate (logDate entry)) newAtoms
                  diff <- diffDebianizations old new
                  assertEqual label [] diff)
     where

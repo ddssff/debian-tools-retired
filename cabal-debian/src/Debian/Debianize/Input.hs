@@ -6,8 +6,9 @@ module Debian.Debianize.Input
     , inputDebianizationFile
     , inputChangeLog
     , inputCompiler
+    , inputCompiler'
     , inputCabalization
-    -- , inputLicenseFile
+    , inputCabalization'
     , inputMaintainer
     , dataDir
     ) where
@@ -314,26 +315,15 @@ inputCompiler top =
        mCompilerVersion <- access compilerVersion
        liftIO $ inputCompiler' top vb mCompilerVersion
 
--- | Read the (GHC) compiler version specified by Cabal, optionally
+-- | Read the compiler version specified by Cabal, optionally
 -- changing the version number.
-inputCompiler' :: Top -> Verbosity -> Set Version -> IO CompilerId
+inputCompiler' :: Top -> Verbosity -> Maybe Version -> IO CompilerId
 inputCompiler' top vb mCompilerVersion =
     withCurrentDirectory (unTop top) $ do
-      (compiler', _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
-      return $ case Set.toList mCompilerVersion of
-                         [] -> compilerId compiler'
-                         [ver] -> CompilerId GHC ver
-                         xs -> error $ "Conflicting ghc versions requestion: " ++ show xs
-
--- | Try to read the license file specified in the cabal package,
--- otherwise return a text representation of the License field.
-{-
-inputLicenseFile :: MonadIO m => Top -> DebT m ()
-inputLicenseFile top =
-    do pkgDesc <- access packageDescription
-       text <- liftIO $ maybe (return Nothing) (readFileMaybe . ((unTop top) </>) . Cabal.licenseFile) pkgDesc
-       copyright ~?= text
--}
+      (Compiler {compilerId = CompilerId flavour version}, _) <- configCompiler (Just GHC) Nothing Nothing defaultProgramConfiguration vb
+      return $ case mCompilerVersion of
+                         Nothing -> CompilerId flavour version
+                         Just version' -> CompilerId flavour version'
 
 -- | Try to compute a string for the the debian "Maintainer:" field using, in this order
 --    1. the maintainer explicitly specified using 'Debian.Debianize.Monad.maintainer'
@@ -343,14 +333,10 @@ inputLicenseFile top =
 --    5. the Debian Haskell Group, pkg-haskell-maintainers@lists.alioth.debian.org
 inputMaintainer :: MonadIO m => DebT m ()
 inputMaintainer =
-    do cabalMaintainer <- access packageDescription >>=
-                          maybe (return Nothing)
-                                (\ pkgDesc ->
-                                      return $ case Cabal.maintainer pkgDesc of
-                                                 "" -> Nothing
-                                                 x -> either (const Nothing)
-                                                             Just
-                                                             (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x)))
+    do Just pkgDesc <- access packageDescription
+       let cabalMaintainer = case Cabal.maintainer pkgDesc of
+                               "" -> Nothing
+                               x -> either (const Nothing) Just (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x))
        Lenses.maintainer ~?= cabalMaintainer
        debianMaintainer <- liftIO getDebianMaintainer
        Lenses.maintainer ~?= debianMaintainer
