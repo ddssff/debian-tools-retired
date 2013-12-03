@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
 {-# OPTIONS -Wall -Wwarn -fno-warn-name-shadowing -fno-warn-orphans #-}
-module Debian.Debianize.Files2
+module Debian.Debianize.DebianName
     ( debianName             -- Used in Debian.Debianize.Files and
     , mkPkgName
     , mkPkgName'
@@ -10,9 +10,9 @@ import Data.Char (toLower)
 import Data.Lens.Lazy (access)
 import Data.Map as Map (lookup)
 import Data.Version (showVersion)
-import Debian.Debianize.Facts.Types as Debian (PackageType(..))
-import Debian.Debianize.Facts.Lenses as Lenses (debianNameMap, packageDescription)
-import Debian.Debianize.Facts.Monad (DebT)
+import Debian.Debianize.Types as Debian (PackageType(..))
+import Debian.Debianize.Lenses as Lenses (debianNameMap, packageDescription)
+import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.VersionSplits (doSplits, VersionSplits)
 import Debian.Orphans ()
 import Debian.Relation (PkgName(..), Relations)

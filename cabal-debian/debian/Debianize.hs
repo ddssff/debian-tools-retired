@@ -7,12 +7,12 @@ import Debian.Changes (ChangeLog(ChangeLog))
 import Debian.Debianize (inputChangeLog, inputDebianization)
 import Debian.Debianize.Details (seereasonDefaultAtoms)
 import Debian.Debianize.Finalize (debianization)
-import Debian.Debianize.Facts.Lenses as Lenses
+import Debian.Debianize.Lenses as Lenses
     (changelog, changelog, compat, conflicts, control, depends, description,
      installCabalExec, sourceFormat, standards, utilsPackageNames, copyright)
-import Debian.Debianize.Facts.Monad (Atoms, DebT, execDebT, evalDebT, execDebM)
-import Debian.Debianize.Facts.Types (Top(Top), newAtoms, SourceDebDescription(homepage))
+import Debian.Debianize.Monad (Atoms, DebT, execDebT, evalDebT, execDebM)
 import Debian.Debianize.Output (compareDebianization)
+import Debian.Debianize.Types (Top(Top), newAtoms, SourceDebDescription(homepage))
 import Debian.Debianize.Utility ((~=), (~?=), (%=), (+=), (++=), (+++=))
 import Debian.Policy (SourceFormat(Native3), StandardsVersion(StandardsVersion))
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), VersionReq(SLT, GRE))

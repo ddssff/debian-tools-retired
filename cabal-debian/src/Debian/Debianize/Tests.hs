@@ -19,20 +19,20 @@ import Data.Set as Set (fromList, union, insert)
 import qualified Data.Text as T
 import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
-import Debian.Debianize.Facts.Lenses as Lenses
-    (changelog, compat, control, copyright, license, rulesHead, sourceFormat, installData, debVersion, buildDeps,
-     execMap, utilsPackageNames, binaryArchitectures, depends, description, revision, missingDependencies,
-     installCabalExec, installCabalExecTo, rulesHead, compat, sourceFormat, changelog, control, buildDeps, epochMap,
-     sourcePackageName, maintainer, sourceSection, standards)
-import Debian.Debianize.Facts.Monad
-    (Atoms, DebT, evalDebT, execDebM, execDebT, mapCabal, splitCabal)
-import Debian.Debianize.Facts.Types as Deb
-    (Top(..), InstallFile(..), Server(..), Site(..), {-Atoms(top),-} newAtoms,
-     SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Finalize (debianization, finalizeDebianization')
 import Debian.Debianize.Goodies (tightDependencyFixup, doExecutable, doWebsite, doServer, doBackups, makeRulesHead)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization, inputCompiler', inputCabalization')
+import Debian.Debianize.Lenses as Lenses
+    (changelog, compat, control, copyright, license, rulesHead, sourceFormat, installData, debVersion, buildDeps,
+     execMap, utilsPackageNames, binaryArchitectures, depends, description, revision, missingDependencies,
+     installCabalExec, installCabalExecTo, rulesHead, compat, sourceFormat, changelog, control, buildDeps, epochMap,
+     sourcePackageName, maintainer, sourceSection, standards)
+import Debian.Debianize.Monad
+    (Atoms, DebT, evalDebT, execDebM, execDebT, mapCabal, splitCabal)
+import Debian.Debianize.Types as Deb
+    (Top(..), InstallFile(..), Server(..), Site(..), {-Atoms(top),-} newAtoms,
+     SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..), VersionControlSpec(..))
 import Debian.Debianize.Utility ((~=), (%=), (+=), (++=), (+++=))
 import Debian.Policy (databaseDirectory, StandardsVersion(StandardsVersion), getDebhelperCompatLevel,
                       getDebianStandardsVersion, PackagePriority(Extra), PackageArchitectures(All),

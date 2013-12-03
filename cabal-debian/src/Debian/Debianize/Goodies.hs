@@ -26,15 +26,15 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Set as Set (insert, union, singleton)
 import Data.Text as Text (Text, pack, unlines, intercalate)
-import qualified Debian.Debianize.Facts.Lenses as Lenses
+import Debian.Debianize.DebianName (debianName)
+import Debian.Debianize.Lenses
+    (executable, rulesFragments, installDir, link, file, logrotateStanza, serverInfo, website, backups, depends)
+import qualified Debian.Debianize.Lenses as Lenses
     (rulesFragments, install, installTo, installCabalExecTo, logrotateStanza, postInst,
      installInit, installCabalExec, rulesFragments, packageDescription)
-import Debian.Debianize.Facts.Types as Debian (PackageType(..))
-import Debian.Debianize.Files2 (debianName)
-import Debian.Debianize.Facts.Lenses
-    (executable, rulesFragments, installDir, link, file, logrotateStanza, serverInfo, website, backups, depends)
-import Debian.Debianize.Facts.Monad (Atoms, DebT, execDebM)
-import Debian.Debianize.Facts.Types (InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.Monad (Atoms, DebT, execDebM)
+import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.Types as Debian (PackageType(..))
 import Debian.Debianize.Utility (trim, (+=), (++=), (+++=))
 import Debian.Orphans ()
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)

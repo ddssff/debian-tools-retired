@@ -12,13 +12,13 @@ import Data.Char (toLower, isDigit, ord)
 import Data.Set (singleton)
 import Data.Version (parseVersion)
 import Debian.Debianize.Goodies (doExecutable)
-import Debian.Debianize.Facts.Lenses
+import Debian.Debianize.Lenses
     (verbosity, dryRun, debAction, compilerVersion, noDocumentationLibrary, noProfilingLibrary,
      missingDependencies, sourcePackageName, cabalFlagAssignments, maintainer, buildDir, omitLTDeps,
      sourceFormat, buildDeps, buildDepsIndep, extraDevDeps, depends, conflicts, replaces, provides,
      extraLibMap, debVersion, revision, epochMap, execMap)
-import Debian.Debianize.Facts.Monad (DebT)
-import Debian.Debianize.Facts.Types (InstallFile(..), DebAction(..))
+import Debian.Debianize.Monad (DebT)
+import Debian.Debianize.Types (InstallFile(..), DebAction(..))
 import Debian.Debianize.Utility (read', maybeRead, (+=), (~=), (++=), (+++=))
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)

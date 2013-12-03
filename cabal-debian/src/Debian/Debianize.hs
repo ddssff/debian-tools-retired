@@ -72,8 +72,8 @@ module Debian.Debianize
     -- * Deb monad - 'Debian.Debianize.Monad'
     , DebT, runDebT, execDebT, evalDebT, DebM, runDebM, execDebM, evalDebM
 
-    , Debian.Debianize.Facts.Monad.mapCabal
-    , Debian.Debianize.Facts.Monad.splitCabal
+    , Debian.Debianize.Monad.mapCabal
+    , Debian.Debianize.Monad.splitCabal
     , Debian.Debianize.Options.compileArgs
     , Debian.Debianize.SubstVars.substvars
 
@@ -86,8 +86,8 @@ module Debian.Debianize
 
     -- * TBD
 
-    , module Debian.Debianize.Facts.Lenses
-    , module Debian.Debianize.Facts.Types
+    , module Debian.Debianize.Lenses
+    , module Debian.Debianize.Types
     , module Debian.Policy
 {-
     , module Debian.Debianize.Bundled
@@ -106,9 +106,9 @@ import Debian.Debianize.Finalize
 import Debian.Debianize.Goodies
 import Debian.Debianize.Input
 -- import Debian.Debianize.Interspersed
-import Debian.Debianize.Facts.Lenses
-import Debian.Debianize.Facts.Monad
-import Debian.Debianize.Facts.Types hiding (maintainer, description, depends, conflicts)
+import Debian.Debianize.Lenses
+import Debian.Debianize.Monad
+import Debian.Debianize.Types hiding (maintainer, description, depends, conflicts)
 import Debian.Debianize.Options
 import Debian.Debianize.Output
 import Debian.Debianize.SubstVars

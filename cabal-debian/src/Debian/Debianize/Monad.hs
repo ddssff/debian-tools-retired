@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wall #-}
-module Debian.Debianize.Facts.Monad
+module Debian.Debianize.Monad
     ( Atoms
 
     , DebT
@@ -32,8 +32,8 @@ module Debian.Debianize.Facts.Monad
 import Control.Monad.State (evalState, evalStateT, execState, execStateT, runState, State, StateT(runStateT))
 import Data.Map as Map (alter)
 import Data.Version (Version)
-import Debian.Debianize.Facts.Lenses (debianNameMap)
-import Debian.Debianize.Facts.Types (Atoms)
+import Debian.Debianize.Lenses (debianNameMap)
+import Debian.Debianize.Types (Atoms)
 import Debian.Debianize.Utility ((%=))
 import Debian.Debianize.VersionSplits (insertSplit, makePackage, VersionSplits)
 import Debian.Orphans ()

@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections, TypeFamilies #-}
 {-# OPTIONS_GHC -Wall #-}
-module Debian.Debianize.Facts.Lenses
+module Debian.Debianize.Lenses
     (
     -- * Modes of operation
       verbosity
@@ -99,7 +99,7 @@ import Data.Set as Set (Set)
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog)
-import Debian.Debianize.Facts.Types hiding (conflicts, depends, description, maintainer)
+import Debian.Debianize.Types hiding (conflicts, depends, description, maintainer)
 import Debian.Debianize.VersionSplits (VersionSplits)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat, StandardsVersion)

@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-module Debian.Debianize.Facts.Types where
+module Debian.Debianize.Types where
 
 import Data.Generics (Data, Typeable)
 import Data.Map as Map (Map)

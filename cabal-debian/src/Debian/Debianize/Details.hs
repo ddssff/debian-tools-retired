@@ -5,8 +5,8 @@ module Debian.Debianize.Details
     ) where
 
 import Data.Version (Version(Version))
-import Debian.Debianize.Facts.Lenses (epochMap, missingDependencies)
-import Debian.Debianize.Facts.Monad (DebT, mapCabal, splitCabal)
+import Debian.Debianize.Lenses (epochMap, missingDependencies)
+import Debian.Debianize.Monad (DebT, mapCabal, splitCabal)
 import Debian.Debianize.Utility ((+=), (++=))
 import Debian.Relation (BinPkgName(BinPkgName))
 import Distribution.Package (PackageName(PackageName))

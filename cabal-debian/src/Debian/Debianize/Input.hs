@@ -28,16 +28,16 @@ import Data.Text.IO (readFile)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(logWho), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import qualified Debian.Debianize.Facts.Lenses as Lenses (maintainer, changelog)
-import Debian.Debianize.Facts.Types as Debian
+import qualified Debian.Debianize.Lenses as Lenses (maintainer, changelog)
+import Debian.Debianize.Types as Debian
     (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
      VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
-import Debian.Debianize.Facts.Lenses
+import Debian.Debianize.Lenses
     (control, warning, sourceFormat, watch, rulesHead, compat, packageDescription, compiler,
      license, licenseFile, copyright, changelog, installInit, postInst, postRm, preInst, preRm,
      logrotateStanza, link, install, installDir, intermediateFiles, compilerVersion, cabalFlagAssignments, verbosity)
-import Debian.Debianize.Facts.Monad (Atoms, DebT, execDebT)
-import Debian.Debianize.Facts.Types (Top(unTop), newAtoms)
+import Debian.Debianize.Monad (Atoms, DebT, execDebT)
+import Debian.Debianize.Types (Top(unTop), newAtoms)
 import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (~?=), (+=), (++=), (+++=))
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
