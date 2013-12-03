@@ -18,7 +18,6 @@ module Debian.Debianize.Goodies
     , makeRulesHead
     ) where
 
-import Control.Monad.Trans (MonadIO)
 import Data.Lens.Lazy (modL, access)
 import Data.List as List (map, intersperse, intercalate)
 import Data.Map as Map (insertWith)
@@ -354,7 +353,7 @@ fileAtoms' b sourceDir' execName' destDir' destName' r =
       d = fromMaybe "usr/bin" destDir'
 
 -- | Build a suitable value for the head of the rules file.
-makeRulesHead :: MonadIO m => DebT m Text
+makeRulesHead :: Monad m => DebT m Text
 makeRulesHead =
     do b <- debianName Cabal
        let ls = ["DEB_CABAL_PACKAGE = " <> pack (show (pretty (b :: BinPkgName))), ""]

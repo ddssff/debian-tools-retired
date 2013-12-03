@@ -6,11 +6,11 @@ import Data.Text as Text (intercalate)
 import Debian.Changes (ChangeLog(..))
 import Debian.Debianize (debianization, doBackups, doExecutable, doServer, doWebsite,
                          inputChangeLog, inputDebianization, seereasonDefaultAtoms)
-import Debian.Debianize.Facts.Lenses as Lenses
+import Debian.Debianize.Lenses as Lenses
     (changelog, binaryArchitectures, buildDepsIndep, changelog, compat, control, depends, description,
      installCabalExec, installData, sourcePackageName)
-import Debian.Debianize.Facts.Monad (execDebT, evalDebT, DebT, execDebM)
-import Debian.Debianize.Facts.Types (Top(Top), Atoms, newAtoms, SourceDebDescription(homepage, standardsVersion),
+import Debian.Debianize.Monad (execDebT, evalDebT, DebT, execDebM)
+import Debian.Debianize.Types (Top(Top), Atoms, newAtoms, SourceDebDescription(homepage, standardsVersion),
                                      InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Output (compareDebianization)
 import Debian.Debianize.Utility ((~=), (%=), (+=), (++=), (+++=), (~?=))

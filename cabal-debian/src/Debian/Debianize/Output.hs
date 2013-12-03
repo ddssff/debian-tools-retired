@@ -16,7 +16,7 @@ module Debian.Debianize.Output
 
 import Control.Exception as E (throw)
 import Control.Monad.State (get, lift)
-import Control.Monad.Trans (MonadIO, liftIO)
+import Control.Monad.Trans (MonadIO)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Lens.Lazy (getL)
@@ -29,7 +29,7 @@ import Debian.Debianize.Types (Top(unTop))
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Input (inputDebianization)
 import qualified Debian.Debianize.Lenses as Lenses (changelog, control, dryRun, validate)
-import Debian.Debianize.Monad (DebT, Atoms)
+import Debian.Debianize.Monad (DebT, Atoms, evalDebT)
 import Debian.Debianize.Options (putEnvironmentArgs)
 import Debian.Debianize.Utility (indent, replaceFile, withCurrentDirectory, zipMaps)
 import Prelude hiding (unlines, writeFile)
@@ -82,7 +82,7 @@ doDebianizeAction top =
 -- | Write the files of the debianization @d@ to the directory @top@.
 writeDebianization :: Top -> DebT IO ()
 writeDebianization top =
-    do files <- get >>= lift . debianizationFileMap
+    do files <- debianizationFileMap
        lift $ withCurrentDirectory (unTop top) $ mapM_ (uncurry doFile) (Map.toList files)
        lift $ getPermissions (unTop top </> "debian/rules") >>= setPermissions (unTop top </> "debian/rules") . (\ p -> p {executable = True})
     where
@@ -92,16 +92,16 @@ writeDebianization top =
 
 -- | Return a string describing the debianization - a list of file
 -- names and their contents in a somewhat human readable format.
-describeDebianization :: MonadIO m => DebT m String
+describeDebianization :: (MonadIO m, Functor m) => DebT m String
 describeDebianization =
-    get >>= liftIO . debianizationFileMap >>= return . concatMap (\ (path, text) -> path ++ ": " ++ indent " > " (unpack text)) . Map.toList
+    debianizationFileMap >>= return . concatMap (\ (path, text) -> path ++ ": " ++ indent " > " (unpack text)) . Map.toList
 
 -- | Compare the old and new debianizations, returning a string
 -- describing the differences.
 compareDebianization :: Atoms -> Atoms -> IO String
 compareDebianization old new =
-    do oldFiles <- debianizationFileMap old
-       newFiles <- debianizationFileMap new
+    do oldFiles <- evalDebT debianizationFileMap old
+       newFiles <- evalDebT debianizationFileMap new
        return $ concat $ Map.elems $ zipMaps doFile oldFiles newFiles
     where
       doFile :: FilePath -> Maybe Text -> Maybe Text -> Maybe String

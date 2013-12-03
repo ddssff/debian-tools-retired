@@ -9,7 +9,7 @@ module Main
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Function (on)
-import Data.Lens.Lazy (getL, modL, access)
+import Data.Lens.Lazy (getL, access)
 import Data.List (sortBy)
 import Data.Map as Map (differenceWithKey, intersectionWithKey)
 import qualified Data.Map as Map
@@ -573,8 +573,8 @@ diffMaps old new =
 
 diffDebianizations :: Atoms -> Atoms -> IO String -- [Change FilePath T.Text]
 diffDebianizations old new =
-    do old' <- debianizationFileMap (sortBinaryDebs old)
-       new' <- debianizationFileMap (sortBinaryDebs new)
+    do old' <- evalDebT (sortBinaryDebs >> debianizationFileMap) old
+       new' <- evalDebT (sortBinaryDebs >> debianizationFileMap) new
        return $ show $ mconcat $ map prettyChange $ filter (not . isUnchanged) $ diffMaps old' new'
     where
       isUnchanged (Unchanged _ _) = True
@@ -595,7 +595,8 @@ diffDebianizations old new =
                      -- detect whether the file has a final newline
                      -- character.
                      (contextDiff 2 (T.split (== '\n') a) (T.split (== '\n') b))
-      sortBinaryDebs atoms = modL Lenses.control (\ deb -> deb {Deb.binaryPackages = sortBy (compare `on` Deb.package) (Deb.binaryPackages deb)}) atoms
+
+sortBinaryDebs = Lenses.control %= (\ deb -> deb {Deb.binaryPackages = sortBy (compare `on` Deb.package) (Deb.binaryPackages deb)})
 
 testEntry :: ChangeLogEntry
 testEntry =

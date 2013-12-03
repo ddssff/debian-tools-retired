@@ -2,13 +2,14 @@
 -- written out.
 {-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 module Debian.Debianize.Files
-    ( debianizationFileMap    -- Used by Debian.Debianize.Atoms and Debian.Debianize.Tests
-    , getRulesHead
+    ( debianizationFileMap
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Monad.State (get, modify)
-import Control.Monad.Trans (MonadIO)
-import Data.Lens.Lazy (getL, setL)
+import Control.Monad.Trans (MonadIO, lift)
+import Control.Monad.Writer (WriterT, execWriterT, tell)
+import Data.Lens.Lazy (getL, setL, access)
 import Data.List as List (map, unlines)
 import Data.Map as Map (Map, toList, fromListWithKey, mapKeys)
 import Data.Maybe
@@ -17,13 +18,13 @@ import Data.Set as Set (toList, member)
 import Data.Text as Text (Text, pack, unpack, lines, unlines, strip, null)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
 import Debian.Debianize.Types as Debian (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-                                         VersionControlSpec(..), XField(..), XFieldDest(..), Atoms)
+                                         VersionControlSpec(..), XField(..), XFieldDest(..))
 import Debian.Debianize.Goodies (makeRulesHead)
 import qualified Debian.Debianize.Lenses as Lenses
     (compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
      intermediateFiles, install, installDir, installInit, logrotateStanza, link,
      rulesHead, rulesFragments, copyright, license, licenseFile)
-import Debian.Debianize.Monad (DebT, evalDebT)
+import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
 import Distribution.License (License(AllRightsReserved))
@@ -32,13 +33,7 @@ import Prelude hiding (init, unlines, writeFile, log)
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
--- | If the rulesHead value is still Nothing, construct a suitable
--- value, save it in the DebT state and return it.
-getRulesHead :: MonadIO m => DebT m ()
-getRulesHead =
-    do oldText <- get >>= return . getL Lenses.rulesHead
-       newText <- maybe makeRulesHead return oldText
-       modify (setL Lenses.rulesHead (Just newText))
+type FilesT m = WriterT [(FilePath, Text)] (DebT m)
 
 -- | Turn the Debianization into a list of files, making sure the text
 -- associated with each path is unique.  Assumes that
@@ -46,126 +41,126 @@ getRulesHead =
 -- considering building one into the other, but it is handy to look at
 -- the Debianization produced by finalizeDebianization in the unit
 -- tests.)
-debianizationFileMap :: Atoms -> IO (Map FilePath Text)
-debianizationFileMap deb =
-    do -- here <- getCurrentDirectory
-       let d = getL Lenses.control deb
-           log = getL Lenses.changelog deb
-           compat = getL Lenses.compat deb
-           copyrt = getL Lenses.copyright deb
-           license = getL Lenses.license deb
-           licenseFile = getL Lenses.licenseFile deb
-       prs <- sequence [return ("debian/control", pack (show (pretty (controlFile d)))),
-                        return ("debian/changelog", pack (show (pretty (fromMaybe (error "No changelog in debianization") log)))),
-                        evalDebT rules deb,
-                        return ("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom - is debhelper installed?") $ compat) <> "\n")),
-                        return ("debian/copyright", case (licenseFile, copyrt, license) of
-                                                      (Just x, _, _) -> x <> "\n"
-                                                      (_, Just x, y) -> x <> "\n" <> maybe mempty (\ z -> pack ("License: " <> (show  (pretty z)) <> "\n")) y
-                                                      (_, _, Just x) -> pack ("License: " <> show (pretty x) <> "\n")
-                                                      _ -> pack ("License: " <> show (pretty AllRightsReserved)))]
-       prs' <- sequence
-                 [return prs,
-                  evalDebT sourceFormatFiles deb,
-                  evalDebT watchFile deb,
-                  evalDebT installs deb,
-                  evalDebT dirs deb,
-                  evalDebT init deb,
-                  evalDebT logrotate deb,
-                  evalDebT links deb,
-                  evalDebT postinstFiles deb,
-                  evalDebT postrmFiles deb,
-                  evalDebT preinstFiles deb,
-                  evalDebT prermFiles deb,
-                  evalDebT intermediates deb] >>= return . concat
-       return $ Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b) prs'
 
+debianizationFileMap :: (Monad m, Functor m) => DebT m (Map FilePath Text)
+debianizationFileMap =
+    fmap (Map.fromListWithKey (\ k a b -> error $ "Multiple values for " ++ k ++ ":\n  " ++ show a ++ "\n" ++ show b)) $ execWriterT $
+    do -- here <- liftIO getCurrentDirectory
+       tell =<< control
+       tell =<< changelog
+       tell =<< rules
+       tell =<< compat
+       tell =<< copyright
+       tell =<< sourceFormatFiles
+       tell =<< watchFile
+       tell =<< installs
+       tell =<< dirs
+       tell =<< init
+       tell =<< logrotate
+       tell =<< links
+       tell =<< postinstFiles
+       tell =<< postrmFiles
+       tell =<< preinstFiles
+       tell =<< prermFiles
+       tell =<< intermediates
 
-sourceFormatFiles :: Monad m => DebT m [(FilePath, Text)]
-sourceFormatFiles = get >>= return . maybe [] (\ x -> [("debian/source/format", pack (show (pretty x)))]) . getL Lenses.sourceFormat
+sourceFormatFiles :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
+sourceFormatFiles =
+    maybe [] (\ x -> [("debian/source/format", pack (show (pretty x)))]) <$> (lift $ access Lenses.sourceFormat)
 
-watchFile :: Monad m => DebT m [(FilePath, Text)]
-watchFile = get >>= return . maybe [] (\ x -> [("debian/watch", x)]) . getL Lenses.watch
+watchFile :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
+watchFile = maybe [] (\ x -> [("debian/watch", x)]) <$> (lift $ access Lenses.watch)
 
-intermediates :: Monad m => DebT m [(FilePath, Text)]
-intermediates = get >>= return . Set.toList . getL Lenses.intermediateFiles
+intermediates :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
+intermediates = Set.toList <$> (lift $ access Lenses.intermediateFiles)
 
-installs :: Monad m => DebT m [(FilePath, Text)]
+installs :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
 installs =
-    get >>= \ deb -> return $
-    map (\ (path, pairs) -> (path, pack (List.unlines (map (\ (src, dst) -> src <> " " <> dst) (Set.toList pairs))))) $
-    Map.toList $
-    mapKeys pathf $
-    getL Lenses.install deb
+    (map (\ (path, pairs) -> (path, pack (List.unlines (map (\ (src, dst) -> src <> " " <> dst) (Set.toList pairs))))) . Map.toList . mapKeys pathf) <$> (lift $ access Lenses.install)
     where
       pathf name = "debian" </> show (pretty name) ++ ".install"
 
-dirs :: Monad m => DebT m [(FilePath, Text)]
+dirs :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
 dirs =
-    get >>= \ deb -> return $
-    map (\ (path, dirs') -> (path, pack (List.unlines (Set.toList dirs')))) $ Map.toList $ mapKeys pathf $ getL Lenses.installDir deb
+    (map (\ (path, dirs') -> (path, pack (List.unlines (Set.toList dirs')))) . Map.toList . mapKeys pathf) <$> (lift $ access Lenses.installDir)
     where
       pathf name = "debian" </> show (pretty name) ++ ".dirs"
 
-init :: Monad m => DebT m [(FilePath, Text)]
+init :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
 init =
-    get >>= \ deb -> return $
-    Map.toList $ mapKeys pathf $ getL Lenses.installInit deb
+    (Map.toList . mapKeys pathf) <$> (lift $ access Lenses.installInit)
     where
       pathf name = "debian" </> show (pretty name) ++ ".init"
 
 -- FIXME - use a map and insertWith, check for multiple entries
-logrotate :: Monad m => DebT m [(FilePath, Text)]
+logrotate :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
 logrotate =
-    get >>= \ deb -> return $
-    map (\ (path, stanzas) -> (path, Text.unlines (Set.toList stanzas))) $ Map.toList $ mapKeys pathf $ getL Lenses.logrotateStanza deb
+    (map (\ (path, stanzas) -> (path, Text.unlines (Set.toList stanzas))) . Map.toList . mapKeys pathf) <$> (lift $ access Lenses.logrotateStanza)
     where
       pathf name = "debian" </> show (pretty name) ++ ".logrotate"
 
 -- | Assemble all the links by package and output one file each
-links :: Monad m => DebT m [(FilePath, Text)]
+links :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
 links =
-    get >>= \ deb -> return $
-    map (\ (path, pairs) -> (path, pack (List.unlines (map (\ (loc, txt) -> loc ++ " " ++ txt) (Set.toList pairs))))) $
-    Map.toList $
-    mapKeys pathf $
-    getL Lenses.link deb
+    (map (\ (path, pairs) -> (path, pack (List.unlines (map (\ (loc, txt) -> loc ++ " " ++ txt) (Set.toList pairs))))) . Map.toList . mapKeys pathf) <$> (lift $ access Lenses.link)
     where
       pathf name = "debian" </> show (pretty name) ++ ".links"
 
-postinstFiles :: Monad m => DebT m [(FilePath, Text)]
+postinstFiles :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
 postinstFiles =
-    get >>= \ deb -> return $
-    Map.toList $ mapKeys pathf $ getL Lenses.postInst deb
+     (Map.toList . mapKeys pathf) <$> (lift $ access Lenses.postInst)
     where
       pathf (BinPkgName name) = "debian" </> show (pretty name) ++ ".postinst"
 
-postrmFiles :: Monad m => DebT m [(FilePath, Text)]
+postrmFiles :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
 postrmFiles =
-    get >>= \ deb -> return $
-    Map.toList $ mapKeys pathf $ getL Lenses.postRm deb
+    (Map.toList . mapKeys pathf) <$> (lift $ access Lenses.postRm)
     where
       pathf name = "debian" </> show (pretty name) ++ ".postrm"
 
-preinstFiles :: Monad m => DebT m [(FilePath, Text)]
+preinstFiles :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
 preinstFiles =
-    get >>= \ deb -> return $
-    Map.toList $ mapKeys pathf $ getL Lenses.preInst deb
+    (Map.toList . mapKeys pathf) <$> (lift $ access Lenses.preInst)
     where
       pathf name = "debian" </> show (pretty name) ++ ".preinst"
 
-prermFiles :: Monad m => DebT m [(FilePath, Text)]
+prermFiles :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
 prermFiles =
-    get >>= \ deb -> return $
-    Map.toList $ mapKeys pathf $ getL Lenses.preRm deb
+    (Map.toList . mapKeys pathf) <$> (lift $ access Lenses.preRm)
     where
       pathf name = "debian" </> show (pretty name) ++ ".prerm"
 
-rules :: MonadIO m => DebT m (FilePath, Text)
+rules :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
 rules =
-    do rh <- get >>= return . getL Lenses.rulesHead >>= maybe makeRulesHead return
-       rl <- get >>= return . reverse . Set.toList . getL Lenses.rulesFragments
-       return ("debian/rules", Text.unlines (rh : rl))
+    do rh <- lift (access Lenses.rulesHead) >>= maybe (lift makeRulesHead) return
+       rl <- (reverse . Set.toList) <$> lift (access Lenses.rulesFragments)
+       return [("debian/rules", Text.unlines (rh : rl))]
+
+changelog :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
+changelog =
+    do log <- lift $ access Lenses.changelog
+       return [("debian/changelog", pack (show (pretty (fromMaybe (error "No changelog in debianization") log))))]
+
+control :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
+control =
+    do d <- lift $ access Lenses.control
+       return [("debian/control", pack (show (pretty (controlFile d))))]
+
+compat :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
+compat =
+    do text <- lift $ access Lenses.compat
+       return [("debian/compat", pack (show (fromMaybe (error "Missing DebCompat atom - is debhelper installed?") $ text) <> "\n"))]
+
+copyright :: (Monad m, Functor m) => FilesT m [(FilePath, Text)]
+copyright =
+    do copyrt <- lift $ access Lenses.copyright
+       license <- lift $ access Lenses.license
+       licenseFile <- lift $ access Lenses.licenseFile
+       return [("debian/copyright", case (licenseFile, copyrt, license) of
+                                      (Just x, _, _) -> x <> "\n"
+                                      (_, Just x, y) -> x <> "\n" <> maybe mempty (\ z -> pack ("License: " <> (show  (pretty z)) <> "\n")) y
+                                      (_, _, Just x) -> pack ("License: " <> show (pretty x) <> "\n")
+                                      _ -> pack ("License: " <> show (pretty AllRightsReserved)))]
 
 controlFile :: SourceDebDescription -> Control' String
 controlFile src =
