@@ -6,10 +6,9 @@ module Debian.Debianize.Files
     ) where
 
 import Control.Applicative ((<$>))
-import Control.Monad.State (get, modify)
-import Control.Monad.Trans (MonadIO, lift)
+import Control.Monad.Trans (lift)
 import Control.Monad.Writer (WriterT, execWriterT, tell)
-import Data.Lens.Lazy (getL, setL, access)
+import Data.Lens.Lazy (access)
 import Data.List as List (map, unlines)
 import Data.Map as Map (Map, toList, fromListWithKey, mapKeys)
 import Data.Maybe

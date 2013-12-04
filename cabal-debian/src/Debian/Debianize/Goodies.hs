@@ -99,7 +99,7 @@ doBackups bin s =
 describe :: Monad m => PackageType -> DebT m Text
 describe typ =
     do Just p <- access Lenses.packageDescription
-       return $ 
+       return $
           debianDescriptionBase p <> "\n" <>
           case typ of
             Profiling ->

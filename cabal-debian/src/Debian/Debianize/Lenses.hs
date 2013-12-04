@@ -176,7 +176,7 @@ compiler = lens compiler_ (\ a b -> b {compiler_ = a})
 
 -- | Map from cabal version number ranges to debian package names.  This is a
 -- result of the fact that only one version of a debian package can be
--- installed at a given time, while multiple versions of a cabal packages can.
+-- installed at a given time, while multiple versions of a cabal package can.
 debianNameMap :: Lens Atoms (Map PackageName VersionSplits)
 debianNameMap = lens debianNameMap_ (\ a b -> b {debianNameMap_ = a})
 

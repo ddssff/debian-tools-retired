@@ -5,8 +5,6 @@ module Debian.Debianize.Finalize
     , finalizeDebianization' -- external use deprecated - used in test script
     ) where
 
--- import Debug.Trace
-
 import Control.Applicative ((<$>))
 import Control.Monad (when)
 import Control.Monad as List (mapM_)
@@ -102,10 +100,10 @@ finalizeDebianization date debhelperCompat =
        watch ~?= Just (watchAtom (pkgName $ Cabal.package $ pkgDesc))
        sourceSection ~?= Just (MainSection "haskell")
        sourcePriority ~?= Just Optional
-       finalizeCompat debhelperCompat
+       compat ~?= debhelperCompat
        finalizeChangelog date
        finalizeControl
-       finalizeCopyright pkgDesc
+       license ~?= Just (Cabal.license pkgDesc)
        expandAtoms
        -- Create the binary packages for the web sites, servers, backup packges, and other executables
        access Lenses.executable >>= List.mapM_ (cabalExecBinaryPackage . fst) . Map.toList
@@ -124,15 +122,16 @@ finalizeDebianization date debhelperCompat =
        access Lenses.binaryArchitectures >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {architecture = x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList
        access Lenses.binaryPriorities >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {binaryPriority = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList
        access Lenses.binarySections >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {binarySection = Just x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList
-       access Lenses.description >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList
+       finalizeDescriptions
 
-finalizeCompat :: Monad m => Maybe Int -> DebT m ()
-finalizeCompat debhelperCompat =
-    compat ~?= debhelperCompat
+finalizeDescriptions :: (Monad m, Functor m) => DebT m ()
+finalizeDescriptions =
+    do descMap <- access Lenses.description
+       List.mapM_ (uncurry finalizeDescription) (Map.toList descMap)
+    where
+      finalizeDescription b x =
+          control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y)
 
-finalizeCopyright :: Monad m => PackageDescription -> DebT m ()
-finalizeCopyright pkgDesc =
-    license ~?= Just (Cabal.license pkgDesc)
        -- if no PackageDescription: (Left AllRightsReserved)
 
 -- | Combine various bits of information to produce the debian version
@@ -227,18 +226,19 @@ addExtraLibDependencies =
        libMap <- access Lenses.extraLibMap
        control %= (\ y -> y {binaryPackages = List.map (f pkgDesc devName libMap) (binaryPackages y)})
     where
+      f :: PackageDescription -> BinPkgName -> Map String (Set Relations) -> BinaryDebDescription -> BinaryDebDescription
       f pkgDesc devName libMap bin
           | devName == D.package bin =
-              bin { D.relations = g pkgDesc libMap (D.relations bin) }
+              bin { D.relations = g (D.relations bin) }
+          where
+            g :: PackageRelations -> PackageRelations
+            g rels =
+                rels { D.depends =
+                           concat $ [D.depends rels] ++
+                                    concatMap (\ cab -> maybe [[[Rel (BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]]
+                                                        Set.toList (Map.lookup cab libMap))
+                                              (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc) }
       f _ _ _ bin = bin
-      g pkgDesc libMap rels =
-          rels { D.depends =
-                     concat $
-                          [D.depends rels] ++
-                          concatMap (\ cab -> maybe [[[Rel (BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]]
-                                                    Set.toList
-                                                    (Map.lookup cab libMap))
-                                    (nub $ concatMap Cabal.extraLibs $ Cabal.allBuildInfo $ pkgDesc) }
 
 putBuildDeps :: Monad m => PackageDescription -> DebT m ()
 putBuildDeps pkgDesc =
