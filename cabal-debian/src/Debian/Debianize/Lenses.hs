@@ -51,7 +51,6 @@ module Debian.Debianize.Lenses
 
     -- * Binary Package Info
     , binaryArchitectures
-    , description
     , executable
     , serverInfo -- askServers = serverInfo
     , website
@@ -183,10 +182,6 @@ debianNameMap = lens debianNameMap_ (\ a b -> b {debianNameMap_ = a})
 -- | Map of Debian epoch numbers assigned to cabal packages.
 epochMap :: Lens Atoms (Map PackageName Int)
 epochMap = lens epochMap_ (\ a b -> b {epochMap_ = a})
-
--- | Map of binary deb descriptions.
-description :: Lens Atoms (Map BinPkgName Text)
-description = lens description_ (\ a b -> b {description_ = a})
 
 -- | Create a package to hold a cabal executable
 executable :: Lens Atoms (Map BinPkgName InstallFile)

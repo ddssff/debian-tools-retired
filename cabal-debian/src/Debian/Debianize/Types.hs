@@ -162,8 +162,6 @@ data Atoms
       -- ^ Set the Section field of the source package
       , binarySections_ :: Map BinPkgName Section
       -- ^ Set the Section field of a binary package
-      , description_ :: Map BinPkgName Text
-      -- ^ Set the description of source or binary
       , install_ :: Map BinPkgName (Set (FilePath, FilePath))
       -- ^ Install a build file into the binary package
       , installTo_ :: Map BinPkgName (Set (FilePath, FilePath))
@@ -256,7 +254,6 @@ newAtoms
       , binaryPriorities_ = mempty
       , sourceSection_ = Nothing
       , binarySections_ = mempty
-      , description_ = mempty
       , install_ = mempty
       , installTo_ = mempty
       , installData_ = mempty
