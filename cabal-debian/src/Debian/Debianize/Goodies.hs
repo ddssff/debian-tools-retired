@@ -26,15 +26,15 @@ import Data.Monoid ((<>))
 import Data.Set as Set (insert, union, singleton)
 import Data.Text as Text (Text, pack, unlines, intercalate)
 import Debian.Debianize.DebianName (debianName)
-import Debian.Debianize.Lenses
-    (executable, rulesFragments, installDir, link, file, logrotateStanza, serverInfo, website, backups, depends)
-import qualified Debian.Debianize.Lenses as Lenses
+import Debian.Debianize.Types.Atoms
+    (executable, rulesFragments, installDir, link, file, logrotateStanza, serverInfo, website, backups, depends, packageType)
+import qualified Debian.Debianize.Types.Atoms as T
     (rulesFragments, install, installTo, installCabalExecTo, logrotateStanza, postInst,
      installInit, installCabalExec, rulesFragments, packageDescription)
 import Debian.Debianize.Monad (Atoms, DebT, execDebM)
-import Debian.Debianize.Types (InstallFile(..), Server(..), Site(..))
-import Debian.Debianize.Types as Debian (PackageType(..))
-import Debian.Debianize.Utility (trim, (+=), (++=), (+++=))
+import Debian.Debianize.Types.Atoms (InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.Types.BinaryDebDescription as Debian (PackageType(..))
+import Debian.Debianize.Utility (trim, (%=), (+=), (++=), (+++=))
 import Debian.Orphans ()
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel))
@@ -94,31 +94,33 @@ doWebsite p w = website ++= (p, w)
 doBackups :: Monad m => BinPkgName -> String -> DebT m ()
 doBackups bin s =
     do backups ++= (bin, s)
-       depends +++= (bin, Rel (BinPkgName "anacron") Nothing Nothing)
+       depends bin %= (++ [[Rel (BinPkgName "anacron") Nothing Nothing]])
+       -- depends +++= (bin, Rel (BinPkgName "anacron") Nothing Nothing)
 
-describe :: Monad m => PackageType -> DebT m Text
-describe typ =
-    do Just p <- access Lenses.packageDescription
+describe :: Monad m => BinPkgName -> DebT m Text
+describe b =
+    do Just p <- access T.packageDescription
+       typ <- access (packageType b)
        return $
           debianDescriptionBase p <> "\n" <>
           case typ of
-            Profiling ->
+            Just Profiling ->
                 Text.intercalate "\n"
                         [" .",
                          " This package provides a library for the Haskell programming language, compiled",
                          " for profiling.  See http:///www.haskell.org/ for more information on Haskell."]
-            Development ->
+            Just Development ->
                 Text.intercalate "\n"
                         [" .",
                          " This package provides a library for the Haskell programming language.",
                          " See http:///www.haskell.org/ for more information on Haskell."]
-            Documentation ->
+            Just Documentation ->
                 Text.intercalate "\n"
                         [" .",
                          " This package provides the documentation for a library for the Haskell",
                          " programming language.",
                          " See http:///www.haskell.org/ for more information on Haskell." ]
-            Exec ->
+            Just Exec ->
                 Text.intercalate "\n"
                         [" .",
                          " An executable built from the " <> pack (display (pkgName (Cabal.package p))) <> " package."]
@@ -126,11 +128,11 @@ describe typ =
                 Text.intercalate "\n"
                         [" .",
                          " A server built from the " <> pack (display (pkgName pkgId)) <> " package."] -}
-            Utilities ->
+            _ {-Utilities-} ->
                 Text.intercalate "\n"
                         [" .",
-                         " Utility files associated with the " <> pack (display (pkgName (Cabal.package p))) <> " package."]
-            x -> error $ "Unexpected library package name suffix: " ++ show x
+                         " Files associated with the " <> pack (display (pkgName (Cabal.package p))) <> " package."]
+            -- x -> error $ "Unexpected library package name suffix: " ++ show x
 
 -- | The Cabal package has one synopsis and one description field
 -- for the entire package, while in a Debian package there is a
@@ -174,17 +176,19 @@ watchAtom (PackageName pkgname) =
 siteAtoms :: BinPkgName -> Site -> Atoms -> Atoms
 siteAtoms b site =
     execDebM
-      (do installDir +++= (b, "/etc/apache2/sites-available")
-          link +++= (b, ("/etc/apache2/sites-available/" ++ domain site, "/etc/apache2/sites-enabled/" ++ domain site))
-          file +++= (b, ("/etc/apache2/sites-available" </> domain site, apacheConfig))
-          installDir +++= (b, apacheLogDirectory b)
-          logrotateStanza +++= (b, (Text.unlines $ [ pack (apacheAccessLog b) <> " {"
+      (do installDir +++= (b, singleton "/etc/apache2/sites-available")
+          link +++= (b, singleton ("/etc/apache2/sites-available/" ++ domain site, "/etc/apache2/sites-enabled/" ++ domain site))
+          file +++= (b, singleton ("/etc/apache2/sites-available" </> domain site, apacheConfig))
+          installDir +++= (b, singleton (apacheLogDirectory b))
+          logrotateStanza +++= (b, singleton
+                                   (Text.unlines $ [ pack (apacheAccessLog b) <> " {"
                                                    , "  weekly"
                                                    , "  rotate 5"
                                                    , "  compress"
                                                    , "  missingok"
                                                    , "}"]))
-          logrotateStanza +++= (b, (Text.unlines $ [ pack (apacheErrorLog b) <> " {"
+          logrotateStanza +++= (b, singleton
+                                   (Text.unlines $ [ pack (apacheErrorLog b) <> " {"
                                                    , "  weekly"
                                                    , "  rotate 5"
                                                    , "  compress"
@@ -233,8 +237,8 @@ siteAtoms b site =
 -- FIXME - use Atoms
 serverAtoms :: BinPkgName -> Server -> Bool -> Atoms -> Atoms
 serverAtoms b server' isSite =
-    modL Lenses.postInst (insertWith (\ old new -> if old /= new then error ("serverAtoms: " ++ show old ++ " -> " ++ show new) else old) b debianPostinst) .
-    modL Lenses.installInit (Map.insertWith (\ old new -> if old /= new then error ("serverAtoms: " ++ show old ++ " -> " ++ show new) else old) b debianInit) .
+    modL T.postInst (insertWith (\ old new -> if old /= new then error ("serverAtoms: " ++ show old ++ " -> " ++ show new) else old) b debianPostinst) .
+    modL T.installInit (Map.insertWith (\ old new -> if old /= new then error ("serverAtoms: " ++ show old ++ " -> " ++ show new) else old) b debianInit) .
     serverLogrotate' b .
     execAtoms b exec
     where
@@ -299,13 +303,13 @@ serverAtoms b server' isSite =
 -- FIXME - use Atoms
 serverLogrotate' :: BinPkgName -> Atoms -> Atoms
 serverLogrotate' b =
-    modL Lenses.logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAccessLog b) <> " {"
+    modL T.logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAccessLog b) <> " {"
                                  , "  weekly"
                                  , "  rotate 5"
                                  , "  compress"
                                  , "  missingok"
                                  , "}" ]))) .
-    modL Lenses.logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAppLog b) <> " {"
+    modL T.logrotateStanza (insertWith Set.union b (singleton (Text.unlines $ [ pack (serverAppLog b) <> " {"
                                  , "  weekly"
                                  , "  rotate 5"
                                  , "  compress"
@@ -315,7 +319,7 @@ serverLogrotate' b =
 -- FIXME - use Atoms
 backupAtoms :: BinPkgName -> String -> Atoms -> Atoms
 backupAtoms b name =
-    modL Lenses.postInst (insertWith (\ old new -> if old /= new then error $ "backupAtoms: " ++ show old ++ " -> " ++ show new else old) b
+    modL T.postInst (insertWith (\ old new -> if old /= new then error $ "backupAtoms: " ++ show old ++ " -> " ++ show new else old) b
                  (Text.unlines $
                   [ "#!/bin/sh"
                   , ""
@@ -332,7 +336,7 @@ backupAtoms b name =
 -- FIXME - use Atoms
 execAtoms :: BinPkgName -> InstallFile -> Atoms -> Atoms
 execAtoms b ifile r =
-    modL Lenses.rulesFragments (Set.insert (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp"))) .
+    modL T.rulesFragments (Set.insert (pack ("build" </> show (pretty b) ++ ":: build-ghc-stamp"))) .
     fileAtoms b ifile $
     r
 
@@ -345,10 +349,10 @@ fileAtoms b installFile' r =
 fileAtoms' :: BinPkgName -> Maybe FilePath -> String -> Maybe FilePath -> String -> Atoms -> Atoms
 fileAtoms' b sourceDir' execName' destDir' destName' r =
     case (sourceDir', execName' == destName') of
-      (Nothing, True) -> modL Lenses.installCabalExec (insertWith Set.union b (singleton (execName', d))) r
-      (Just s, True) -> modL Lenses.install (insertWith Set.union b (singleton (s </> execName', d))) r
-      (Nothing, False) -> modL Lenses.installCabalExecTo (insertWith Set.union b (singleton (execName', (d </> destName')))) r
-      (Just s, False) -> modL Lenses.installTo (insertWith Set.union b (singleton (s </> execName', d </> destName'))) r
+      (Nothing, True) -> modL T.installCabalExec (insertWith Set.union b (singleton (execName', d))) r
+      (Just s, True) -> modL T.install (insertWith Set.union b (singleton (s </> execName', d))) r
+      (Nothing, False) -> modL T.installCabalExecTo (insertWith Set.union b (singleton (execName', (d </> destName')))) r
+      (Just s, False) -> modL T.installTo (insertWith Set.union b (singleton (s </> execName', d </> destName'))) r
     where
       d = fromMaybe "usr/bin" destDir'
 

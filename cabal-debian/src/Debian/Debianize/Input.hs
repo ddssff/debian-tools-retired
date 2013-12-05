@@ -15,29 +15,30 @@ module Debian.Debianize.Input
 
 import Debug.Trace (trace)
 
+import Control.Category ((.))
 import Control.Exception (bracket)
 import Control.Monad (when, foldM, filterM)
 import Control.Monad.State (get, put)
 import Control.Monad.Trans (MonadIO, liftIO, lift)
 import Data.Char (isSpace, toLower)
-import Data.Lens.Lazy (getL, access)
+import Data.Lens.Lazy (getL, setL, modL, access)
 import Data.Maybe (fromMaybe)
-import Data.Set as Set (Set, toList, fromList, insert)
+import Data.Set as Set (Set, toList, fromList, insert, singleton)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(logWho), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import qualified Debian.Debianize.Lenses as Lenses (maintainer, changelog)
-import Debian.Debianize.Types as Debian
-    (SourceDebDescription(..), BinaryDebDescription(..), PackageRelations(..),
-     VersionControlSpec(..), XField(..), newSourceDebDescription', newBinaryDebDescription)
-import Debian.Debianize.Lenses
-    (control, warning, sourceFormat, watch, rulesHead, compat, packageDescription, compiler,
+import qualified Debian.Debianize.Types.Atoms as T (maintainer, changelog)
+import Debian.Debianize.Types.BinaryDebDescription (BinaryDebDescription, newBinaryDebDescription)
+import qualified Debian.Debianize.Types.BinaryDebDescription as B
+import qualified Debian.Debianize.Types.SourceDebDescription as S
+import Debian.Debianize.Types.Atoms
+    (newAtoms, control, warning, sourceFormat, watch, rulesHead, compat, packageDescription, compiler,
      license, licenseFile, copyright, changelog, installInit, postInst, postRm, preInst, preRm,
      logrotateStanza, link, install, installDir, intermediateFiles, compilerVersion, cabalFlagAssignments, verbosity)
 import Debian.Debianize.Monad (Atoms, DebT, execDebT)
-import Debian.Debianize.Types (Top(unTop), newAtoms)
+import Debian.Debianize.Types (Top(unTop))
 import Debian.Debianize.Utility (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (~?=), (+=), (++=), (+++=))
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
@@ -54,7 +55,7 @@ import Distribution.Simple.Program (defaultProgramConfiguration)
 import Distribution.Simple.Utils (defaultPackageDesc, die, setupMessage)
 import Distribution.System (Platform(..), buildOS, buildArch)
 import Distribution.Verbosity (Verbosity)
-import Prelude hiding (readFile, lines, words, break, null, log, sum)
+import Prelude hiding (readFile, lines, words, break, null, log, sum, (.))
 import System.Cmd (system)
 import System.Directory (doesFileExist)
 import System.Exit (ExitCode(..))
@@ -77,7 +78,7 @@ inputDebianizationFile top path =
     do inputAtomsFromDirectory top
        lift (readFileMaybe (unTop top </> path)) >>= maybe (return ()) (\ text -> intermediateFiles += (path, text))
 
-inputSourceDebDescription :: Top -> DebT IO (SourceDebDescription, [Field])
+inputSourceDebDescription :: Top -> DebT IO (S.SourceDebDescription, [Field])
 inputSourceDebDescription top =
     do paras <- lift $ parseControlFromFile (unTop top </> "debian/control") >>= either (error . show) (return . unControl)
        case paras of
@@ -85,46 +86,46 @@ inputSourceDebDescription top =
          [_] -> error "Missing binary paragraph"
          (hd : tl) -> return $ parseSourceDebDescription hd tl
 
-parseSourceDebDescription :: Paragraph' String -> [Paragraph' String] -> (SourceDebDescription, [Field])
+parseSourceDebDescription :: Paragraph' String -> [Paragraph' String] -> (S.SourceDebDescription, [Field])
 parseSourceDebDescription (Paragraph fields) binaryParagraphs =
     foldr readField (src, []) fields'
     where
       fields' = map stripField fields
-      src = (newSourceDebDescription' findSource findMaint) {binaryPackages = bins}
+      src = setL S.binaryPackages bins (S.newSourceDebDescription' findSource findMaint)
       findSource = findMap "Source" SrcPkgName fields'
       findMaint = findMap "Maintainer" (\ m -> either (\ e -> error $ "Failed to parse maintainer field " ++ show m ++ ": " ++ show e) id . parseMaintainer $ m) fields'
       -- findStandards = findMap "Standards-Version" parseStandardsVersion fields'
 
       (bins, _extra) = unzip $ map parseBinaryDebDescription binaryParagraphs
-      readField :: Field -> (SourceDebDescription, [Field]) -> (SourceDebDescription, [Field])
+      readField :: Field -> (S.SourceDebDescription, [Field]) -> (S.SourceDebDescription, [Field])
       -- Mandatory
       readField (Field ("Source", _)) x = x
       readField (Field ("Maintainer", _)) x = x
       -- readField (Field ("Standards-Version", _)) x = x
       -- Recommended
-      readField (Field ("Standards-Version", value)) (desc, unrecognized) = (desc {standardsVersion = Just (parseStandardsVersion value)}, unrecognized)
-      readField (Field ("Priority", value)) (desc, unrecognized) = (desc {priority = Just (readPriority value)}, unrecognized)
-      readField (Field ("Section", value)) (desc, unrecognized) = (desc {section = Just (MainSection value)}, unrecognized)
+      readField (Field ("Standards-Version", value)) (desc, unrecognized) = (setL S.standardsVersion (Just (parseStandardsVersion value)) desc, unrecognized)
+      readField (Field ("Priority", value)) (desc, unrecognized) = (setL S.priority (Just (readPriority value)) desc, unrecognized)
+      readField (Field ("Section", value)) (desc, unrecognized) = (setL S.section (Just (MainSection value)) desc, unrecognized)
       -- Optional
-      readField (Field ("Homepage", value)) (desc, unrecognized) = (desc {homepage = Just (strip (pack value))}, unrecognized)
-      readField (Field ("Uploaders", value)) (desc, unrecognized) = (desc {uploaders = either (const []) id (parseUploaders value)}, unrecognized)
-      readField (Field ("DM-Upload-Allowed", value)) (desc, unrecognized) = (desc {dmUploadAllowed = yes value}, unrecognized)
-      readField (Field ("Build-Depends", value)) (desc, unrecognized) = (desc {buildDepends = rels value}, unrecognized)
-      readField (Field ("Build-Conflicts", value)) (desc, unrecognized) = (desc {buildConflicts = rels value}, unrecognized)
-      readField (Field ("Build-Depends-Indep", value)) (desc, unrecognized) = (desc {buildDependsIndep = rels value}, unrecognized)
-      readField (Field ("Build-Conflicts-Indep", value)) (desc, unrecognized) = (desc {buildConflictsIndep = rels value}, unrecognized)
-      readField (Field ("Vcs-Browser", s)) (desc, unrecognized) = (desc {vcsFields = insert (VCSBrowser (pack s)) (vcsFields desc)}, unrecognized)
-      readField (Field ("Vcs-Arch", s)) (desc, unrecognized) = (desc {vcsFields = insert (VCSArch (pack s)) (vcsFields desc)}, unrecognized)
-      readField (Field ("Vcs-Bzr", s)) (desc, unrecognized) = (desc {vcsFields = insert (VCSBzr (pack s)) (vcsFields desc)}, unrecognized)
-      readField (Field ("Vcs-Cvs", s)) (desc, unrecognized) = (desc {vcsFields = insert (VCSCvs (pack s)) (vcsFields desc)}, unrecognized)
-      readField (Field ("Vcs-Darcs", s)) (desc, unrecognized) = (desc {vcsFields = insert (VCSDarcs (pack s)) (vcsFields desc)}, unrecognized)
-      readField (Field ("Vcs-Git", s)) (desc, unrecognized) = (desc {vcsFields = insert (VCSGit (pack s)) (vcsFields desc)}, unrecognized)
-      readField (Field ("Vcs-Hg", s)) (desc, unrecognized) = (desc {vcsFields = insert (VCSHg (pack s)) (vcsFields desc)}, unrecognized)
-      readField (Field ("Vcs-Mtn", s)) (desc, unrecognized) = (desc {vcsFields = insert (VCSMtn (pack s)) (vcsFields desc)}, unrecognized)
-      readField (Field ("Vcs-Svn", s)) (desc, unrecognized) = (desc {vcsFields = insert (VCSSvn (pack s)) (vcsFields desc)}, unrecognized)
+      readField (Field ("Homepage", value)) (desc, unrecognized) = (setL S.homepage (Just (strip (pack value))) desc, unrecognized)
+      readField (Field ("Uploaders", value)) (desc, unrecognized) = (setL S.uploaders (either (const []) id (parseUploaders value)) desc, unrecognized)
+      readField (Field ("DM-Upload-Allowed", value)) (desc, unrecognized) = (setL S.dmUploadAllowed (yes value) desc, unrecognized)
+      readField (Field ("Build-Depends", value)) (desc, unrecognized) = (setL S.buildDepends (rels value) desc, unrecognized)
+      readField (Field ("Build-Conflicts", value)) (desc, unrecognized) = (setL S.buildConflicts (rels value) desc, unrecognized)
+      readField (Field ("Build-Depends-Indep", value)) (desc, unrecognized) = (setL S.buildDependsIndep (rels value) desc, unrecognized)
+      readField (Field ("Build-Conflicts-Indep", value)) (desc, unrecognized) = (setL S.buildConflictsIndep (rels value) desc, unrecognized)
+      readField (Field ("Vcs-Browser", s)) (desc, unrecognized) = (modL S.vcsFields (\ vcsFields -> insert (S.VCSBrowser (pack s)) vcsFields) desc, unrecognized)
+      readField (Field ("Vcs-Arch", s)) (desc, unrecognized) = (modL S.vcsFields (\ vcsFields -> insert (S.VCSArch (pack s)) vcsFields) desc, unrecognized)
+      readField (Field ("Vcs-Bzr", s)) (desc, unrecognized) = (modL S.vcsFields (\ vcsFields -> insert (S.VCSBzr (pack s)) vcsFields) desc, unrecognized)
+      readField (Field ("Vcs-Cvs", s)) (desc, unrecognized) = (modL S.vcsFields (\ vcsFields -> insert (S.VCSCvs (pack s)) vcsFields) desc, unrecognized)
+      readField (Field ("Vcs-Darcs", s)) (desc, unrecognized) = (modL S.vcsFields (\ vcsFields -> insert (S.VCSDarcs (pack s)) vcsFields) desc, unrecognized)
+      readField (Field ("Vcs-Git", s)) (desc, unrecognized) = (modL S.vcsFields (\ vcsFields -> insert (S.VCSGit (pack s)) vcsFields) desc, unrecognized)
+      readField (Field ("Vcs-Hg", s)) (desc, unrecognized) = (modL S.vcsFields (\ vcsFields -> insert (S.VCSHg (pack s)) vcsFields) desc, unrecognized)
+      readField (Field ("Vcs-Mtn", s)) (desc, unrecognized) = (modL S.vcsFields (\ vcsFields -> insert (S.VCSMtn (pack s)) vcsFields) desc, unrecognized)
+      readField (Field ("Vcs-Svn", s)) (desc, unrecognized) = (modL S.vcsFields (\ vcsFields -> insert (S.VCSSvn (pack s)) vcsFields) desc, unrecognized)
       readField field@(Field ('X' : fld, value)) (desc, unrecognized) =
           case span (`elem` "BCS") fld of
-            (xs, '-' : more) -> (desc {xFields = insert (XField (fromList (map (read' (\ s -> error $ "parseSourceDebDescription: " ++ show s) . (: [])) xs)) (pack more) (pack value)) (xFields desc)}, unrecognized)
+            (xs, '-' : more) -> (modL S.xFields (\ xFields -> insert (S.XField (fromList (map (read' (\ s -> error $ "parseSourceDebDescription: " ++ show s) . (: [])) xs)) (pack more) (pack value)) xFields) desc, unrecognized)
             _ -> (desc, field : unrecognized)
       readField field (desc, unrecognized) = (desc, field : unrecognized)
 
@@ -133,9 +134,10 @@ parseBinaryDebDescription (Paragraph fields) =
     foldr readField (bin, []) fields'
     where
       fields' = map stripField fields
-      bin = newBinaryDebDescription findPackage findArchitecture
-      findPackage = findMap "Package" BinPkgName fields'
-      findArchitecture = findMap "Architecture" parsePackageArchitectures fields'
+      bin = setL B.architecture (Just arch) (newBinaryDebDescription b)
+      b :: BinPkgName
+      b = findMap "Package" BinPkgName fields'
+      arch = findMap "Architecture" parsePackageArchitectures fields'
 {-
 (BinPkgName (fromJust (fieldValue "Package" bin)))
 (read' (fromJust (fieldValue "Architecture" bin)))
@@ -144,21 +146,21 @@ parseBinaryDebDescription (Paragraph fields) =
 -}
 
       readField :: Field -> (BinaryDebDescription, [Field]) -> (BinaryDebDescription, [Field])
-      readField (Field ("Package", value)) (desc, unrecognized) = (desc {Debian.package = BinPkgName value}, unrecognized)
-      readField (Field ("Architecture", value)) (desc, unrecognized) = (desc {architecture = parsePackageArchitectures value}, unrecognized)
-      readField (Field ("Section", value)) (desc, unrecognized) = (desc {binarySection = Just (readSection value)}, unrecognized)
-      readField (Field ("Priority", value)) (desc, unrecognized) = (desc {binaryPriority = Just (readPriority value)}, unrecognized)
-      readField (Field ("Essential", value)) (desc, unrecognized) = (desc {essential = yes value}, unrecognized)
-      readField (Field ("Depends", value)) (desc, unrecognized) = (desc {relations = (relations desc) {depends = rels value}}, unrecognized)
-      readField (Field ("Recommends", value)) (desc, unrecognized) = (desc {relations = (relations desc) {recommends = rels value}}, unrecognized)
-      readField (Field ("Suggests", value)) (desc, unrecognized) = (desc {relations = (relations desc) {suggests = rels value}}, unrecognized)
-      readField (Field ("Pre-Depends", value)) (desc, unrecognized) = (desc {relations = (relations desc) {preDepends = rels value}}, unrecognized)
-      readField (Field ("Breaks", value)) (desc, unrecognized) = (desc {relations = (relations desc) {breaks = rels value}}, unrecognized)
-      readField (Field ("Conflicts", value)) (desc, unrecognized) = (desc {relations = (relations desc) {conflicts = rels value}}, unrecognized)
-      readField (Field ("Provides", value)) (desc, unrecognized) = (desc {relations = (relations desc) {provides_ = rels value}}, unrecognized)
-      readField (Field ("Replaces", value)) (desc, unrecognized) = (desc {relations = (relations desc) {replaces_ = rels value}}, unrecognized)
-      readField (Field ("Built-Using", value)) (desc, unrecognized) = (desc {relations = (relations desc) {builtUsing = rels value}}, unrecognized)
-      readField (Field ("Description", value)) (desc, unrecognized) = (desc {description = pack value}, unrecognized)
+      readField (Field ("Package", x)) (desc, unrecognized) = (setL B.package (BinPkgName x) desc, unrecognized)
+      readField (Field ("Architecture", x)) (desc, unrecognized) = (setL B.architecture (Just (parsePackageArchitectures x)) desc, unrecognized)
+      readField (Field ("Section", x)) (desc, unrecognized) = (setL B.binarySection (Just (readSection x)) desc, unrecognized)
+      readField (Field ("Priority", x)) (desc, unrecognized) = (setL B.binaryPriority (Just (readPriority x)) desc, unrecognized)
+      readField (Field ("Essential", x)) (desc, unrecognized) = (setL B.essential (Just (yes x)) desc, unrecognized)
+      readField (Field ("Depends", x)) (desc, unrecognized) = (setL (B.depends . B.relations) (rels x) desc, unrecognized)
+      readField (Field ("Recommends", x)) (desc, unrecognized) = (setL (B.recommends . B.relations) (rels x) desc, unrecognized)
+      readField (Field ("Suggests", x)) (desc, unrecognized) = (setL (B.suggests . B.relations) (rels x) desc, unrecognized)
+      readField (Field ("Pre-Depends", x)) (desc, unrecognized) = (setL (B.preDepends . B.relations) (rels x) desc, unrecognized)
+      readField (Field ("Breaks", x)) (desc, unrecognized) = (setL (B.breaks . B.relations) (rels x) desc, unrecognized)
+      readField (Field ("Conflicts", x)) (desc, unrecognized) = (setL (B.conflicts . B.relations) (rels x) desc, unrecognized)
+      readField (Field ("Provides", x)) (desc, unrecognized) = (setL (B.provides . B.relations) (rels x) desc, unrecognized)
+      readField (Field ("Replaces", x)) (desc, unrecognized) = (setL (B.replaces . B.relations) (rels x) desc, unrecognized)
+      readField (Field ("Built-Using", x)) (desc, unrecognized) = (setL (B.builtUsing . B.relations) (rels x) desc, unrecognized)
+      readField (Field ("Description", x)) (desc, unrecognized) = (setL B.description (Just (pack x)) desc, unrecognized)
       readField field (desc, unrecognized) = (desc, field : unrecognized)
 
 -- | Look for a field and apply a function to its value
@@ -228,7 +230,7 @@ inputAtoms debian name xs =
       (p, ".install") ->   readFile (debian </> name) >>= \ text -> execDebT (mapM_ (readInstall p) (lines text)) xs
       (p, ".dirs") ->      readFile (debian </> name) >>= \ text -> execDebT (mapM_ (readDir p) (lines text)) xs
       (p, ".init") ->      readFile (debian </> name) >>= \ text -> execDebT (installInit ++= (p, text)) xs
-      (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> execDebT (logrotateStanza +++= (p, text)) xs
+      (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> execDebT (logrotateStanza +++= (p, singleton text)) xs
       (p, ".links") ->     readFile (debian </> name) >>= \ text -> execDebT (mapM_ (readLink p) (lines text)) xs
       (p, ".postinst") ->  readFile (debian </> name) >>= \ text -> execDebT (postInst ++= (p, text)) xs
       (p, ".postrm") ->    readFile (debian </> name) >>= \ text -> execDebT (postRm ++= (p, text)) xs
@@ -247,7 +249,7 @@ inputAtoms debian name xs =
 readLink :: Monad m => BinPkgName -> Text -> DebT m ()
 readLink p line =
     case words line of
-      [a, b] -> link +++= (p, (unpack a, unpack b))
+      [a, b] -> link +++= (p, singleton (unpack a, unpack b))
       [] -> return ()
       _ -> trace ("Unexpected value passed to readLink: " ++ show line) (return ())
 
@@ -256,11 +258,11 @@ readInstall :: Monad m => BinPkgName -> Text -> DebT m ()
 readInstall p line =
     case break isSpace line of
       (_, b) | null b -> error $ "readInstall: syntax error in .install file for " ++ show p ++ ": " ++ show line
-      (a, b) -> install +++= (p, (unpack (strip a), unpack (strip b)))
+      (a, b) -> install +++= (p, singleton (unpack (strip a), unpack (strip b)))
 
 -- | Read a line from a debian .dirs file
 readDir :: Monad m => BinPkgName -> Text -> DebT m ()
-readDir p line = installDir +++= (p, unpack line)
+readDir p line = installDir +++= (p, singleton (unpack line))
 
 inputCabalization :: MonadIO m => Top -> DebT m ()
 inputCabalization top =
@@ -337,18 +339,18 @@ inputMaintainer =
        let cabalMaintainer = case Cabal.maintainer pkgDesc of
                                "" -> Nothing
                                x -> either (const Nothing) Just (parseMaintainer (takeWhile (\ c -> c /= ',' && c /= '\n') x))
-       Lenses.maintainer ~?= cabalMaintainer
+       T.maintainer ~?= cabalMaintainer
        debianMaintainer <- liftIO getDebianMaintainer
-       Lenses.maintainer ~?= debianMaintainer
+       T.maintainer ~?= debianMaintainer
        changelogMaintainer <-
-           do log <- get >>= return . getL Lenses.changelog
+           do log <- get >>= return . getL T.changelog
               case log of
                 Just (ChangeLog (entry : _)) ->
                     case (parseMaintainer (logWho entry)) of
                       Left _e -> return $ Nothing -- Just $ NameAddr (Just "Invalid signature in changelog") (show e)
                       Right x -> return (Just x)
                 _ -> return Nothing
-       Lenses.maintainer ~?= changelogMaintainer
+       T.maintainer ~?= changelogMaintainer
 
 -- | Compute the Cabal data directory for a Linux install from a Cabal
 -- package description.  This needs to match the path cabal assigns to

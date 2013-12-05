@@ -2,17 +2,19 @@ import Control.Monad.State (get)
 import Data.Lens.Lazy (getL, access)
 import Data.List (intercalate)
 import Data.Monoid (mempty)
+import Data.Set (singleton)
 import Data.Text as Text (pack)
 import Debian.Changes (ChangeLog(ChangeLog))
 import Debian.Debianize (inputChangeLog, inputDebianization)
 import Debian.Debianize.Details (seereasonDefaultAtoms)
 import Debian.Debianize.Finalize (debianization)
-import Debian.Debianize.Lenses as Lenses
-    (changelog, changelog, compat, conflicts, control, depends, description,
-     installCabalExec, sourceFormat, standards, utilsPackageNames, copyright)
+import Debian.Debianize.Types.Atoms as T
+    (changelog, changelog, compat, conflicts, control, depends, debianDescription, homepage,
+     installCabalExec, sourceFormat, standards, utilsPackageNames, copyright, newAtoms)
 import Debian.Debianize.Monad (Atoms, DebT, execDebT, evalDebT, execDebM)
 import Debian.Debianize.Output (compareDebianization)
-import Debian.Debianize.Types (Top(Top), newAtoms, SourceDebDescription(homepage))
+import Debian.Debianize.Types (Top(Top))
+import Debian.Debianize.Types.SourceDebDescription (SourceDebDescription)
 import Debian.Debianize.Utility ((~=), (~?=), (%=), (+=), (++=), (+++=))
 import Debian.Policy (SourceFormat(Native3), StandardsVersion(StandardsVersion))
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), VersionReq(SLT, GRE))
@@ -46,9 +48,8 @@ main =
                                               , ""
                                               , "Copyright: (c) 2010-2011, SeeReason Partners LLC"
                                               , "License: All Rights Reserved"]))
-             description ++=
-                         (BinPkgName "cabal-debian",
-                          pack (intercalate "\n"
+             debianDescription (BinPkgName "cabal-debian") ~=
+                   Just (pack (intercalate "\n"
                                   [ "Create a debianization for a cabal package"
                                   , " Tool for creating debianizations of Haskell packages based on the .cabal"
                                   , " file.  If apt-file is installed it will use it to discover what is the"
@@ -56,17 +57,17 @@ main =
                                   , " ."
                                   , "  Author: David Fox <dsf@seereason.com>"
                                   , "  Upstream-Maintainer: David Fox <dsf@seereason.com>" ]))
-             conflicts +++= (BinPkgName "cabal-debian", Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing)
-             depends +++= (BinPkgName "cabal-debian", Rel (BinPkgName "apt-file") Nothing Nothing)
-             depends +++= (BinPkgName "cabal-debian", Rel (BinPkgName "debian-policy") Nothing Nothing)
-             depends +++= (BinPkgName "libghc-cabal-debian-dev", Rel (BinPkgName "debian-policy") Nothing Nothing)
-             depends +++= (BinPkgName "cabal-debian", Rel (BinPkgName "debhelper") Nothing Nothing)
-             depends +++= (BinPkgName "cabal-debian", Rel (BinPkgName "haskell-devscripts") (Just (GRE (parseDebianVersion ("0.8.19" :: String)))) Nothing)
-             installCabalExec +++= (BinPkgName "cabal-debian-tests", ("cabal-debian-tests", "/usr/bin"))
-             installCabalExec +++= (BinPkgName "cabal-debian", ("cabal-debian", "/usr/bin"))
+             conflicts (BinPkgName "cabal-debian") %= (++ [[Rel (BinPkgName "haskell-debian-utils") (Just (SLT (parseDebianVersion ("3.59" :: String)))) Nothing]])
+             depends (BinPkgName "cabal-debian") %= (++ [[Rel (BinPkgName "apt-file") Nothing Nothing]])
+             depends (BinPkgName "cabal-debian") %= (++ [[Rel (BinPkgName "debian-policy") Nothing Nothing]])
+             depends (BinPkgName "libghc-cabal-debian-dev") %= (++ [[Rel (BinPkgName "debian-policy") Nothing Nothing]])
+             depends (BinPkgName "cabal-debian") %= (++ [[Rel (BinPkgName "debhelper") Nothing Nothing]])
+             depends (BinPkgName "cabal-debian") %= (++ [[Rel (BinPkgName "haskell-devscripts") (Just (GRE (parseDebianVersion ("0.8.19" :: String)))) Nothing]])
+             installCabalExec +++= (BinPkgName "cabal-debian-tests", singleton ("cabal-debian-tests", "/usr/bin"))
+             installCabalExec +++= (BinPkgName "cabal-debian", singleton ("cabal-debian", "/usr/bin"))
              utilsPackageNames += BinPkgName "cabal-debian"
              -- extraDevDeps (BinPkgName "debian-policy")
-             control %= (\ y -> y {homepage = Just (pack "http://src.seereason.com/cabal-debian")})
+             homepage ~= Just (pack "http://src.seereason.com/cabal-debian")
 
 -- | This copies the first log entry of deb1 into deb2.  Because the
 -- debianization process updates that log entry, we need to undo that
@@ -74,8 +75,8 @@ main =
 copyFirstLogEntry :: Monad m => Atoms -> DebT m ()
 copyFirstLogEntry src =
     do dst <- get
-       let Just (ChangeLog (hd1 : _)) = getL Lenses.changelog src
-           Just (ChangeLog (_ : tl2)) = getL Lenses.changelog dst
+       let Just (ChangeLog (hd1 : _)) = getL T.changelog src
+           Just (ChangeLog (_ : tl2)) = getL T.changelog dst
        changelog ~= Just (ChangeLog (hd1 : tl2))
 {-
     get >>= \ dst -> 

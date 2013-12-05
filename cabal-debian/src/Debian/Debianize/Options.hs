@@ -9,17 +9,18 @@ module Debian.Debianize.Options
 
 import Control.Monad.State (lift)
 import Data.Char (toLower, isDigit, ord)
+import Data.Lens.Lazy (Lens)
 import Data.Set (singleton)
 import Data.Version (parseVersion)
 import Debian.Debianize.Goodies (doExecutable)
-import Debian.Debianize.Lenses
+import Debian.Debianize.Types.Atoms
     (verbosity, dryRun, debAction, compilerVersion, noDocumentationLibrary, noProfilingLibrary,
      missingDependencies, sourcePackageName, cabalFlagAssignments, maintainer, buildDir, omitLTDeps,
-     sourceFormat, buildDeps, buildDepsIndep, extraDevDeps, depends, conflicts, replaces, provides,
+     sourceFormat, buildDepends, buildDependsIndep, extraDevDeps, depends, conflicts, replaces, provides,
      extraLibMap, debVersion, revision, epochMap, execMap)
 import Debian.Debianize.Monad (DebT)
-import Debian.Debianize.Types (InstallFile(..), DebAction(..))
-import Debian.Debianize.Utility (read', maybeRead, (+=), (~=), (++=), (+++=))
+import Debian.Debianize.Types.Atoms (Atoms, InstallFile(..), DebAction(..))
+import Debian.Debianize.Utility (read', maybeRead, (+=), (~=), (%=), (++=), (+++=))
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relations, Relation(..))
@@ -104,7 +105,7 @@ options =
                  (ReqArg (\ name ->
                               case parseRelations name of
                                 Left err -> error ("cabal-debian option --build-dep " ++ show name ++ ": " ++ show err)
-                                Right rss -> buildDeps += rss) "Debian package relations")
+                                Right rss -> buildDepends %= (++ rss)) "Debian package relations")
                  (unlines [ "Add a dependency relation to the Build-Depends: field for this source package, e.g."
                           , ""
                           , "     --build-dep libglib2.0-dev"
@@ -113,25 +114,25 @@ options =
                  (ReqArg (\ name ->
                               case parseRelations name of
                                 Left err -> error ("cabal-debian option --build-dep-indep " ++ show name ++ ": " ++ show err)
-                                Right rss -> buildDepsIndep += rss) "Debian binary package name")
+                                Right rss -> buildDependsIndep %= (++ rss)) "Debian binary package name")
                  (unlines [ "Similar to --build-dep, but the dependencies are added to Build-Depends-Indep, e.g.:"
                           , ""
                           , "    --build-dep-indep perl" ]),
-      Option "" ["dev-dep"] (ReqArg (\ name -> extraDevDeps += (Rel (BinPkgName name) Nothing Nothing)) "Debian binary package name")
+      Option "" ["dev-dep"] (ReqArg (\ name -> extraDevDeps %= (++ [[Rel (BinPkgName name) Nothing Nothing]])) "Debian binary package name")
              (unlines [ "Add an entry to the Depends: field of the -dev package, e.g."
                       , "'--dev-dep libncurses5-dev'.  It might be good if this implied --build-dep."]),
       Option "" ["depends"]
-             (ReqArg (\ arg -> mapM_ (depends +++=) (parseDeps arg)) "deb:deb,deb:deb,...")
+             (ReqArg (addDep depends) "deb:deb,deb:deb,...")
              (unlines [ "Generalized --dev-dep - specify pairs A:B of debian binary package names, each"
                       , "A gets a Depends: B.  Note that B can have debian style version relations"]),
       Option "" ["conflicts"]
-             (ReqArg (\ arg -> mapM_ (conflicts +++=) (parseDeps arg)) "deb:deb,deb:deb,...")
+             (ReqArg (addDep conflicts) "deb:deb,deb:deb,...")
              "Like --depends, modifies the Conflicts field.",
       Option "" ["replaces"]
-             (ReqArg (\ arg -> mapM_ (replaces +++=) (parseDeps arg)) "deb:deb,deb:deb,...")
+             (ReqArg (addDep replaces) "deb:deb,deb:deb,...")
              "Like --depends, modifies the Replaces field.",
       Option "" ["provides"]
-             (ReqArg (\ arg -> mapM_ (provides +++=) (parseDeps arg)) "deb:deb,deb:deb,...")
+             (ReqArg (addDep provides) "deb:deb,deb:deb,...")
              "Like --depends, modifies the Provides field.",
       Option "" ["map-dep"] (ReqArg (\ pair -> case break (== '=') pair of
                                                  (cab, (_ : deb)) -> extraLibMap +++= (cab, rels deb)
@@ -195,6 +196,9 @@ executableOption arg f =
                          , sourceDir = case sd of "./" -> Nothing; _ -> Just sd
                          , destDir = case md of (':' : dd) -> Just dd; _ -> Nothing })
 
+addDep :: Monad m => (BinPkgName -> Lens Atoms Relations) -> String -> DebT m ()
+addDep lns arg = mapM_ (\ (b, rel) -> lns b %= (++ [[rel]])) (parseDeps arg)
+
 parseDeps :: String -> [(BinPkgName, Relation)]
 parseDeps arg =
     map pair (split arg)
@@ -206,7 +210,7 @@ parseDeps arg =
             _ -> error $ "Invalid dependency: " ++ show s
       pair s =
           case s =~ "^[ \t:]*([^ \t:]+)[ \t]*:[ \t]*(.+)[ \t]*" :: (String, String, String, [String]) of
-            (_, _, _, [x, y]) -> (b x, anyrel (b y))
+            (_, _, _, [x, y]) -> (BinPkgName x, anyrel (BinPkgName y))
             _ -> error $ "Invalid dependency: " ++ show s
 
 -- Lifted from Distribution.Simple.Setup, since it's not exported.
@@ -214,9 +218,6 @@ flagList :: String -> [(FlagName, Bool)]
 flagList = map tagWithValue . words
   where tagWithValue ('-':name) = (FlagName (map toLower name), False)
         tagWithValue name       = (FlagName (map toLower name), True)
-
-b :: String -> BinPkgName
-b = BinPkgName
 
 rels :: String -> Relations
 rels s =

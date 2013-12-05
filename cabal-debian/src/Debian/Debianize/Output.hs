@@ -14,6 +14,7 @@ module Debian.Debianize.Output
     , validateDebianization
     ) where
 
+import Control.Category ((.))
 import Control.Exception as E (throw)
 import Control.Monad.State (get, lift)
 import Control.Monad.Trans (MonadIO)
@@ -24,15 +25,16 @@ import Data.Map as Map (elems, toList)
 import Data.Maybe (fromMaybe)
 import Data.Text as Text (split, Text, unpack)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
-import qualified Debian.Debianize.Types as D (BinaryDebDescription(package), SourceDebDescription(binaryPackages, source))
+import qualified Debian.Debianize.Types.Atoms as T
+import qualified Debian.Debianize.Types.BinaryDebDescription as B (package)
+import qualified Debian.Debianize.Types.SourceDebDescription as S (source)
 import Debian.Debianize.Types (Top(unTop))
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Input (inputDebianization)
-import qualified Debian.Debianize.Lenses as Lenses (changelog, control, dryRun, validate)
 import Debian.Debianize.Monad (DebT, Atoms, evalDebT)
 import Debian.Debianize.Options (putEnvironmentArgs)
 import Debian.Debianize.Utility (indent, replaceFile, withCurrentDirectory, zipMaps)
-import Prelude hiding (unlines, writeFile)
+import Prelude hiding (unlines, writeFile, (.))
 import System.Directory (createDirectoryIfMissing, doesFileExist, getPermissions, Permissions(executable), setPermissions)
 import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess))
@@ -68,11 +70,11 @@ doDebianizeAction :: Top -> DebT IO ()
 doDebianizeAction top =
     do new <- get
        case () of
-         _ | getL Lenses.validate new ->
+         _ | getL T.validate new ->
                do inputDebianization top
                   old <- get
                   return $ validateDebianization old new
-         _ | getL Lenses.dryRun new ->
+         _ | getL T.dryRun new ->
                do inputDebianization top
                   old <- get
                   diff <- lift $ compareDebianization old new
@@ -126,11 +128,11 @@ validateDebianization old new =
         | oldPackages /= newPackages -> throw (userError ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages)))
         | True -> ()
     where
-      oldVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL Lenses.changelog old))))
-      newVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL Lenses.changelog new))))
-      oldSource = D.source . getL Lenses.control $ old
-      newSource = D.source . getL Lenses.control $ new
-      oldPackages = map D.package . D.binaryPackages . getL Lenses.control $ old
-      newPackages = map D.package . D.binaryPackages . getL Lenses.control $ new
+      oldVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL T.changelog old))))
+      newVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL T.changelog new))))
+      oldSource = getL (S.source . T.control) old
+      newSource = getL (S.source . T.control) new
+      oldPackages = map (getL B.package) $ getL T.binaryPackages old
+      newPackages = map (getL B.package) $ getL T.binaryPackages new
       unChangeLog :: ChangeLog -> [ChangeLogEntry]
       unChangeLog (ChangeLog x) = x

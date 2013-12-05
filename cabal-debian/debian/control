@@ -21,6 +21,8 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-containers-prof | ghc-prof
 	       , libghc-data-lens-dev
 	       , libghc-data-lens-prof
+               , libghc-data-lens-template-dev
+               , libghc-data-lens-template-prof
                , libghc-debian-dev (>= 3.71)
                , libghc-debian-prof (>= 3.71)
                , libghc-directory-dev | ghc
@@ -57,6 +59,7 @@ Build-Depends-Indep: ghc-doc
                      , libghc-base-doc (<< 5) | ghc-doc
                      , libghc-containers-doc | ghc-doc
 		     , libghc-data-lens-doc
+                     , libghc-data-lens-template-doc
                      , libghc-debian-doc (>= 3.71)
                      , libghc-directory-doc | ghc-doc
                      , libghc-filepath-doc | ghc-doc
@@ -73,6 +76,29 @@ Build-Depends-Indep: ghc-doc
                      , libghc-utf8-string-doc
 Standards-Version: 3.9.3
 Homepage: http://src.seereason.com/cabal-debian
+
+Package: cabal-debian
+Architecture: any
+Section: misc
+Depends: ${shlibs:Depends}
+         , ${haskell:Depends}
+	 , ${misc:Depends}
+	 , apt-file
+         , debian-policy
+         , debhelper
+         , haskell-devscripts (>= 0.8.19)
+Recommends: ${haskell:Recommends}
+Suggests: ${haskell:Suggests}
+Conflicts: ${haskell:Conflicts}, haskell-debian-utils (<< 3.59)
+Provides: ${haskell:Provides}
+Replaces: ${haskell:Replaces}
+Description: Create a debianization for a cabal package
+ Tool for creating debianizations of Haskell packages based on the .cabal
+ file.  If apt-file is installed it will use it to discover what is the
+ debian package name of a C library.
+ .
+  Author: David Fox <dsf@seereason.com>
+  Upstream-Maintainer: David Fox <dsf@seereason.com>
 
 Package: libghc-cabal-debian-dev
 Architecture: any
@@ -148,26 +174,3 @@ Description: Create a debianization for a cabal package
  This package provides the documentation for a library for the Haskell
  programming language.
  See http:///www.haskell.org/ for more information on Haskell.
-
-Package: cabal-debian
-Architecture: any
-Section: misc
-Depends: ${shlibs:Depends}
-         , ${haskell:Depends}
-	 , ${misc:Depends}
-	 , apt-file
-         , debhelper
-         , debian-policy
-         , haskell-devscripts (>= 0.8.19)
-Recommends: ${haskell:Recommends}
-Suggests: ${haskell:Suggests}
-Conflicts: ${haskell:Conflicts}, haskell-debian-utils (<< 3.59)
-Provides: ${haskell:Provides}
-Replaces: ${haskell:Replaces}
-Description: Create a debianization for a cabal package
- Tool for creating debianizations of Haskell packages based on the .cabal
- file.  If apt-file is installed it will use it to discover what is the
- debian package name of a C library.
- .
-  Author: David Fox <dsf@seereason.com>
-  Upstream-Maintainer: David Fox <dsf@seereason.com>

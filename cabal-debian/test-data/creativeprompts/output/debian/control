@@ -190,6 +190,7 @@ Section: misc
 Depends: ${shlibs:Depends}
          , ${haskell:Depends}
          , ${misc:Depends}
+         , markdown
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
@@ -205,6 +206,7 @@ Section: misc
 Depends: ${shlibs:Depends}
          , ${haskell:Depends}
          , ${misc:Depends}
+         , markdown
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}

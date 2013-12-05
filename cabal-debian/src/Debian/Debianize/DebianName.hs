@@ -10,8 +10,8 @@ import Data.Char (toLower)
 import Data.Lens.Lazy (access)
 import Data.Map as Map (lookup)
 import Data.Version (showVersion)
-import Debian.Debianize.Types as Debian (PackageType(..))
-import Debian.Debianize.Lenses as Lenses (debianNameMap, packageDescription)
+import Debian.Debianize.Types.BinaryDebDescription as Debian (PackageType(..))
+import Debian.Debianize.Types.Atoms as T (debianNameMap, packageDescription)
 import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.VersionSplits (doSplits, VersionSplits)
 import Debian.Orphans ()
@@ -34,7 +34,7 @@ debianName :: (Monad m, PkgName name) => PackageType -> DebT m name
 debianName typ =
     do Just pkgDesc <- access packageDescription
        let pkgId = Cabal.package pkgDesc
-       nameMap <- access Lenses.debianNameMap
+       nameMap <- access T.debianNameMap
        return $ debianName' (Map.lookup (pkgName pkgId) nameMap) typ pkgId
 
 -- | Function that applies the mapping from cabal names to debian

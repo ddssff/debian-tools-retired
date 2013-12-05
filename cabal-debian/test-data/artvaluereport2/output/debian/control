@@ -158,9 +158,9 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-xhtml-dev
                , libghc-xhtml-prof
 Build-Depends-Indep: ghc-doc
-                     , libjs-jcrop
-                     , libjs-jquery
                      , libjs-jquery-ui (<< 1.10)
+                     , libjs-jquery
+                     , libjs-jcrop
                      , libghc-extra-doc (>= 1.35)
                      , libghc-hjscript-doc
                      , libghc-hatex-doc
@@ -239,27 +239,23 @@ Build-Depends-Indep: ghc-doc
 Standards-Version: 3.9.1
 Homepage: http://appraisalreportonline.com
 
-Package: artvaluereport2-production
-Architecture: all
+Package: artvaluereport2-backups
+Architecture: any
 Section: misc
-Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, apache2, libjpeg-progs, libjs-jcrop, libjs-jquery, libjs-jquery-ui, netpbm, texlive-fonts-extra, texlive-fonts-recommended, texlive-latex-extra, texlive-latex-recommended
+Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, anacron
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
 Replaces: ${haskell:Replaces}
-Description: Haskell modules for fine art appraisal applications
- Haskell modules for fine art appraisal applications
- .
-  Author: David Fox <dsf@seereason.com>, Clifford Beshers <beshers@seereason.com>
-  Upstream-Maintainer: Clifford Beshers <beshers@seereason.com>
- .
- An executable built from the ArtValueReport package.
+Description: backup program for the appraisalreportonline.com site
+  Install this somewhere other than where the server is running get
+  automated backups of the database.
 
-Package: artvaluereport2-staging
+Package: artvaluereport2-production
 Architecture: all
 Section: misc
-Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, libjpeg-progs, libjs-jcrop, libjs-jquery, libjs-jquery-ui, netpbm, texlive-fonts-extra, texlive-fonts-recommended, texlive-latex-extra, texlive-latex-recommended
+Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, apache2, libjpeg-progs, libjs-jcrop, libjs-jquery, libjs-jquery-ui, netpbm, texlive-fonts-extra, texlive-fonts-recommended, texlive-latex-extra, texlive-latex-recommended
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
@@ -290,18 +286,22 @@ Description: Haskell modules for fine art appraisal applications
  .
  An executable built from the ArtValueReport package.
 
-Package: artvaluereport2-backups
-Architecture: any
+Package: artvaluereport2-staging
+Architecture: all
 Section: misc
-Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, anacron
+Depends: ${shlibs:Depends}, ${haskell:Depends}, ${misc:Depends}, libjpeg-progs, libjs-jcrop, libjs-jquery, libjs-jquery-ui, netpbm, texlive-fonts-extra, texlive-fonts-recommended, texlive-latex-extra, texlive-latex-recommended
 Recommends: ${haskell:Recommends}
 Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
 Replaces: ${haskell:Replaces}
-Description: backup program for the appraisalreportonline.com site
-  Install this somewhere other than where the server is running get
-  automated backups of the database.
+Description: Haskell modules for fine art appraisal applications
+ Haskell modules for fine art appraisal applications
+ .
+  Author: David Fox <dsf@seereason.com>, Clifford Beshers <beshers@seereason.com>
+  Upstream-Maintainer: Clifford Beshers <beshers@seereason.com>
+ .
+ An executable built from the ArtValueReport package.
 
 Package: appraisalscope
 Architecture: any

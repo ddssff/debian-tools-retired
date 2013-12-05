@@ -18,14 +18,13 @@ import Data.List (intercalate, isPrefixOf, isSuffixOf, nub, partition, unlines)
 import Data.List as List (map)
 import qualified Data.Map as Map (insert, lookup, Map)
 import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
-import qualified Data.Set as Set (member, Set, toList)
+import qualified Data.Set as Set (member, Set)
 import Data.Text (pack)
 import Debian.Control (Control'(unControl), ControlFunctions(lookupP, parseControl, stripWS), Field'(Field))
 import Debian.Debianize.Input (inputCompiler, inputCabalization)
-import Debian.Debianize.Lenses (dryRun, packageInfo, packageDescription)
 import Debian.Debianize.Monad (DebT)
-import qualified Debian.Debianize.Lenses as Lenses (extraLibMap, missingDependencies, packageInfo)
-import Debian.Debianize.Types (Top, Atoms, DebType, DebType(Dev, Doc, Prof), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb))
+import Debian.Debianize.Types (Top)
+import Debian.Debianize.Types.Atoms as T (Atoms, DebType, DebType(Dev, Doc, Prof), PackageInfo(PackageInfo, cabalName, devDeb, profDeb, docDeb), dryRun, packageInfo, packageDescription, extraLibMap, missingDependencies)
 import Debian.Debianize.Utility ((!), buildDebVersionMap, cond, DebMap, debOfFile, diffFile, dpkgFileMap, replaceFile, showDeps, modifyM)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName(BinPkgName), Relation, Relations)
@@ -165,7 +164,7 @@ unboxDependency (ExtraLibs _) = Nothing -- Dependency (PackageName d) anyVersion
 -- which are build dependencies
 debDeps :: (MonadIO m, Functor m) => DebType -> Control' String -> DebT m D.Relations
 debDeps debType control =
-    do info <- get >>= return . getL Lenses.packageInfo
+    do info <- get >>= return . getL T.packageInfo
        cabalDeps <- cabalDependencies
        return $ interdependencies ++ otherdependencies info cabalDeps
     where
@@ -205,9 +204,8 @@ allBuildDepends atoms buildDepends buildTools pkgconfigDepends extraLibs =
           map ExtraLibs (fixDeps extraLibs)
     where
       fixDeps :: [String] -> [Relations]
-      fixDeps xs = concatMap (\ cab -> maybe [[[D.Rel (D.BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]]
-                                             Set.toList
-                                             (Map.lookup cab (getL Lenses.extraLibMap atoms))) xs
+      fixDeps xs = map (\ cab -> fromMaybe [[D.Rel (D.BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]]
+                                           (Map.lookup cab (getL T.extraLibMap atoms))) xs
 
 -- | Given a control file and a DebType, look for the binary deb with
 -- the corresponding suffix and return its name.
@@ -222,5 +220,5 @@ debNameFromType control debType =
 
 filterMissing :: Monad m => [[Relation]] -> DebT m [[Relation]]
 filterMissing rels =
-    do missing <- get >>= return . getL Lenses.missingDependencies
+    do missing <- get >>= return . getL T.missingDependencies
        return $ filter (/= []) (List.map (filter (\ (D.Rel name _ _) -> not (Set.member name missing))) rels)

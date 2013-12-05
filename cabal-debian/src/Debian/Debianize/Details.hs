@@ -5,7 +5,7 @@ module Debian.Debianize.Details
     ) where
 
 import Data.Version (Version(Version))
-import Debian.Debianize.Lenses (epochMap, missingDependencies)
+import Debian.Debianize.Types.Atoms as T (epochMap, missingDependencies)
 import Debian.Debianize.Monad (DebT, mapCabal, splitCabal)
 import Debian.Debianize.Utility ((+=), (++=))
 import Debian.Relation (BinPkgName(BinPkgName))
@@ -13,8 +13,8 @@ import Distribution.Package (PackageName(PackageName))
 
 debianDefaultAtoms :: Monad m => DebT m ()
 debianDefaultAtoms =
-    do epochMap ++= (PackageName "HaXml", 1)
-       epochMap ++= (PackageName "HTTP", 1)
+    do T.epochMap ++= (PackageName "HaXml", 1)
+       T.epochMap ++= (PackageName "HTTP", 1)
        mapCabal (PackageName "parsec") "parsec3"
        splitCabal (PackageName "parsec") "parsec2" (Version [3] [])
        mapCabal (PackageName "QuickCheck") "quickcheck2"

@@ -31,6 +31,11 @@ Suggests: ${haskell:Suggests}
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
 Replaces: ${haskell:Replaces}
-Description: backup program for the seereason source repositories
-  Install this somewhere other than where the server is running get
-  automated backups of the database.
+Description: Backups of the seereason darcs repositories
+ Install this somewhere other than where the server is running get
+ automated backups of the database.
+ .
+  Author: SeeReason Partners <partners@seereason.com>
+  Upstream-Maintainer: SeeReason Partners <partners@seereason.com>
+ .
+ Files associated with the seereason-darcs-backups package.

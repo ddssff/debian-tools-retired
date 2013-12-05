@@ -57,6 +57,8 @@
 --    existing debianization, and so on.  This information results in
 --    a value of type @Atoms@.  Modules @Types@, @Lenses@, @Inputs@.
 --
+--    [Customize] Make modifications to the input values
+--
 --    [Finalization] Module "Debian.Debianize.Finalize" - Fill in any
 --    information missing from @Atoms@ that is required to build the
 --    debianization based on the inputs and our policy decisions.
@@ -139,8 +141,8 @@ module Debian.Debianize
 
     -- * TBD
 
-    , module Debian.Debianize.Lenses
     , module Debian.Debianize.Types
+    , module Debian.Debianize.Types.Atoms
     , module Debian.Policy
 {-
     , module Debian.Debianize.Bundled
@@ -159,9 +161,9 @@ import Debian.Debianize.Finalize
 import Debian.Debianize.Goodies
 import Debian.Debianize.Input
 -- import Debian.Debianize.Interspersed
-import Debian.Debianize.Lenses
 import Debian.Debianize.Monad
-import Debian.Debianize.Types hiding (maintainer, description, depends, conflicts)
+import Debian.Debianize.Types
+import Debian.Debianize.Types.Atoms
 import Debian.Debianize.Options
 import Debian.Debianize.Output
 import Debian.Debianize.SubstVars

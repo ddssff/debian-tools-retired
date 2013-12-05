@@ -37,6 +37,7 @@ Library
    Cabal >= 1.9,
    containers,
    data-lens,
+   data-lens-template,
    debian >= 3.71,
    Diff,
    directory,
@@ -68,12 +69,15 @@ Library
    Debian.Debianize.Goodies
    Debian.Debianize.Input
    Debian.Debianize.Interspersed
-   Debian.Debianize.Lenses
    Debian.Debianize.Monad
    Debian.Debianize.Options
    Debian.Debianize.Output
    Debian.Debianize.SubstVars
    Debian.Debianize.Types
+   Debian.Debianize.Types.Atoms
+   Debian.Debianize.Types.Base
+   Debian.Debianize.Types.BinaryDebDescription
+   Debian.Debianize.Types.SourceDebDescription
    Debian.Debianize.Utility
    Debian.Debianize.VersionSplits
  Other-Modules:
@@ -89,6 +93,7 @@ Executable cabal-debian
    Cabal,
    containers,
    data-lens,
+   data-lens-template,
    debian,
    Diff,
    directory,
@@ -115,6 +120,7 @@ Executable cabal-debian-tests
    Cabal,
    containers,
    data-lens,
+   data-lens-template,
    debian,
    Diff,
    directory,

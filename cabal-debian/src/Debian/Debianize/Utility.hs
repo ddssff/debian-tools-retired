@@ -53,8 +53,8 @@ import Data.List as List (isSuffixOf, intercalate, map, lines)
 import Data.Lens.Lazy (Lens, modL)
 import Data.Map as Map (Map, foldWithKey, empty, fromList, findWithDefault, insert, map, lookup, insertWith)
 import Data.Maybe (catMaybes, mapMaybe, listToMaybe, fromMaybe, fromJust)
-import Data.Monoid ((<>))
-import Data.Set as Set (Set, toList, union, singleton)
+import Data.Monoid (Monoid, (<>), mappend)
+import Data.Set as Set (Set, toList)
 import qualified Data.Set as Set
 import Data.Text as Text (Text, unpack, lines)
 import Data.Text.IO (hGetContents)
@@ -306,8 +306,8 @@ lens += x = lens %= Set.insert x
 lens ++= (k, a) = lens %= Map.insert k a
 
 -- | Insert an element into a @(Map b (Set c))@
-(+++=) :: (Monad m, Ord b, Ord c) => Lens a (Map b (Set c)) -> (b, c) -> StateT a m ()
-lens +++= (k, a) = lens %= Map.insertWith union k (singleton a)
+(+++=) :: (Monad m, Ord b, Monoid c) => Lens a (Map b c) -> (b, c) -> StateT a m ()
+lens +++= (k, a) = lens %= Map.insertWith mappend k a
 
 fromEmpty :: Set a -> Set a -> Set a
 fromEmpty d s | Set.null s = d

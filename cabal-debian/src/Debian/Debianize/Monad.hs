@@ -32,8 +32,7 @@ module Debian.Debianize.Monad
 import Control.Monad.State (evalState, evalStateT, execState, execStateT, runState, State, StateT(runStateT))
 import Data.Map as Map (alter)
 import Data.Version (Version)
-import Debian.Debianize.Lenses (debianNameMap)
-import Debian.Debianize.Types (Atoms)
+import Debian.Debianize.Types.Atoms (Atoms, debianNameMap)
 import Debian.Debianize.Utility ((%=))
 import Debian.Debianize.VersionSplits (insertSplit, makePackage, VersionSplits)
 import Debian.Orphans ()
@@ -71,7 +70,7 @@ mapCabal pname dname =
     where
       f :: Maybe VersionSplits -> Maybe VersionSplits
       f Nothing = Just (makePackage dname)
-      f (Just sp) = error $ "mapCabal - already mapped: " ++ show sp
+      f (Just sp) = error $ "mapCabal " ++ show pname ++ " " ++ show dname ++ ": - already mapped: " ++ show sp
 
 -- | Map versions less than ver of Cabal Package pname to Debian package ltname
 splitCabal :: Monad m => PackageName -> String -> Version -> DebT m ()

@@ -6,7 +6,7 @@ Copyright:        (c) 2010-2011, SeeReason Partners LLC
 Author:           SeeReason Partners <partners@seereason.com>
 Maintainer:       SeeReason Partners <partners@seereason.com>
 Synopsis:         Backups of the seereason darcs repositories
-Description:      Install on a machine other than src.seereason.com to perform automated timed incremental backups.
+Description:
   Install this somewhere other than where the server is running get
   automated backups of the database.
 Build-Type:       Custom

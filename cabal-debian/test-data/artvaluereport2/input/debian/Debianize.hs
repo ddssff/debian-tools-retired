@@ -2,16 +2,18 @@
 import Data.Lens.Lazy (getL, modL, access)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
+import Data.Set (singleton)
 import Data.Text as Text (intercalate)
 import Debian.Changes (ChangeLog(..))
 import Debian.Debianize (debianization, doBackups, doExecutable, doServer, doWebsite,
                          inputChangeLog, inputDebianization, seereasonDefaultAtoms)
-import Debian.Debianize.Lenses as Lenses
-    (changelog, binaryArchitectures, buildDepsIndep, changelog, compat, control, depends, description,
-     installCabalExec, installData, sourcePackageName)
+import Debian.Debianize.Types.Atoms as T
+    (changelog, binaryArchitectures, buildDependsIndep, changelog, compat, control, depends, debianDescription,
+     installCabalExec, installData, sourcePackageName, homepage, standardsVersion,
+     Atoms, newAtoms, InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Monad (execDebT, evalDebT, DebT, execDebM)
-import Debian.Debianize.Types (Top(Top), Atoms, newAtoms, SourceDebDescription(homepage, standardsVersion),
-                                     InstallFile(..), Server(..), Site(..))
+import Debian.Debianize.Types (Top(Top))
+import Debian.Debianize.Types.SourceDebDescription (SourceDebDescription)
 import Debian.Debianize.Output (compareDebianization)
 import Debian.Debianize.Utility ((~=), (%=), (+=), (++=), (+++=), (~?=))
 import Debian.Policy (databaseDirectory, PackageArchitectures(All), StandardsVersion(StandardsVersion))
@@ -36,7 +38,7 @@ main =
       customize :: Maybe ChangeLog -> DebT IO ()
       customize log =
           do changelog ~?= log
-             installCabalExec +++= (BinPkgName "appraisalscope", ("lookatareport", "usr/bin"))
+             installCabalExec +++= (BinPkgName "appraisalscope", singleton ("lookatareport", "usr/bin"))
              doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"})
              doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development"))
              doServer (BinPkgName "artvaluereport2-staging") (theServer (BinPkgName "artvaluereport2-staging"))
@@ -44,40 +46,39 @@ main =
              doBackups (BinPkgName "artvaluereport2-backups") "artvaluereport2-backups"
              -- This should go into the "real" data directory.  And maybe a different icon for each server?
              -- install (BinPkgName "artvaluereport2-server") ("theme/ArtValueReport_SunsetSpectrum.ico", "usr/share/artvaluereport2-data")
-             description ++=
-                         (BinPkgName "artvaluereport2-backups",
-                          Text.intercalate "\n"
+             debianDescription (BinPkgName "artvaluereport2-backups") ~=
+                     Just (Text.intercalate "\n"
                                   [ "backup program for the appraisalreportonline.com site"
                                   , "  Install this somewhere other than where the server is running get"
                                   , "  automated backups of the database." ])
              addDep (BinPkgName "artvaluereport2-production") (BinPkgName "apache2")
              addServerData
              addServerDeps
-             description ++= (BinPkgName "appraisalscope", "Offline manipulation of appraisal database")
-             buildDepsIndep += [[Rel (BinPkgName "libjs-jquery-ui") (Just (SLT (parseDebianVersion ("1.10" :: String)))) Nothing]]
-             buildDepsIndep += [[Rel (BinPkgName "libjs-jquery") Nothing Nothing]]
-             buildDepsIndep += [[Rel (BinPkgName "libjs-jcrop") Nothing Nothing]]
-             binaryArchitectures ++= (BinPkgName "artvaluereport2-staging", All)
-             binaryArchitectures ++= (BinPkgName "artvaluereport2-production", All)
-             binaryArchitectures ++= (BinPkgName "artvaluereport2-development", All)
+             debianDescription (BinPkgName "appraisalscope") ~= Just "Offline manipulation of appraisal database"
+             buildDependsIndep %= (++ [[Rel (BinPkgName "libjs-jquery-ui") (Just (SLT (parseDebianVersion ("1.10" :: String)))) Nothing]])
+             buildDependsIndep %= (++ [[Rel (BinPkgName "libjs-jquery") Nothing Nothing]])
+             buildDependsIndep %= (++ [[Rel (BinPkgName "libjs-jcrop") Nothing Nothing]])
+             binaryArchitectures (BinPkgName "artvaluereport2-staging") ~= Just All
+             binaryArchitectures (BinPkgName "artvaluereport2-production") ~= Just All
+             binaryArchitectures (BinPkgName "artvaluereport2-development") ~= Just All
              -- utilsPackageNames [BinPkgName "artvaluereport2-server"]
              sourcePackageName ~= Just (SrcPkgName "haskell-artvaluereport2")
-             control %= (\ x -> x {standardsVersion = Just (StandardsVersion 3 9 1 Nothing)})
+             T.standardsVersion ~= Just (StandardsVersion 3 9 1 Nothing)
+             homepage ~= Just "http://appraisalreportonline.com"
              compat ~= Just 7
-             control %= (\ y -> y {homepage = Just "http://appraisalreportonline.com"})
 
       addServerDeps :: DebT IO ()
       addServerDeps = mapM_ addDeps (map BinPkgName ["artvaluereport2-development", "artvaluereport2-staging", "artvaluereport2-production"])
       addDeps p = mapM_ (addDep p) (map BinPkgName ["libjpeg-progs", "libjs-jcrop", "libjs-jquery", "libjs-jquery-ui", "netpbm", "texlive-fonts-extra", "texlive-fonts-recommended", "texlive-latex-extra", "texlive-latex-recommended"])
-      addDep p dep = depends +++= (p, Rel dep Nothing Nothing)
+      addDep p dep = depends p %= (++ [[Rel dep Nothing Nothing]])
 
       addServerData :: DebT IO ()
       addServerData = mapM_ addData (map BinPkgName ["artvaluereport2-development", "artvaluereport2-staging", "artvaluereport2-production"])
       addData p =
-          do installData +++= (p, ("theme/ArtValueReport_SunsetSpectrum.ico", "ArtValueReport_SunsetSpectrum.ico"))
+          do installData +++= (p, singleton ("theme/ArtValueReport_SunsetSpectrum.ico", "ArtValueReport_SunsetSpectrum.ico"))
              mapM_ (addDataFile p) ["Udon.js", "flexbox.css", "DataTables-1.8.2", "html5sortable", "jGFeed", "searchMag.png",
                                     "Clouds.jpg", "tweaks.css", "verticalTabs.css", "blueprint", "jquery.blockUI", "jquery.tinyscrollbar"]
-      addDataFile p path = installData +++= (p, (path, path))
+      addDataFile p path = installData +++= (p, singleton (path, path))
 
       theSite :: BinPkgName -> Site
       theSite deb =
@@ -132,7 +133,7 @@ anyrel b = Rel b Nothing Nothing
 
 copyFirstLogEntry :: Atoms -> Atoms -> Atoms
 copyFirstLogEntry deb1 deb2 =
-    modL Lenses.changelog (const (Just (ChangeLog (hd1 : tl2)))) deb2
+    modL T.changelog (const (Just (ChangeLog (hd1 : tl2)))) deb2
     where
-      ChangeLog (hd1 : _) = fromMaybe (error "Missing debian/changelog") (getL Lenses.changelog deb1)
-      ChangeLog (_ : tl2) = fromMaybe (error "Missing debian/changelog") (getL Lenses.changelog deb2)
+      ChangeLog (hd1 : _) = fromMaybe (error "Missing debian/changelog") (getL T.changelog deb1)
+      ChangeLog (_ : tl2) = fromMaybe (error "Missing debian/changelog") (getL T.changelog deb2)
