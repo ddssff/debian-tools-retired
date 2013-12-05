@@ -45,7 +45,7 @@ prepare defaultAtoms cache package' target =
          [cabfile] ->
              do desc <- liftIO $ readPackageDescription normal (dir </> cabfile)
                 -- let (PackageName name) = pkgName . package . packageDescription $ desc
-                let version = pkgVersion . package . packageDescription $ desc
+                let version = pkgVersion . package . Distribution.PackageDescription.packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
                 liftIO $ autobuilderCabal cache (P.flags package') dir defaultAtoms
@@ -90,9 +90,9 @@ autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do -- This will be false if the package has no debian/Debianize.hs script
        done <- collectPackageFlags cache pflags >>= runDebianizeScript
-       when (not done) (withArgs [] (Cabal.evalDebT (debianization defaultAtoms (applyPackageFlags pflags) >>
-                                                     writeDebianization)
-                                                    (newAtoms ".")))
+       when (not done) (withArgs [] (Cabal.evalDebT (debianization (Top ".") defaultAtoms (applyPackageFlags pflags) >>
+                                                     writeDebianization (Top "."))
+                                                    newAtoms))
 
 applyPackageFlags :: [P.PackageFlag] -> DebT IO ()
 applyPackageFlags flags = mapM_ applyPackageFlag flags
