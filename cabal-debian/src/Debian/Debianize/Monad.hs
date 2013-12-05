@@ -33,7 +33,7 @@ import Control.Monad.State (evalState, evalStateT, execState, execStateT, runSta
 import Data.Map as Map (alter)
 import Data.Version (Version)
 import Debian.Debianize.Types.Atoms (Atoms, debianNameMap)
-import Debian.Debianize.Utility ((%=))
+import Debian.Debianize.Prelude ((%=))
 import Debian.Debianize.VersionSplits (insertSplit, makePackage, VersionSplits)
 import Debian.Orphans ()
 import Distribution.Package (PackageName)

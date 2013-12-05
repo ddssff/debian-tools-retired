@@ -18,18 +18,17 @@ import Data.Monoid ((<>), mconcat, mempty)
 import Data.Set as Set (fromList, singleton, union)
 import qualified Data.Text as T (intercalate, lines, pack, split, Text, unlines)
 import Data.Version (Version(Version))
-import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
+import Debian.Changes (ChangeLog(..), ChangeLogEntry(..) {-, parseEntry-})
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Finalize (debianization)
 import Debian.Debianize.Goodies (doBackups, doExecutable, doServer, doWebsite, makeRulesHead, tightDependencyFixup)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization)
-import Debian.Debianize.Monad (Atoms, DebT, evalDebT, execDebM, execDebT, mapCabal, splitCabal)
-import qualified Debian.Debianize.Types as T (Top(Top))
-import Debian.Debianize.Types.Atoms as T (InstallFile(..), newAtoms, Server(..), Site(..))
-import qualified Debian.Debianize.Types.Atoms as T (binaryArchitectures, binaryPackages, buildDepends, buildDependsIndep, changelog, compat, copyright, debianDescription, debVersion, depends, epochMap, execMap, homepage, installCabalExec, installData, maintainer, missingDependencies, revision, rulesHead, source, sourceFormat, sourcePackageName, sourcePriority, sourceSection, standards, standardsVersion, uploaders, utilsPackageNames, vcsFields)
-import qualified Debian.Debianize.Types.BinaryDebDescription as B (package)
-import qualified Debian.Debianize.Types.SourceDebDescription as S (VersionControlSpec(VCSBrowser, VCSDarcs))
-import Debian.Debianize.Utility ((%=), (+++=), (++=), (+=), (~=))
+import Debian.Debianize.Monad (DebT, evalDebT, execDebM, execDebT, mapCabal, splitCabal)
+import Debian.Debianize.Prelude ((%=), (+++=), (++=), (+=), (~=))
+import Debian.Debianize.Types (Top(Top))
+import Debian.Debianize.Types.Atoms as T
+import qualified Debian.Debianize.Types.BinaryDebDescription as B
+import qualified Debian.Debianize.Types.SourceDebDescription as S
 import Debian.Policy (databaseDirectory, PackageArchitectures(All), PackagePriority(Extra), parseMaintainer, Section(MainSection), SourceFormat(Native3), StandardsVersion(..))
 import Debian.Relation (BinPkgName(..), Relation(..), SrcPkgName(..), VersionReq(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
@@ -178,13 +177,23 @@ test2 label =
                                                      "    files that were supposed to be installed into packages."],
                               logWho = "David Fox <dsf@seereason.com>",
                               logDate = "Thu, 20 Dec 2012 06:49:25 -0800"}]
+
+testEntry :: ChangeLogEntry
+testEntry =
+    either (error "Error in test changelog entry") fst
+           (parseEntry (unlines [ "haskell-cabal-debian (2.6.2) unstable; urgency=low"
+                                , ""
+                                , "  * Fix a bug constructing the destination pathnames that was dropping"
+                                , "    files that were supposed to be installed into packages."
+                                , ""
+                                , " -- David Fox <dsf@seereason.com>  Thu, 20 Dec 2012 06:49:25 -0800" ]))
 -}
 
 test3 :: String -> Test
 test3 label =
     TestLabel label $
-    TestCase (do let top = T.Top "test-data/haskell-devscripts"
-                 deb <- execDebT (inputDebianization top) newAtoms
+    TestCase (do let top = Top "test-data/haskell-devscripts"
+                 deb <- execDebT (inputDebianization top) T.newAtoms
                  diff <- diffDebianizations testDeb2 deb
                  assertEqual label [] diff)
     where
@@ -323,7 +332,7 @@ test3 label =
                                                                                             , B.builtUsing = [] }}]})
 -}
                                                                                             )
-            newAtoms
+            T.newAtoms
       log = ChangeLog [Entry { logPackage = "haskell-devscripts"
                              , logVersion = Debian.Version.parseDebianVersion ("0.8.13" :: String)
                              , logDists = [ReleaseName {relName = "experimental"}]
@@ -342,11 +351,11 @@ test3 label =
 test4 :: String -> Test
 test4 label =
     TestLabel label $
-    TestCase (do let inTop = T.Top "test-data/clckwrks-dot-com/input"
-                     outTop = T.Top "test-data/clckwrks-dot-com/output"
-                 old <- execDebT (inputDebianization outTop) newAtoms
+    TestCase (do let inTop = Top "test-data/clckwrks-dot-com/input"
+                     outTop = Top "test-data/clckwrks-dot-com/output"
+                 old <- execDebT (inputDebianization outTop) T.newAtoms
                  let log = getL T.changelog old
-                 new <- execDebT (debianization inTop defaultAtoms (customize log)) newAtoms
+                 new <- execDebT (debianization inTop defaultAtoms (customize log)) T.newAtoms
                  diff <- diffDebianizations old ({-copyFirstLogEntry old-} new)
                  assertEqual label [] diff)
     where
@@ -404,7 +413,7 @@ test4 label =
                                            (BinPkgName "libghc-clckwrks-plugin-bugs-dev", BinPkgName "haskell-clckwrks-plugin-bugs-utils"),
                                            (BinPkgName "libghc-clckwrks-dev", BinPkgName "haskell-clckwrks-utils")]) serverNames
 
-      theSite :: BinPkgName -> Site
+      theSite :: BinPkgName -> T.Site
       theSite deb =
           Site { domain = hostname'
                , serverAdmin = "logic@seereason.com"
@@ -452,8 +461,8 @@ anyrel b = Rel b Nothing Nothing
 test5 :: String -> Test
 test5 label =
     TestLabel label $
-    TestCase (do let inTop = (T.Top "test-data/creativeprompts/input")
-                     outTop = (T.Top "test-data/creativeprompts/output")
+    TestCase (do let inTop = (Top "test-data/creativeprompts/input")
+                     outTop = (Top "test-data/creativeprompts/output")
                  old <- execDebT (inputDebianization outTop) newAtoms
                  let standards = getL T.standardsVersion old
                      level = getL T.compat old
@@ -548,8 +557,8 @@ test7 label =
 test8 :: String -> Test
 test8 label =
     TestLabel label $
-    TestCase ( do let inTop = T.Top "test-data/artvaluereport-data/input"
-                      outTop = T.Top "test-data/artvaluereport-data/output"
+    TestCase ( do let inTop = Top "test-data/artvaluereport-data/input"
+                      outTop = Top "test-data/artvaluereport-data/output"
                   old <- execDebT (inputDebianization outTop) newAtoms
                   log <- evalDebT (inputChangeLog inTop >> access T.changelog) newAtoms
                   new <- execDebT (debianization inTop defaultAtoms (customize log)) newAtoms
@@ -568,8 +577,8 @@ test8 label =
 test9 :: String -> Test
 test9 label =
     TestLabel label $
-    TestCase (do let inTop = T.Top "test-data/alex/input"
-                     outTop = T.Top "test-data/alex/output"
+    TestCase (do let inTop = Top "test-data/alex/input"
+                     outTop = Top "test-data/alex/output"
                  old <- execDebT (inputDebianization outTop) newAtoms
                  let Just (ChangeLog (entry : _)) = getL T.changelog old
                  new <- execDebT (debianization inTop defaultAtoms customize >> copyChangelogDate (logDate entry)) newAtoms
@@ -604,8 +613,8 @@ test9 label =
 test10 :: String -> Test
 test10 label =
     TestLabel label $
-    TestCase (do let inTop = T.Top "test-data/archive/input"
-                     outTop = T.Top "test-data/archive/output"
+    TestCase (do let inTop = Top "test-data/archive/input"
+                     outTop = Top "test-data/archive/output"
                  old <- execDebT (inputDebianization outTop) newAtoms
                  let Just (ChangeLog (entry : _)) = getL T.changelog old
                  new <- execDebT (debianization inTop defaultAtoms customize >> copyChangelogDate (logDate entry)) newAtoms
@@ -616,7 +625,7 @@ test10 label =
       customize =
           do T.sourcePackageName ~= Just (SrcPkgName "seereason-darcs-backups")
              T.compat ~= Just 5
-             T.standards ~= Just (StandardsVersion 3 8 1 Nothing)
+             T.standardsVersion ~= Just (StandardsVersion 3 8 1 Nothing)
              T.maintainer ~= either (const Nothing) Just (parseMaintainer "David Fox <dsf@seereason.com>")
              T.depends (BinPkgName "seereason-darcs-backups") %= (++ [[Rel (BinPkgName "anacron") Nothing Nothing]])
              T.sourceSection ~= Just (MainSection "haskell")
@@ -669,17 +678,8 @@ diffDebianizations old new =
                      -- character.
                      (contextDiff 2 (T.split (== '\n') a) (T.split (== '\n') b))
 
+sortBinaryDebs :: DebT IO ()
 sortBinaryDebs = T.binaryPackages %= sortBy (compare `on` getL B.package)
-
-testEntry :: ChangeLogEntry
-testEntry =
-    either (error "Error in test changelog entry") fst
-           (parseEntry (unlines [ "haskell-cabal-debian (2.6.2) unstable; urgency=low"
-                                , ""
-                                , "  * Fix a bug constructing the destination pathnames that was dropping"
-                                , "    files that were supposed to be installed into packages."
-                                , ""
-                                , " -- David Fox <dsf@seereason.com>  Thu, 20 Dec 2012 06:49:25 -0800" ]))
 
 main :: IO ()
 main = runTestTT tests >>= putStrLn . show

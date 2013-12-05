@@ -134,10 +134,10 @@ module Debian.Debianize
 
     -- * Utility functions
 
-    , Debian.Debianize.Utility.withCurrentDirectory
-    , Debian.Debianize.Utility.buildDebVersionMap
-    , Debian.Debianize.Utility.dpkgFileMap
-    , Debian.Debianize.Utility.debOfFile
+    , Debian.Debianize.Prelude.withCurrentDirectory
+    , Debian.Debianize.Prelude.buildDebVersionMap
+    , Debian.Debianize.Prelude.dpkgFileMap
+    , Debian.Debianize.Prelude.debOfFile
 
     -- * TBD
 
@@ -162,11 +162,11 @@ import Debian.Debianize.Goodies
 import Debian.Debianize.Input
 -- import Debian.Debianize.Interspersed
 import Debian.Debianize.Monad
+import Debian.Debianize.Prelude
 import Debian.Debianize.Types
 import Debian.Debianize.Types.Atoms
 import Debian.Debianize.Options
 import Debian.Debianize.Output
 import Debian.Debianize.SubstVars
-import Debian.Debianize.Utility
 -- import Debian.Debianize.VersionSplits
 import Debian.Policy

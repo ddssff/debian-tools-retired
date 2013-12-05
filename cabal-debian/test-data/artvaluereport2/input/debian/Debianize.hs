@@ -5,8 +5,7 @@ import Data.Monoid (mempty)
 import Data.Set (singleton)
 import Data.Text as Text (intercalate)
 import Debian.Changes (ChangeLog(..))
-import Debian.Debianize (debianization, doBackups, doExecutable, doServer, doWebsite,
-                         inputChangeLog, inputDebianization, seereasonDefaultAtoms)
+import Debian.Debianize (debianization, doBackups, doExecutable, doServer, doWebsite, inputChangeLog, inputDebianization, seereasonDefaultAtoms)
 import Debian.Debianize.Types.Atoms as T
     (changelog, binaryArchitectures, buildDependsIndep, changelog, compat, control, depends, debianDescription,
      installCabalExec, installData, sourcePackageName, homepage, standardsVersion,
@@ -15,7 +14,7 @@ import Debian.Debianize.Monad (execDebT, evalDebT, DebT, execDebM)
 import Debian.Debianize.Types (Top(Top))
 import Debian.Debianize.Types.SourceDebDescription (SourceDebDescription)
 import Debian.Debianize.Output (compareDebianization)
-import Debian.Debianize.Utility ((~=), (%=), (+=), (++=), (+++=), (~?=))
+import Debian.Debianize.Prelude ((~=), (%=), (+=), (++=), (+++=), (~?=))
 import Debian.Policy (databaseDirectory, PackageArchitectures(All), StandardsVersion(StandardsVersion))
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), SrcPkgName(..), VersionReq(SLT))
 import Debian.Version (parseDebianVersion)
@@ -37,7 +36,7 @@ main =
     where
       customize :: Maybe ChangeLog -> DebT IO ()
       customize log =
-          do changelog ~?= log
+          do T.changelog ~?= log
              installCabalExec +++= (BinPkgName "appraisalscope", singleton ("lookatareport", "usr/bin"))
              doExecutable (BinPkgName "appraisalscope") (InstallFile {execName = "appraisalscope", sourceDir = Nothing, destDir = Nothing, destName = "appraisalscope"})
              doServer (BinPkgName "artvaluereport2-development") (theServer (BinPkgName "artvaluereport2-development"))

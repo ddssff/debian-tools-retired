@@ -7,7 +7,7 @@ module Debian.Debianize.Details
 import Data.Version (Version(Version))
 import Debian.Debianize.Types.Atoms as T (epochMap, missingDependencies)
 import Debian.Debianize.Monad (DebT, mapCabal, splitCabal)
-import Debian.Debianize.Utility ((+=), (++=))
+import Debian.Debianize.Prelude ((+=), (++=))
 import Debian.Relation (BinPkgName(BinPkgName))
 import Distribution.Package (PackageName(PackageName))
 

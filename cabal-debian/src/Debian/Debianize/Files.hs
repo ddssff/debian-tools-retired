@@ -16,16 +16,12 @@ import Data.Monoid ((<>), mempty)
 import Data.Set as Set (toList, member)
 import Data.Text as Text (Text, pack, unpack, lines, unlines, strip, null)
 import Debian.Control (Control'(Control, unControl), Paragraph'(Paragraph), Field'(Field))
-import Debian.Debianize.Types.BinaryDebDescription (BinaryDebDescription, PackageRelations)
+import Debian.Debianize.Goodies (makeRulesHead)
+import Debian.Debianize.Monad (DebT)
+import Debian.Debianize.Prelude (showDeps')
+import qualified Debian.Debianize.Types.Atoms as T
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S
-import Debian.Debianize.Goodies (makeRulesHead)
-import qualified Debian.Debianize.Types.Atoms as T
-    (compat, sourceFormat, watch, changelog, control, postInst, postRm, preInst, preRm,
-     intermediateFiles, install, installDir, installInit, logrotateStanza, link,
-     rulesHead, rulesFragments, copyright, license, licenseFile)
-import Debian.Debianize.Monad (DebT)
-import Debian.Debianize.Utility (showDeps')
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
 import Distribution.License (License(AllRightsReserved))
 import Prelude hiding (init, unlines, writeFile, log)
@@ -184,7 +180,7 @@ controlFile src =
            List.map binary (getL S.binaryPackages src))
     }
     where
-      binary :: BinaryDebDescription -> Paragraph' String
+      binary :: B.BinaryDebDescription -> Paragraph' String
       binary bin =
           Paragraph
            ([Field ("Package", " " ++ show (pretty (getL B.package bin))),
@@ -217,7 +213,7 @@ controlFile src =
                     if member S.S s then "S" else "" <>
                     if member S.C s then "C" else ""
 
-relFields :: PackageRelations -> [Field' [Char]]
+relFields :: B.PackageRelations -> [Field' [Char]]
 relFields rels =
     depField "Depends" (getL B.depends rels) ++
     depField "Recommends" (getL B.recommends rels) ++

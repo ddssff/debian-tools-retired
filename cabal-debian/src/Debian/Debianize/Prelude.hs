@@ -1,8 +1,8 @@
--- | Functions used by but not related to cabal-debian, these could
--- conceivably be moved into more general libraries.
+-- | Functions and instances used by but not related to cabal-debian.
+-- These could conceivably be moved into more general libraries.
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
-module Debian.Debianize.Utility
+module Debian.Debianize.Prelude
     ( curry3
     , DebMap
     , buildDebVersionMap

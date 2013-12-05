@@ -42,7 +42,7 @@ module Debian.Debianize.Types.Atoms
     , sourceFormat
     , changelog
     , comments
-    , standards
+    , standardsVersion
     , rulesHead
     , rulesFragments
     , noProfilingLibrary
@@ -115,7 +115,6 @@ module Debian.Debianize.Types.Atoms
     , changedBy
     , uploaders
     , dmUploadAllowed
-    , standardsVersion
     , homepage
     , vcsFields
     , xFields
@@ -832,6 +831,7 @@ uploaders = S.uploaders . control
 dmUploadAllowed :: Lens Atoms (Bool)
 dmUploadAllowed = S.dmUploadAllowed . control
 
+-- | The @Standards-Version@ field of the @debian/control@ file
 standardsVersion :: Lens Atoms (Maybe StandardsVersion)
 standardsVersion = S.standardsVersion . control
 
@@ -858,10 +858,6 @@ buildConflictsIndep = S.buildConflictsIndep . control
 
 binaryPackages :: Lens Atoms [B.BinaryDebDescription]
 binaryPackages = S.binaryPackages . control
-
--- | The @Standards-Version@ field of the @debian/control@ file
-standards :: Lens Atoms (Maybe StandardsVersion)
-standards = S.standardsVersion . control
 
 -- | Add a stanza to the binary package's logrotate script.
 logrotateStanza :: Lens Atoms (Map BinPkgName (Set Text))

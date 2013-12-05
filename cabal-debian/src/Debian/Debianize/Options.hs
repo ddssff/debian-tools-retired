@@ -19,8 +19,8 @@ import Debian.Debianize.Types.Atoms
      sourceFormat, buildDepends, buildDependsIndep, extraDevDeps, depends, conflicts, replaces, provides,
      extraLibMap, debVersion, revision, epochMap, execMap)
 import Debian.Debianize.Monad (DebT)
+import Debian.Debianize.Prelude (read', maybeRead, (+=), (~=), (%=), (++=), (+++=))
 import Debian.Debianize.Types.Atoms (Atoms, InstallFile(..), DebAction(..))
-import Debian.Debianize.Utility (read', maybeRead, (+=), (~=), (%=), (++=), (+++=))
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relations, Relation(..))

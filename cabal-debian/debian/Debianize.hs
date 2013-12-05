@@ -9,13 +9,13 @@ import Debian.Debianize (inputChangeLog, inputDebianization)
 import Debian.Debianize.Details (seereasonDefaultAtoms)
 import Debian.Debianize.Finalize (debianization)
 import Debian.Debianize.Types.Atoms as T
-    (changelog, changelog, compat, conflicts, control, depends, debianDescription, homepage,
-     installCabalExec, sourceFormat, standards, utilsPackageNames, copyright, newAtoms)
+    (changelog, compat, conflicts, control, depends, debianDescription, homepage,
+     installCabalExec, sourceFormat, standardsVersion, utilsPackageNames, copyright, newAtoms)
 import Debian.Debianize.Monad (Atoms, DebT, execDebT, evalDebT, execDebM)
 import Debian.Debianize.Output (compareDebianization)
+import Debian.Debianize.Prelude ((~=), (~?=), (%=), (+=), (++=), (+++=))
 import Debian.Debianize.Types (Top(Top))
 import Debian.Debianize.Types.SourceDebDescription (SourceDebDescription)
-import Debian.Debianize.Utility ((~=), (~?=), (%=), (+=), (++=), (+++=))
 import Debian.Policy (SourceFormat(Native3), StandardsVersion(StandardsVersion))
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), VersionReq(SLT, GRE))
 import Debian.Version (parseDebianVersion)
@@ -42,7 +42,7 @@ main =
       customize :: Monad m => DebT m ()
       customize =
           do sourceFormat ~= Just Native3
-             standards ~= Just (StandardsVersion 3 9 3 Nothing)
+             standardsVersion ~= Just (StandardsVersion 3 9 3 Nothing)
              compat ~= Just 7
              copyright ~= Just (pack (unlines [ "This package is not part of the Debian GNU/Linux distribution."
                                               , ""

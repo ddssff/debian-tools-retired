@@ -32,12 +32,10 @@ import Debian.Debianize.Goodies (backupAtoms, describe, execAtoms, serverAtoms, 
 import Debian.Debianize.Input (dataDir, inputCabalization, inputChangeLog, inputMaintainer)
 import Debian.Debianize.Monad as Monad (Atoms, DebT)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
-import Debian.Debianize.Types as Debian (Top)
-import Debian.Debianize.Types.Atoms as T (buildDependsIndep, compat, compiler, file, install, installCabalExec, installData, installDir, InstallFile(execName, sourceDir), installTo, intermediateFiles, license, link, maintainer, packageDescription, rulesFragments, showAtoms, sourcePackageName, sourcePriority, sourceSection, verbosity, watch)
-import qualified Debian.Debianize.Types.Atoms as T (apacheSite, backups, binaryArchitectures, binaryPackages, binarySection, breaks, buildDepends, buildDir, builtUsing, changelog, comments, conflicts, debianDescription, debianNameMap, debVersion, depends, epochMap, execMap, executable, extraDevDeps, extraLibMap, installCabalExecTo, missingDependencies, noDocumentationLibrary, noProfilingLibrary, packageType, preDepends, provides, recommends, replaces, revision, serverInfo, source, suggests, utilsPackageNames, website)
-import Debian.Debianize.Types.BinaryDebDescription as B (BinaryDebDescription, PackageType(Development, Documentation, Exec, Profiling, Utilities))
-import qualified Debian.Debianize.Types.BinaryDebDescription as B (package, PackageType(Source'))
-import Debian.Debianize.Utility ((%=), (+++=), (+=), foldEmpty, fromEmpty, fromSingleton, (~=), (~?=))
+import Debian.Debianize.Prelude ((%=), (+++=), (+=), foldEmpty, fromEmpty, fromSingleton, (~=), (~?=))
+import Debian.Debianize.Types (Top)
+import qualified Debian.Debianize.Types.Atoms as T
+import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
 import Debian.Policy (getDebhelperCompatLevel, haskellMaintainer, PackageArchitectures(Any, All), PackagePriority(Optional), Section(..))
@@ -81,7 +79,7 @@ finalizeDebianization' =
     do date <- liftIO getCurrentLocalRFC822Time
        debhelperCompat <- liftIO getDebhelperCompatLevel
        finalizeDebianization date debhelperCompat
-       access verbosity >>= \ vb -> when (vb >= 3) (get >>= liftIO . showAtoms)
+       access T.verbosity >>= \ vb -> when (vb >= 3) (get >>= liftIO . T.showAtoms)
 
 -- | Now that we know the build and data directories, we can expand
 -- some atoms into sets of simpler atoms which can eventually be
@@ -94,14 +92,14 @@ finalizeDebianization' =
 finalizeDebianization  :: (Monad m, Functor m) => String -> Maybe Int -> DebT m ()
 finalizeDebianization date debhelperCompat =
     do addExtraLibDependencies
-       Just pkgDesc <- access packageDescription
-       watch ~?= Just (watchAtom (pkgName $ Cabal.package $ pkgDesc))
-       sourceSection ~?= Just (MainSection "haskell")
-       sourcePriority ~?= Just Optional
-       compat ~?= debhelperCompat
+       Just pkgDesc <- access T.packageDescription
+       T.watch ~?= Just (watchAtom (pkgName $ Cabal.package $ pkgDesc))
+       T.sourceSection ~?= Just (MainSection "haskell")
+       T.sourcePriority ~?= Just Optional
+       T.compat ~?= debhelperCompat
        finalizeChangelog date
        finalizeControl
-       license ~?= Just (Cabal.license pkgDesc)
+       T.license ~?= Just (Cabal.license pkgDesc)
        expandAtoms
        -- Create the binary packages for the web sites, servers, backup packges, and other executables
        access T.executable >>= List.mapM_ (cabalExecBinaryPackage . fst) . Map.toList
@@ -134,7 +132,7 @@ finalizeDebianization date debhelperCompat =
 finalizeDescriptions :: (Monad m, Functor m) => DebT m ()
 finalizeDescriptions = access T.binaryPackages >>= List.mapM_ finalizeDescription
 
-finalizeDescription :: (Monad m, Functor m) => BinaryDebDescription -> DebT m ()
+finalizeDescription :: (Monad m, Functor m) => B.BinaryDebDescription -> DebT m ()
 finalizeDescription bdd =
     do let b = getL B.package bdd
        cabDesc <- describe b
@@ -157,7 +155,7 @@ finalizeDescription bdd =
 -- a version.
 debianVersion :: Monad m => DebT m DebianVersion
 debianVersion =
-    do pkgDesc <- access packageDescription >>= maybe (error "debianVersion: no PackageDescription") return
+    do pkgDesc <- access T.packageDescription >>= maybe (error "debianVersion: no PackageDescription") return
        let pkgId = Cabal.package pkgDesc
        epoch <- debianEpoch (pkgName pkgId)
        debVer <- access T.debVersion
@@ -194,7 +192,7 @@ finalizeControl :: Monad m => DebT m ()
 finalizeControl =
     do finalizeSourceName
        finalizeMaintainer
-       Just src <- access sourcePackageName
+       Just src <- access T.sourcePackageName
        maint <- access T.maintainer >>= return . fromMaybe (error "No maintainer")
        T.source ~= Just src
        T.maintainer ~= Just maint
@@ -209,8 +207,8 @@ finalizeChangelog date =
     do finalizeSourceName
        finalizeMaintainer
        ver <- debianVersion
-       src <- access sourcePackageName
-       Just maint <- access maintainer
+       src <- access T.sourcePackageName
+       Just maint <- access T.maintainer
        cmts <- access T.comments
        T.changelog %= fmap (dropFutureEntries ver)
        T.changelog %= fixLog src ver cmts maint
@@ -237,7 +235,7 @@ finalizeChangelog date =
 -- devel package (if there is one.)
 addExtraLibDependencies :: (Monad m, Functor m) => DebT m ()
 addExtraLibDependencies =
-    do pkgDesc <- access packageDescription >>= maybe (error "addExtraLibDependencies: no PackageDescription") return
+    do pkgDesc <- access T.packageDescription >>= maybe (error "addExtraLibDependencies: no PackageDescription") return
        devName <- debianName B.Development
        libMap <- access T.extraLibMap
        binNames <- List.map (getL B.package) <$> access T.binaryPackages
@@ -253,23 +251,23 @@ putBuildDeps pkgDesc =
     do deps <- debianBuildDeps pkgDesc
        depsIndep <- debianBuildDepsIndep pkgDesc
        T.buildDepends ~= deps
-       buildDependsIndep ~= depsIndep
+       T.buildDependsIndep ~= depsIndep
 
 cabalExecBinaryPackage :: Monad m => BinPkgName -> DebT m ()
 cabalExecBinaryPackage b =
-    do T.packageType b ~?= Just Exec
+    do T.packageType b ~?= Just B.Exec
        T.binaryArchitectures b ~?= Just Any
        T.binarySection b ~?= Just (MainSection "misc")
        desc <- describe b
        T.debianDescription b ~?= Just desc
-       binaryPackageRelations b Exec
+       binaryPackageRelations b B.Exec
     where
 
-binaryPackageRelations :: Monad m => BinPkgName -> PackageType -> DebT m ()
+binaryPackageRelations :: Monad m => BinPkgName -> B.PackageType -> DebT m ()
 binaryPackageRelations b typ =
     do edds <- access T.extraDevDeps
        T.depends b %= \ rels -> [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
-                                (if typ == Development then edds else []) ++ rels
+                                (if typ == B.Development then edds else []) ++ rels
        T.recommends b ~= [anyrel "${haskell:Recommends}"]
        T.suggests b ~= [anyrel "${haskell:Suggests}"]
        T.preDepends b ~= []
@@ -296,36 +294,35 @@ binaryPackageProvides b = get >>= \ atoms -> return $ maybe [] (List.map (: []) 
 -- debLibProf haddock binaryPackageDeps extraDevDeps extraLibMap
 librarySpecs :: Monad m => PackageDescription -> DebT m ()
 librarySpecs pkgDesc =
-    do debName <- debianName Documentation
+    do debName <- debianName B.Documentation
        let dev = isJust (Cabal.library pkgDesc)
        doc <- get >>= return . (/= singleton True) . getL T.noDocumentationLibrary
        prof <- get >>= return . (/= singleton True) . getL T.noProfilingLibrary
-       when dev (librarySpec Any Development)
-       when (dev && prof) (librarySpec Any Profiling)
+       when dev (librarySpec Any B.Development)
+       when (dev && prof) (librarySpec Any B.Profiling)
        when (dev && doc)
             (do docSpecsParagraph
-                link +++= (debName, singleton
-                                    ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt",
-                                     "/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")))
+                T.link +++= (debName, singleton ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt",
+                                                 "/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")))
     where
       PackageName cabal = pkgName (Cabal.package pkgDesc)
       hoogle = List.map toLower cabal
 
 docSpecsParagraph :: Monad m => DebT m ()
 docSpecsParagraph =
-    do b <- debianName Documentation
-       binaryPackageRelations b Development -- not sure why this isn't Documentation, but I think there's a "good" reason
-       T.packageType b ~?= Just Documentation
+    do b <- debianName B.Documentation
+       binaryPackageRelations b B.Development -- not sure why this isn't Documentation, but I think there's a "good" reason
+       T.packageType b ~?= Just B.Documentation
        desc <- describe b
-       T.packageType b ~?= Just Documentation
+       T.packageType b ~?= Just B.Documentation
        T.binaryArchitectures b ~= Just All
        T.binarySection b ~?= Just (MainSection "doc")
        T.debianDescription b ~?= Just desc
 
-librarySpec :: Monad m => PackageArchitectures -> PackageType -> DebT m ()
+librarySpec :: Monad m => PackageArchitectures -> B.PackageType -> DebT m ()
 librarySpec arch typ =
     do b <- debianName typ
-       binaryPackageRelations b Development
+       binaryPackageRelations b B.Development
        T.packageType b ~?= Just typ
        desc <- describe b
        T.packageType b ~?= Just typ
@@ -380,10 +377,10 @@ makeUtilsPackages pkgDesc =
                                   T.rulesFragments += (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp"))
                                   T.binaryArchitectures p ~?= Just (if Set.null utilsExec then All else Any)
                                   T.binarySection p ~?= Just (MainSection "misc")
-                                  binaryPackageRelations p Utilities) utilsPackages)
+                                  binaryPackageRelations p B.Utilities) utilsPackages)
        -- Add the unassigned files to the utils packages
-       Set.mapM_ (\ p -> Set.mapM_ (\ path -> installData +++= (p, singleton (path, path))) utilsDataMissing) utilsPackages
-       Set.mapM_ (\ p -> Set.mapM_ (\ name -> installCabalExec +++= (p, singleton (name, "usr/bin"))) (tr "utilsExecMissing: " utilsExecMissing)) utilsPackages
+       Set.mapM_ (\ p -> Set.mapM_ (\ path -> T.installData +++= (p, singleton (path, path))) utilsDataMissing) utilsPackages
+       Set.mapM_ (\ p -> Set.mapM_ (\ name -> T.installCabalExec +++= (p, singleton (name, "usr/bin"))) (tr "utilsExecMissing: " utilsExecMissing)) utilsPackages
 {-
        case (Set.difference availableData installedData, Set.difference availableExec installedExec) of
          (datas, execs) | Set.null datas && Set.null execs -> return ()
@@ -404,9 +401,9 @@ makeUtilsPackages pkgDesc =
 -}
     where
       ename i =
-          case sourceDir i of
-            (Nothing) -> execName i
-            (Just s) ->  s </> execName i
+          case T.sourceDir i of
+            (Nothing) -> T.execName i
+            (Just s) ->  s </> T.execName i
 
 tr :: Show a => String -> a -> a
 tr _label x = {- trace ("(trace " ++ _label ++ show x ++ ")") -} x
@@ -442,7 +439,7 @@ makeUtilsAtoms p datas execs =
 expandAtoms :: Monad m => DebT m ()
 expandAtoms =
     do builddir <- get >>= return . fromEmpty (singleton "dist-ghc/build") . getL T.buildDir
-       dDir <- access packageDescription >>= maybe (error "expandAtoms") (return . dataDir)
+       dDir <- access T.packageDescription >>= maybe (error "expandAtoms") (return . dataDir)
        expandApacheSites
        expandInstallCabalExecs (fromSingleton (error "no builddir") (\ xs -> error $ "multiple builddirs:" ++ show xs) builddir)
        expandInstallCabalExecTo (fromSingleton (error "no builddir") (\ xs -> error $ "multiple builddirs:" ++ show xs) builddir)
@@ -460,36 +457,36 @@ expandAtoms =
              List.mapM_ expandApacheSite (Map.toList mp)
           where
             expandApacheSite (b, (dom, log, text)) =
-                do link +++= (b, singleton ("/etc/apache2/sites-available/" ++ dom, "/etc/apache2/sites-enabled/" ++ dom))
-                   installDir +++= (b, singleton log)
-                   file +++= (b, singleton ("/etc/apache2/sites-available" </> dom, text))
+                do T.link +++= (b, singleton ("/etc/apache2/sites-available/" ++ dom, "/etc/apache2/sites-enabled/" ++ dom))
+                   T.installDir +++= (b, singleton log)
+                   T.file +++= (b, singleton ("/etc/apache2/sites-available" </> dom, text))
 
       expandInstallCabalExecs :: Monad m => FilePath -> DebT m ()
       expandInstallCabalExecs builddir =
           do mp <- get >>= return . getL T.installCabalExec
-             List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (name, dst) -> install +++= (b, singleton (builddir </> name </> name, dst))) pairs) (Map.toList mp)
+             List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (name, dst) -> T.install +++= (b, singleton (builddir </> name </> name, dst))) pairs) (Map.toList mp)
 
       expandInstallCabalExecTo :: Monad m => FilePath -> DebT m ()
       expandInstallCabalExecTo builddir =
           do mp <- get >>= return . getL T.installCabalExecTo
-             List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (n, d) -> rulesFragments += (Text.unlines
-                                                                                   [ pack ("binary-fixup" </> show (pretty b)) <> "::"
-                                                                                   , "\tinstall -Dps " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty b) </> makeRelative "/" d) ])) pairs) (Map.toList mp)
+             List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (n, d) -> T.rulesFragments += (Text.unlines
+                                                                                     [ pack ("binary-fixup" </> show (pretty b)) <> "::"
+                                                                                     , "\tinstall -Dps " <> pack (builddir </> n </> n) <> " " <> pack ("debian" </> show (pretty b) </> makeRelative "/" d) ])) pairs) (Map.toList mp)
 
       expandInstallData :: Monad m => FilePath -> DebT m ()
       expandInstallData dDir =
           do mp <- get >>= return . getL T.installData
              List.mapM_ (\ (b, pairs) -> Set.mapM_ (\ (s, d) ->
                                                         if takeFileName s == takeFileName d
-                                                        then install +++= (b, singleton (s, (dDir </> makeRelative "/" (takeDirectory d))))
-                                                        else installTo +++= (b, singleton (s, (dDir </> makeRelative "/" d)))) pairs) (Map.toList mp)
+                                                        then T.install +++= (b, singleton (s, (dDir </> makeRelative "/" (takeDirectory d))))
+                                                        else T.installTo +++= (b, singleton (s, (dDir </> makeRelative "/" d)))) pairs) (Map.toList mp)
 
       expandInstallTo :: Monad m => DebT m ()
       expandInstallTo =
           do mp <- get >>= return . getL T.installTo
-             List.mapM_ (\ (p, pairs) -> Set.mapM_ (\ (s, d) -> rulesFragments += (Text.unlines
-                                                                                   [ pack ("binary-fixup" </> show (pretty p)) <> "::"
-                                                                                   , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])) pairs) (Map.toList mp)
+             List.mapM_ (\ (p, pairs) -> Set.mapM_ (\ (s, d) -> T.rulesFragments += (Text.unlines
+                                                                                     [ pack ("binary-fixup" </> show (pretty p)) <> "::"
+                                                                                     , "\tinstall -Dp " <> pack s <> " " <> pack ("debian" </> show (pretty p) </> makeRelative "/" d) ])) pairs) (Map.toList mp)
 
       expandFile :: Monad m => DebT m ()
       expandFile =
@@ -498,8 +495,8 @@ expandAtoms =
                                                         do let (destDir', destName') = splitFileName path
                                                                tmpDir = "debian/cabalInstall" </> show (md5 (fromString (unpack s)))
                                                                tmpPath = tmpDir </> destName'
-                                                           intermediateFiles += (tmpPath, s)
-                                                           install +++= (p, singleton (tmpPath, destDir'))) pairs) (Map.toList mp)
+                                                           T.intermediateFiles += (tmpPath, s)
+                                                           T.install +++= (p, singleton (tmpPath, destDir'))) pairs) (Map.toList mp)
 
       expandWebsite :: Monad m => DebT m ()
       expandWebsite =
@@ -613,7 +610,7 @@ debianBuildDepsIndep pkgDesc =
 -- documentation package for any libraries which are build
 -- dependencies, so we have access to all the cross references.
 docDependencies :: Monad m => Dependency_ -> DebT m D.Relations
-docDependencies (BuildDepends (Dependency name ranges)) = dependencies Documentation name ranges
+docDependencies (BuildDepends (Dependency name ranges)) = dependencies B.Documentation name ranges
 docDependencies _ = return []
 
 -- | The Debian build dependencies for a package include the profiling
@@ -621,8 +618,8 @@ docDependencies _ = return []
 -- references.  Also the packages associated with extra libraries.
 buildDependencies :: Monad m => Dependency_ -> DebT m D.Relations
 buildDependencies (BuildDepends (Dependency name ranges)) =
-    do dev <- dependencies Development name ranges
-       prof <- dependencies Profiling name ranges
+    do dev <- dependencies B.Development name ranges
+       prof <- dependencies B.Profiling name ranges
        return $ dev ++ prof
 buildDependencies dep@(ExtraLibs _) =
     do mp <- get >>= return . getL T.execMap
@@ -672,7 +669,7 @@ anyrel' x = [D.Rel x Nothing Nothing]
 -- | Turn a cabal dependency into debian dependencies.  The result
 -- needs to correspond to a single debian package to be installed,
 -- so we will return just an OrRelation.
-dependencies :: Monad m => PackageType -> PackageName -> VersionRange -> DebT m Relations
+dependencies :: Monad m => B.PackageType -> PackageName -> VersionRange -> DebT m Relations
 dependencies typ name cabalRange =
     do atoms <- get
        -- Compute a list of alternative debian dependencies for
@@ -737,16 +734,16 @@ dependencies typ name cabalRange =
 -- compiler a substitute for that package.  If we were to
 -- specify the virtual package (e.g. libghc-base-dev) we would
 -- have to make sure not to specify a version number.
-doBundled :: Monad m => PackageType -> PackageName -> [D.Relation] -> DebT m [D.Relation]
+doBundled :: Monad m => B.PackageType -> PackageName -> [D.Relation] -> DebT m [D.Relation]
 doBundled typ name rels =
-    do comp <- access compiler >>= return . fromMaybe (error "no Compiler value")
+    do comp <- access T.compiler >>= return . fromMaybe (error "no Compiler value")
        case ghcBuiltIn comp name of
          True -> return $ rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
          False -> return rels
     where
-      compilerPackageName Documentation = D.BinPkgName "ghc-doc"
-      compilerPackageName Profiling = D.BinPkgName "ghc-prof"
-      compilerPackageName Development = D.BinPkgName "ghc"
+      compilerPackageName B.Documentation = D.BinPkgName "ghc-doc"
+      compilerPackageName B.Profiling = D.BinPkgName "ghc-prof"
+      compilerPackageName B.Development = D.BinPkgName "ghc"
       compilerPackageName _ = D.BinPkgName "ghc" -- whatevs
 
 -- Convert a cabal version to a debian version, adding an epoch number if requested
