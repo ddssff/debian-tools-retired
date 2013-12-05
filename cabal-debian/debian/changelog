@@ -1,3 +1,9 @@
+haskell-cabal-debian (4.0.0) unstable; urgency=low
+
+  * Massive lens overhaul
+
+ -- David Fox <dsf@seereason.com>  Thu, 05 Dec 2013 12:26:31 -0800
+
 haskell-cabal-debian (3.10.3) unstable; urgency=low
 
   * Go back to using lens interface directly
