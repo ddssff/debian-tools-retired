@@ -127,8 +127,8 @@ module Debian.Debianize
     -- * Deb monad - 'Debian.Debianize.Monad'
     , DebT, runDebT, execDebT, evalDebT, DebM, runDebM, execDebM, evalDebM
 
-    , Debian.Debianize.Monad.mapCabal
-    , Debian.Debianize.Monad.splitCabal
+    , Debian.Debianize.DebianName.mapCabal
+    , Debian.Debianize.DebianName.splitCabal
     , Debian.Debianize.Options.compileArgs
     , Debian.Debianize.SubstVars.substvars
 
@@ -155,6 +155,7 @@ module Debian.Debianize
     ) where
 
 -- import Debian.Debianize.Bundled
+import Debian.Debianize.DebianName
 import Debian.Debianize.Details
 -- import Debian.Debianize.Files
 import Debian.Debianize.Finalize

@@ -4,16 +4,19 @@ module Debian.Debianize.DebianName
     ( debianName             -- Used in Debian.Debianize.Files and
     , mkPkgName
     , mkPkgName'
+    , mapCabal
+    , splitCabal
     ) where
 
 import Data.Char (toLower)
 import Data.Lens.Lazy (access)
-import Data.Map as Map (lookup)
-import Data.Version (showVersion)
+import Data.Map as Map (lookup, alter)
+import Data.Version (Version, showVersion)
 import Debian.Debianize.Types.BinaryDebDescription as Debian (PackageType(..))
 import Debian.Debianize.Types.Atoms as T (debianNameMap, packageDescription)
 import Debian.Debianize.Monad (DebT)
-import Debian.Debianize.VersionSplits (doSplits, VersionSplits)
+import Debian.Debianize.Prelude ((%=))
+import Debian.Debianize.VersionSplits (insertSplit, doSplits, VersionSplits, makePackage)
 import Debian.Orphans ()
 import Debian.Relation (PkgName(..), Relations)
 import qualified Debian.Relation as D (VersionReq(EEQ))
@@ -78,3 +81,24 @@ debianBaseName (PackageName name) =
       fixChar :: Char -> Char
       fixChar '_' = '-'
       fixChar c = toLower c
+
+-- | Map all versions of Cabal package pname to Debian package dname.
+-- Not really a debian package name, but the name of a cabal package
+-- that maps to the debian package name we want.  (Should this be a
+-- SrcPkgName?)
+mapCabal :: Monad m => PackageName -> String -> DebT m ()
+mapCabal pname dname =
+    debianNameMap %= Map.alter f pname
+    where
+      f :: Maybe VersionSplits -> Maybe VersionSplits
+      f Nothing = Just (makePackage dname)
+      f (Just sp) = error $ "mapCabal " ++ show pname ++ " " ++ show dname ++ ": - already mapped: " ++ show sp
+
+-- | Map versions less than ver of Cabal Package pname to Debian package ltname
+splitCabal :: Monad m => PackageName -> String -> Version -> DebT m ()
+splitCabal pname ltname ver =
+    debianNameMap %= Map.alter f pname
+    where
+      f :: Maybe VersionSplits -> Maybe VersionSplits
+      f Nothing = error $ "splitCabal - not mapped: " ++ show pname
+      f (Just sp) = Just (insertSplit ver ltname sp)

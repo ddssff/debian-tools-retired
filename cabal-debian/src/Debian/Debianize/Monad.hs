@@ -25,8 +25,8 @@ module Debian.Debianize.Monad
 -}
 
     -- * modify cabal to debian package version map
-    , mapCabal
-    , splitCabal
+    -- , mapCabal
+    -- , splitCabal
     ) where
 
 import Control.Monad.State (evalState, evalStateT, execState, execStateT, runState, State, StateT(runStateT))
@@ -59,24 +59,3 @@ evalDebM action atoms = evalState action atoms
 
 runDebM :: DebM a -> Atoms -> (a, Atoms)
 runDebM action atoms = runState action atoms
-
--- | Map all versions of Cabal package pname to Debian package dname.
--- Not really a debian package name, but the name of a cabal package
--- that maps to the debian package name we want.  (Should this be a
--- SrcPkgName?)
-mapCabal :: Monad m => PackageName -> String -> DebT m ()
-mapCabal pname dname =
-    debianNameMap %= Map.alter f pname
-    where
-      f :: Maybe VersionSplits -> Maybe VersionSplits
-      f Nothing = Just (makePackage dname)
-      f (Just sp) = error $ "mapCabal " ++ show pname ++ " " ++ show dname ++ ": - already mapped: " ++ show sp
-
--- | Map versions less than ver of Cabal Package pname to Debian package ltname
-splitCabal :: Monad m => PackageName -> String -> Version -> DebT m ()
-splitCabal pname ltname ver =
-    debianNameMap %= Map.alter f pname
-    where
-      f :: Maybe VersionSplits -> Maybe VersionSplits
-      f Nothing = error $ "splitCabal - not mapped: " ++ show pname
-      f (Just sp) = Just (insertSplit ver ltname sp)
