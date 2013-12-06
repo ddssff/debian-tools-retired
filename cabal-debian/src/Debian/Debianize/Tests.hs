@@ -19,9 +19,8 @@ import Data.Set as Set (fromList, singleton, union)
 import qualified Data.Text as T (intercalate, lines, pack, split, Text, unlines)
 import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..) {-, parseEntry-})
-import Debian.Debianize.DebianName (mapCabal, splitCabal)
 import Debian.Debianize.Files (debianizationFileMap)
-import Debian.Debianize.Finalize (debianization)
+import Debian.Debianize.Finalize (debianization, finalizeDebianization')
 import Debian.Debianize.Goodies (doBackups, doExecutable, doServer, doWebsite, makeRulesHead, tightDependencyFixup)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization)
 import Debian.Debianize.Monad (DebT, evalDebT, execDebM, execDebT)
@@ -30,10 +29,11 @@ import Debian.Debianize.Types as T
 import Debian.Debianize.Types.Atoms as T
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S
-import Debian.Policy (databaseDirectory, PackageArchitectures(All), PackagePriority(Extra), parseMaintainer, Section(MainSection), SourceFormat(Native3), StandardsVersion(..))
+import Debian.Policy (databaseDirectory, PackageArchitectures(All), PackagePriority(Extra), parseMaintainer, Section(MainSection), SourceFormat(Native3), StandardsVersion(..), getDebhelperCompatLevel, getDebianStandardsVersion)
 import Debian.Relation (BinPkgName(..), Relation(..), SrcPkgName(..), VersionReq(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
-import Debian.Version (parseDebianVersion)
+import Debian.Version (parseDebianVersion, buildDebianVersion)
+import Distribution.License (License(..))
 import Distribution.Package (PackageName(PackageName))
 import Prelude hiding (log)
 import System.Exit (ExitCode(ExitSuccess))
@@ -86,7 +86,6 @@ tests = TestLabel "Debianization Tests" (TestList [-- 1 and 2 do not input a cab
                                                    test9 "test9 - test-data/alex",
                                                    test10 "test10 - test-data/archive"])
 
-{-
 test1 :: String -> Test
 test1 label =
     TestLabel label $
@@ -115,15 +114,15 @@ test1 label =
                                                 , "include /usr/share/cdbs/1/class/hlibrary.mk" ])))
                 compat ~= Just 9 -- This will change as new version of debhelper are released
                 license ~= Just BSD3
-                control %= (\ y -> y { T.source = Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"})
-                                     , T.maintainer = Just (NameAddr (Just "David Fox") "dsf@seereason.com")
-                                     , T.standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)) -- This will change as new versions of debian-policy are released
-                                     , T.buildDepends = [[Rel (BinPkgName "debhelper") (Just (GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
-                                                           [Rel (BinPkgName "haskell-devscripts") (Just (GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
-                                                           [Rel (BinPkgName "cdbs") Nothing Nothing],
-                                                           [Rel (BinPkgName "ghc") Nothing Nothing],
-                                                           [Rel (BinPkgName "ghc-prof") Nothing Nothing]]
-                                     , T.buildDependsIndep = [[Rel (BinPkgName "ghc-doc") Nothing Nothing]] }))
+                T.source ~= Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"})
+                T.maintainer ~= Just (NameAddr (Just "David Fox") "dsf@seereason.com")
+                T.standardsVersion ~= Just (StandardsVersion 3 9 3 (Just 1)) -- This will change as new versions of debian-policy are released
+                T.buildDepends %= (++ [[Rel (BinPkgName "debhelper") (Just (GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
+                                       [Rel (BinPkgName "haskell-devscripts") (Just (GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
+                                       [Rel (BinPkgName "cdbs") Nothing Nothing],
+                                       [Rel (BinPkgName "ghc") Nothing Nothing],
+                                       [Rel (BinPkgName "ghc-prof") Nothing Nothing]])
+                T.buildDependsIndep %= (++ [[Rel (BinPkgName "ghc-doc") Nothing Nothing]]))
             newAtoms
       log = ChangeLog [Entry { logPackage = "haskell-cabal-debian"
                              , logVersion = buildDebianVersion Nothing "2.6.2" Nothing
@@ -160,15 +159,15 @@ test2 label =
                                                  "include /usr/share/cdbs/1/class/hlibrary.mk"])))
                 compat ~= Just 9
                 license ~= Just BSD3
-                control %= (\ y -> y { T.source = Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"}),
-                                       T.maintainer = Just (NameAddr {nameAddr_name = Just "David Fox", nameAddr_addr = "dsf@seereason.com"}),
-                                       T.standardsVersion = Just (StandardsVersion 3 9 3 (Just 1)),
-                                       T.buildDepends = [[Rel (BinPkgName "debhelper") (Just (GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
-                                                           [Rel (BinPkgName "haskell-devscripts") (Just (GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
-                                                           [Rel (BinPkgName "cdbs") Nothing Nothing],
-                                                           [Rel (BinPkgName "ghc") Nothing Nothing],
-                                                           [Rel (BinPkgName "ghc-prof") Nothing Nothing]],
-                                       T.buildDependsIndep = [[Rel (BinPkgName "ghc-doc") Nothing Nothing]] }))
+                T.source ~= Just (SrcPkgName {unSrcPkgName = "haskell-cabal-debian"})
+                T.maintainer ~= Just (NameAddr {nameAddr_name = Just "David Fox", nameAddr_addr = "dsf@seereason.com"})
+                T.standardsVersion ~= Just (StandardsVersion 3 9 3 (Just 1))
+                T.buildDepends %= (++ [[Rel (BinPkgName "debhelper") (Just (GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
+                                       [Rel (BinPkgName "haskell-devscripts") (Just (GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
+                                       [Rel (BinPkgName "cdbs") Nothing Nothing],
+                                       [Rel (BinPkgName "ghc") Nothing Nothing],
+                                       [Rel (BinPkgName "ghc-prof") Nothing Nothing]])
+                T.buildDependsIndep %= (++ [[Rel (BinPkgName "ghc-doc") Nothing Nothing]]))
             newAtoms
       log = ChangeLog [Entry {logPackage = "haskell-cabal-debian",
                               logVersion = Debian.Version.parseDebianVersion ("2.6.2" :: String),
@@ -188,7 +187,6 @@ testEntry =
                                 , "    files that were supposed to be installed into packages."
                                 , ""
                                 , " -- David Fox <dsf@seereason.com>  Thu, 20 Dec 2012 06:49:25 -0800" ]))
--}
 
 test3 :: String -> Test
 test3 label =
