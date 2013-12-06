@@ -13,7 +13,7 @@ import Data.Lens.Lazy (Lens)
 import Data.Set (singleton)
 import Data.Version (parseVersion)
 import Debian.Debianize.Goodies (doExecutable)
-import Debian.Debianize.Types.Atoms
+import Debian.Debianize.Types
     (verbosity, dryRun, debAction, compilerVersion, noDocumentationLibrary, noProfilingLibrary,
      missingDependencies, sourcePackageName, cabalFlagAssignments, maintainer, buildDir, omitLTDeps,
      sourceFormat, buildDepends, buildDependsIndep, extraDevDeps, depends, conflicts, replaces, provides,

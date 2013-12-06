@@ -28,6 +28,7 @@ import Data.Text as Text (Text, pack, unlines, intercalate)
 import Debian.Debianize.DebianName (debianName)
 import Debian.Debianize.Monad (Atoms, DebT, execDebM)
 import Debian.Debianize.Prelude (trim, (%=), (+=), (++=), (+++=))
+import qualified Debian.Debianize.Types as T
 import qualified Debian.Debianize.Types.Atoms as T
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import Debian.Orphans ()

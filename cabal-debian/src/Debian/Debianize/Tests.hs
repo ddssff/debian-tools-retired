@@ -19,13 +19,14 @@ import Data.Set as Set (fromList, singleton, union)
 import qualified Data.Text as T (intercalate, lines, pack, split, Text, unlines)
 import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..) {-, parseEntry-})
+import Debian.Debianize.DebianName (mapCabal, splitCabal)
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Finalize (debianization)
 import Debian.Debianize.Goodies (doBackups, doExecutable, doServer, doWebsite, makeRulesHead, tightDependencyFixup)
 import Debian.Debianize.Input (inputChangeLog, inputDebianization)
-import Debian.Debianize.Monad (DebT, evalDebT, execDebM, execDebT, mapCabal, splitCabal)
+import Debian.Debianize.Monad (DebT, evalDebT, execDebM, execDebT)
 import Debian.Debianize.Prelude ((%=), (+++=), (++=), (+=), (~=))
-import Debian.Debianize.Types (Top(Top))
+import Debian.Debianize.Types as T
 import Debian.Debianize.Types.Atoms as T
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S

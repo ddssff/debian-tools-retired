@@ -31,7 +31,7 @@ import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Monad (DebT, Atoms, evalDebT)
 import Debian.Debianize.Options (putEnvironmentArgs)
 import Debian.Debianize.Prelude (indent, replaceFile, withCurrentDirectory, zipMaps)
-import qualified Debian.Debianize.Types.Atoms as T
+import qualified Debian.Debianize.Types as T
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (package)
 import qualified Debian.Debianize.Types.SourceDebDescription as S (source)
 import Prelude hiding (unlines, writeFile, (.))

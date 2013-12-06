@@ -29,7 +29,8 @@ import Data.Text.IO (readFile)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(logWho), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
-import qualified Debian.Debianize.Types.Atoms as T (maintainer, changelog)
+import qualified Debian.Debianize.Types as T (maintainer)
+import qualified Debian.Debianize.Types.Atoms as T (changelog)
 import Debian.Debianize.Types.BinaryDebDescription (BinaryDebDescription, newBinaryDebDescription)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S
@@ -39,7 +40,7 @@ import Debian.Debianize.Types.Atoms
      logrotateStanza, link, install, installDir, intermediateFiles, compilerVersion, cabalFlagAssignments, verbosity)
 import Debian.Debianize.Monad (Atoms, DebT, execDebT)
 import Debian.Debianize.Prelude (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (~?=), (+=), (++=), (+++=))
-import Debian.Debianize.Types (Top(unTop))
+import Debian.Debianize.Types.Base (Top(unTop))
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer)
@@ -328,11 +329,11 @@ inputCompiler' top vb mCompilerVersion =
                          Just version' -> CompilerId flavour version'
 
 -- | Try to compute a string for the the debian "Maintainer:" field using, in this order
---    1. the maintainer explicitly specified using 'Debian.Debianize.Monad.maintainer'
+--    1. the maintainer explicitly specified using "Debian.Debianize.Monad.maintainer"
 --    2. the maintainer field of the cabal package,
 --    3. the value returned by getDebianMaintainer, which looks in several environment variables,
 --    4. the signature from the latest entry in debian/changelog,
---    5. the Debian Haskell Group, pkg-haskell-maintainers@lists.alioth.debian.org
+--    5. the Debian Haskell Group, @pkg-haskell-maintainers\@lists.alioth.debian.org@
 inputMaintainer :: MonadIO m => DebT m ()
 inputMaintainer =
     do Just pkgDesc <- access packageDescription

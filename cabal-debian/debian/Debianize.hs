@@ -8,9 +8,10 @@ import Debian.Changes (ChangeLog(ChangeLog))
 import Debian.Debianize (inputChangeLog, inputDebianization)
 import Debian.Debianize.Details (seereasonDefaultAtoms)
 import Debian.Debianize.Finalize (debianization)
-import Debian.Debianize.Types.Atoms as T
+import Debian.Debianize.Types as T
     (changelog, compat, conflicts, control, depends, debianDescription, homepage,
-     installCabalExec, sourceFormat, standardsVersion, utilsPackageNames, copyright, newAtoms)
+     installCabalExec, sourceFormat, standardsVersion, utilsPackageNames, copyright)
+import Debian.Debianize.Types.Atoms as T (Atoms, newAtoms)
 import Debian.Debianize.Monad (Atoms, DebT, execDebT, evalDebT, execDebM)
 import Debian.Debianize.Output (compareDebianization)
 import Debian.Debianize.Prelude ((~=), (~?=), (%=), (+=), (++=), (+++=))

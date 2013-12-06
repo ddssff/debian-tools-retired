@@ -144,7 +144,7 @@ removeIfExists :: FilePath -> IO ()
 removeIfExists x = removeFileIfExists x >> removeDirectoryIfExists x
 
 -- |Create a map from pathname to the names of the packages that contains that pathname using the
--- contents of the debian package info directory @/var/lib/dpkg/info".
+-- contents of the debian package info directory @/var/lib/dpkg/info@.
 dpkgFileMap :: IO (Map FilePath (Set D.BinPkgName))
 dpkgFileMap =
     do

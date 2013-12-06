@@ -6,10 +6,11 @@ import Data.Set (singleton)
 import Data.Text as Text (intercalate)
 import Debian.Changes (ChangeLog(..))
 import Debian.Debianize (debianization, doBackups, doExecutable, doServer, doWebsite, inputChangeLog, inputDebianization, seereasonDefaultAtoms)
-import Debian.Debianize.Types.Atoms as T
+import Debian.Debianize.Types as T
     (changelog, binaryArchitectures, buildDependsIndep, changelog, compat, control, depends, debianDescription,
-     installCabalExec, installData, sourcePackageName, homepage, standardsVersion,
-     Atoms, newAtoms, InstallFile(..), Server(..), Site(..))
+     installCabalExec, installData, sourcePackageName, homepage, standardsVersion)
+import Debian.Debianize.Types.Atoms as T
+    (Atoms, newAtoms, InstallFile(..), Server(..), Site(..))
 import Debian.Debianize.Monad (execDebT, evalDebT, DebT, execDebM)
 import Debian.Debianize.Types (Top(Top))
 import Debian.Debianize.Types.SourceDebDescription (SourceDebDescription)

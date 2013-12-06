@@ -12,18 +12,6 @@ module Debian.Debianize.Monad
     , evalDebM
     , execDebM
 
-{-
-    -- * Lens Helper Functions
-    , doConst
-    , doConstJust
-    , doConstMaybe
-    , doOnce
-    , doModify
-    , doSetElem
-    , doMapElem
-    , doMapSet
--}
-
     -- * modify cabal to debian package version map
     -- , mapCabal
     -- , splitCabal
@@ -32,7 +20,8 @@ module Debian.Debianize.Monad
 import Control.Monad.State (evalState, evalStateT, execState, execStateT, runState, State, StateT(runStateT))
 import Data.Map as Map (alter)
 import Data.Version (Version)
-import Debian.Debianize.Types.Atoms (Atoms, debianNameMap)
+import Debian.Debianize.Types.Atoms (Atoms)
+import Debian.Debianize.Types (debianNameMap)
 import Debian.Debianize.Prelude ((%=))
 import Debian.Debianize.VersionSplits (insertSplit, makePackage, VersionSplits)
 import Debian.Orphans ()

@@ -1,6 +1,9 @@
+-- | This module holds a long list of lenses that access the Atoms
+-- record, the record that holds the input data from which the
+-- debianization is to be constructed.
 {-# LANGUAGE DeriveDataTypeable #-}
 module Debian.Debianize.Types.Atoms
-    ( Atoms
+{-    ( Atoms
     , showAtoms
     , newAtoms
     , InstallFile(..) -- FIXME - lenses for this
@@ -9,121 +12,7 @@ module Debian.Debianize.Types.Atoms
     , DebAction(..)
     , DebType(..)
     , PackageInfo(..)
-
-    -- * Modes of operation
-    , verbosity
-    , dryRun
-    , debAction
-    , cabalFlagAssignments
-
-    -- * Cabal package info
-    , packageDescription
-    , compiler
-
-    -- * Repository info
-    , execMap
-    , epochMap
-    , missingDependencies
-    , extraLibMap
-    , debianNameMap
-
-    -- * Source Package Info
-    , sourcePackageName
-    , revision
-    , debVersion
-    , maintainer
-    , copyright
-    , license
-    , licenseFile
-    , sourceArchitectures
-    , sourcePriority
-    , sourceSection
-    , compat
-    , sourceFormat
-    , changelog
-    , comments
-    , standardsVersion
-    , rulesHead
-    , rulesFragments
-    , noProfilingLibrary
-    , noDocumentationLibrary
-    , utilsPackageNames
-    , buildDir
-    , watch
-
-    -- * Source Package Build Dependencies
-    , omitLTDeps
-    , compilerVersion
-
-    -- * Binary Package Info
-    , binaryArchitectures
-    , executable
-    , serverInfo -- askServers = serverInfo
-    , website
-    , backups
-    , apacheSite
-    , extraDevDeps
-    , postInst
-    , postRm
-    , preInst
-    , preRm
-    , binaryPriority
-    , binarySection
-    , installInit
-    , packageType
-    , debianDescription
-    , essential
-
-    , relations
-    , depends
-    , recommends
-    , suggests
-    , preDepends
-    , breaks
-    , conflicts
-    , provides
-    , replaces
-    , builtUsing
-
-{-
-    -- * Binary Package Dependencies
-    , depends
-    , conflicts
-    , replaces
-    , provides
--}
-
-    -- * Binary package Files
-    , link
-    , install
-    , installTo
-    , installData
-    , file
-    , installDir
-    , logrotateStanza
-    , installCabalExec
-    , installCabalExecTo
-
-    -- * Unknown, obsolete, internal
-    , flags
-    , validate
-    , warning -- no-op?
-    , intermediateFiles
-    , packageInfo
-    , control -- obsolete
-    , source
-    , changedBy
-    , uploaders
-    , dmUploadAllowed
-    , homepage
-    , vcsFields
-    , xFields
-    , buildDepends
-    , buildConflicts
-    , buildDependsIndep
-    , buildConflictsIndep
-    , binaryPackages
-    ) where
+    ) -} where
 
 import Control.Category ((.))
 import Data.Lens.Lazy (Lens, lens, iso, getL)
@@ -236,10 +125,6 @@ data Atoms
       , comments_ :: Maybe [[Text]]
       -- ^ Each element is a comment to be added to the changelog, where the
       -- element's text elements are the lines of the comment.
-{-    , buildDeps_ :: Relations
-      -- ^ Add build dependencies
-      , buildDepsIndep_ :: Relations
-      -- ^ Add arch independent build dependencies  -}
       , missingDependencies_ :: Set BinPkgName
       -- ^ Lets cabal-debian know that a package it might expect to exist
       -- actually does not, so omit all uses in resulting debianization.
@@ -316,16 +201,6 @@ data Atoms
       -- ^ Like DHServer, but configure the server as a web server
       , backups_ :: Map BinPkgName String
       -- ^ Configure the executable to do incremental backups
-{-
-      , depends_ :: Map BinPkgName (Set Relation)
-      -- ^ Says that the debian package should have this relation in Depends
-      , conflicts_ :: Map BinPkgName (Set Relation)
-      -- ^ Says that the debian package should have this relation in Conflicts
-      , providesMap_ :: Map BinPkgName (Set Relation)
-      -- ^ Says that the debian package should have this relation in Provides
-      , replacesMap_ :: Map BinPkgName (Set Relation)
-      -- ^ Says that the debian package should have this relation in Replaces
--}
       , extraDevDeps_ :: Relations
       -- ^ Limited version of Depends, put a dependency on the dev library package.  The only
       -- reason to use this is because we don't yet know the name of the dev library package.
@@ -394,12 +269,6 @@ newAtoms
       , serverInfo_ = mempty
       , website_ = mempty
       , backups_ = mempty
-{-
-      , depends_ = mempty
-      , conflicts_ = mempty
-      , providesMap_ = mempty
-      , replacesMap_ = mempty
--}
       , extraDevDeps_ = mempty
       , packageDescription_ = Nothing
       , compiler_ = Nothing
@@ -483,10 +352,6 @@ defaultFlags =
 showAtoms :: Atoms -> IO ()
 showAtoms x = putStrLn ("\nTop: " ++ show x ++ "\n")
 
--- Lenses to access values in the Atoms type.  This is an old
--- design which I plan to make private and turn into something
--- nicer, so these will remain ugly and repetitive for now.
-
 -- | Set how much progress messages get generated.
 verbosity :: Lens Atoms Int
 verbosity = lens verbosity_ (\ b a -> a {verbosity_ = b}) . flags
@@ -555,62 +420,19 @@ debianNameMap = lens debianNameMap_ (\ a b -> b {debianNameMap_ = a})
 epochMap :: Lens Atoms (Map PackageName Int)
 epochMap = lens epochMap_ (\ a b -> b {epochMap_ = a})
 
-binaryDebDescription :: BinPkgName -> Lens Atoms B.BinaryDebDescription
-binaryDebDescription b = maybeLens (B.newBinaryDebDescription b) (iso id id) . listElemLens ((== b) . getL B.package) . S.binaryPackages . control
-
-packageType :: BinPkgName -> Lens Atoms (Maybe B.PackageType)
-packageType b = B.packageType . binaryDebDescription b
-
--- | Lens into the description field of a BinaryDebDescription.
-debianDescription :: BinPkgName -> Lens Atoms (Maybe Text)
-debianDescription b = B.description . binaryDebDescription b
-
-essential :: BinPkgName -> Lens Atoms (Maybe Bool)
-essential b = B.essential . binaryDebDescription b
-
-relations :: BinPkgName -> Lens Atoms B.PackageRelations
-relations b = B.relations . binaryDebDescription b
-
-depends :: BinPkgName -> Lens Atoms Relations
-depends b = B.depends . B.relations . binaryDebDescription b
-
-recommends :: BinPkgName -> Lens Atoms Relations
-recommends b = B.recommends . B.relations . binaryDebDescription b
-
-suggests :: BinPkgName -> Lens Atoms Relations
-suggests b = B.suggests . B.relations . binaryDebDescription b
-
-preDepends :: BinPkgName -> Lens Atoms Relations
-preDepends b = B.preDepends . B.relations . binaryDebDescription b
-
-breaks :: BinPkgName -> Lens Atoms Relations
-breaks b = B.breaks . B.relations . binaryDebDescription b
-
-conflicts :: BinPkgName -> Lens Atoms Relations
-conflicts b = B.conflicts . B.relations . binaryDebDescription b
-
-provides :: BinPkgName -> Lens Atoms Relations
-provides b = B.provides . B.relations . binaryDebDescription b
-
-replaces :: BinPkgName -> Lens Atoms Relations
-replaces b = B.replaces . B.relations . binaryDebDescription b
-
-builtUsing :: BinPkgName -> Lens Atoms Relations
-builtUsing b = B.builtUsing . B.relations . binaryDebDescription b
-
 -- | Create a package to hold a cabal executable
 executable :: Lens Atoms (Map BinPkgName InstallFile)
 executable = lens executable_ (\ a b -> b {executable_ = a})
 
--- | Create a package for an operating service using the given executable
+-- | Create a package for a server
 serverInfo :: Lens Atoms (Map BinPkgName Server)
 serverInfo = lens serverInfo_ (\ a b -> b {serverInfo_ = a})
 
--- | Create a package for a website using the given executable as the server
+-- | Create a package for a website
 website :: Lens Atoms (Map BinPkgName Site)
 website = lens website_ (\ a b -> b {website_ = a})
 
--- | Generate a backups package using the given cabal executable
+-- | Create a package for a timed backup script
 backups :: Lens Atoms (Map BinPkgName String)
 backups = lens backups_ (\ a b -> b {backups_ = a})
 
@@ -647,15 +469,6 @@ revision = lens revision_ (\ a b -> b {revision_ = a})
 debVersion :: Lens Atoms (Maybe DebianVersion)
 debVersion = lens debVersion_ (\ b a -> a {debVersion_ = b})
 
--- | Maintainer field.  Overrides any value found in the cabal file, or
--- in the DEBIANMAINTAINER environment variable.
-{-
-maintainerOld :: Lens Atoms (Maybe NameAddr)
-maintainerOld = lens maintainerOld_ (\ b a -> a {maintainerOld_ = b})
--}
-maintainer :: Lens Atoms (Maybe NameAddr)
-maintainer = S.maintainer . control
-
 -- | No longer sure what the purpose of this lens is.
 packageInfo :: Lens Atoms (Map PackageName PackageInfo)
 packageInfo = lens packageInfo_ (\ a b -> b {packageInfo_ = a})
@@ -681,7 +494,7 @@ copyright = lens copyright_ (\ a b -> b {copyright_ = a})
 license :: Lens Atoms (Maybe License)
 license = lens license_ (\ a b -> b {license_ = a})
 
--- | The license information from the cabal file
+-- | The value in the cabal file's license-file field
 licenseFile :: Lens Atoms (Maybe Text)
 licenseFile = lens licenseFile_ (\ a b -> b {licenseFile_ = a})
 
@@ -689,80 +502,6 @@ licenseFile = lens licenseFile_ (\ a b -> b {licenseFile_ = a})
 -- @All@, or some list of specific architectures.
 sourceArchitectures :: Lens Atoms (Maybe PackageArchitectures)
 sourceArchitectures = lens sourceArchitecture_ (\ a b -> b {sourceArchitecture_ = a})
-
--- | The architectures supported by a binary package
-{-
-binaryArchitectures :: Lens Atoms (Map BinPkgName PackageArchitectures)
-binaryArchitectures = lens binaryArchitectures_ (\ a b -> b {binaryArchitectures_ = a})
--}
-binaryArchitectures :: BinPkgName -> Lens Atoms (Maybe PackageArchitectures)
-binaryArchitectures b = B.architecture . binaryDebDescription b
-
--- | The source package priority
-{-
-sourcePriority :: Lens Atoms (Maybe PackagePriority)
-sourcePriority = lens sourcePriority_ (\ a b -> b {sourcePriority_ = a})
--}
-sourcePriority :: Lens Atoms (Maybe PackagePriority)
-sourcePriority = S.priority . control
-
--- | Map of the binary package priorities (FIXME: redundant with BinaryDebDescription)
-{-
-binaryPriorities :: Lens Atoms (Map BinPkgName PackagePriority)
-binaryPriorities = lens binaryPriorities_ (\ a b -> b {binaryPriorities_ = a})
--}
-binaryPriority :: BinPkgName -> Lens Atoms (Maybe PackagePriority)
-binaryPriority b = B.binaryPriority . binaryDebDescription b
-
--- | The source package's section assignment
-{-
-sourceSection :: Lens Atoms (Maybe Section)
-sourceSection = lens sourceSection_ (\ a b -> b {sourceSection_ = a})
--}
-sourceSection :: Lens Atoms (Maybe Section)
-sourceSection = S.section . control
-
--- | Map of the binary deb section assignments (FIXME: redundant with BinaryDebDescription)
-{-
-binarySections :: Lens Atoms (Map BinPkgName Section)
-binarySections = lens binarySections_ (\ a b -> b {binarySections_ = a})
--}
-binarySection :: BinPkgName -> Lens Atoms (Maybe Section)
-binarySection b = B.binarySection . binaryDebDescription b
-
--- * Debian dependency info
-
--- | Build dependencies.  FIXME: This should be a Set (Set Relation)
--- so we can build or relations, right now we just assume that each
--- Relation is a singleton set.
-{-
-buildDeps :: Lens Atoms Relations
-buildDeps = lens buildDeps_ (\ a b -> b {buildDeps_ = t1 (buildDeps_ b) a})
-
--- | Architecture independent
-buildDepsIndep :: Lens Atoms Relations
-buildDepsIndep = lens buildDepsIndep_ (\ a b -> b {buildDepsIndep_ = a})
-
--- | Map of extra install dependencies for the package's binary debs.
--- This should be [[Relation]] for full generality, or Set (Set Relation)
-depends :: Lens Atoms (Map BinPkgName (Set Relation))
-depends = lens depends_ (\ a b -> b {depends_ = a})
-
--- | Map of extra install conflicts for the package's binary debs.
--- We should support all the other dependency fields - provides, replaces, etc.
-conflicts :: Lens Atoms (Map BinPkgName (Set Relation))
-conflicts = lens conflicts_ (\ a b -> b {conflicts_ = a})
-
--- | Map of extra install replaces for the package's binary debs.
--- We should support all the other dependency fields - provides, replaces, etc.
-replaces :: Lens Atoms (Map BinPkgName (Set Relation))
-replaces = lens replacesMap_ (\ a b -> b {replacesMap_ = a})
-
--- | Map of extra install provides for the package's binary debs.
--- We should support all the other dependency fields - provides, replaces, etc.
-provides :: Lens Atoms (Map BinPkgName (Set Relation))
-provides = lens providesMap_ (\ a b -> b {providesMap_ = a})
--}
 
 -- | Extra install dependencies for the devel library.  Redundant
 -- with depends, but kept for backwards compatibility.  Also, I
@@ -795,19 +534,21 @@ preInst = lens preInst_ (\ a b -> b {preInst_ = a})
 preRm :: Lens Atoms (Map BinPkgName Text)
 preRm = lens preRm_ (\ a b -> b {preRm_ = a})
 
--- | The @debian/compat@ file, contains the minimum compatible version of the @debhelper@ package
+-- | The @debian/compat@ file, contains the minimum compatible version
+-- of the @debhelper@ package.  If not given the version number of the
+-- installed debhelper package is used.
 compat :: Lens Atoms (Maybe Int)
 compat = lens compat_ (\ a b -> b {compat_ = a})
 
--- | The @debian/source/format@ file.
+-- | The @debian\/source\/format@ file.
 sourceFormat :: Lens Atoms (Maybe SourceFormat)
 sourceFormat = lens sourceFormat_ (\ a b -> b {sourceFormat_ = a})
 
--- | the @debian/watch@ file
+-- | the @debian\/watch@ file
 watch :: Lens Atoms (Maybe Text)
 watch = lens watch_ (\ a b -> b {watch_ = a})
 
--- | the @debian/changelog@ file
+-- | the @debian\/changelog@ file
 changelog :: Lens Atoms (Maybe ChangeLog)
 changelog = lens changelog_ (\ a b -> b {changelog_ = a})
 
@@ -815,49 +556,9 @@ changelog = lens changelog_ (\ a b -> b {changelog_ = a})
 comments :: Lens Atoms (Maybe [[Text]])
 comments = lens comments_ (\ a b -> b {comments_ = a})
 
--- | The @debian/control@ file.
+-- | The @debian\/control@ file.  Many of the following lenses access parts of the @SourceDebDescription@.
 control :: Lens Atoms S.SourceDebDescription
 control = lens control_ (\ a b -> b {control_ = a})
-
-source :: Lens Atoms (Maybe SrcPkgName)
-source = S.source . control
-
-changedBy :: Lens Atoms (Maybe NameAddr)
-changedBy = S.changedBy . control
-
-uploaders :: Lens Atoms ([NameAddr])
-uploaders = S.uploaders . control
-
-dmUploadAllowed :: Lens Atoms (Bool)
-dmUploadAllowed = S.dmUploadAllowed . control
-
--- | The @Standards-Version@ field of the @debian/control@ file
-standardsVersion :: Lens Atoms (Maybe StandardsVersion)
-standardsVersion = S.standardsVersion . control
-
-homepage :: Lens Atoms (Maybe Text)
-homepage = S.homepage . control
-
-vcsFields :: Lens Atoms (Set S.VersionControlSpec)
-vcsFields = S.vcsFields . control
-
-xFields :: Lens Atoms (Set S.XField)
-xFields = S.xFields . control
-
-buildDepends :: Lens Atoms Relations
-buildDepends = S.buildDepends . control
-
-buildDependsIndep :: Lens Atoms Relations
-buildDependsIndep = S.buildDependsIndep . control
-
-buildConflicts :: Lens Atoms Relations
-buildConflicts = S.buildConflicts . control
-
-buildConflictsIndep :: Lens Atoms Relations
-buildConflictsIndep = S.buildConflictsIndep . control
-
-binaryPackages :: Lens Atoms [B.BinaryDebDescription]
-binaryPackages = S.binaryPackages . control
 
 -- | Add a stanza to the binary package's logrotate script.
 logrotateStanza :: Lens Atoms (Map BinPkgName (Set Text))

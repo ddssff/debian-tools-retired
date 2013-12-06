@@ -34,7 +34,8 @@ import Debian.Debianize.Monad as Monad (Atoms, DebT)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
 import Debian.Debianize.Prelude ((%=), (+++=), (+=), foldEmpty, fromEmpty, fromSingleton, (~=), (~?=))
 import Debian.Debianize.Types (Top)
-import qualified Debian.Debianize.Types.Atoms as T
+import qualified Debian.Debianize.Types as T
+import qualified Debian.Debianize.Types.Atoms as A
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
@@ -79,7 +80,7 @@ finalizeDebianization' =
     do date <- liftIO getCurrentLocalRFC822Time
        debhelperCompat <- liftIO getDebhelperCompatLevel
        finalizeDebianization date debhelperCompat
-       access T.verbosity >>= \ vb -> when (vb >= 3) (get >>= liftIO . T.showAtoms)
+       access T.verbosity >>= \ vb -> when (vb >= 3) (get >>= liftIO . A.showAtoms)
 
 -- | Now that we know the build and data directories, we can expand
 -- some atoms into sets of simpler atoms which can eventually be
@@ -401,9 +402,9 @@ makeUtilsPackages pkgDesc =
 -}
     where
       ename i =
-          case T.sourceDir i of
-            (Nothing) -> T.execName i
-            (Just s) ->  s </> T.execName i
+          case A.sourceDir i of
+            (Nothing) -> A.execName i
+            (Just s) ->  s </> A.execName i
 
 tr :: Show a => String -> a -> a
 tr _label x = {- trace ("(trace " ++ _label ++ show x ++ ")") -} x
