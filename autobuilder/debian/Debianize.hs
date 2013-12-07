@@ -7,7 +7,7 @@ import Debian.Debianize.Types (InstallFile(InstallFile, destDir, destName, execN
 import Debian.Policy (SourceFormat(Native3))
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), SrcPkgName(SrcPkgName), VersionReq(EEQ))
 import Debian.Version (buildDebianVersion)
-import Distribution.License (License(AllRightsReserved))
+import Distribution.License (License(BSD3))
 import Prelude hiding (log)
 
 top :: Top
@@ -19,7 +19,7 @@ customize :: DebT IO ()
 customize =
     do inputChangeLog top
        sourcePackageName ~= Just (SrcPkgName "autobuilder")
-       license ~= Just AllRightsReserved
+       license ~= Just BSD3
        sourceFormat ~= Just Native3
        mapM_ (\ rs -> depends (BinPkgName "autobuilder") %= (++ rs))
              [ [[Rel (BinPkgName "ghc") Nothing Nothing]]
