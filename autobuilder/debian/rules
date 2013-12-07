@@ -5,6 +5,4 @@ DEB_CABAL_PACKAGE = autobuilder
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/hlibrary.mk
 
-build/haskell-autobuilder-utils:: build-ghc-stamp
-
 build/autobuilder:: build-ghc-stamp
