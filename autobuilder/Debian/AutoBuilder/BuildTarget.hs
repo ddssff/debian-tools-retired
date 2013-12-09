@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, RankNTypes, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget
     ( retrieve
     , targetDocumentation
@@ -126,9 +126,9 @@ retrieve defaultAtoms buildOS cache target =
 withProc :: forall a. OSImage -> IO a -> IO a
 withProc buildOS task =
     do createDirectoryIfMissing True dir
-       _ <- quieter 1 $ runProcessF (proc "mount" ["--bind", "/proc", dir]) L.empty
+       _ <- quieter 1 $ runProcessF (Just (" 1> ", " 2> ")) (proc "mount" ["--bind", "/proc", dir]) L.empty
        result <- try task :: IO (Either SomeException a)
-       _ <- quieter 1 $ runProcessF (proc "umount" [dir]) L.empty
+       _ <- quieter 1 $ runProcessF (Just (" 1> ", " 2> ")) (proc "umount" [dir]) L.empty
        either throw return result
     where
       dir = rootPath (rootDir buildOS) ++ "/proc"

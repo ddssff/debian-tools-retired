@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 -- | A Mercurial archive.
 module Debian.AutoBuilder.BuildTarget.Hg where
 
@@ -36,23 +36,23 @@ prepare cache package archive =
                           , T.cleanTarget =
                               \ path -> 
                                   let cmd = "rm -rf " ++ path ++ "/.hg" in
-                                  timeTask (runProcessF (shell cmd) empty)
+                                  timeTask (runProcessF (Just (" 1> ", " 2> ")) (shell cmd) empty)
                           , T.buildWrapper = id
                           }
     where
       verifySource dir =
-          try (runProcessF (shell ("cd " ++ dir ++ " && hg status | grep -q .")) empty) >>=
+          try (runProcessF (Just (" 1> ", " 2> ")) (shell ("cd " ++ dir ++ " && hg status | grep -q .")) empty) >>=
           either (\ (_ :: SomeException) -> updateSource dir)	-- failure means there were no changes
                  (\ _ -> removeSource dir >> createSource dir)	-- success means there was a change
 
       removeSource dir = liftIO $ removeRecursiveSafely dir
 
       updateSource dir =
-          runProcessF (shell ("cd " ++ dir ++ " && hg pull -u")) empty >>
+          runProcessF (Just (" 1> ", " 2> ")) (shell ("cd " ++ dir ++ " && hg pull -u")) empty >>
           findSourceTree dir :: IO SourceTree
 
       createSource dir =
           let (parent, _) = splitFileName dir in
           liftIO (createDirectoryIfMissing True parent) >>
-          runProcessF (shell ("hg clone " ++ archive ++ " " ++ dir)) empty >>
+          runProcessF (Just (" 1> ", " 2> ")) (shell ("hg clone " ++ archive ++ " " ++ dir)) empty >>
           findSourceTree dir :: IO SourceTree

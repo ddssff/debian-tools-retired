@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, PackageImports, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TypeFamilies #-}
 -- |AutoBuilder - application to build Debian packages in a clean
 -- environment.  In the following list, each module's dependencies
 -- appear above it:
@@ -257,12 +257,12 @@ runParameterSet init cache =
                                          "--sign", "--root", uriPath uri] ++
                                         (concat . map (\ rel -> ["--create", rel]) . P.createRelease $ params) in
                              qPutStrLn "Running newdist on remote repository" >>
-                             try (timeTask (runProcessF (proc cmd args) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
+                             try (timeTask (runProcessF (Just (" 1> ", " 2> ")) (proc cmd args) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                          Nothing ->
                              let cmd = P.newDistProgram params
                                  args = ["--sign", "--root", uriPath uri] in
                              qPutStr "Running newdist on a local repository" >>
-                             try (timeTask (runProcessF (proc cmd args) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
+                             try (timeTask (runProcessF (Just (" 1> ", " 2> ")) (proc cmd args) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                 _ -> error "Missing Upload-URI parameter"
           | True = return (Success ([], (fromInteger 0)))
 

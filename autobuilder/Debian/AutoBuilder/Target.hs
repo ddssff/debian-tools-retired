@@ -412,7 +412,7 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint !target stat
              -- unless we actually created a patch.
              _ <- liftIO $ useEnv' root (\ _ -> return ())
                              (-- Get the version number of dpkg-dev in the build environment
-                              runProcessF (shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")) L.empty >>= return . head . words . L.unpack . L.concat . keepStdout >>= \ installed ->
+                              runProcessF (Just (" 1> ", " 2> ")) (shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")) L.empty >>= return . head . words . L.unpack . L.concat . keepStdout >>= \ installed ->
                               -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
                               runProcess (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) L.empty >>= return . (== [ExitSuccess]) . keepResult >>= \ newer ->
                               when newer (doesDirectoryExist (path' </> "debian/patches") >>= doDpkgSource)
@@ -763,10 +763,10 @@ updateChangesFile elapsed changes =
 {-    autobuilderVersion <- processOutput "dpkg -s autobuilder | sed -n 's/^Version: //p'" >>=
                             return . either (const Nothing) Just >>=
                             return . maybe Nothing (listToMaybe . lines) -}
-      hostname <- runProcessF (shell "hostname") L.empty >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
+      hostname <- runProcessF (Just (" 1> ", " 2> ")) (shell "hostname") L.empty >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
       cpuInfo <- parseProcCpuinfo
       memInfo <- parseProcMeminfo
-      machine <- runProcessF (shell "uname -m") L.empty >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
+      machine <- runProcessF (Just (" 1> ", " 2> ")) (shell "uname -m") L.empty >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
       let buildInfo = ["Autobuilder-Version: " ++ V.autoBuilderVersion] ++
                       ["Time: " ++ show elapsed] ++
                       maybeField "Memory: " (lookup "MemTotal" memInfo) ++

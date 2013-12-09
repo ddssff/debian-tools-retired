@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Tla where
 
 import Control.Exception (SomeException, try)
@@ -35,12 +35,12 @@ prepare cache package version =
                           , T.cleanTarget =
                               \ path -> 
                                   let cmd = "find '" ++ path ++ "' -name '.arch-ids' -o -name '{arch}' -prune | xargs rm -rf" in
-                                  timeTask (runProcessF (shell cmd) L.empty)
+                                  timeTask (runProcessF (Just (" 1> ", " 2> ")) (shell cmd) L.empty)
                           , T.buildWrapper = id
                           }
     where
       verifySource dir =
-          do result <- try (runProcessF (shell ("cd " ++ dir ++ " && tla changes")) L.empty)
+          do result <- try (runProcessF (Just (" 1> ", " 2> ")) (shell ("cd " ++ dir ++ " && tla changes")) L.empty)
              case result of
                Left (e :: SomeException) -> qPutStrLn (show e) >> removeSource dir >> createSource dir -- Failure means there is corruption
                Right _output -> updateSource dir						         -- Success means no changes
@@ -48,7 +48,7 @@ prepare cache package version =
       removeSource dir = liftIO $ removeRecursiveSafely dir
 
       updateSource dir =
-          runProcessF (shell ("cd " ++ dir ++ " && tla update " ++ version)) L.empty >>
+          runProcessF (Just (" 1> ", " 2> ")) (shell ("cd " ++ dir ++ " && tla update " ++ version)) L.empty >>
              -- At one point we did a tla undo here.  However, we are
              -- going to assume that the "clean" copies in the cache
              -- directory are clean, since some of the other target
@@ -60,5 +60,5 @@ prepare cache package version =
             -- Create parent dir and let tla create dir
             let (parent, _) = splitFileName dir
             liftIO $ createDirectoryIfMissing True parent
-            _output <- runProcessF (shell ("tla get " ++ version ++ " " ++ dir)) L.empty
+            _output <- runProcessF (Just (" 1> ", " 2> ")) (shell ("tla get " ++ version ++ " " ++ dir)) L.empty
             findSourceTree dir

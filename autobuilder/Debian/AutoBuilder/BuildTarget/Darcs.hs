@@ -1,4 +1,4 @@
-{-# LANGUAGE Rank2Types, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, Rank2Types, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Darcs
     ( documentation
     , prepare
@@ -56,7 +56,7 @@ prepare cache package theUri =
                           , T.origTarball = Nothing
                           , T.cleanTarget =
                               \ top -> let cmd = "find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf" in
-                                       timeTask (runProcessF (shell cmd) B.empty)
+                                       timeTask (runProcessF (Just (" 1> ", " 2> ")) (shell cmd) B.empty)
                           , T.buildWrapper = id
                           }
     where
@@ -72,7 +72,7 @@ prepare cache package theUri =
 
       updateSource :: FilePath -> IO SourceTree
       updateSource dir =
-          runProcessF (shell ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri')) B.empty >>
+          runProcessF (Just (" 1> ", " 2> ")) (shell ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri')) B.empty >>
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
 
@@ -80,7 +80,7 @@ prepare cache package theUri =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _output <- runProcessF (shell cmd) B.empty
+             _output <- runProcessF (Just (" 1> ", " 2> ")) (shell cmd) B.empty
              findSourceTree dir
           where
             cmd = unwords $ ["darcs", "get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", "'" ++ tag ++ "'"]) theTag ++ [dir]
@@ -88,7 +88,7 @@ prepare cache package theUri =
       fixLink base =
           let link = base ++ "/" ++ name
               cmd = "rm -rf " ++ link ++ " && ln -s " ++ sum ++ " " ++ link in
-          runProcessF (shell cmd) B.empty
+          runProcessF (Just (" 1> ", " 2> ")) (shell cmd) B.empty
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndTag))
       uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag

@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, PackageImports, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables, TypeFamilies #-}
 -- |A 'uri:' target is an URI that returns a tarball, with an optional
 -- md5sum if we want to ensure against the tarball changing unexpectedly.
 module Debian.AutoBuilder.BuildTarget.Uri
@@ -74,7 +74,7 @@ prepare c package u s =
              _output <-
                  case exists of
                    True -> return []
-                   False -> runProcessF (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'")) B.empty
+                   False -> runProcessF (Just (" 1> ", " 2> ")) (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'")) B.empty
              -- We should do something with the output
              return ()
       -- Make sure what we just downloaded has the correct checksum
@@ -100,13 +100,13 @@ prepare c package u s =
                    fileInfo <- liftIO $ magicFile magic tar
                    case () of
                      _ | isPrefixOf "Zip archive data" fileInfo ->
-                           liftIO $ timeTask $ runProcessF (shell ("unzip " ++ tar ++ " -d " ++ src)) B.empty
+                           liftIO $ timeTask $ runProcessF (Just (" 1> ", " 2> ")) (shell ("unzip " ++ tar ++ " -d " ++ src)) B.empty
                        | isPrefixOf "gzip" fileInfo ->
-                           liftIO $ timeTask $ runProcessF (shell ("tar xfz " ++ tar ++ " -C " ++ src)) B.empty
+                           liftIO $ timeTask $ runProcessF (Just (" 1> ", " 2> ")) (shell ("tar xfz " ++ tar ++ " -C " ++ src)) B.empty
                        | isPrefixOf "bzip2" fileInfo ->
-                           liftIO $ timeTask $ runProcessF (shell ("tar xfj " ++ tar ++ " -C " ++ src)) B.empty
+                           liftIO $ timeTask $ runProcessF (Just (" 1> ", " 2> ")) (shell ("tar xfj " ++ tar ++ " -C " ++ src)) B.empty
                        | True ->
-                           liftIO $ timeTask $ runProcessF (shell ("cp " ++ tar ++ " " ++ src ++ "/")) B.empty
+                           liftIO $ timeTask $ runProcessF (Just (" 1> ", " 2> ")) (shell ("cp " ++ tar ++ " " ++ src ++ "/")) B.empty
             read (_output, _elapsed) = sourceDir s >>= \ src -> liftIO (getDir src)
             getDir dir = getDirectoryContents dir >>= return . filter (not . flip elem [".", ".."])
             search files = checkContents (filter (not . flip elem [".", ".."]) files)

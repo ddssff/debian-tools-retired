@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 -- | The quilt target takes two other targets, one a base source
 -- directory and another a quilt-style patch directory, and creates
 -- a build target with the patches applied to the source directory.
@@ -73,7 +73,7 @@ makeQuiltTree m base patch =
        let cmd1 = ("set -x && cd '" ++ quiltDir ++ "' && rm -f '" ++ quiltPatchesDir ++
                    "' && ln -s '" ++ patchDir ++ "' '" ++ quiltPatchesDir ++ "'")
        -- runTaskAndTest (linkStyle (commandTask cmd1))
-       _output <- runProcessF (shell cmd1) L.empty
+       _output <- runProcessF (Just (" 1> ", " 2> ")) (shell cmd1) L.empty
        -- Now we need to have created a DebianSourceTree so
        -- that there is a changelog for us to reconstruct.
        return (copyTree, quiltDir)

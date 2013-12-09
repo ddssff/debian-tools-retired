@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Svn 
     ( prepare
     , documentation
@@ -27,7 +27,7 @@ documentation = [ "svn:<uri> - A target of this form retrieves the source code f
                 , "a subversion repository." ]
 
 svn :: [String] -> IO [Output L.ByteString]
-svn args = runProcessF (proc "svn" args) L.empty
+svn args = runProcessF (Just (" 1> ", " 2> ")) (proc "svn" args) L.empty
 
 username userInfo =
     let un = takeWhile (/= ':') userInfo in
@@ -55,7 +55,7 @@ prepare cache package uri =
                            , T.cleanTarget =
                                \ path -> 
                                    let cmd = "find " ++ path ++ " -name .svn -type d -print0 | xargs -0 -r -n1 rm -rf" in
-                                   timeTask (runProcessF (shell cmd) L.empty)
+                                   timeTask (runProcessF (Just (" 1> ", " 2> ")) (shell cmd) L.empty)
                            , T.buildWrapper = id
                            }
     where

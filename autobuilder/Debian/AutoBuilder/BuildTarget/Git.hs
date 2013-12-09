@@ -1,4 +1,4 @@
-{-# LANGUAGE Rank2Types, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, Rank2Types, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Git where
 
 import Control.Exception (try, SomeException)
@@ -57,7 +57,7 @@ prepare cache package theUri =
                           , T.origTarball = Nothing
                           , T.cleanTarget =
                               \ top -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in
-                                       timeTask (runProcessF (shell cmd) B.empty)
+                                       timeTask (runProcessF (Just (" 1> ", " 2> ")) (shell cmd) B.empty)
                           , T.buildWrapper = id
                           }
     where
@@ -78,7 +78,7 @@ prepare cache package theUri =
 
       updateSource :: FilePath -> IO SourceTree
       updateSource dir =
-          runProcessF ((proc "git" ["pull", "--all", "--commit", renderForGit theUri']) {cwd = Just dir}) B.empty >>
+          runProcessF (Just (" 1> ", " 2> ")) ((proc "git" ["pull", "--all", "--commit", renderForGit theUri']) {cwd = Just dir}) B.empty >>
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
 
@@ -86,7 +86,7 @@ prepare cache package theUri =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _output <- runProcessF cmd B.empty
+             _output <- runProcessF (Just (" 1> ", " 2> ")) cmd B.empty
              findSourceTree dir
           where
             cmd = proc "git" (["clone", renderForGit theUri'] ++ maybe [] (\ branch -> [" --branch", "'" ++ branch ++ "'"]) theBranch ++ [dir])
@@ -94,8 +94,8 @@ prepare cache package theUri =
       -- CB  git reset --hard    will remove all edits back to the most recent commit
       fixLink base =
           let link = base </> name in
-          runProcessF (proc "rm" ["-rf", link]) B.empty >>
-          runProcessF (proc "ln" ["-s", sum, link]) B.empty
+          runProcessF (Just (" 1> ", " 2> ")) (proc "rm" ["-rf", link]) B.empty >>
+          runProcessF (Just (" 1> ", " 2> ")) (proc "ln" ["-s", sum, link]) B.empty
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndBranch))
       -- Maybe we should include the "git:" in the string we checksum?  -- DSF
