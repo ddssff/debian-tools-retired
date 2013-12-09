@@ -21,6 +21,7 @@ module System.Process.Read.Monad
 import Control.Monad (when, unless)
 import Control.Monad.State (StateT(runStateT), get, put)
 import Control.Monad.Trans (MonadIO, liftIO)
+import Data.List (intercalate)
 import qualified Data.ListLike as P
 import Prelude hiding (print)
 import System.Exit (ExitCode(ExitFailure))
@@ -39,12 +40,14 @@ data RunState s
       , prefixes :: Maybe (s, s)
       -- ^ Prepend a prefix to the echoed lines of stdout and stderr.
       --  Special case for Just ("", ""), which means echo unmodified output.
+      , exnPrefixes :: Maybe (s, s)
+      -- ^ Prefixes to use when generating output after an exception occurs.
       , failEcho :: Bool -- ^ Echo the process output if the result code is ExitFailure
       , failExit :: Bool -- ^ Throw an IOError if the result code is ExitFailure
       } deriving (Show)
 
 defaultRunState :: RunState s
-defaultRunState = RunState {cpd=0, trace=True, echo=False, failEcho=False, failExit=False, prefixes=Nothing}
+defaultRunState = RunState {cpd=0, trace=True, echo=False, failEcho=False, failExit=False, prefixes=Nothing, exnPrefixes=Nothing}
 
 -- | The monad for running processes
 type RunT s = StateT (RunState s)
@@ -82,11 +85,15 @@ runProcessM p input =
          (out1 :: [P.Output s]) <- P.readProcessChunks p input
          (out2 :: [P.Output s]) <- if cpd s > 0 then P.dots (fromIntegral (cpd s)) (\ n -> hPutStr stderr (replicate (fromIntegral n) '.')) out1 else return out1
          (out3 :: [P.Output s]) <- if echo s then doOutput (prefixes s) out2 else return out2
-         (out5 :: [P.Output s]) <- (if failExit s then P.foldFailure (\ n -> error (showCommand (cmdspec p) ++ " -> ExitFailure " ++ show n)) else return) out3
+         (out5 :: [P.Output s]) <- if failExit s then P.foldFailure' (\ n -> doOutput (exnPrefixes s) out3 >> error (showCommand (cmdspec p) ++ " -> ExitFailure " ++ show n)) out3 else return out3
          (out6 :: [P.Output s]) <- (if trace s then  P.foldResult (\ ec -> hPutStrLn stderr ("<- " ++ showCommand (cmdspec p) ++ ": " ++ show ec) >> return (P.Result ec)) else return) out5
          (out7 :: [P.Output s]) <- (if failEcho s then P.foldFailure (\ n -> unless (trace s) (hPutStrLn stderr ("<- " ++ showCommand (cmdspec p) ++ ": " ++ show (ExitFailure n))) >>
-                                                                             doOutput (prefixes s) out5 >> return (P.Result (ExitFailure n))) else return) out6
+                                                                              doOutput (prefixes s) out5 >> return (P.Result (ExitFailure n))) else return) out6
          return out7
+    where
+      text (P.Stdout x) = P.toList x
+      text (P.Stderr x) = P.toList x
+      text _ = []
 
 doOutput :: P.ListLikePlus a c => Maybe (a, a) -> [P.Output a] -> IO [P.Output a]
 -- doOutput prefixes out = maybe (P.doOutput out) (\ (sout, serr) -> P.prefixed sout serr out) prefixes >> return out
@@ -148,21 +155,21 @@ runProcessVF p input =
     withRunState defaultRunState (c >> v >> f >> runProcessM p input)
 
 -- | Exception and echo on failure
-runProcessSE :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
-runProcessSE p input =
-    withRunState defaultRunState (s >> e >> runProcessM p input)
+runProcessSE :: (P.NonBlocking a c, MonadIO m) => Maybe (a, a) -> CreateProcess -> a -> m [P.Output a]
+runProcessSE prefixes p input =
+    withRunState (defaultRunState {exnPrefixes = prefixes}) (s >> e >> runProcessM p input)
 
 -- | Exception and echo on failure
-runProcessQE :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
-runProcessQE p input =
-    withRunState defaultRunState (c >> e >> runProcessM p input)
+runProcessQE :: (P.NonBlocking a c, MonadIO m) => Maybe (a, a) -> CreateProcess -> a -> m [P.Output a]
+runProcessQE prefixes p input =
+    withRunState (defaultRunState {exnPrefixes = prefixes}) (c >> e >> runProcessM p input)
 
 -- | Dot output, exception on failure, echo on failure.  Note that
 -- runProcessVE isn't a useful option, you get the output twice.  VF
 -- makes more sense.
-runProcessDE :: (P.NonBlocking a c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
-runProcessDE p input =
-    withRunState defaultRunState (c >> d >> e >> runProcessM p input)
+runProcessDE :: (P.NonBlocking a c, MonadIO m) => Maybe (a, a) -> CreateProcess -> a -> m [P.Output a]
+runProcessDE prefixes p input =
+    withRunState (defaultRunState {exnPrefixes = prefixes}) (c >> d >> e >> runProcessM p input)
 
 showCommand :: CmdSpec -> String
 showCommand (RawCommand cmd args) = showCommandForUser cmd args

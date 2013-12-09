@@ -57,14 +57,14 @@ runProcess p input = liftIO $
       _ -> runProcessV p input
 
 -- | A version of 'runProcess' that throws an exception on failure.
-runProcessF :: (NonBlocking s c, MonadIO m) => CreateProcess -> s -> m [Output s]
-runProcessF p input = liftIO $
+runProcessF :: (NonBlocking s c, MonadIO m) => Maybe (s, s) -> CreateProcess -> s -> m [Output s]
+runProcessF prefixes p input = liftIO $
     verbosity >>= \ v ->
     case v of
       _ | v < 0 -> runProcessSF p input
-      0 -> runProcessSE p input
-      1 -> runProcessQE p input
-      2 -> runProcessDE p input
+      0 -> runProcessSE prefixes p input
+      1 -> runProcessQE prefixes p input
+      2 -> runProcessDE prefixes p input
       _ -> runProcessVF p input
 
 qPutStrLn :: MonadIO m => String -> m ()

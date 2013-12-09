@@ -40,6 +40,7 @@ module System.Process.Read.Convenience
     , foldResult
     , foldSuccess
     , foldFailure
+    , foldFailure'
 
     , doException
     , doOutput
@@ -163,6 +164,14 @@ foldFailure :: ListLikePlus a c => (Int -> IO (Output a)) -> [Output a] -> IO [O
 foldFailure failfn = foldResult codefn
     where codefn (ExitFailure n) = failfn n
           codefn x = return (Result x)
+
+foldResult' :: ListLikePlus a c => ([Output a] -> ExitCode -> IO (Output a)) -> [Output a] -> IO [Output a]
+foldResult' codefn outputs = mapM (foldOutput (codefn outputs) (return . Stdout) (return . Stderr) (return . Exception)) outputs
+
+foldFailure' :: ListLikePlus a c => (Int -> IO (Output a)) -> [Output a] -> IO [Output a]
+foldFailure' failfn outputs = foldResult' codefn outputs
+    where codefn outputs (ExitFailure n) = failfn n
+          codefn _ x = return (Result x)
 
 foldSuccess :: ListLikePlus a c => IO (Output a) -> [Output a] -> IO [Output a]
 foldSuccess successfn = foldResult codefn

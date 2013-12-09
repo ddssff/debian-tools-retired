@@ -1,3 +1,9 @@
+haskell-process-progress (0.6) unstable; urgency=low
+
+  * Add option to echo output with prefixes on exception
+
+ -- David Fox <dsf@seereason.com>  Mon, 09 Dec 2013 06:22:34 -0800
+
 haskell-process-progress (0.5.3) unstable; urgency=low
 
   * Make changelog visible on hackage.
