@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 {-# OPTIONS -fno-warn-orphans #-}
 -- |The AptImage object represents a partial OS image which is capable
 -- of running apt-get, and thus obtaining repository info and source
@@ -97,7 +97,7 @@ prepareAptEnv' cacheDir sourcesChangedAction sources =
 {-# NOINLINE updateAptEnv #-}
 updateAptEnv :: MonadApt m => AptImage -> m AptImage
 updateAptEnv os =
-    liftIO (runProcessF (shell cmd) L.empty) >>
+    liftIO (runProcessF (Just (" 1> ", " 2> ")) (shell cmd) L.empty) >>
     getSourcePackages os >>= return . sortBy cmp >>= \ sourcePackages ->
     getBinaryPackages os >>= \ binaryPackages ->
     return $ os { aptImageSourcePackages = sourcePackages
@@ -173,7 +173,7 @@ aptGetSource dir os package version =
 -- | Note that apt-get source works for binary or source package names.
 runAptGet :: (PkgName n, AptCache t) => t -> FilePath -> String -> [(n, Maybe DebianVersion)] -> IO ()
 runAptGet os dir command packages =
-    createDirectoryIfMissing True dir >> runProcessF (shell cmd) L.empty >> return ()
+    createDirectoryIfMissing True dir >> runProcessF (Just (" 1> ", " 2> ")) (shell cmd) L.empty >> return ()
     where
       cmd = (intercalate " " ("cd" : dir : "&&" : "apt-get" : aptOpts os : command : map formatPackage packages))
       formatPackage (name, Nothing) = show (pretty name)

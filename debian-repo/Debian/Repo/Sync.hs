@@ -1,5 +1,7 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Debian.Repo.Sync
     ( rsync
+    , prefixes
     ) where
 
 import Control.Monad.Trans (MonadIO)
@@ -9,9 +11,12 @@ import System.FilePath (dropTrailingPathSeparator)
 import System.Process (proc)
 import System.Process.Progress (runProcessF, keepResult)
 
+prefixes = Just (" 1> ", " 2> ")
+
 rsync :: (Functor m, MonadIO m) => [String] -> FilePath -> FilePath -> m ExitCode
 rsync extra source dest =
-    do result <- runProcessF (proc "rsync" (["-aHxSpDt", "--delete"] ++ extra ++
+    do result <- runProcessF prefixes
+                             (proc "rsync" (["-aHxSpDt", "--delete"] ++ extra ++
                                             [dropTrailingPathSeparator source ++ "/",
                                              dropTrailingPathSeparator dest])) B.empty >>= return . keepResult
        case result of

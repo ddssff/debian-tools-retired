@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 module Debian.Repo.OSImage 
     ( OSImage(..)
@@ -592,6 +592,8 @@ syncPool os =
       root = osRoot os
 -}
 
+prefixes = Just (" 1> ", " 2> ")
+
 updateLists :: OSImage -> IO NominalDiffTime
 updateLists os =
     withProc os $ quieter 2 $ do
@@ -599,10 +601,10 @@ updateLists os =
       out <- useEnv root forceList (runProcess update L.empty)
       _ <- case keepResult out of
              [ExitFailure _] ->
-                 do _ <- useEnv root forceList (runProcessF configure L.empty)
-                    useEnv root forceList (runProcessF update L.empty)
+                 do _ <- useEnv root forceList (runProcessF prefixes configure L.empty)
+                    useEnv root forceList (runProcessF prefixes update L.empty)
              _ -> return []
-      (_, elapsed) <- timeTask (useEnv root forceList (runProcessF upgrade L.empty))
+      (_, elapsed) <- timeTask (useEnv root forceList (runProcessF prefixes upgrade L.empty))
       return elapsed
     where
        root = rootPath (osRoot os)

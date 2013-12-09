@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-name-shadowing #-}
 module Debian.Repo.SourceTree.Classes 
     ( SourceTreeC(..)
@@ -97,7 +97,8 @@ buildDebs noClean _twice setEnv buildOS buildTree status =
       env0 <- getEnvironment
       -- Set LOGNAME so dpkg-buildpackage doesn't die when it fails to
       -- get the original user's login information
-      let run cmd = timeTask . useEnv root forceList . noisier 3 $ runProcessF (cmd {env = Just (modEnv (("LOGNAME", Just "root") : setEnv) env0),
+      let run cmd = timeTask . useEnv root forceList . noisier 3 $ runProcessF (Just (" 1> ", " 2> "))
+                                                                               (cmd {env = Just (modEnv (("LOGNAME", Just "root") : setEnv) env0),
                                                                                      cwd = dropPrefix root path}) L.empty
       _ <- run (proc "chmod" ["ugo+x", "debian/rules"])
       let buildCmd = proc "dpkg-buildpackage" (concat [["-sa"],
