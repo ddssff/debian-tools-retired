@@ -1,3 +1,10 @@
+haskell-cabal-debian (4.0.3) unstable; urgency=low
+
+  * Include the build dependencies of the executables in the debian
+    source deb build dependencies.
+
+ -- David Fox <dsf@seereason.com>  Tue, 10 Dec 2013 14:37:20 -0800
+
 haskell-cabal-debian (4.0.2) unstable; urgency=low
 
   * Export some lens state operators from Prelude.

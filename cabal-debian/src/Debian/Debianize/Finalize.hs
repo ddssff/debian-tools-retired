@@ -47,7 +47,7 @@ import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (buildDebianVersion, DebianVersion, parseDebianVersion)
 import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
 import Distribution.PackageDescription (PackageDescription)
-import Distribution.PackageDescription as Cabal (allBuildInfo, BuildInfo(buildTools, extraLibs, pkgconfigDepends))
+import Distribution.PackageDescription as Cabal (allBuildInfo, BuildInfo(buildTools, extraLibs, pkgconfigDepends), Executable(..), BuildInfo(..))
 import qualified Distribution.PackageDescription as Cabal (BuildInfo(buildable), Executable(buildInfo, exeName), PackageDescription(buildDepends, dataFiles, executables, library, package), PackageDescription(license))
 import Distribution.Version (anyVersion, asVersionIntervals, earlierVersion, foldVersionRange', fromVersionIntervals, intersectVersionRanges, isNoVersion, laterVersion, orEarlierVersion, orLaterVersion, toVersionIntervals, unionVersionRanges, VersionRange, withinVersion)
 import Distribution.Version.Invert (invertVersionRange)
@@ -495,7 +495,7 @@ debianBuildDeps pkgDesc =
     where
       cabalDeps =
           do deps <- allBuildDepends
-                          (Cabal.buildDepends pkgDesc)
+                          (Cabal.buildDepends pkgDesc ++ concatMap (Cabal.targetBuildDepends . Cabal.buildInfo) (Cabal.executables pkgDesc))
                           (concatMap buildTools . allBuildInfo $ pkgDesc)
                           (concatMap pkgconfigDepends . allBuildInfo $ pkgDesc)
                           (concatMap extraLibs . allBuildInfo $ pkgDesc)
