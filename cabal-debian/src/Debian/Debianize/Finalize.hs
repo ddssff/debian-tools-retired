@@ -114,17 +114,6 @@ finalizeDebianization date debhelperCompat =
        -- executed since the last expandAtoms.  Anyway, should be idempotent.
        expandAtoms
        -- Turn atoms related to priority, section, and description into debianization elements
-{-
-       access T.sourcePriority >>= maybe (return ()) (\ x -> control %= (\ y -> y {S.priority = Just x}))
-       access T.sourceSection >>= maybe (return ()) (\ x -> control %= (\ y -> y {S.section = Just x}))
-       access T.binaryArchitectures >>= List.mapM_ (\ (b, x) -> T.architecture b ~?= x
-                                                             -- control %= (\ y -> modifyBinaryDeb b ((\ bin -> setL B.architecture bin x) . fromMaybe (newBinaryDebDescription b Any)) y)
-                                                        ) . Map.toList
-       access T.binaryPriorities >>= List.mapM_ (\ (b, x) ->  T.binaryPriority b ~?= Just x
-                                                          -- control %= (\ y -> modifyBinaryDeb b ((\ bin -> setL B.binaryPriority bin (Just x)) . fromMaybe (newBinaryDebDescription b Any)) y)
-                                                     ) . Map.toList
-       access T.binarySections >>= List.mapM_ (\ (b, x) -> control %= (\ y -> modifyBinaryDeb b ((\ bin -> setL B.binarySection bin (Just x)) . fromMaybe (newBinaryDebDescription b Any)) y)) . Map.toList
--}
        finalizeDescriptions
 
 -- | Compute the final values of the BinaryDebDescription record
@@ -138,14 +127,6 @@ finalizeDescription bdd =
     do let b = getL B.package bdd
        cabDesc <- describe b
        T.debianDescription b ~?= Just cabDesc
-{-
-    do descMap <- access T.debianDescription
-       List.mapM_ (uncurry finalizeDescription) (Map.toList descMap)
-    where
-      finalizeDescription b x =
-          control %= (\ y -> modifyBinaryDeb b ((\ bin -> bin {Debian.description = x}) . fromMaybe (newBinaryDebDescription b Any)) y)
-       -- if no PackageDescription: (Left AllRightsReserved)
--}
 
 -- | Combine various bits of information to produce the debian version
 -- which will be used for the debian package.  If the override
@@ -278,21 +259,6 @@ binaryPackageRelations b typ =
        T.replaces b %= \ rels -> [anyrel "${haskell:Replaces}"] ++ rels
        T.builtUsing b ~= []
 
-{-
-binaryPackageDeps :: Monad m => BinPkgName -> DebT m [[Relation]]
-binaryPackageDeps b = get >>= \ atoms -> return $ maybe [] (List.map (: []) . Set.toList) (Map.lookup b (getL T.depends atoms))
-
-binaryPackageConflicts :: Monad m => BinPkgName -> DebT m [[Relation]]
-binaryPackageConflicts b = get >>= \ atoms -> return $ maybe [] (List.map (: []) . Set.toList) (Map.lookup b (getL T.conflicts atoms))
-
-binaryPackageReplaces :: Monad m => BinPkgName -> DebT m [[Relation]]
-binaryPackageReplaces b = get >>= \ atoms -> return $ maybe [] (List.map (: []) . Set.toList) (Map.lookup b (getL T.replaces atoms))
-
-binaryPackageProvides :: Monad m => BinPkgName -> DebT m [[Relation]]
-binaryPackageProvides b = get >>= \ atoms -> return $ maybe [] (List.map (: []) . Set.toList) (Map.lookup b (getL T.provides atoms))
--}
-
--- debLibProf haddock binaryPackageDeps extraDevDeps extraLibMap
 librarySpecs :: Monad m => PackageDescription -> DebT m ()
 librarySpecs pkgDesc =
     do debName <- debianName B.Documentation
@@ -357,6 +323,8 @@ makeUtilsPackages pkgDesc =
        let availableData = Set.union installedData (Set.fromList (Cabal.dataFiles pkgDesc)) :: Set FilePath
            availableExec = Set.union installedExec (Set.map Cabal.exeName (Set.filter (Cabal.buildable . Cabal.buildInfo) (Set.fromList (Cabal.executables pkgDesc)))) :: Set FilePath
 
+       access T.utilsPackageNames >>= \ names ->
+           when (Set.null names) (debianName B.Utilities >>= \ name -> T.utilsPackageNames ~= singleton name)
        utilsPackages <- access T.utilsPackageNames
 
        -- Files that are installed into packages other than the utils packages
@@ -372,9 +340,8 @@ makeUtilsPackages pkgDesc =
        let utilsDataMissing = Set.difference utilsData installedData
            utilsExecMissing = Set.difference utilsExec installedExec
        -- If any files belong in the utils packages, make sure they exist
-       when (not (Set.null utilsData && Set.null (tr "utilsExec: " utilsExec)))
-            (Set.mapM_ (\ p -> do -- control %= (modifyBinaryDeb p (maybe (newbin utilsExec rels p) (\ b -> b {relations = rels})))
-                                  -- This is really for all binary debs except the libraries - I'm not sure why
+       when (not (Set.null utilsData && Set.null utilsExec))
+            (Set.mapM_ (\ p -> do -- This is really for all binary debs except the libraries - I'm not sure why
                                   T.rulesFragments += (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp"))
                                   T.binaryArchitectures p ~?= Just (if Set.null utilsExec then All else Any)
                                   T.binarySection p ~?= Just (MainSection "misc")
@@ -382,24 +349,6 @@ makeUtilsPackages pkgDesc =
        -- Add the unassigned files to the utils packages
        Set.mapM_ (\ p -> Set.mapM_ (\ path -> T.installData +++= (p, singleton (path, path))) utilsDataMissing) utilsPackages
        Set.mapM_ (\ p -> Set.mapM_ (\ name -> T.installCabalExec +++= (p, singleton (name, "usr/bin"))) (tr "utilsExecMissing: " utilsExecMissing)) utilsPackages
-{-
-       case (Set.difference availableData installedData, Set.difference availableExec installedExec) of
-         (datas, execs) | Set.null datas && Set.null execs -> return ()
-         (datas, execs) ->
-             do name <- debianName Utilities
-                T.utilsPackageNames %= (\ s -> if Set.null s then singleton name else s)
-                Set.mapM_ (makeUtilsPackage datas execs) utilsPackages
-      newbin execs rels p =
-          let b = newBinaryDebDescription p (if Set.null execs then All else Any) in
-          b {binarySection = Just (MainSection "misc"), relations = rels}
-      makeUtilsPackage datas execs p =
-          do makeUtilsAtoms p datas execs
-             rels <- binaryPackageRelations p Utilities
-             control %= (\ y -> let f (Just b) = b
-                                    f Nothing = let b = newBinaryDebDescription p (if Set.null execs then All else Any) in
-                                                b {binarySection = Just (MainSection "misc"), relations = rels} in
-                                modifyBinaryDeb p f y)
--}
     where
       ename i =
           case A.sourceDir i of
@@ -408,34 +357,6 @@ makeUtilsPackages pkgDesc =
 
 tr :: Show a => String -> a -> a
 tr _label x = {- trace ("(trace " ++ _label ++ show x ++ ")") -} x
-
-{-
--- If bin is in the binary package list apply f (Just x) to it, otherwise use f Nothing to create a new package
-modifyBinaryDeb :: BinPkgName -> (Maybe BinaryDebDescription -> BinaryDebDescription) -> SourceDebDescription -> SourceDebDescription
-modifyBinaryDeb bin f deb =
-    deb {binaryPackages = bins}
-    where
-      bins = if any (\ x -> package x == bin) (binaryPackages deb)
-             then List.map g (binaryPackages deb)
-             else binaryPackages deb ++ [f Nothing]
-      g x = if package x == bin then f (Just x) else x
--}
-
-{-
-makeUtilsAtoms :: Monad m => BinPkgName -> Set FilePath -> Set String -> DebT m ()
-makeUtilsAtoms p datas execs =
-    do Set.mapM_ (\ path -> installData +++= (p, (path, path))) datas
-       -- The executables that are not already assigned to this package
-       execs' <- access installCabalExec >>= return . (maybe empty (Set.difference execs . Set.map fst)) . Map.lookup p
-       Set.mapM_ (\ name -> installCabalExec +++= (p, (name, "usr/bin"))) execs'
-       when (not (Set.null datas && Set.null execs'))
-            (rulesFragments += (pack ("build" </> show (pretty p) ++ ":: build-ghc-stamp\n")))
--}
-
--- finalizeAtoms :: Atoms -> Atoms
--- finalizeAtoms atoms = execDebM expandAtoms atoms
--- finalizeAtoms atoms | atoms == mempty = atoms
--- finalizeAtoms atoms = atoms <> finalizeAtoms (execDebM expandAtoms atoms)
 
 expandAtoms :: Monad m => DebT m ()
 expandAtoms =

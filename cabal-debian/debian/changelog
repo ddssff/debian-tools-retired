@@ -1,3 +1,10 @@
+haskell-cabal-debian (4.0.1) unstable; urgency=low
+
+  * Make sure the utilities package gets created even if no name
+    has been specified for it - use the name generated in DebianNames.hs.
+
+ -- David Fox <dsf@seereason.com>  Tue, 10 Dec 2013 05:10:11 -0800
+
 haskell-cabal-debian (4.0.0) unstable; urgency=low
 
   * Massive lens overhaul

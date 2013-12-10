@@ -30,12 +30,12 @@ main = cabalDebianMain debianDefaultAtoms
 cabalDebianMain :: DebT IO () -> IO ()
 cabalDebianMain init =
     -- This picks up the options required to decide what action we are
-    -- taking.  Yes, it does get repeated in the call to debianize.
+    -- taking.  Much of this will be repeated in the call to debianize.
     evalDebT (init >> compileEnvironmentArgs >> compileCommandlineArgs >>
               get >>= return . getL debAction >>= finish) newAtoms
     where
       finish (SubstVar debType) = substvars top debType
-      finish Debianize = debianization top init (return ()) >> doDebianizeAction top
+      finish Debianize = debianization top (return ()) (return ()) >> doDebianizeAction top
       finish Usage = do
           progName <- lift getProgName
           let info = unlines [ "Typical usage is to cd to the top directory of the package's unpacked source and run: "
