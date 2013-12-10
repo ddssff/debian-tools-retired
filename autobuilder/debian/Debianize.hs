@@ -1,9 +1,8 @@
 import Debian.Changes (ChangeLog)
 import Debian.Debianize (DebT, evalDebT, debianization, writeDebianization, newAtoms, inputChangeLog,
                          seereasonDefaultAtoms, changelog, license, copyright, depends, doExecutable,
-                         sourceFormat, sourcePackageName)
-import Debian.Debianize.Prelude ((~=), (%=))
-import Debian.Debianize.Types (InstallFile(InstallFile, destDir, destName, execName, sourceDir), Top(Top))
+                         sourceFormat, sourcePackageName, (~=), (%=),
+                         InstallFile(InstallFile, destDir, destName, execName, sourceDir), Top(Top))
 import Debian.Policy (SourceFormat(Native3))
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), SrcPkgName(SrcPkgName), VersionReq(EEQ))
 import Debian.Version (buildDebianVersion)
