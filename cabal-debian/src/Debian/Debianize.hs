@@ -138,6 +138,12 @@ module Debian.Debianize
     , Debian.Debianize.Prelude.buildDebVersionMap
     , Debian.Debianize.Prelude.dpkgFileMap
     , Debian.Debianize.Prelude.debOfFile
+    , Debian.Debianize.Prelude.~=
+    , Debian.Debianize.Prelude.~?=
+    , Debian.Debianize.Prelude.%=
+    , Debian.Debianize.Prelude.+=
+    , Debian.Debianize.Prelude.++=
+    , Debian.Debianize.Prelude.+++=
 
     -- * TBD
 

@@ -1,3 +1,9 @@
+haskell-cabal-debian (4.0.2) unstable; urgency=low
+
+  * Export some lens state operators from Prelude.
+
+ -- David Fox <dsf@seereason.com>  Tue, 10 Dec 2013 05:38:00 -0800
+
 haskell-cabal-debian (4.0.1) unstable; urgency=low
 
   * Make sure the utilities package gets created even if no name
