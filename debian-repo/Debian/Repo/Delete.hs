@@ -14,25 +14,23 @@ import Control.Monad (filterM)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as L (fromChunks)
 import Data.Either (partitionEithers)
-import Data.List as List (intercalate, sortBy, groupBy, isSuffixOf, partition, map, isInfixOf, filter)
+import Data.List as List (intercalate, sortBy, groupBy, isSuffixOf, partition, map, filter)
 import Data.Monoid (mconcat)
-import Data.Set as Set (Set, size, fromList, member, toList, difference, empty, null, partition, map, union, fold, toAscList, filter)
+import Data.Set as Set (Set, size, fromList, member, toList, difference, empty, null, map, union, fold, toAscList)
 import Data.Text as T (pack, unpack)
 import Data.Text.Encoding (encodeUtf8)
 import Debian.Arch (Arch(..))
 import Debian.Control (formatControl)
 import qualified Debian.Control.Text as B (Control'(Control))
-import Debian.Relation (BinPkgName(unBinPkgName))
+import Debian.Relation (BinPkgName)
 import Debian.Repo.Insert (findLive)
 import Debian.Repo.Monads.Apt (MonadApt)
 import qualified Debian.Repo.Package as DRP (binaryPackageSourceID, sourcePackageBinaryIDs, getPackages, sourcePackagesOfIndex)
 import Debian.Repo.PackageIndex (packageIndexPath, packageIndexList, sourceIndexList, binaryIndexList)
 import Debian.Repo.Release (signRelease)
 import Debian.Repo.Types ( BinaryPackageLocal, binaryPackageName, PackageIDLocal,
-                           BinaryPackage(packageID, packageInfo), PackageID(packageName), PackageIndexLocal, PackageIndex(..),
-                           SourcePackage(sourcePackageID),
-                           PackageVersion(pkgVersion), Release,
-                           EnvPath, outsidePath, Release(..))
+                           BinaryPackage(packageID, packageInfo), PackageID, PackageIndexLocal, PackageIndex(..),
+                           SourcePackage, PackageVersion(pkgVersion), Release, EnvPath, outsidePath, Release(..))
 import Debian.Repo.Types.LocalRepository (Layout(..), LocalRepository, repoLayout, repoRoot, repoReleaseInfoLocal)
 import Debian.Repo.Types.Repo (repoKey)
 import Debian.Repo.Types.Repository (fromLocalRepository)
@@ -112,8 +110,8 @@ deleteBinaryOrphans dry keyname repo releases =
                 liftIO $ deleteBinaryPackages dry keyname repo badBps
          (exns1', exns2', _, _) -> error $ "Failure(s) loading package indexes:\n " ++ intercalate "\n " (List.map show (exns1' ++ exns2'))
     where
-      p :: (Release, PackageIndex, PackageID BinPkgName) -> Bool
-      p (_, _, pid) = isInfixOf "fay" (unBinPkgName . packageName $ pid)
+      -- p :: (Release, PackageIndex, PackageID BinPkgName) -> Bool
+      -- p (_, _, pid) = isInfixOf "fay" (unBinPkgName . packageName $ pid)
       getPackages' repo release index = either Left (Right . List.map (\ p -> (release, index, p))) <$> DRP.getPackages repo release index
       sourcePackagesOfIndex' repo release index = either Left (Right . List.map (\ p -> (release, index, p))) <$> DRP.sourcePackagesOfIndex repo release index
 {-

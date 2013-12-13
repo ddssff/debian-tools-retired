@@ -1,11 +1,11 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, StandaloneDeriving, TupleSections #-}
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 import Control.DeepSeq (force)
 import Control.Exception (SomeException)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as L
-import qualified Data.ByteString.Char8 as B
+-- import qualified Data.ByteString.Char8 as B
 import Data.Either (partitionEithers)
 import Data.List as List (intercalate, map)
 import Data.Set as Set (Set, unions, fromList, size)
@@ -14,6 +14,7 @@ import Debian.Repo (runAptIO, findReleases)
 import Debian.Repo.PackageIndex ( packageIndexPath, sourceIndexList, binaryIndexList )
 import Debian.Repo.Types (rootEnvPath, Release, PackageIndex(packageIndexArch),
                           BinaryPackage(..), SourcePackage)
+import Debian.Repo.Types.EnvPath (EnvPath)
 import Debian.Repo.Types.LocalRepository (Layout(Pool))
 import Debian.Repo.Types.Repository (prepareLocalRepository)
 import System.IO (hPutStrLn, stderr)
@@ -29,7 +30,7 @@ import Debian.Repo.Types (SourceFileSpec(SourceFileSpec), SourceControl(..), Sou
 import Debian.Repo.Types.Repo (repoURI)
 import Debian.Repo.Types.Repository (Repository, fromLocalRepository)
 import Debian.Version (parseDebianVersion)
-import qualified Data.ByteString.Lazy.Char8 as L ( ByteString, fromChunks )
+-- import qualified Data.ByteString.Lazy.Char8 as L ( ByteString, fromChunks )
 import Data.List (partition)
 import Data.Maybe ( catMaybes )
 import GHC.IO.Exception (IOErrorType(UserError), IOException)
@@ -46,8 +47,10 @@ uriToString' uri = uriToString id uri ""
 deriving instance Show BinaryPackage
 
 -- | How long to parse the files in a repository?
+root :: EnvPath
 root = rootEnvPath "/srv/deb/ubuntu"
 
+main :: IO ()
 main = runAptIO $ quieter (- 3) $
     do repo <- prepareLocalRepository root (Just Pool)
        releases <- findReleases repo

@@ -17,7 +17,7 @@ module Debian.Repo.OSImage
 
 import Control.Exception (evaluate, bracket)
 import Control.Exception ( SomeException, try )
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy as L
 import Data.List ( intercalate )
 import Data.Time ( NominalDiffTime )
@@ -37,7 +37,7 @@ import Debian.Repo.Types (AptBuildCache(..), AptCache(..), SourcePackage, Binary
 import Debian.Repo.Types.LocalRepository (LocalRepository)
 import Debian.Repo.Types.Repo (repoURI, repoKey)
 import Debian.Repo.Types.Repository (fromLocalRepository, prepareLocalRepository,
-                                     NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..), copyLocalRepo, MonadRepoCache)
+                                     NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..), copyLocalRepo)
 import Debian.URI ( uriToString', URI(uriScheme) )
 import Extra.Files ( replaceFile )
 import "Extra" Extra.List ( isSublistOf )
@@ -178,6 +178,8 @@ prepareEnv root distro local flush ifSourcesChanged include exclude components =
     where
       update _ | flush = return (Left Flushed)
       update os = updateEnv os
+      recreate ::(MonadTop m, {-MonadRepoCache k r-} MonadIO m, MonadApt m) =>
+                 Arch -> OSImage -> Either UpdateError OSImage -> m OSImage
       recreate _ _ (Right os) = return os
       recreate _arch _os (Left (Changed name path computed installed))
           | ifSourcesChanged == SourcesChangedError =
@@ -579,7 +581,7 @@ removeEnv os =
 -- |Use rsync to synchronize the pool of locally built packages from
 -- outside the build environment to the location inside the environment
 -- where apt can see and install the packages.
-syncPool :: MonadRepoCache m => OSImage -> m OSImage
+syncPool :: {- MonadRepoCache k r -} MonadApt m => OSImage -> m OSImage
 syncPool os =
     do repo' <- copyLocalRepo (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) (osLocalMaster os)
        return (os {osLocalCopy = repo'})

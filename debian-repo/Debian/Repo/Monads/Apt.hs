@@ -39,8 +39,10 @@ import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), Contro
 import Debian.Release (ReleaseName)
 import Debian.Sources (SliceName)
 import Debian.Repo.Types (AptImage, SourcePackage, BinaryPackage, Release)
+import Debian.Repo.Types.RemoteRepository (RemoteRepository)
 import Debian.Repo.Types.Repo (Repo(repoKey), RepoKey(..))
 import Debian.Repo.Types.Repository (Repository, MonadRepoCache(getRepoCache, putRepoCache))
+import Debian.URI (URI')
 import qualified System.IO as IO ( IOMode(ReadMode), hClose, openBinaryFile )
 import System.Posix.Files ( FileStatus, deviceID, fileID, modificationTime )
 import System.Process.Progress (ePutStrLn)
@@ -67,7 +69,7 @@ type AptIO = AptIOT IO
 -- | This represents the state of the IO system.
 data AptState
     = AptState
-      { repoMap :: Map.Map RepoKey Repository		-- ^ Map to look up known Repository objects
+      { repoMap :: Map.Map URI' RemoteRepository		-- ^ Map to look up known Repository objects
       , releaseMap :: Map.Map (RepoKey, ReleaseName) Release -- ^ Map to look up known Release objects
       , aptImageMap :: Map.Map SliceName AptImage	-- ^ Map to look up prepared AptImage objects
       , sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
@@ -92,16 +94,16 @@ initState = AptState
             , binaryPackageMap = Map.empty
             }
 
-setRepoMap :: Map.Map RepoKey Repository -> AptState -> AptState
+setRepoMap :: Map.Map URI' RemoteRepository -> AptState -> AptState
 setRepoMap m state = state {repoMap = m}
 
-getRepoMap :: AptState -> Map.Map RepoKey Repository
+getRepoMap :: AptState -> Map.Map URI' RemoteRepository
 getRepoMap state = repoMap state
 
-lookupRepository :: RepoKey -> AptState -> Maybe Repository
+lookupRepository :: URI' -> AptState -> Maybe RemoteRepository
 lookupRepository uri state = Map.lookup uri (repoMap state)
 
-insertRepository :: RepoKey -> Repository -> AptState -> AptState
+insertRepository :: URI' -> RemoteRepository -> AptState -> AptState
 insertRepository uri repo state = state {repoMap = Map.insert uri repo (repoMap state)}
 
 lookupAptImage :: SliceName -> AptState -> Maybe AptImage
@@ -161,6 +163,6 @@ instance MonadApt m => MonadApt (ReaderT s m) where
     getApt = lift getApt
     putApt = lift . putApt
 
-instance MonadApt m => MonadRepoCache m where
+instance MonadApt m => MonadRepoCache URI' RemoteRepository m where
     getRepoCache = getApt >>= return . repoMap
     putRepoCache m = getApt >>= \ a -> putApt (a {repoMap = m})

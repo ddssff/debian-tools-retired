@@ -1,7 +1,7 @@
-{-# LANGUAGE FlexibleInstances, PackageImports, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, PackageImports, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types.Repository
-    ( Repository
+    ( Repository(LocalRepo)
     , MonadRepoCache(getRepoCache, putRepoCache)
     , loadRepoCache
     , saveRepoCache
@@ -25,7 +25,7 @@ import Control.Monad (filterM, when, unless)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (groupBy, partition, sort, isPrefixOf, intercalate)
-import Data.Map as Map (Map, insertWith, lookup, insert, fromList, toList, union, empty)
+import Data.Map as Map (Map, insertWith, lookup, insert, fromList, toList, union, empty, mapKeys, mapMaybeWithKey)
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text as T (Text, unpack)
 import Debian.Changes (ChangesFile(changeInfo), ChangedFileSpec(changedFileSection))
@@ -74,13 +74,9 @@ instance Ord Repository where
 instance Eq Repository where
     a == b = compare a b == EQ
 
--- | URI has a bogus show function, which we are using here.
-instance F.Pretty URI' where
-    pretty = text . show . fromURI'
-
 instance F.Pretty Repository where
     pretty (LocalRepo r) = text $ outsidePath (repoRoot r)
-    pretty (RemoteRepo (RemoteRepository s _)) = F.pretty s
+    pretty (RemoteRepo r) = F.pretty r
 
 instance Repo Repository where
     repoKey (LocalRepo r) = repoKey r
@@ -88,11 +84,11 @@ instance Repo Repository where
     repoReleaseInfo (LocalRepo r) = repoReleaseInfo r
     repoReleaseInfo (RemoteRepo r) = repoReleaseInfo r
 
-class MonadIO m => MonadRepoCache m where
-    getRepoCache :: m (Map RepoKey Repository)
-    putRepoCache :: Map RepoKey Repository -> m ()
+class MonadIO m => MonadRepoCache k r m where
+    getRepoCache :: m (Map k r)
+    putRepoCache :: Map k r -> m ()
 
-modifyRepoCache :: MonadRepoCache m => (Map RepoKey Repository -> Map RepoKey Repository) -> m ()
+modifyRepoCache :: MonadRepoCache k r m => (Map k r -> Map k r) -> m ()
 modifyRepoCache f = do
     s <- getRepoCache
     putRepoCache (f s)
@@ -104,12 +100,12 @@ fromLocalRepository = LocalRepo
 -- downloading information from the remote repositories.  These values may
 -- go out of date, as when a new release is added to a repository.  When this
 -- happens some ugly errors will occur and the cache will have to be flushed.
-loadRepoCache :: (MonadRepoCache m, MonadTop m) => m ()
+loadRepoCache :: forall k r m. (Read r, Read k, Ord k, MonadRepoCache k r m, MonadTop m) => m ()
 loadRepoCache =
     do dir <- sub "repoCache"
        liftIO (loadRepoCache' dir `catch` (\ (e :: SomeException) -> qPutStrLn (show e) >> return Map.empty)) >>= putRepoCache
     where
-      loadRepoCache' :: FilePath -> IO (Map RepoKey Repository)
+      loadRepoCache' :: FilePath -> IO (Map k r)
       loadRepoCache' repoCache =
           do qPutStrLn "Loading repo cache..."
              file <- readFile repoCache
@@ -121,7 +117,7 @@ loadRepoCache =
                    return (fromList pairs)
 
 -- | Write the repo cache map into a file.
-saveRepoCache :: (MonadIO m, MonadTop m, MonadRepoCache m) => m ()
+saveRepoCache :: forall k r m. (Show r, Read r, Show k, Read k, Ord k, MonadIO m, MonadTop m, MonadRepoCache k r m) => m ()
 saveRepoCache =
           do path <- sub "repoCache"
              live <- getRepoCache
@@ -132,31 +128,25 @@ saveRepoCache =
           where
             -- isRemote uri = uriScheme uri /= "file:"
             -- isRemote (uri, _) = uriScheme uri /= "file:"
-            loadCache :: FilePath -> IO (Map.Map RepoKey Repository)
+            loadCache :: FilePath -> IO (Map.Map k r)
             loadCache path =
                 readFile path `IO.catch` (\ (_ :: SomeException) -> return "[]") >>=
                 return . Map.fromList . fromMaybe [] . maybeRead
 
-readLocalRepo :: MonadRepoCache m => EnvPath -> Maybe Layout -> m LocalRepository
+readLocalRepo :: MonadIO m => EnvPath -> Maybe Layout -> m LocalRepository
 readLocalRepo root layout =
-    do state <- getRepoCache
-       case Map.lookup (Local root) state of
-         Just (RemoteRepo _) -> error "readLocalRepo: internal error" -- somehow a remote repo got associated with a Local RepoKey
-         Just (LocalRepo repo) -> return repo
-         Nothing ->
-             do names <- liftIO (getDirectoryContents distDir) >>= return . filter (\ x -> not . elem x $ [".", ".."])
-                (links, dists) <- partitionM (liftIO . isSymLink . (distDir </>)) names
-                linkText <- mapM (liftIO . F.readSymbolicLink) (map (distDir </>) links)
-                let aliasPairs = zip linkText links ++ map (\ dist -> (dist, dist)) dists
-                let distGroups = groupBy fstEq . sort $ aliasPairs
-                let aliases = map (checkAliases  . partition (uncurry (==))) distGroups
-                releaseInfo <- mapM (liftIO . getReleaseInfo) aliases
-                qPutStrLn ("LocalRepository releaseInfo " ++ show root ++ ": " ++ show releaseInfo)
-                let repo = LocalRepository { repoRoot_ = root
-                                           , repoLayout_ = layout
-                                           , repoReleaseInfoLocal_ = releaseInfo }
-                putRepoCache (insertWith (\ _ x -> x) (Local root) (LocalRepo repo) state)
-                return repo
+    do names <- liftIO (getDirectoryContents distDir) >>= return . filter (\ x -> not . elem x $ [".", ".."])
+       (links, dists) <- partitionM (liftIO . isSymLink . (distDir </>)) names
+       linkText <- mapM (liftIO . F.readSymbolicLink) (map (distDir </>) links)
+       let aliasPairs = zip linkText links ++ map (\ dist -> (dist, dist)) dists
+       let distGroups = groupBy fstEq . sort $ aliasPairs
+       let aliases = map (checkAliases  . partition (uncurry (==))) distGroups
+       releaseInfo <- mapM (liftIO . getReleaseInfo) aliases
+       qPutStrLn ("LocalRepository releaseInfo " ++ show root ++ ": " ++ show releaseInfo)
+       let repo = LocalRepository { repoRoot_ = root
+                                  , repoLayout_ = layout
+                                  , repoReleaseInfoLocal_ = releaseInfo }
+       return repo
     where
       fstEq (a, _) (b, _) = a == b
       checkAliases :: ([(String, String)], [(String, String)]) -> (ReleaseName, [ReleaseName])
@@ -187,7 +177,7 @@ parseRelease name aliases file =
 -- | Create or verify the existance of the directories which will hold
 -- a repository on the local machine.  Verify the index files for each of
 -- its existing releases.
-prepareLocalRepository :: MonadRepoCache m => EnvPath -> Maybe Layout -> m LocalRepository
+prepareLocalRepository :: MonadIO m => EnvPath -> Maybe Layout -> m LocalRepository
 prepareLocalRepository root layout =
     do mapM_ (liftIO . initDir)
                  [(".", 0o40755),
@@ -220,16 +210,13 @@ prepareLocalRepository root layout =
 -- repoCD :: EnvPath -> LocalRepository -> LocalRepository
 -- repoCD path repo = repo { repoRoot_ = path }
 
-copyLocalRepo :: MonadRepoCache m => EnvPath -> LocalRepository -> m LocalRepository
+copyLocalRepo :: MonadIO m => EnvPath -> LocalRepository -> m LocalRepository
 copyLocalRepo dest repo =
     do qPutStrLn ("Syncing local repository from " ++ src ++ " -> " ++ dst)
        liftIO $ createDirectoryIfMissing True (outsidePath dest)
        result <- liftIO $ rsync [] (outsidePath (repoRoot repo)) (outsidePath dest)
        case result of
-         ExitSuccess ->
-             do let repo' = repo {repoRoot_ = dest}
-                modifyRepoCache (Map.insert (Local dest) (LocalRepo repo'))
-                return repo'
+         ExitSuccess -> return $ repo {repoRoot_ = dest}
          code -> error $ "*** FAILURE syncing local repository " ++ src ++ " -> " ++ dst ++ ": " ++ show code
     where
       src = outsidePath (repoRoot repo)
@@ -258,44 +245,40 @@ setRepositoryCompatibility r =
 
 -- | Remove all the packages from the repository and then re-create
 -- the empty releases.
-flushLocalRepository :: MonadRepoCache m => LocalRepository -> m LocalRepository
+flushLocalRepository :: MonadIO m => LocalRepository -> m LocalRepository
 flushLocalRepository r =
     do liftIO $ removeRecursiveSafely (outsidePath (repoRoot r))
        prepareLocalRepository (repoRoot r) (repoLayout r)
 
-prepareRepository :: MonadRepoCache m => RepoKey -> m Repository
+prepareRepository :: (MonadRepoCache URI' RemoteRepository m) =>
+                     RepoKey -> m Repository
 prepareRepository key =
     case key of
       Local path -> prepareLocalRepository path Nothing >>= return . LocalRepo
-      Remote uri -> prepareRepository' (fromURI' uri)
-
--- | Prepare a repository, which may be remote or local depending on
--- the URI.
-prepareRepository' :: MonadRepoCache m => URI -> m Repository
-prepareRepository' uri =
-    do state <- getRepoCache
-       repo <- maybe newRepo return (Map.lookup (Remote (toURI' uri)) state)
-       putRepoCache (Map.insert (Remote (toURI' uri)) repo state)
-       return repo
-    where
-      newRepo =
+      Remote uri' ->
+          do let uri = fromURI' uri'
              case uriScheme uri of
-               "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
-               -- FIXME: We only want to verifyRepository on demand.
-               _ -> verifyRepository (toURI' uri)
+               "file:" ->
+                   prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
+               _ ->
+                   do (state :: Map URI' RemoteRepository) <- getRepoCache
+                      -- FIXME: We only want to verifyRepository on demand.
+                      repo <- maybe (verifyRepository (toURI' uri)) return (Map.lookup (toURI' uri) state)
+                      putRepoCache (Map.insert (toURI' uri) repo state)
+                      return (RemoteRepo repo)
 
 -- |To create a RemoteRepo we must query it to find out the
 -- names, sections, and supported architectures of its releases.
 {-# NOINLINE verifyRepository #-}
-verifyRepository :: MonadRepoCache m => URI' -> m Repository
+verifyRepository :: MonadRepoCache URI' RemoteRepository m => URI' -> m RemoteRepository
 verifyRepository uri =
     do state <- getRepoCache
-       case Map.lookup (Remote uri) state of
+       case Map.lookup uri state of
          Just repo -> return repo
          Nothing ->
              do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . fromURI' $ uri
-                let repo = RemoteRepo (RemoteRepository uri releaseInfo)
-                modifyRepoCache (Map.insert (Remote uri) repo)
+                let repo = RemoteRepository uri releaseInfo
+                modifyRepoCache (Map.insert uri repo)
                 return repo
 
 -- Nice code to do caching, but I figured out how to fix the old code.

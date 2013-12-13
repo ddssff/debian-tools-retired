@@ -46,7 +46,6 @@ import Debian.Repo.Types ( AptCache(aptArch, rootDir), BinaryPackageLocal, Sourc
 import Debian.Repo.Types.EnvPath (outsidePath)
 import Debian.Repo.Types.LocalRepository (LocalRepository, repoRoot)
 import Debian.Repo.Types.Repo (RepoKey, repoKeyURI)
-import Debian.Repo.Types.Repository (MonadRepoCache)
 import Debian.URI ( fileFromURIStrict )
 import Debian.Version ( parseDebianVersion, DebianVersion )
 import qualified Debian.Version as V ( buildDebianVersion, epoch, revision, version )
@@ -232,14 +231,14 @@ getPackages repo release index =
       --showStream x@(Right s) = hPutStrLn stderr (show uri' ++ " - stream length: " ++ show (L.length s)) >> return x
 
 -- | Get the contents of a package index
-binaryPackagesOfIndex :: MonadRepoCache m => RepoKey -> Release -> PackageIndex -> m (Either SomeException [BinaryPackage])
+binaryPackagesOfIndex :: {- MonadRepoCache k r -} MonadIO m => RepoKey -> Release -> PackageIndex -> m (Either SomeException [BinaryPackage])
 binaryPackagesOfIndex repo release index =
     case packageIndexArch index of
       Source -> return (Right [])
       _ -> liftIO $ getPackages repo release index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
 
 -- | Get the contents of a package index
-sourcePackagesOfIndex :: MonadRepoCache m => RepoKey -> Release -> PackageIndex -> m (Either SomeException [SourcePackage])
+sourcePackagesOfIndex :: {- MonadRepoCache k r -} MonadIO m => RepoKey -> Release -> PackageIndex -> m (Either SomeException [SourcePackage])
 sourcePackagesOfIndex repo release index =
     case packageIndexArch index of
       Source -> liftIO (getPackages repo release index) >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
@@ -333,7 +332,7 @@ binaryPackagesOfIndex' cache repo release index =
       path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
 
 -- | Return a list of all source packages.
-releaseSourcePackages :: MonadRepoCache m => RepoKey -> Release -> m (Set SourcePackage)
+releaseSourcePackages :: {- MonadRepoCache k r -} MonadIO m => RepoKey -> Release -> m (Set SourcePackage)
 releaseSourcePackages repo release =
     mapM (sourcePackagesOfIndex repo release) (sourceIndexList release) >>= return . test
     where
@@ -343,7 +342,7 @@ releaseSourcePackages repo release =
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Return a list of all the binary packages for all supported architectures.
-releaseBinaryPackages :: MonadRepoCache m => RepoKey -> Release -> m (Set BinaryPackage)
+releaseBinaryPackages :: {- MonadRepoCache k r -} MonadIO m => RepoKey -> Release -> m (Set BinaryPackage)
 releaseBinaryPackages repo release =
     mapM (binaryPackagesOfIndex repo release) (binaryIndexList release) >>= return . test
     where

@@ -48,3 +48,10 @@ data RemoteRepository
 instance Repo RemoteRepository where
     repoKey (RemoteRepository uri _) = Remote uri
     repoReleaseInfo (RemoteRepository _ info) = info
+
+instance F.Pretty RemoteRepository where
+    pretty (RemoteRepository s _) = F.pretty s
+
+-- | URI has a bogus show function, which we are using here.
+instance F.Pretty URI' where
+    pretty = text . show . fromURI'
