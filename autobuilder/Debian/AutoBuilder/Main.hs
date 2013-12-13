@@ -16,6 +16,7 @@ import Control.Monad.State(MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import Data.List as List (intercalate, null)
+import Data.Maybe (mapMaybe)
 import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildTarget (retrieve)
@@ -30,7 +31,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (DebT)
-import Debian.Release (parseSection', releaseName')
+import Debian.Release ({-parseSection',-} releaseName')
 import Debian.Sources (SliceName(..))
 import Debian.Repo.AptImage(prepareAptEnv)
 import Debian.Repo.Cache(updateCacheSources)
@@ -38,12 +39,15 @@ import Debian.Repo.Delete(deleteGarbage)
 import Debian.Repo.Monads.Apt (MonadApt, runAptT)
 import Debian.Repo.Monads.Top (MonadTop(askTop), runTopT)
 import Debian.Repo.OSImage(OSImage(osLocalMaster, osLocalCopy), buildEssential, prepareEnv, chrootEnv)
-import Debian.Repo.Release(prepareRelease)
+--import Debian.Repo.Release(prepareRelease)
 import Debian.Repo.Repository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Slice(appendSliceLists, inexactPathSlices, releaseSlices, repoSources)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types (EnvRoot(rootPath), EnvPath(..), rootEnvPath)
-import Debian.Repo.Types.Repository (LocalRepository, repoRoot, prepareLocalRepository, NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey), repoReleaseNames, saveRepoCache, prepareRepository)
+import Debian.Repo.Types.LocalRepository (LocalRepository, repoRoot, prepareLocalRepository)
+import Debian.Repo.Types.RemoteRepository (saveRepoCache, repoReleaseNames)
+import Debian.Repo.Types.Repository (prepareRepository, unRemoteRepository)
+import Debian.Repo.Types.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey))
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
@@ -130,7 +134,7 @@ prepareDependOS :: (MonadTop m, MonadApt m) => P.ParamRec -> NamedSliceList -> F
 prepareDependOS params buildRelease localRepo =
     do when (P.flushPool params) (liftIO (removeRecursiveSafely localRepo))
        repo <- prepareLocalRepository (rootEnvPath localRepo) Nothing
-       release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
+       -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
        when (P.cleanUp params) (deleteGarbage repo)
        dependRoot <- dependEnv (P.buildRelease params)
        exists <- liftIO $ doesDirectoryExist (rootPath dependRoot)
@@ -266,11 +270,12 @@ runParameterSet init cache =
                 _ -> error "Missing Upload-URI parameter"
           | True = return (Success ([], (fromInteger 0)))
 
-
--- doVerifyBuildRepo :: IO ()
+-- | Make sure the build release ("P.buildRelease params") - the
+-- release and repository to which we intend to upload the packages
+-- that we build - exists on the upload server ("P.uploadURI params").
 doVerifyBuildRepo :: MonadApt m => C.CacheRec -> m ()
 doVerifyBuildRepo cache =
-    do repos <- mapM prepareRepository (map sliceRepoKey . slices . C.buildRepoSources $ cache)
+    do repos <- mapM prepareRepository (map sliceRepoKey . slices . C.buildRepoSources $ cache) >>= return . mapMaybe unRemoteRepository
        let names = concatMap repoReleaseNames repos
        when (not (any (== (P.buildRelease params)) names))
             (case P.uploadURI params of
