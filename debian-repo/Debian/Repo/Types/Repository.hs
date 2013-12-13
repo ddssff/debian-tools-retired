@@ -6,7 +6,6 @@ module Debian.Repo.Types.Repository
     , prepareRepository
     , unLocalRepository
     , unRemoteRepository
-    , repoReleaseNames
     ) where
 
 import Control.Applicative.Error (Failing(Success, Failure), maybeRead)
@@ -52,7 +51,6 @@ import qualified Tmp.File as F (Source(RemotePath))
 
 -- | The Repository type reprents any instance of the Repo class, so
 -- it might be local or remote.
---data Repository = forall a. (Repo a) => Repository a
 data Repository
     = LocalRepo LocalRepository
     | RemoteRepo RemoteRepository
@@ -94,6 +92,3 @@ prepareRepository key =
           case uriScheme uri of
                "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
                _ -> prepareRemoteRepository uri >>= return . RemoteRepo
-
-repoReleaseNames :: RemoteRepository -> [ReleaseName]
-repoReleaseNames (RemoteRepository _ rels) = map releaseName rels

@@ -6,6 +6,7 @@ module Debian.Repo.Types.RemoteRepository
     , loadRepoCache
     , saveRepoCache
     , prepareRemoteRepository
+    , repoReleaseNames
     ) where
 
 import Control.Applicative.Error (Failing(Success, Failure), maybeRead)
@@ -190,3 +191,6 @@ getReleaseInfoRemote uri =
             distURI = distsURI {uriPath = uriPath distsURI </> releaseName' distName}
       uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
       uncurry3 f (a, b, c) =  f a b c
+
+repoReleaseNames :: RemoteRepository -> [ReleaseName]
+repoReleaseNames (RemoteRepository _ rels) = map releaseName rels
