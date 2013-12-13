@@ -1,7 +1,9 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, PackageImports, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types.Repository
-    ( Repository(LocalRepo)
+    ( Repository(LocalRepo, RemoteRepo)
+    , unLocalRepository
+    , unRemoteRepository
     , MonadRepoCache(getRepoCache, putRepoCache)
     , loadRepoCache
     , saveRepoCache
@@ -63,6 +65,14 @@ data Repository
     | RemoteRepo RemoteRepository
     deriving (Show, Read)
 
+unRemoteRepository :: Repository -> Maybe RemoteRepository
+unRemoteRepository (RemoteRepo x) = Just x
+unRemoteRepository _ = Nothing
+
+unLocalRepository :: Repository -> Maybe LocalRepository
+unLocalRepository (LocalRepo x) = Just x
+unLocalRepository _ = Nothing
+
 instance Ord Repository where
     compare a b = compare (repoKey a) (repoKey b)
 
@@ -79,11 +89,11 @@ instance Repo Repository where
     repoReleaseInfo (LocalRepo r) = repoReleaseInfo r
     repoReleaseInfo (RemoteRepo r) = repoReleaseInfo r
 
-class MonadIO m => MonadRepoCache k r m where
-    getRepoCache :: m (Map k r)
-    putRepoCache :: Map k r -> m ()
+class MonadIO m => MonadRepoCache m where
+    getRepoCache :: m (Map URI' RemoteRepository)
+    putRepoCache :: Map URI' RemoteRepository -> m ()
 
-modifyRepoCache :: MonadRepoCache k r m => (Map k r -> Map k r) -> m ()
+modifyRepoCache :: MonadRepoCache m => (Map URI' RemoteRepository -> Map URI' RemoteRepository) -> m ()
 modifyRepoCache f = do
     s <- getRepoCache
     putRepoCache (f s)
@@ -95,12 +105,12 @@ fromLocalRepository = LocalRepo
 -- downloading information from the remote repositories.  These values may
 -- go out of date, as when a new release is added to a repository.  When this
 -- happens some ugly errors will occur and the cache will have to be flushed.
-loadRepoCache :: forall k r m. (Read r, Read k, Ord k, MonadRepoCache k r m, MonadTop m) => m ()
+loadRepoCache :: (MonadRepoCache m, MonadTop m) => m ()
 loadRepoCache =
     do dir <- sub "repoCache"
        liftIO (loadRepoCache' dir `catch` (\ (e :: SomeException) -> qPutStrLn (show e) >> return Map.empty)) >>= putRepoCache
     where
-      loadRepoCache' :: FilePath -> IO (Map k r)
+      loadRepoCache' :: FilePath -> IO (Map URI' RemoteRepository)
       loadRepoCache' repoCache =
           do qPutStrLn "Loading repo cache..."
              file <- readFile repoCache
@@ -112,7 +122,7 @@ loadRepoCache =
                    return (fromList pairs)
 
 -- | Write the repo cache map into a file.
-saveRepoCache :: forall k r m. (Show r, Read r, Show k, Read k, Ord k, MonadIO m, MonadTop m, MonadRepoCache k r m) => m ()
+saveRepoCache :: (MonadIO m, MonadTop m, MonadRepoCache m) => m ()
 saveRepoCache =
           do path <- sub "repoCache"
              live <- getRepoCache
@@ -123,12 +133,12 @@ saveRepoCache =
           where
             -- isRemote uri = uriScheme uri /= "file:"
             -- isRemote (uri, _) = uriScheme uri /= "file:"
-            loadCache :: FilePath -> IO (Map.Map k r)
+            loadCache :: FilePath -> IO (Map.Map URI' RemoteRepository)
             loadCache path =
                 readFile path `IO.catch` (\ (_ :: SomeException) -> return "[]") >>=
                 return . Map.fromList . fromMaybe [] . maybeRead
 
-prepareRepository :: (MonadRepoCache URI' RemoteRepository m) =>
+prepareRepository :: (MonadRepoCache m) =>
                      RepoKey -> m Repository
 prepareRepository key =
     case key of
@@ -139,7 +149,7 @@ prepareRepository key =
                "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
                _ -> prepareRemoteRepository uri >>= return . RemoteRepo
 
-prepareRemoteRepository :: (MonadRepoCache URI' RemoteRepository m) => URI -> m RemoteRepository
+prepareRemoteRepository :: (MonadRepoCache m) => URI -> m RemoteRepository
 prepareRemoteRepository uri =
     do (state :: Map URI' RemoteRepository) <- getRepoCache
        -- FIXME: We only want to verifyRepository on demand.
@@ -150,7 +160,7 @@ prepareRemoteRepository uri =
 -- |To create a RemoteRepo we must query it to find out the
 -- names, sections, and supported architectures of its releases.
 {-# NOINLINE verifyRemoteRepository #-}
-verifyRemoteRepository :: MonadRepoCache URI' RemoteRepository m => URI' -> m RemoteRepository
+verifyRemoteRepository :: MonadRepoCache m => URI' -> m RemoteRepository
 verifyRemoteRepository uri =
     do state <- getRepoCache
        case Map.lookup uri state of
@@ -240,6 +250,5 @@ instance Pretty SliceList where
 deriving instance Show SourceType
 deriving instance Show DebSource
 
-repoReleaseNames :: Repository -> [ReleaseName]
-repoReleaseNames (RemoteRepo (RemoteRepository _ rels)) = map releaseName rels
-repoReleaseNames _ = []
+repoReleaseNames :: RemoteRepository -> [ReleaseName]
+repoReleaseNames (RemoteRepository _ rels) = map releaseName rels

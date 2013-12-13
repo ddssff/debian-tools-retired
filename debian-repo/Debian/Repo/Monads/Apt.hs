@@ -163,6 +163,6 @@ instance MonadApt m => MonadApt (ReaderT s m) where
     getApt = lift getApt
     putApt = lift . putApt
 
-instance MonadApt m => MonadRepoCache URI' RemoteRepository m where
+instance MonadApt m => MonadRepoCache m where
     getRepoCache = getApt >>= return . repoMap
     putRepoCache m = getApt >>= \ a -> putApt (a {repoMap = m})
