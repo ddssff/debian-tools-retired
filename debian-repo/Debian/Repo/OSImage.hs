@@ -36,8 +36,8 @@ import Debian.Repo.Types (AptBuildCache(..), AptCache(..), SourcePackage, Binary
                           EnvPath(EnvPath, envRoot, envPath), EnvRoot(rootPath), outsidePath, rootEnvPath)
 import Debian.Repo.Types.LocalRepository (LocalRepository, prepareLocalRepository, copyLocalRepo)
 import Debian.Repo.Types.Repo (repoURI, repoKey)
-import Debian.Repo.Types.Repository (fromLocalRepository,
-                                     NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..))
+import Debian.Repo.Types.Repository (fromLocalRepository)
+import Debian.Repo.Types.Slice (NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..))
 import Debian.URI ( uriToString', URI(uriScheme) )
 import Extra.Files ( replaceFile )
 import "Extra" Extra.List ( isSublistOf )

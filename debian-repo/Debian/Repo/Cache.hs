@@ -40,7 +40,8 @@ import Debian.Repo.Types ( AptCache(aptArch, aptBaseSliceList, aptBinaryPackages
                            sourcePackageName, BinaryPackage(packageID), binaryPackageName, PackageID(packageVersion), PackageIndex(..),
                            Release(releaseName), EnvRoot(EnvRoot) )
 import Debian.Repo.Types.Repo (Repo(repoReleaseInfo), RepoKey, repoKey)
-import Debian.Repo.Types.Repository (Slice(..), prepareRepository)
+import Debian.Repo.Types.Repository (prepareRepository)
+import Debian.Repo.Types.Slice (Slice(..))
 import Extra.Files ( replaceFile )
 import Network.URI ( URIAuth(uriPort, uriRegName, uriUserInfo), URI(uriAuthority, uriPath, uriScheme), escapeURIString )
 import System.Directory ( createDirectoryIfMissing, doesFileExist, removeFile )

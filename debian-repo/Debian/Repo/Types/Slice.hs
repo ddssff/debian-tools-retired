@@ -1,12 +1,9 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, PackageImports, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Debian.Repo.Types.Repository
-    ( Repository(LocalRepo, RemoteRepo)
-    , fromLocalRepository
-    , prepareRepository
-    , unLocalRepository
-    , unRemoteRepository
-    , repoReleaseNames
+module Debian.Repo.Types.Slice
+    ( Slice(..)
+    , SliceList(..)
+    , NamedSliceList(..)
     ) where
 
 import Control.Applicative.Error (Failing(Success, Failure), maybeRead)
@@ -48,52 +45,18 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat, text)
 import Text.Regex (matchRegex, mkRegex)
 import qualified Tmp.File as F (Source(RemotePath))
 
---------------------- REPOSITORY -----------------------
+data Slice = Slice {sliceRepoKey :: RepoKey, sliceSource :: DebSource} deriving (Eq, Ord, Show)
 
--- | The Repository type reprents any instance of the Repo class, so
--- it might be local or remote.
---data Repository = forall a. (Repo a) => Repository a
-data Repository
-    = LocalRepo LocalRepository
-    | RemoteRepo RemoteRepository
-    deriving (Show, Read)
+-- | Each line of the sources.list represents a slice of a repository
+data SliceList = SliceList {slices :: [Slice]} deriving (Eq, Ord, Show)
 
-unRemoteRepository :: Repository -> Maybe RemoteRepository
-unRemoteRepository (RemoteRepo x) = Just x
-unRemoteRepository _ = Nothing
+data NamedSliceList
+    = NamedSliceList { sliceList :: SliceList
+                     , sliceListName :: SliceName
+                     } deriving (Eq, Ord, Show)
 
-unLocalRepository :: Repository -> Maybe LocalRepository
-unLocalRepository (LocalRepo x) = Just x
-unLocalRepository _ = Nothing
+instance Pretty SliceList where
+    pretty = vcat . map (pretty . sliceSource) . slices
 
-instance Ord Repository where
-    compare a b = compare (repoKey a) (repoKey b)
-
-instance Eq Repository where
-    a == b = compare a b == EQ
-
-instance F.Pretty Repository where
-    pretty (LocalRepo r) = text $ outsidePath (repoRoot r)
-    pretty (RemoteRepo r) = F.pretty r
-
-instance Repo Repository where
-    repoKey (LocalRepo r) = repoKey r
-    repoKey (RemoteRepo r) = repoKey r
-    repoReleaseInfo (LocalRepo r) = repoReleaseInfo r
-    repoReleaseInfo (RemoteRepo r) = repoReleaseInfo r
-
-fromLocalRepository :: LocalRepository -> Repository
-fromLocalRepository = LocalRepo
-
-prepareRepository :: (MonadRepoCache m) => RepoKey -> m Repository
-prepareRepository key =
-    case key of
-      Local path -> prepareLocalRepository path Nothing >>= return . LocalRepo
-      Remote uri' ->
-          let uri = fromURI' uri' in
-          case uriScheme uri of
-               "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
-               _ -> prepareRemoteRepository uri >>= return . RemoteRepo
-
-repoReleaseNames :: RemoteRepository -> [ReleaseName]
-repoReleaseNames (RemoteRepository _ rels) = map releaseName rels
+deriving instance Show SourceType
+deriving instance Show DebSource

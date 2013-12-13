@@ -68,6 +68,7 @@ Library
         Debian.Repo.Types.Release,
         Debian.Repo.Types.RemoteRepository,
         Debian.Repo.Types.Repository,
+        Debian.Repo.Types.Slice,
         Debian.Repo.Types.Repo,
         Debian.VersionPolicy,
         Extra.SSH,

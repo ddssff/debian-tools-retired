@@ -18,7 +18,7 @@ import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupAptImage, insertA
 import Debian.Repo.Slice ( sourceSlices, binarySlices )
 import Debian.Repo.SourceTree ( DebianBuildTree(debTree'), DebianSourceTree(tree'), SourceTree(dir'), findDebianBuildTrees, entry )
 import Debian.Repo.Types ( AptImage(..), AptCache(..), SourcePackage(sourcePackageID), sourcePackageName, BinaryPackage, PackageID(packageVersion), EnvRoot(..) )
-import Debian.Repo.Types.Repository (NamedSliceList(sliceList, sliceListName), SliceList(slices))
+import Debian.Repo.Types.Slice (NamedSliceList(sliceList, sliceListName), SliceList(slices))
 import Debian.Relation ( PkgName(..), SrcPkgName(..) )
 import Debian.Version ( DebianVersion, prettyDebianVersion )
 import Control.Monad.Trans ( liftIO )
