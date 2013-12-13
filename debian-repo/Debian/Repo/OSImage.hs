@@ -34,8 +34,9 @@ import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types (AptBuildCache(..), AptCache(..), SourcePackage, BinaryPackage,
                           EnvPath(EnvPath, envRoot, envPath), EnvRoot(rootPath), outsidePath, rootEnvPath)
+import Debian.Repo.Types.LocalRepository (LocalRepository)
 import Debian.Repo.Types.Repo (repoURI, repoKey)
-import Debian.Repo.Types.Repository (LocalRepository, fromLocalRepository, prepareLocalRepository,
+import Debian.Repo.Types.Repository (fromLocalRepository, prepareLocalRepository,
                                      NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..), copyLocalRepo, MonadRepoCache)
 import Debian.URI ( uriToString', URI(uriScheme) )
 import Extra.Files ( replaceFile )
@@ -592,6 +593,7 @@ syncPool os =
       root = osRoot os
 -}
 
+prefixes :: Maybe (L.ByteString, L.ByteString)
 prefixes = Just (" 1> ", " 2> ")
 
 updateLists :: OSImage -> IO NominalDiffTime

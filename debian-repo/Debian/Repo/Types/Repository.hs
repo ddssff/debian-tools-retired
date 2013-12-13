@@ -2,8 +2,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types.Repository
     ( Repository
-    , LocalRepository, repoRoot, repoLayout, repoReleaseInfoLocal
-    , Layout(..)
     , MonadRepoCache(getRepoCache, putRepoCache)
     , loadRepoCache
     , saveRepoCache
@@ -14,7 +12,6 @@ module Debian.Repo.Types.Repository
     , prepareRepository
     , setRepositoryCompatibility
     , flushLocalRepository
-    , poolDir'
     , Slice(..)
     , SliceList(..)
     , NamedSliceList(..)
@@ -37,7 +34,9 @@ import Debian.Release (ReleaseName(..), releaseName', Section, sectionName', par
 import Debian.Repo.Monads.Top (MonadTop, sub)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath)
+import Debian.Repo.Types.LocalRepository (LocalRepository(..), repoRoot, repoLayout, Layout(Pool, Flat))
 import Debian.Repo.Types.Release (Release(releaseName), makeReleaseInfo)
+import Debian.Repo.Types.RemoteRepository (RemoteRepository(..))
 import Debian.Repo.Types.Repo (Repo(..), RepoKey(..), compatibilityFile, libraryCompatibilityLevel)
 import Debian.Sources ( SliceName(..), DebSource(..), SourceType(..) )
 import Debian.URI (URI', fromURI', toURI', uriToString', URI(uriScheme, uriPath), dirFromURI, fileFromURI)
@@ -60,10 +59,6 @@ import Text.Regex (matchRegex, mkRegex)
 import qualified Tmp.File as F (Source(RemotePath))
 
 --------------------- REPOSITORY -----------------------
-
-data RemoteRepository
-    = RemoteRepository URI' [Release]
-    deriving (Read, Show)
 
 -- | The Repository type reprents any instance of the Repo class, so
 -- it might be local or remote.
@@ -88,34 +83,10 @@ instance F.Pretty Repository where
     pretty (RemoteRepo (RemoteRepository s _)) = F.pretty s
 
 instance Repo Repository where
-    repoKey (LocalRepo (LocalRepository path _ _)) = Local path -- fromJust . parseURI $ "file://" ++ envPath path
-    repoKey (RemoteRepo (RemoteRepository uri _)) = Remote uri
-    repoReleaseInfo (LocalRepo (LocalRepository _ _ info)) = info
-    repoReleaseInfo (RemoteRepo (RemoteRepository _ info)) = info
-
-data LocalRepository
-    = LocalRepository
-      { repoRoot_ :: EnvPath
-      , repoLayout_ :: (Maybe Layout)
-      , repoReleaseInfoLocal_ :: [Release]
-      } deriving (Read, Show, Ord, Eq)
-
-repoRoot :: LocalRepository -> EnvPath
-repoRoot = repoRoot_
-
-repoLayout :: LocalRepository -> Maybe Layout
-repoLayout = repoLayout_
-
-repoReleaseInfoLocal :: LocalRepository -> [Release]
-repoReleaseInfoLocal = repoReleaseInfoLocal_
-
--- |The possible file arrangements for a repository.  An empty
--- repository does not yet have either of these attributes.
-data Layout = Flat | Pool deriving (Eq, Ord, Read, Show, Bounded, Enum)
-
-instance Repo LocalRepository where
-    repoKey (LocalRepository path _ _) = Local path -- fromJust . parseURI $ "file://" ++ envPath path
-    repoReleaseInfo (LocalRepository _ _ info) = info
+    repoKey (LocalRepo r) = repoKey r
+    repoKey (RemoteRepo r) = repoKey r
+    repoReleaseInfo (LocalRepo r) = repoReleaseInfo r
+    repoReleaseInfo (RemoteRepo r) = repoReleaseInfo r
 
 class MonadIO m => MonadRepoCache m where
     getRepoCache :: m (Map RepoKey Repository)
@@ -284,28 +255,6 @@ setRepositoryCompatibility :: LocalRepository -> IO ()
 setRepositoryCompatibility r =
     maybeWriteFile path (show libraryCompatibilityLevel ++ "\n")
     where path = outsidePath (repoRoot r) </> compatibilityFile
-
--- | Return the subdirectory where a source package with the given
--- section and name would be installed given the layout of the
--- repository.
-poolDir :: LocalRepository -> Section -> String -> FilePath
-poolDir r section source =
-    case repoLayout r of
-      Just Pool ->
-          "pool/" ++ sectionName' section </> prefixDir </> source
-              where prefixDir =
-                        if isPrefixOf "lib" source
-                        then take (min 4 (length source)) source
-                        else take (min 1 (length source)) source
-      _ -> ""
-
--- | Return the subdirectory in the pool where a source package would be
--- installed.
-poolDir' :: LocalRepository -> ChangesFile -> ChangedFileSpec -> FilePath
-poolDir' repo changes file =
-    case T.fieldValue "Source" (changeInfo changes) of
-      Nothing -> error "No 'Source' field in .changes file"
-      Just source -> poolDir repo (section . changedFileSection $ file) (unpack source)
 
 -- | Remove all the packages from the repository and then re-create
 -- the empty releases.

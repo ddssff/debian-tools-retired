@@ -10,7 +10,7 @@ module Debian.NewDist.Options
 
 import Data.List (intercalate)
 import Debian.Config (ParamDescr(..))
-import Debian.Repo.Types.Repository (Layout(..))
+import Debian.Repo.Types.LocalRepository (Layout(..))
 import Prelude hiding (putStr, putStrLn, putChar)
 import System.Console.GetOpt (ArgDescr(NoArg, ReqArg))
 import System.Environment (getEnv)

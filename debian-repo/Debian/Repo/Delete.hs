@@ -33,8 +33,9 @@ import Debian.Repo.Types ( BinaryPackageLocal, binaryPackageName, PackageIDLocal
                            SourcePackage(sourcePackageID),
                            PackageVersion(pkgVersion), Release,
                            EnvPath, outsidePath, Release(..))
+import Debian.Repo.Types.LocalRepository (Layout(..), LocalRepository, repoLayout, repoRoot, repoReleaseInfoLocal)
 import Debian.Repo.Types.Repo (repoKey)
-import Debian.Repo.Types.Repository (Layout(..), LocalRepository, repoLayout, repoRoot, fromLocalRepository, repoReleaseInfoLocal)
+import Debian.Repo.Types.Repository (fromLocalRepository)
 import Debian.Version.Text ()
 import Extra.GPGSign ( PGPKey )
 import Extra.Files ( writeAndZipFileWithBackup )
