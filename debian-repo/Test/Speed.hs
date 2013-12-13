@@ -15,8 +15,7 @@ import Debian.Repo.PackageIndex ( packageIndexPath, sourceIndexList, binaryIndex
 import Debian.Repo.Types (rootEnvPath, Release, PackageIndex(packageIndexArch),
                           BinaryPackage(..), SourcePackage)
 import Debian.Repo.Types.EnvPath (EnvPath)
-import Debian.Repo.Types.LocalRepository (Layout(Pool))
-import Debian.Repo.Types.Repository (prepareLocalRepository)
+import Debian.Repo.Types.LocalRepository (Layout(Pool), prepareLocalRepository)
 import System.IO (hPutStrLn, stderr)
 
 import Control.Exception as E ( SomeException(..), try, ErrorCall(..) )
