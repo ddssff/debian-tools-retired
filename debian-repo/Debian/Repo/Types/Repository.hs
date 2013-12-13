@@ -61,12 +61,16 @@ import qualified Tmp.File as F (Source(RemotePath))
 
 --------------------- REPOSITORY -----------------------
 
+data RemoteRepository
+    = RemoteRepository URI' [Release]
+    deriving (Read, Show)
+
 -- | The Repository type reprents any instance of the Repo class, so
 -- it might be local or remote.
 --data Repository = forall a. (Repo a) => Repository a
 data Repository
     = LocalRepo LocalRepository
-    | RemoteRepo URI' [Release]
+    | RemoteRepo RemoteRepository
     deriving (Show, Read)
 
 instance Ord Repository where
@@ -81,13 +85,13 @@ instance F.Pretty URI' where
 
 instance F.Pretty Repository where
     pretty (LocalRepo r) = text $ outsidePath (repoRoot r)
-    pretty (RemoteRepo s _) = F.pretty s
+    pretty (RemoteRepo (RemoteRepository s _)) = F.pretty s
 
 instance Repo Repository where
     repoKey (LocalRepo (LocalRepository path _ _)) = Local path -- fromJust . parseURI $ "file://" ++ envPath path
-    repoKey (RemoteRepo uri _) = Remote uri
+    repoKey (RemoteRepo (RemoteRepository uri _)) = Remote uri
     repoReleaseInfo (LocalRepo (LocalRepository _ _ info)) = info
-    repoReleaseInfo (RemoteRepo _ info) = info
+    repoReleaseInfo (RemoteRepo (RemoteRepository _ info)) = info
 
 data LocalRepository
     = LocalRepository
@@ -166,7 +170,7 @@ readLocalRepo :: MonadRepoCache m => EnvPath -> Maybe Layout -> m LocalRepositor
 readLocalRepo root layout =
     do state <- getRepoCache
        case Map.lookup (Local root) state of
-         Just (RemoteRepo _ _) -> error "readLocalRepo: internal error" -- somehow a remote repo got associated with a Local RepoKey
+         Just (RemoteRepo _) -> error "readLocalRepo: internal error" -- somehow a remote repo got associated with a Local RepoKey
          Just (LocalRepo repo) -> return repo
          Nothing ->
              do names <- liftIO (getDirectoryContents distDir) >>= return . filter (\ x -> not . elem x $ [".", ".."])
@@ -341,7 +345,7 @@ verifyRepository uri =
          Just repo -> return repo
          Nothing ->
              do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . fromURI' $ uri
-                let repo = RemoteRepo uri releaseInfo
+                let repo = RemoteRepo (RemoteRepository uri releaseInfo)
                 modifyRepoCache (Map.insert (Remote uri) repo)
                 return repo
 
@@ -425,5 +429,5 @@ deriving instance Show SourceType
 deriving instance Show DebSource
 
 repoReleaseNames :: Repository -> [ReleaseName]
-repoReleaseNames (RemoteRepo _ rels) = map releaseName rels
+repoReleaseNames (RemoteRepo (RemoteRepository _ rels)) = map releaseName rels
 repoReleaseNames _ = []
