@@ -31,9 +31,10 @@ import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.SourcesList ( parseSourceLine, parseSourcesList )
 import Debian.Repo.Types (EnvPath(..), EnvRoot(..))
 import Debian.Repo.Types.LocalRepository (prepareLocalRepository)
-import Debian.Repo.Types.Repository (Repository(LocalRepo), NamedSliceList(..), SliceList(..), Slice(..), prepareRepository)
-import Debian.Repo.Types.Repo (RepoKey(..), repoKey)
-import Debian.URI (toURI', dirFromURI, fileFromURI)
+import Debian.Repo.Types.RemoteRepository (prepareRemoteRepository)
+import Debian.Repo.Types.Repository (Repository(LocalRepo, RemoteRepo), NamedSliceList(..), SliceList(..), Slice(..))
+import Debian.Repo.Types.Repo (repoKey)
+import Debian.URI (dirFromURI, fileFromURI)
 import Network.URI (URI(uriScheme, uriPath))
 import System.FilePath ((</>))
 import Text.Regex ( mkRegex, splitRegex )
@@ -127,5 +128,5 @@ verifyDebSource chroot line =
       repo =
           case uriScheme (sourceUri line) of
             "file:" -> prepareLocalRepository (EnvPath chroot' (uriPath (sourceUri line))) Nothing >>= return . LocalRepo
-            _ -> prepareRepository (Remote (toURI' (sourceUri line)))
+            _ -> prepareRemoteRepository (sourceUri line) >>= return . RemoteRepo
       chroot' = fromMaybe (EnvRoot "") chroot

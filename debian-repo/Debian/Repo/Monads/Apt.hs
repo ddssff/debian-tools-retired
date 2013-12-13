@@ -39,9 +39,9 @@ import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), Contro
 import Debian.Release (ReleaseName)
 import Debian.Sources (SliceName)
 import Debian.Repo.Types (AptImage, SourcePackage, BinaryPackage, Release)
-import Debian.Repo.Types.RemoteRepository (RemoteRepository)
+import Debian.Repo.Types.RemoteRepository (RemoteRepository, MonadRepoCache(getRepoCache, putRepoCache))
 import Debian.Repo.Types.Repo (Repo(repoKey), RepoKey(..))
-import Debian.Repo.Types.Repository (Repository, MonadRepoCache(getRepoCache, putRepoCache))
+import Debian.Repo.Types.Repository (Repository)
 import Debian.URI (URI')
 import qualified System.IO as IO ( IOMode(ReadMode), hClose, openBinaryFile )
 import System.Posix.Files ( FileStatus, deviceID, fileID, modificationTime )
@@ -69,7 +69,7 @@ type AptIO = AptIOT IO
 -- | This represents the state of the IO system.
 data AptState
     = AptState
-      { repoMap :: Map.Map URI' RemoteRepository		-- ^ Map to look up known Repository objects
+      { repoMap :: Map.Map URI' RemoteRepository		-- ^ Map to look up known (remote) Repository objects
       , releaseMap :: Map.Map (RepoKey, ReleaseName) Release -- ^ Map to look up known Release objects
       , aptImageMap :: Map.Map SliceName AptImage	-- ^ Map to look up prepared AptImage objects
       , sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
