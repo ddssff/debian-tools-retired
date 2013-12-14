@@ -223,7 +223,7 @@ prepareDevs root = do
                        False -> readProcessChunks (shell cmd) L.empty >>= return . oneResult
                        True -> return ExitSuccess
 
-_pbuilderBuild :: MonadDeb m =>
+_pbuilderBuild :: MonadApt m =>
             FilePath
          -> EnvRoot
          -> NamedSliceList
@@ -372,7 +372,7 @@ buildEnv root distro arch repo copy include exclude components =
 
 -- |Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.
-updateEnv :: MonadDeb m => OSImage -> m (Either UpdateError OSImage)
+updateEnv :: MonadApt m => OSImage -> m (Either UpdateError OSImage)
 updateEnv os =
     do liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc") >> readFile "/etc/resolv.conf" >>= writeFile (rootPath root ++ "/etc/resolv.conf")
        verified <- verifySources
@@ -387,7 +387,7 @@ updateEnv os =
                 binary <- getBinaryPackages os'
                 return . Right $ os' {osSourcePackages = source, osBinaryPackages = binary}
     where
-      verifySources :: MonadDeb m => m (Either UpdateError OSImage)
+      verifySources :: MonadApt m => m (Either UpdateError OSImage)
       verifySources =
           do let computed = remoteOnly (aptSliceList os)
                  sourcesPath' = rootPath root ++ "/etc/apt/sources.list"

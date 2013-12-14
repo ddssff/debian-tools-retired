@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses,
-             PackageImports, TypeSynonymInstances, UndecidableInstances #-}
+             PackageImports, ScopedTypeVariables, TypeSynonymInstances, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |AptIO is an instance of the RWS monad used to manage the global
 -- state and output style parameters of clients of the Apt library,
@@ -28,25 +28,39 @@ module Debian.Repo.Monads.Apt
     , findRelease
     , putRelease
     , countTasks
+    , prepareRemoteRepository
+    , prepareRepository
     ) where
 
+import Control.Applicative.Error (Failing(Failure, Success))
+import Control.Exception (ErrorCall(ErrorCall), Exception(toException))
 import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO)
 import Control.Monad.Reader (ReaderT)
-import Control.Monad.State (get, put)
-import Control.Monad.State (MonadTrans(..), MonadIO(..), StateT(runStateT))
-import qualified Data.Map as Map (Map, insert, empty, lookup)
-import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), ControlFunctions(parseControlFromHandle) )
-import Debian.Release (ReleaseName)
-import Debian.Repo.Types (AptImage, SourcePackage, BinaryPackage, Release)
-import Debian.Repo.Types.RemoteRepository (RemoteRepository)
+import Control.Monad.State (get, MonadIO(..), MonadTrans(..), put, StateT(runStateT))
+import Data.List (intercalate)
+import Data.Map as Map (empty, insert, lookup, Map)
+import Data.Maybe (catMaybes)
+import Data.Text as T (Text, unpack)
+import qualified Debian.Control.Text as B (Control'(Control), ControlFunctions(parseControlFromHandle), Paragraph)
+import qualified Debian.Control.Text as T (Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph, Paragraph')
+import Debian.Release (parseReleaseName, ReleaseName, ReleaseName(relName), releaseName')
+import qualified Debian.Repo.File as F (File(..), Source(RemotePath))
+import Debian.Repo.Types (AptImage, BinaryPackage, Release, SourcePackage)
+import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot))
+import Debian.Repo.Types.LocalRepository (prepareLocalRepository)
+import Debian.Repo.Types.Release (makeReleaseInfo)
+import Debian.Repo.Types.RemoteRepository (RemoteRepository, RemoteRepository(RemoteRepository))
 import Debian.Repo.Types.Repo (Repo(repoKey), RepoKey(..))
-import Debian.Repo.Types.Repository (Repository)
+import Debian.Repo.Types.Repository (Repository, Repository(LocalRepo, RemoteRepo))
 import Debian.Sources (SliceName)
-import Debian.URI (URI')
-import qualified System.IO as IO ( IOMode(ReadMode), hClose, openBinaryFile )
-import System.Posix.Files ( FileStatus, deviceID, fileID, modificationTime )
-import System.Process.Progress (ePutStrLn)
-import Text.Printf ( printf )
+import Debian.URI (dirFromURI, fileFromURI, fromURI', toURI', URI(uriPath, uriScheme), URI', uriToString')
+import Debian.UTF8 as Deb (decode)
+import System.FilePath ((</>))
+import qualified System.IO as IO (hClose, IOMode(ReadMode), openBinaryFile)
+import System.IO.Unsafe (unsafeInterleaveIO)
+import System.Posix.Files (deviceID, fileID, FileStatus, modificationTime)
+import System.Process.Progress (ePutStrLn, qPutStr, quieter)
+import Text.Printf (printf)
 
 instance Ord FileStatus where
     compare a b = compare (deviceID a, fileID a, modificationTime a) (deviceID b, fileID b, modificationTime b)
@@ -154,11 +168,115 @@ countTasks tasks =
 class (MonadIO m, Functor m, MonadCatchIO m) => MonadApt m where
     getApt :: m AptState
     putApt :: AptState -> m ()
+    getRepoCache :: m (Map URI' RemoteRepository)
+    putRepoCache :: Map URI' RemoteRepository -> m ()
 
 instance (MonadIO m, Functor m, MonadCatchIO m) => MonadApt (AptIOT m) where
     getApt = get
     putApt = put
+    getRepoCache = getApt >>= return . repoMap
+    putRepoCache mp = getApt >>= \ a -> putApt (a {repoMap = mp})
 
 instance MonadApt m => MonadApt (ReaderT s m) where
     getApt = lift getApt
     putApt = lift . putApt
+    getRepoCache = getApt >>= return . repoMap
+    putRepoCache mp = getApt >>= \ a -> putApt (a {repoMap = mp})
+
+prepareRemoteRepository :: MonadApt m => URI -> m RemoteRepository
+prepareRemoteRepository uri =
+    do (state :: Map URI' RemoteRepository) <- getRepoCache
+       -- FIXME: We only want to verifyRepository on demand.
+       repo <- maybe (verifyRemoteRepository (toURI' uri)) return (Map.lookup (toURI' uri) state)
+       putRepoCache (Map.insert (toURI' uri) repo state)
+       return repo
+
+-- |To create a RemoteRepo we must query it to find out the
+-- names, sections, and supported architectures of its releases.
+{-# NOINLINE verifyRemoteRepository #-}
+verifyRemoteRepository :: MonadApt m => URI' -> m RemoteRepository
+verifyRemoteRepository uri =
+    do state <- getRepoCache
+       case Map.lookup uri state of
+         Just repo -> return repo
+         Nothing ->
+             do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . fromURI' $ uri
+                let repo = RemoteRepository uri releaseInfo
+                modifyRepoCache (Map.insert uri repo)
+                return repo
+
+modifyRepoCache :: MonadApt m => (Map URI' RemoteRepository -> Map URI' RemoteRepository) -> m ()
+modifyRepoCache f = do
+    s <- getRepoCache
+    putRepoCache (f s)
+
+--instance Read URI where
+--    readsPrec _ s = [(fromJust (parseURI s), "")]
+--
+---- |Get the list of releases of a remote repository.
+--getReleaseInfo :: FilePath
+--               -> Bool     -- ^ If False don't look at existing cache
+--               -> URI
+--               -> IO [ReleaseInfo]
+--getReleaseInfo top tryCache uri =
+--    readCache >>= \ cache ->
+--    return (lookup uri cache) >>=
+--    maybe (updateCache cache) return
+--    where
+--      cachePath = top ++ "/repoCache"
+--      readCache :: IO [(URI, [ReleaseInfo])]
+--      readCache = if tryCache
+--                  then try (readFile cachePath >>= return . read) >>= return . either (\ (_ :: SomeException) -> []) id
+--                  else return []
+--      updateCache :: [(URI, [ReleaseInfo])] -> IO [ReleaseInfo]
+--      updateCache pairs = getReleaseInfoRemote uri >>= \ info ->
+--                          writeCache ((uri, info) : pairs) >> return info
+--      writeCache :: [(URI, [ReleaseInfo])] -> IO ()
+--      writeCache pairs = writeFile (show pairs) cachePath
+
+-- |Get the list of releases of a remote repository.
+getReleaseInfoRemote :: URI -> IO [Release]
+getReleaseInfoRemote uri =
+    qPutStr ("(verifying " ++ uriToString' uri ++ ".") >>
+    quieter 2 (dirFromURI distsURI) >>=
+    quieter 2 . either (error . show) verify >>=
+    return . catMaybes >>= 
+    (\ result -> qPutStr ")\n" >> return result)
+    where
+      distsURI = uri {uriPath = uriPath uri </> "dists/"}
+      verify names =
+          do let dists = map parseReleaseName names
+             (releaseFiles :: [F.File (T.Paragraph' Text)]) <- mapM getReleaseFile dists
+             let releasePairs = zip3 (map getSuite releaseFiles) releaseFiles dists
+             return $ map (uncurry3 getReleaseInfo) releasePairs
+      releaseNameField releaseFile = case fmap T.unpack (T.fieldValue "Origin" releaseFile) of Just "Debian" -> "Codename"; _ -> "Suite"
+      getReleaseInfo :: Maybe Text -> (F.File T.Paragraph) -> ReleaseName -> Maybe Release
+      getReleaseInfo Nothing _ _ = Nothing
+      getReleaseInfo (Just dist) _ relname | (parseReleaseName (T.unpack dist)) /= relname = Nothing
+      getReleaseInfo (Just dist) info _ = Just $ makeReleaseInfo info (parseReleaseName (T.unpack dist)) []
+      getSuite :: F.File (T.Paragraph' Text) -> Maybe Text
+      getSuite (F.File {F.text = Success releaseFile}) = T.fieldValue (releaseNameField releaseFile) releaseFile
+      getSuite (F.File {F.text = Failure msgs}) = fail (intercalate "\n" msgs)
+      getReleaseFile :: ReleaseName -> IO (F.File (T.Paragraph' Text))
+      getReleaseFile distName =
+          do qPutStr "."
+             release <- fileFromURI releaseURI
+             let control = either Left (either (Left . toException . ErrorCall . show) Right . T.parseControl (show releaseURI) . Deb.decode) release
+             case control of
+               Right (T.Control [info :: T.Paragraph' Text]) -> return $ F.File {F.path = F.RemotePath releaseURI, F.text = Success info}
+               _ -> error ("Failed to get release info from dist " ++ show (relName distName) ++ ", uri " ++ show releaseURI)
+          where
+            releaseURI = distURI {uriPath = uriPath distURI </> "Release"}
+            distURI = distsURI {uriPath = uriPath distsURI </> releaseName' distName}
+      uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
+      uncurry3 f (a, b, c) =  f a b c
+
+prepareRepository :: MonadApt m => RepoKey -> m Repository
+prepareRepository key =
+    case key of
+      Local path -> prepareLocalRepository path Nothing >>= return . LocalRepo
+      Remote uri' ->
+          let uri = fromURI' uri' in
+          case uriScheme uri of
+               "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
+               _ -> prepareRemoteRepository uri >>= return . RemoteRepo

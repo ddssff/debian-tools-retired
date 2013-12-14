@@ -52,7 +52,7 @@ instance Ord AptImage where
 instance Eq AptImage where
     a == b = compare a b == EQ
 
-prepareAptEnv :: MonadDeb m =>
+prepareAptEnv :: MonadApt m =>
                  FilePath		-- Put environment in a subdirectory of this
               -> SourcesChangedAction	-- What to do if environment already exists and sources.list is different
               -> NamedSliceList		-- The sources.list
@@ -64,7 +64,7 @@ prepareAptEnv cacheDir sourcesChangedAction sources =
 
 -- |Create a skeletal enviroment sufficient to run apt-get.
 {-# NOINLINE prepareAptEnv' #-}
-prepareAptEnv' :: MonadDeb m => FilePath -> SourcesChangedAction -> NamedSliceList -> m AptImage
+prepareAptEnv' :: MonadApt m => FilePath -> SourcesChangedAction -> NamedSliceList -> m AptImage
 prepareAptEnv' cacheDir sourcesChangedAction sources =
     do let root = rootPath (cacheRootDir cacheDir (ReleaseName (sliceName (sliceListName sources))))
        --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
