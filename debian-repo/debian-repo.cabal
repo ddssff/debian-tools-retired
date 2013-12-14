@@ -54,6 +54,7 @@ Library
         Debian.Repo.OSImage,
         Debian.Repo.Package,
         Debian.Repo.PackageIndex,
+        Debian.Repo.Pretty,
         Debian.Repo.Release,
         Debian.Repo.Repository,
         Debian.Repo.Slice,
