@@ -9,17 +9,16 @@ module Debian.Repo.Types.Repo
     , compatibilityFile
     ) where
 
-import Control.Exception ( throw )
-import Data.Char ( isDigit )
-import Data.Maybe ( fromJust )
+import Control.Exception (throw)
+import Data.Char (isDigit)
+import Data.Maybe (fromJust)
 import Data.Text (unpack)
-import Debian.URI (fileFromURI)
-import qualified Debian.UTF8 as Deb
 import Debian.Repo.Types.EnvPath (EnvPath(..))
 import Debian.Repo.Types.Release (Release)
-import Debian.URI (URI', fromURI')
-import Network.URI (URI(uriPath), parseURI)
-import System.FilePath ( (</>) )
+import Debian.URI (fileFromURI, fromURI', URI')
+import qualified Debian.UTF8 as Deb (decode)
+import Network.URI (parseURI, URI(uriPath))
+import System.FilePath ((</>))
 
 data RepoKey
     = Remote URI'

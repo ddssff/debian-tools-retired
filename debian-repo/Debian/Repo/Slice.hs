@@ -16,29 +16,28 @@ module Debian.Repo.Slice
     , parseNamedSliceList'
     ) where
 
-import Control.Exception ( throw )
+import Control.Exception (throw)
 import Control.Monad.Trans (liftIO)
-import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy.Char8 as L
-import Data.List ( nubBy )
+import qualified Data.ByteString.Char8 as B (concat)
+import qualified Data.ByteString.Lazy.Char8 as L (toChunks)
+import Data.List (nubBy)
 import Data.Maybe (catMaybes, fromMaybe)
-import Data.Text as T (Text, pack, unpack)
-import Debian.Control (Control'(Control), Paragraph', ControlFunctions(parseControl), fieldValue)
+import Data.Text as T (pack, Text, unpack)
+import Debian.Control (Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph')
 import Debian.Control.Text (decodeParagraph)
-import Debian.Release ( ReleaseName, parseReleaseName, parseSection')
-import Debian.Sources  ( SourceType(..), SliceName(SliceName), DebSource(..) )
+import Debian.Release (parseReleaseName, parseSection', ReleaseName)
 import Debian.Repo.Monads.Apt (MonadApt, prepareRemoteRepository)
-import Debian.Repo.Monads.Deb (MonadDeb)
-import Debian.Repo.SourcesList ( parseSourceLine, parseSourcesList )
+import Debian.Repo.SourcesList (parseSourceLine, parseSourcesList)
 import Debian.Repo.Types (EnvPath(..), EnvRoot(..))
 import Debian.Repo.Types.LocalRepository (prepareLocalRepository)
-import Debian.Repo.Types.Repository (Repository(LocalRepo, RemoteRepo))
 import Debian.Repo.Types.Repo (repoKey)
-import Debian.Repo.Types.Slice (NamedSliceList(..), SliceList(..), Slice(..))
+import Debian.Repo.Types.Repository (Repository(LocalRepo, RemoteRepo))
+import Debian.Repo.Types.Slice (NamedSliceList(..), Slice(..), SliceList(..))
+import Debian.Sources (DebSource(..), SliceName(SliceName), SourceType(..))
 import Debian.URI (dirFromURI, fileFromURI)
 import Network.URI (URI(uriScheme, uriPath))
 import System.FilePath ((</>))
-import Text.Regex ( mkRegex, splitRegex )
+import Text.Regex (mkRegex, splitRegex)
 
 sourceSlices :: SliceList -> SliceList
 sourceSlices = SliceList . filter ((== DebSrc) . sourceType . sliceSource) . slices
