@@ -19,7 +19,7 @@ import Debian.Release ( ReleaseName(relName), releaseName' )
 import Debian.Sources ( SliceName(..) )
 import Debian.Repo (verifySourcesList, repoSources)
 import Debian.Repo.Monads.Apt (MonadApt)
-import Debian.Repo.Monads.Deb (MonadDeb, loadRepoCache)
+import Debian.Repo.Monads.Deb (MonadDeb)
 import Debian.Repo.Monads.Top (MonadTop(askTop), sub)
 import Debian.Repo.Types.Slice (NamedSliceList(..), SliceList(..))
 import System.Directory ( createDirectoryIfMissing, getPermissions, writable )
@@ -33,7 +33,6 @@ buildCache params =
        qPutStrLn ("Preparing autobuilder cache in " ++ top ++ "...")
        mapM_ (\ name -> sub name >>= \ path -> liftIO (createDirectoryIfMissing True path))
                   [".", "darcs", "deb-dir", "dists", "hackage", "localpools", "quilt", "tmp"]
-       loadRepoCache
        all <- mapM parseNamedSliceList (sources params)
        let uri = maybe (uploadURI params) Just (buildURI params)
        build <- maybe (return $ SliceList { slices = [] }) (repoSources Nothing) uri

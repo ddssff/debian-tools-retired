@@ -36,7 +36,7 @@ import Debian.Repo.AptImage(prepareAptEnv)
 import Debian.Repo.Cache(updateCacheSources)
 import Debian.Repo.Delete(deleteGarbage)
 import Debian.Repo.Monads.Apt (MonadApt, runAptT)
-import Debian.Repo.Monads.Deb (MonadDeb, saveRepoCache, prepareRepository)
+import Debian.Repo.Monads.Deb (MonadDeb, prepareRepository)
 import Debian.Repo.Monads.Top (MonadTop(askTop), runTopT)
 import Debian.Repo.OSImage(OSImage(osLocalMaster, osLocalCopy), buildEssential, prepareEnv, chrootEnv)
 --import Debian.Repo.Release(prepareRelease)
@@ -194,7 +194,6 @@ runParameterSet init cache =
       buildResult <- buildTargets cache dependOS globalBuildDeps (osLocalMaster dependOS) poolOS targets
       -- If all targets succeed they may be uploaded to a remote repo
       result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))
-      saveRepoCache
       return result
     where
       params = C.params cache

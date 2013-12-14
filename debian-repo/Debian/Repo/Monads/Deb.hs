@@ -2,8 +2,8 @@
 module Debian.Repo.Monads.Deb
     ( MonadRepoCache(getRepoCache, putRepoCache)
     , modifyRepoCache
-    , loadRepoCache
-    , saveRepoCache
+    -- , loadRepoCache
+    -- , saveRepoCache
     , prepareRemoteRepository
     , prepareRepository
 
@@ -19,7 +19,7 @@ import Debian.Repo.Monads.Top (MonadTop, TopT, runTopT)
 import Control.Applicative.Error (Failing(Success, Failure), maybeRead)
 import Control.Exception (ErrorCall(..), SomeException, toException)
 import Control.Monad (filterM, when, unless)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO, catch)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (groupBy, partition, sort, isPrefixOf, intercalate)
 import Data.Map as Map (Map, insertWith, lookup, insert, fromList, toList, union, empty)
@@ -204,5 +204,8 @@ class (MonadIO m, Functor m, MonadApt m, MonadTop m) => MonadDeb m where
 instance MonadApt m => MonadDeb (TopT m)
 
 -- | Run a known instance of MonadDeb.
-runDebT :: Monad m => FilePath -> TopT (AptIOT m) a -> m a
-runDebT top action = runAptT (runTopT top action)
+runDebT :: (MonadCatchIO m, Functor m) => FilePath -> TopT (AptIOT m) a -> m a
+runDebT top action = runAptT $ runTopT top $ do loadRepoCache
+                                                result <- action
+                                                saveRepoCache
+                                                return result
