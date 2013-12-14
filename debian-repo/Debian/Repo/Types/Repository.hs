@@ -19,7 +19,9 @@ import Data.Text as T (Text, unpack)
 import Debian.Changes (ChangesFile(changeInfo), ChangedFileSpec(changedFileSection))
 import qualified Debian.Control.Text as T (ControlFunctions(parseControl), Control'(Control), fieldValue, Paragraph, Paragraph')
 import Debian.Release (ReleaseName(..), releaseName', Section, sectionName', parseReleaseName, SubSection(section))
+import qualified Debian.Repo.File as F (Source(RemotePath),  File(..), readFile)
 import Debian.Repo.Monads.Top (MonadTop, sub)
+import qualified Debian.Repo.Pretty as F (Pretty(..))
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath)
 import Debian.Repo.Types.LocalRepository (LocalRepository(..), repoRoot, repoLayout, Layout(Pool, Flat), prepareLocalRepository)
@@ -40,11 +42,8 @@ import qualified System.Posix.Files as F (getSymbolicLinkStatus, isSymbolicLink,
                                           fileMode, getFileStatus, setFileMode, removeLink)
 import System.Process.Progress (quieter, qPutStr, qPutStrLn)
 import System.Unix.Directory (removeRecursiveSafely)
-import qualified Text.Format as F (Pretty(..))
-import qualified Tmp.File as F ( File(..), readFile )
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat, text)
 import Text.Regex (matchRegex, mkRegex)
-import qualified Tmp.File as F (Source(RemotePath))
 
 --------------------- REPOSITORY -----------------------
 

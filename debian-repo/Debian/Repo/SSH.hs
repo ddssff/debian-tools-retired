@@ -1,4 +1,4 @@
-module Extra.SSH
+module Debian.Repo.SSH
     ( sshVerify
     , sshExportDeprecated
     , sshCopy

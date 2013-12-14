@@ -15,8 +15,8 @@ import Data.Text (Text, unpack)
 import Debian.Arch (parseArch)
 import qualified Debian.Control.Text as T (Paragraph, fieldValue)
 import Debian.Release (parseSection')
+import qualified Debian.Repo.File as F (File(..))
 import Text.Regex (mkRegex, splitRegex)
-import qualified Tmp.File as F (File(..))
 
 -- FIXME: The lists here should be sets so that == and compare work properly.
 data Release = Release { releaseName :: ReleaseName

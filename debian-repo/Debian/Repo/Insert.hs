@@ -52,7 +52,7 @@ import qualified System.Posix.Files as F ( createLink, fileSize, getFileStatus )
 import System.Posix.Types ( FileOffset )
 import System.Process ( runInteractiveCommand, waitForProcess )
 import System.Process.Progress (qPutStrLn)
-import qualified Text.Format as F ( Pretty(..) )
+import qualified Debian.Repo.Pretty as F ( Pretty(..) )
 import Text.PrettyPrint.ANSI.Leijen (Pretty(..), text, cat, pretty)
 
 data InstallResult 

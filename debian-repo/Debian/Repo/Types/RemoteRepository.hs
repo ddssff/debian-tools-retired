@@ -36,11 +36,11 @@ import qualified System.Posix.Files as F (getSymbolicLinkStatus, isSymbolicLink,
                                           fileMode, getFileStatus, setFileMode, removeLink)
 import System.Process.Progress (quieter, qPutStr, qPutStrLn)
 import System.Unix.Directory (removeRecursiveSafely)
-import qualified Text.Format as F (Pretty(..))
-import qualified Tmp.File as F ( File(..), readFile )
+import qualified Debian.Repo.Pretty as F (Pretty(..))
+import qualified Debian.Repo.File as F ( File(..), readFile )
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat, text)
 import Text.Regex (matchRegex, mkRegex)
-import qualified Tmp.File as F (Source(RemotePath))
+import qualified Debian.Repo.File as F (Source(RemotePath))
 
 data RemoteRepository
     = RemoteRepository URI' [Release]

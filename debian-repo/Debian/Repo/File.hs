@@ -1,8 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Tmp.File
+module Debian.Repo.File
     ( File (File, path, text)
     , Source (LocalPath, RemotePath)
-    , Tmp.File.readFile
+    , Debian.Repo.File.readFile
     ) where
 
 import Control.Applicative

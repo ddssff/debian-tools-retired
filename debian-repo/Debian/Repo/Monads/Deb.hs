@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, RankNTypes, TypeSynonymInstances #-}
-module Debian.AutoBuilder.Monads.Deb
+module Debian.Repo.Monads.Deb
     ( MonadDeb
     , runDebT
     ) where

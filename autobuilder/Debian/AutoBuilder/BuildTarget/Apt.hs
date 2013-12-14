@@ -5,7 +5,6 @@ import Control.Monad
 import Control.Monad.Trans
 import Data.List (sort, nub)
 import Data.Maybe (catMaybes)
-import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Packages as P

@@ -46,9 +46,11 @@ Library
         Debian.Repo.Changes,
         Debian.Repo.Delete,
         Debian.Repo.Dependencies,
+        Debian.Repo.File,
         Debian.Repo.Insert,
         Debian.Repo.Monads.Apt,
         Debian.Repo.Monads.Cache,
+        Debian.Repo.Monads.Deb,
         Debian.Repo.Monads.Top,
         Debian.Repo.OSImage,
         Debian.Repo.Package,
@@ -60,6 +62,7 @@ Library
         Debian.Repo.SourceTree,
         Debian.Repo.SourceTree.Classes,
         Debian.Repo.SourceTree.Types,
+        Debian.Repo.SSH,
         Debian.Repo.Sync,
         Debian.Repo.Types,
         Debian.Repo.Types.AptImage,
@@ -68,13 +71,10 @@ Library
         Debian.Repo.Types.PackageIndex,
         Debian.Repo.Types.Release,
         Debian.Repo.Types.RemoteRepository,
+        Debian.Repo.Types.Repo,
         Debian.Repo.Types.Repository,
         Debian.Repo.Types.Slice,
-        Debian.Repo.Types.Repo,
-        Debian.VersionPolicy,
-        Extra.SSH,
-        Text.Format,
-        Tmp.File
+        Debian.VersionPolicy
 
 Executable debian-versions
   Buildable: True

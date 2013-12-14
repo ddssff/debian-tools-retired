@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleInstances, UndecidableInstances #-}
-module Text.Format where
+module Debian.Repo.Pretty where
 
 import Text.PrettyPrint.ANSI.Leijen (Doc, text)
 

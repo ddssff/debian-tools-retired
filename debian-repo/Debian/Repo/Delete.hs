@@ -40,7 +40,7 @@ import Extra.Files ( writeAndZipFileWithBackup )
 import System.FilePath ( splitFileName, (</>) )
 import System.Directory (doesDirectoryExist, doesFileExist, getDirectoryContents, renameFile)
 import System.Process.Progress (qPutStr, qPutStrLn, ePutStrLn)
-import qualified Text.Format as F ( Pretty(..) )
+import qualified Debian.Repo.Pretty as F ( Pretty(..) )
 
 -- |Delete any packages from a dist which are trumped by newer
 -- packages.  These packages are not technically garbage because they

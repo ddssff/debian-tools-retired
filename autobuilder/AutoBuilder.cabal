@@ -114,7 +114,6 @@ Library
     Debian.AutoBuilder.BuildTarget.Uri,
     Debian.AutoBuilder.Env,
     Debian.AutoBuilder.Main,
-    Debian.AutoBuilder.Monads.Deb,
     Debian.AutoBuilder.Params,
     Debian.AutoBuilder.Target,
     Debian.AutoBuilder.Types.Buildable

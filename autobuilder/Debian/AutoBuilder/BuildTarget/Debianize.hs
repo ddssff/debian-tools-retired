@@ -12,14 +12,13 @@ import Control.Monad.State (modify)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (isSuffixOf)
-import Debian.AutoBuilder.Monads.Deb (MonadDeb)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Debianize as Cabal hiding (package, verbosity, withCurrentDirectory)
 import Debian.Relation (prettyRelations)
-import Debian.Repo (sub)
+import Debian.Repo (sub, MonadDeb)
 import Debian.Repo.Sync (rsync)
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..))
