@@ -62,10 +62,9 @@ prepare cache package name =
                         [v] -> Just v
                         vs -> error ("Conflicting cabal version numbers passed to Debianize: [" ++ intercalate ", " vs ++ "]")
 
--- |Download and unpack the given package version to the autobuilder's
--- hackage temporary directory:
--- > download \"/home/dsf/.autobuilder/hackage\" -> \"/home/dsf/.autobuilder/hackage/happstack-server-6.1.4.tar.gz\"
--- After the download it tries to untar the file, and then it saves the compressed tarball.
+-- | Download and unpack the given package version to the autobuilder
+-- hackage temporary directory.  After the download it tries to untar
+-- the file, and then it saves the compressed tarball.
 download :: (MonadDeb m) => P.CacheRec -> String -> Version -> m ()
 download cache name version =
     (unpacked name version) >>=
