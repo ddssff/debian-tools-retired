@@ -19,7 +19,7 @@ import Debian.Repo.Monads.Top (MonadTop, TopT, runTopT)
 import Control.Applicative.Error (Failing(Success, Failure), maybeRead)
 import Control.Exception (ErrorCall(..), SomeException, toException)
 import Control.Monad (filterM, when, unless)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO, catch)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO, catch, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (groupBy, partition, sort, isPrefixOf, intercalate)
 import Data.Map as Map (Map, insertWith, lookup, insert, fromList, toList, union, empty)
@@ -63,6 +63,16 @@ class MonadIO m => MonadRepoCache m where
 instance MonadApt m => MonadRepoCache m where
     getRepoCache = getApt >>= return . getRepoMap
     putRepoCache mp = modifyRepoCache (const mp)
+
+class (MonadIO m, Functor m, MonadApt m, MonadTop m) => MonadDeb m where
+
+instance MonadApt m => MonadDeb (TopT m)
+
+type DebT m = TopT (AptIOT m)
+
+-- | Run a known instance of MonadDeb.
+runDebT :: (MonadCatchIO m, Functor m) => FilePath -> DebT m a -> m a
+runDebT top action = runAptT $ runTopT top $ bracket loadRepoCache (\ r -> saveRepoCache >> return r) (\ () -> action)
 
 modifyRepoCache :: MonadRepoCache m => (Map URI' RemoteRepository -> Map URI' RemoteRepository) -> m ()
 modifyRepoCache f = do
@@ -198,14 +208,3 @@ prepareRepository key =
           case uriScheme uri of
                "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
                _ -> prepareRemoteRepository uri >>= return . RemoteRepo
-
-class (MonadIO m, Functor m, MonadApt m, MonadTop m) => MonadDeb m where
-
-instance MonadApt m => MonadDeb (TopT m)
-
--- | Run a known instance of MonadDeb.
-runDebT :: (MonadCatchIO m, Functor m) => FilePath -> TopT (AptIOT m) a -> m a
-runDebT top action = runAptT $ runTopT top $ do loadRepoCache
-                                                result <- action
-                                                saveRepoCache
-                                                return result
