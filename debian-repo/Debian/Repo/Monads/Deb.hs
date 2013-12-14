@@ -6,7 +6,8 @@ module Debian.Repo.Monads.Deb
 
 import Control.Monad.State (StateT(runStateT))
 import Control.Monad.Trans (MonadIO)
-import Debian.Repo.Monads.Apt (AptState, MonadApt, AptIOT, runAptT, initState)
+import Debian.Repo.Monads.Apt (AptState, MonadApt(getApt, putApt), AptIOT, runAptT, initState, getRepoMap, setRepoMap)
+import Debian.Repo.Monads.Cache (MonadRepoCache(..))
 import Debian.Repo.Monads.Top (MonadTop, TopT, runTopT)
 
 class (MonadIO m, Functor m, MonadApt m, MonadTop m) => MonadDeb m where

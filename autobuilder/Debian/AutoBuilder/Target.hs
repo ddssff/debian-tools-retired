@@ -49,6 +49,7 @@ import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString(Relations, Relation(..))
 import Debian.Release (releaseName')
 import Debian.Repo.Monads.Apt (MonadApt)
+import Debian.Repo.Monads.Deb (MonadDeb)
 import Debian.Repo.Monads.Top (MonadTop)
 import Debian.Repo.SourceTree (buildDebs)
 import Debian.Sources (SliceName(..))
@@ -154,7 +155,7 @@ partitionFailing xs =
 -- | Build a set of targets.  When a target build is successful it
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
-buildTargets :: (MonadApt m, MonadTop m, AptCache t) => P.CacheRec -> OSImage -> Relations -> LocalRepository -> t -> [Buildable] -> m (LocalRepository, [Target])
+buildTargets :: (MonadDeb m, AptCache t) => P.CacheRec -> OSImage -> Relations -> LocalRepository -> t -> [Buildable] -> m (LocalRepository, [Target])
 buildTargets _ _ _ localRepo _ [] = return (localRepo, [])
 buildTargets cache dependOS globalBuildDeps localRepo poolOS !targetSpecs =
     do
@@ -169,12 +170,12 @@ buildTargets cache dependOS globalBuildDeps localRepo poolOS !targetSpecs =
 
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
-buildLoop :: (MonadApt m, MonadTop m, AptCache t) => P.CacheRec -> Relations -> LocalRepository -> t -> OSImage -> [Target] -> m [Target]
+buildLoop :: (MonadDeb m, AptCache t) => P.CacheRec -> Relations -> LocalRepository -> t -> OSImage -> [Target] -> m [Target]
 buildLoop cache globalBuildDeps localRepo poolOS cleanOS' !targets =
     Set.toList <$> loop cleanOS' (Set.fromList targets) Set.empty
     where
       -- This loop computes the ready targets and builds one.
-      loop :: (MonadApt m, MonadTop m) => OSImage -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
+      loop :: MonadDeb m => OSImage -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
       loop _ unbuilt failed | Set.null unbuilt = return failed
       loop cleanOS' unbuilt failed =
           ePutStrLn "Computing ready targets..." >>
@@ -183,7 +184,7 @@ buildLoop cache globalBuildDeps localRepo poolOS cleanOS' !targets =
             triples -> do noisier 1 $ qPutStrLn (makeTable triples)
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
                           loop2 cleanOS' (Set.difference unbuilt ready) failed triples
-      loop2 :: (MonadApt m, MonadTop m) =>
+      loop2 :: MonadDeb m =>
                OSImage
             -> Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
             -> Set.Set Target -- failed: Targets which either failed to build or were blocked by a target that failed to build

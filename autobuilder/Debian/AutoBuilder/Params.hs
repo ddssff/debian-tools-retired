@@ -20,6 +20,7 @@ import Debian.Sources ( SliceName(..) )
 import Debian.Repo (verifySourcesList, repoSources)
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Monads.Cache (loadRepoCache)
+import Debian.Repo.Monads.Deb (MonadDeb)
 import Debian.Repo.Monads.Top (MonadTop(askTop), sub)
 import Debian.Repo.Types.Slice (NamedSliceList(..), SliceList(..))
 import System.Directory ( createDirectoryIfMissing, getPermissions, writable )
@@ -27,7 +28,7 @@ import System.Environment ( getEnv )
 import System.Process.Progress (qPutStrLn)
 
 -- |Create a Cache object from a parameter set.
-buildCache :: (MonadApt m, MonadTop m) => ParamRec -> m CacheRec
+buildCache :: MonadDeb m => ParamRec -> m CacheRec
 buildCache params =
     do top <- askTop
        qPutStrLn ("Preparing autobuilder cache in " ++ top ++ "...")

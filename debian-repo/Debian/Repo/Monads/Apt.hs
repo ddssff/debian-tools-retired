@@ -37,7 +37,7 @@ import Control.Monad.State (MonadTrans(..), MonadIO(..), StateT(runStateT))
 import qualified Data.Map as Map (Map, insert, empty, lookup)
 import qualified Debian.Control.Text as B ( Paragraph, Control'(Control), ControlFunctions(parseControlFromHandle) )
 import Debian.Release (ReleaseName)
-import Debian.Repo.Monads.Cache (MonadRepoCache(getRepoCache, putRepoCache))
+import Debian.Repo.Monads.Cache (MonadRepoCache(getRepoCache, putRepoCache), modifyRepoCache)
 import Debian.Repo.Types (AptImage, SourcePackage, BinaryPackage, Release)
 import Debian.Repo.Types.RemoteRepository (RemoteRepository)
 import Debian.Repo.Types.Repo (Repo(repoKey), RepoKey(..))
@@ -166,4 +166,4 @@ instance MonadApt m => MonadApt (ReaderT s m) where
 
 instance MonadApt m => MonadRepoCache m where
     getRepoCache = getApt >>= return . repoMap
-    putRepoCache m = getApt >>= \ a -> putApt (a {repoMap = m})
+    putRepoCache mp = modifyRepoCache (const mp)

@@ -2,6 +2,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Monads.Cache
     ( MonadRepoCache(getRepoCache, putRepoCache)
+    , modifyRepoCache
     , loadRepoCache
     , saveRepoCache
     , prepareRemoteRepository

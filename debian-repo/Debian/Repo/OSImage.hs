@@ -27,6 +27,7 @@ import Debian.Sources ( SourceType(..), SliceName(sliceName), DebSource(DebSourc
 import Debian.Repo.Cache ( SourcesChangedAction(SourcesChangedError), distDir, sourcesPath, sliceIndexes, buildArchOfRoot )
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Monads.Top (MonadTop(askTop))
+import Debian.Repo.Monads.Deb (MonadDeb)
 import Debian.Repo.Package ( sourcePackagesOfIndex', binaryPackagesOfIndex' )
 import Debian.Relation (ParseRelations(..), Relations)
 import Debian.Repo.Slice ( sourceSlices, binarySlices, verifySourcesList )
@@ -148,7 +149,7 @@ instance Show UpdateError where
     show Flushed = "Flushed"
 
 -- |Create or update an OS image in which packages can be built.
-prepareEnv :: (MonadApt m, MonadTop m) =>
+prepareEnv :: MonadDeb m =>
               EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list of the base distribution
            -> FilePath                  -- ^ The location of the local upload repository
@@ -178,8 +179,7 @@ prepareEnv root distro local flush ifSourcesChanged include exclude components =
     where
       update _ | flush = return (Left Flushed)
       update os = updateEnv os
-      recreate ::(MonadTop m, {-MonadRepoCache k r-} MonadIO m, MonadApt m) =>
-                 Arch -> OSImage -> Either UpdateError OSImage -> m OSImage
+      recreate :: MonadDeb m => Arch -> OSImage -> Either UpdateError OSImage -> m OSImage
       recreate _ _ (Right os) = return os
       recreate _arch _os (Left (Changed name path computed installed))
           | ifSourcesChanged == SourcesChangedError =
@@ -223,7 +223,7 @@ prepareDevs root = do
                        False -> readProcessChunks (shell cmd) L.empty >>= return . oneResult
                        True -> return ExitSuccess
 
-_pbuilderBuild :: MonadApt m =>
+_pbuilderBuild :: MonadDeb m =>
             FilePath
          -> EnvRoot
          -> NamedSliceList
@@ -306,7 +306,7 @@ _pbuilderBuild cacheDir root distro arch repo copy _extraEssential _omitEssentia
 
 -- Create a new clean build environment in root.clean
 -- FIXME: create an ".incomplete" flag and remove it when build-env succeeds
-buildEnv :: (MonadApt m, MonadTop m) =>
+buildEnv :: MonadDeb m =>
             EnvRoot
          -> NamedSliceList
          -> Arch
@@ -372,7 +372,7 @@ buildEnv root distro arch repo copy include exclude components =
 
 -- |Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.
-updateEnv :: MonadApt m => OSImage -> m (Either UpdateError OSImage)
+updateEnv :: MonadDeb m => OSImage -> m (Either UpdateError OSImage)
 updateEnv os =
     do liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc") >> readFile "/etc/resolv.conf" >>= writeFile (rootPath root ++ "/etc/resolv.conf")
        verified <- verifySources
@@ -387,7 +387,7 @@ updateEnv os =
                 binary <- getBinaryPackages os'
                 return . Right $ os' {osSourcePackages = source, osBinaryPackages = binary}
     where
-      verifySources :: MonadApt m => m (Either UpdateError OSImage)
+      verifySources :: MonadDeb m => m (Either UpdateError OSImage)
       verifySources =
           do let computed = remoteOnly (aptSliceList os)
                  sourcesPath' = rootPath root ++ "/etc/apt/sources.list"

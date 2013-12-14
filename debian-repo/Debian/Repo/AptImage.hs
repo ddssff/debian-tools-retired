@@ -15,6 +15,7 @@ import Debian.Sources (SliceName(sliceName))
 import Debian.Repo.Cache ( SourcesChangedAction, cacheRootDir, sliceIndexes, buildArchOfRoot, updateCacheSources )
 import Debian.Repo.Package ( sourcePackagesOfIndex', binaryPackagesOfIndex' )
 import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupAptImage, insertAptImage )
+import Debian.Repo.Monads.Deb (MonadDeb)
 import Debian.Repo.Slice ( sourceSlices, binarySlices )
 import Debian.Repo.SourceTree ( DebianBuildTree(debTree'), DebianSourceTree(tree'), SourceTree(dir'), findDebianBuildTrees, entry )
 import Debian.Repo.Types ( AptImage(..), AptCache(..), SourcePackage(sourcePackageID), sourcePackageName, BinaryPackage, PackageID(packageVersion), EnvRoot(..) )
@@ -51,7 +52,7 @@ instance Ord AptImage where
 instance Eq AptImage where
     a == b = compare a b == EQ
 
-prepareAptEnv :: MonadApt m =>
+prepareAptEnv :: MonadDeb m =>
                  FilePath		-- Put environment in a subdirectory of this
               -> SourcesChangedAction	-- What to do if environment already exists and sources.list is different
               -> NamedSliceList		-- The sources.list
@@ -63,7 +64,7 @@ prepareAptEnv cacheDir sourcesChangedAction sources =
 
 -- |Create a skeletal enviroment sufficient to run apt-get.
 {-# NOINLINE prepareAptEnv' #-}
-prepareAptEnv' :: MonadApt m => FilePath -> SourcesChangedAction -> NamedSliceList -> m AptImage
+prepareAptEnv' :: MonadDeb m => FilePath -> SourcesChangedAction -> NamedSliceList -> m AptImage
 prepareAptEnv' cacheDir sourcesChangedAction sources =
     do let root = rootPath (cacheRootDir cacheDir (ReleaseName (sliceName (sliceListName sources))))
        --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)

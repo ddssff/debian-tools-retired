@@ -35,6 +35,7 @@ import Debian.Release ( ReleaseName(relName), releaseName', sectionName' )
 import Debian.Sources ( SourceType(..), DebSource(..) )
 import Debian.Repo.Monads.Apt (MonadApt)
 import Debian.Repo.Monads.Cache (prepareRepository)
+import Debian.Repo.Monads.Deb (MonadDeb)
 import Debian.Repo.Slice ( verifySourcesList )
 import Debian.Repo.SourcesList ( parseSourcesList )
 import Debian.Repo.Types ( AptCache(aptArch, aptBaseSliceList, aptBinaryPackages, aptReleaseName, aptSourcePackages, globalCacheDir), SourcePackage(sourcePackageID),
@@ -260,7 +261,7 @@ data SourcesChangedAction =
 
 -- |Change the sources.list of an AptCache object, subject to the
 -- value of sourcesChangedAction.
-updateCacheSources :: (MonadApt m, AptCache c) => SourcesChangedAction -> c -> m c
+updateCacheSources :: (MonadDeb m, AptCache c) => SourcesChangedAction -> c -> m c
 updateCacheSources sourcesChangedAction distro =
     -- (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
     qPutStrLn "Updating cache sources" >>

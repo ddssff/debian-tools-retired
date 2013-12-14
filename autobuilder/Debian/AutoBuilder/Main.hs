@@ -131,7 +131,7 @@ doParameterSet init results params =
       allTargetNames :: Set P.TargetName
       allTargetNames = P.foldPackages (\ name _ _ result -> insert name result) (P.buildPackages params) empty
 
-prepareDependOS :: (MonadTop m, MonadApt m) => P.ParamRec -> NamedSliceList -> FilePath -> m OSImage
+prepareDependOS :: MonadDeb m => P.ParamRec -> NamedSliceList -> FilePath -> m OSImage
 prepareDependOS params buildRelease localRepo =
     do when (P.flushPool params) (liftIO (removeRecursiveSafely localRepo))
        repo <- prepareLocalRepository (rootEnvPath localRepo) Nothing
