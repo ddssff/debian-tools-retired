@@ -1,3 +1,9 @@
+haskell-debian-repo (5.48) unstable; urgency=low
+
+  * Do loadRepoCache and saveRepoCache in DebT monad runner.
+
+ -- David Fox <dsf@seereason.com>  Sat, 14 Dec 2013 10:22:52 -0800
+
 haskell-debian-repo (5.47) unstable; urgency=low
 
   * Repository cache for remote repositories only.
