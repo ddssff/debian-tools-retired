@@ -20,8 +20,6 @@ import qualified Debian.Control.Text as T (ControlFunctions(parseControl), Contr
 import Debian.Release (ReleaseName(..), releaseName', Section, sectionName', parseReleaseName, SubSection(section))
 import qualified Debian.Repo.File as F ( File(..), readFile )
 import qualified Debian.Repo.File as F (Source(RemotePath))
-import Debian.Repo.Monads.Cache (MonadRepoCache, prepareRemoteRepository)
-import Debian.Repo.Monads.Top (MonadTop, sub)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath)
 import Debian.Repo.Types.LocalRepository (LocalRepository(..), repoRoot, repoLayout, Layout(Pool, Flat), prepareLocalRepository)

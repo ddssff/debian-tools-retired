@@ -7,7 +7,7 @@ import Control.Monad.Trans
 import Data.Maybe
 import Debian.Arch (Arch(Binary), ArchCPU(..), ArchOS(..))
 import Debian.Repo.Monads.Apt (MonadApt, runAptT)
-import Debian.Repo.Monads.Cache (prepareRepository)
+import Debian.Repo.Monads.Deb (prepareRepository)
 import Debian.Repo.Release
 import Debian.Repo.Types.Repo (RepoKey(Remote), repoReleaseInfo)
 import Debian.URI

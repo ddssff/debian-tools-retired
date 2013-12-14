@@ -8,7 +8,6 @@ module Debian.Repo
     , module Debian.Repo.Dependencies
     , module Debian.Repo.Insert
     , module Debian.Repo.Monads.Apt
-    , module Debian.Repo.Monads.Cache
     , module Debian.Repo.Monads.Deb
     , module Debian.Repo.Monads.Top
     , module Debian.Repo.OSImage
@@ -29,7 +28,6 @@ import Debian.Repo.Changes
 import Debian.Repo.Dependencies
 import Debian.Repo.Insert
 import Debian.Repo.Monads.Apt
-import Debian.Repo.Monads.Cache
 import Debian.Repo.Monads.Deb
 import Debian.Repo.Monads.Top
 import Debian.Repo.OSImage
