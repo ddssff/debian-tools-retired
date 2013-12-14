@@ -150,12 +150,12 @@ instance Show UpdateError where
 -- |Create or update an OS image in which packages can be built.
 prepareEnv :: (MonadApt m, MonadTop m) =>
               EnvRoot			-- ^ The location where image is to be built
-           -> NamedSliceList		-- ^ The sources.list
+           -> NamedSliceList		-- ^ The sources.list of the base distribution
            -> FilePath                  -- ^ The location of the local upload repository
            -> Bool			-- ^ If true, remove and rebuild the image
            -> SourcesChangedAction	-- ^ What to do if called with a sources.list that
 					-- differs from the previous call (unimplemented)
-           -> [String]			-- ^ Extra packages to include
+           -> [String]			-- ^ Extra packages to install - e.g. keyrings
            -> [String]			-- ^ Packages to exclude
            -> [String]			-- ^ Components of the base repository
            -> m OSImage

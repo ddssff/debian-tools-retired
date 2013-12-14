@@ -3,7 +3,6 @@
 module Debian.Repo.Types.Repository
     ( Repository(LocalRepo, RemoteRepo)
     , fromLocalRepository
-    , prepareRepository
     , unLocalRepository
     , unRemoteRepository
     ) where
@@ -25,7 +24,7 @@ import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath)
 import Debian.Repo.Types.LocalRepository (LocalRepository(..), repoRoot, repoLayout, Layout(Pool, Flat), prepareLocalRepository)
 import Debian.Repo.Types.Release (Release(releaseName), makeReleaseInfo)
-import Debian.Repo.Types.RemoteRepository (RemoteRepository(..), MonadRepoCache, prepareRemoteRepository)
+import Debian.Repo.Types.RemoteRepository (RemoteRepository(..))
 import Debian.Repo.Types.Repo (Repo(..), RepoKey(..), compatibilityFile, libraryCompatibilityLevel)
 import Debian.Sources ( SliceName(..), DebSource(..), SourceType(..) )
 import Debian.URI (URI', fromURI', toURI', uriToString', URI(uriScheme, uriPath), dirFromURI, fileFromURI)
@@ -82,13 +81,3 @@ instance Repo Repository where
 
 fromLocalRepository :: LocalRepository -> Repository
 fromLocalRepository = LocalRepo
-
-prepareRepository :: (MonadRepoCache m) => RepoKey -> m Repository
-prepareRepository key =
-    case key of
-      Local path -> prepareLocalRepository path Nothing >>= return . LocalRepo
-      Remote uri' ->
-          let uri = fromURI' uri' in
-          case uriScheme uri of
-               "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
-               _ -> prepareRemoteRepository uri >>= return . RemoteRepo

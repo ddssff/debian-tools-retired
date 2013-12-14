@@ -45,10 +45,10 @@ uriToString' uri = uriToString id uri ""
 
 deriving instance Show BinaryPackage
 
--- | How long to parse the files in a repository?
 root :: EnvPath
 root = rootEnvPath "/srv/deb/ubuntu"
 
+-- | How long does it take to parse the files in a repository?
 main :: IO ()
 main = runAptIO $ quieter (- 3) $
     do repo <- prepareLocalRepository root (Just Pool)

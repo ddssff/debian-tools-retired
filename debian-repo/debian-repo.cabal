@@ -48,6 +48,7 @@ Library
         Debian.Repo.Dependencies,
         Debian.Repo.Insert,
         Debian.Repo.Monads.Apt,
+        Debian.Repo.Monads.Cache,
         Debian.Repo.Monads.Top,
         Debian.Repo.OSImage,
         Debian.Repo.Package,
