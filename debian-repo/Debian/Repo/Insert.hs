@@ -518,9 +518,6 @@ findLive repo = {-(LocalRepository _ Nothing _)-}
                                               show (prettyArch arch)] ++ ".upload") (Set.fromList (concat (architectures releases)))
       architectures releases = List.map head . group . sort . List.map releaseArchitectures $ releases
 
-instance PkgName name => F.Pretty (PackageID name) where
-    pretty p = prettyPackageID p -- packageName p ++ "=" ++ show (prettyDebianVersion (packageVersion p))
-
 instance F.Pretty (Repository, Release, PackageIndex) where
     pretty (repo, r, i) = text $
         intercalate "/" [show (F.pretty repo),
@@ -528,13 +525,6 @@ instance F.Pretty (Repository, Release, PackageIndex) where
 		         (releaseName' . releaseName $ r),
 		         show (F.pretty (packageIndexComponent i)),
                          show (prettyArch (packageIndexArch i))]
-
-instance F.Pretty (Release, PackageIndex, PackageID BinPkgName) where
-    pretty (r, i, b) = text $
-        intercalate "/" [(releaseName' . releaseName $ r),
-		         show (F.pretty (packageIndexComponent i)),
-                         show (prettyArch (packageIndexArch i)),
-                         show (F.pretty b)]
 
 instance F.Pretty (Release, PackageIndex) where
     pretty (r, i) = text $
@@ -551,11 +541,15 @@ instance F.Pretty Release where
 instance F.Pretty Section where
     pretty (Section s) = text s
 
-{-
-instance F.Pretty Arch where
-    pretty x@(Binary _ _) = text "binary-" <> prettyArch x
-    pretty x = prettyArch x
--}
+instance F.Pretty (Release, PackageIndex, PackageID BinPkgName) where
+    pretty (r, i, b) = text $
+        intercalate "/" [(releaseName' . releaseName $ r),
+		         show (F.pretty (packageIndexComponent i)),
+                         show (prettyArch (packageIndexArch i)),
+                         show (F.pretty b)]
+
+instance PkgName name => F.Pretty (PackageID name) where
+    pretty p = prettyPackageID p -- packageName p ++ "=" ++ show (prettyDebianVersion (packageVersion p))
 
 instance F.Pretty BinaryPackage where
     pretty p = F.pretty (packageID p)

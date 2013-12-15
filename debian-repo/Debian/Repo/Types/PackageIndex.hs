@@ -18,7 +18,7 @@ import qualified Debian.Control.Text as T
 import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Release (Section(..))
-import Debian.Repo.Types.PackageID (PackageID(packageVersion, packageName))
+import Debian.Repo.Types.PackageID (PackageID(packageVersion, packageName), prettyPackageID)
 import Debian.Repo.Types.PackageVersion (PackageVersion(pkgName, pkgVersion))
 import Debian.Version (DebianVersion, prettyDebianVersion, parseDebianVersion)
 import System.Posix.Types ( FileOffset )
@@ -41,18 +41,11 @@ data PackageIndex
                    , packageIndexArch :: Arch
                    } deriving (Eq, Ord, Show)
 
-prettyBinaryPackage :: BinaryPackage -> Doc
-prettyBinaryPackage p = pretty (pkgName p) <> text "-" <> prettyDebianVersion (pkgVersion p)
-
+{-
 instance PackageVersion BinaryPackage where
     pkgName = binaryPackageName
     pkgVersion = packageVersion . packageID
-
-binaryPackageName :: BinaryPackage -> BinPkgName
-binaryPackageName = packageName . packageID
-
-sourcePackageName :: SourcePackage -> SrcPkgName
-sourcePackageName = packageName . sourcePackageID
+-}
 
 -- | The 'BinaryPackage' type adds to the 'PackageID' type the control
 -- information obtained from the package index.
@@ -72,6 +65,13 @@ instance Ord BinaryPackage where
 
 instance Eq BinaryPackage where
     a == b = (packageID a) == (packageID b)
+
+instance PackageVersion BinaryPackage where
+    pkgName = pkgName . packageID
+    pkgVersion = pkgVersion . packageID
+
+prettyBinaryPackage :: BinaryPackage -> Doc
+prettyBinaryPackage = prettyPackageID . packageID
 
 data SourcePackage
     = SourcePackage

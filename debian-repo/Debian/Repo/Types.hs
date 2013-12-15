@@ -15,7 +15,7 @@ module Debian.Repo.Types
 import Debian.Repo.Types.AptImage (AptBuildCache(..), AptCache(..), AptImage(..))
 import Debian.Repo.Types.EnvPath (appendPath, EnvPath(..), EnvRoot(..), outsidePath, rootEnvPath)
 import Debian.Repo.Types.LocalRepository (copyLocalRepo, flushLocalRepository, Layout(..), LocalRepository(..), poolDir', prepareLocalRepository, readLocalRepo, repoLayout, repoReleaseInfoLocal, repoRoot, setRepositoryCompatibility)
-import Debian.Repo.Types.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(..), prettyPackageID)
+import Debian.Repo.Types.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(..))
 import Debian.Repo.Types.PackageIndex (BinaryPackage(..), PackageIndex(..), prettyBinaryPackage, SourceControl(..), SourceFileSpec(..), SourcePackage(..))
 import Debian.Repo.Types.PackageVersion (PackageVersion(..), PkgVersion(..), prettyPkgVersion)
 import Debian.Repo.Types.Release (getReleaseInfoRemote, parseArchitectures, parseComponents, parseReleaseFile, Release(..))

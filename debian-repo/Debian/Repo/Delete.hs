@@ -209,7 +209,7 @@ deleteGarbage repo =
 deleteSourcePackages :: Bool -> Maybe PGPKey -> LocalRepository -> [(Release, PackageIndex, PackageID BinPkgName)] -> IO [Release]
 deleteSourcePackages _ _ _ [] = return []
 deleteSourcePackages dry keyname repo packages =
-    do qPutStrLn ("deleteSourcePackages:\n " ++ intercalate"\n " (List.map (show . F.pretty . (\ (_, _, x) -> x)) packages))
+    do qPutStrLn ("deleteSourcePackages:\n " ++ intercalate "\n " (List.map (show . F.pretty . (\ (_, _, x) -> x)) packages))
        mapM doIndex (Set.toList allIndexes)
     where
       doIndex (release, index) = getEntries release index >>= put release index . List.partition (victim release index)
