@@ -1,19 +1,16 @@
 import Control.DeepSeq (force)
 import Data.ByteString.Char8 as B (ByteString, readFile)
-import Data.ByteString.Lazy.Char8 as L (ByteString, readFile)
-import Data.Char (toLower, chr)
+import Data.Char (chr)
 import Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Data.Text.Encoding (decodeUtf8With)
 import Data.Text.IO as T
 import Data.Word (Word8)
 import Debian.Control
-import Debian.Control.ByteString as B (parseControl)
 import Debian.Control.Text as T (parseControl, decodeControl)
 import Debian.Control.PrettyPrint (ppControl)
 import System.Environment (getArgs)
 import Text.Parsec.Error
-import Text.PrettyPrint.ANSI.Leijen
 
 main =
     do args <- getArgs

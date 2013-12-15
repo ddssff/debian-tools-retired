@@ -28,10 +28,12 @@ import Debian.Repo.Monads.Apt (MonadApt)
 import qualified Debian.Repo.Package as DRP (binaryPackageSourceID, sourcePackageBinaryIDs, getPackages, sourcePackagesOfIndex)
 import Debian.Repo.PackageIndex (packageIndexPath, packageIndexList, sourceIndexList, binaryIndexList)
 import Debian.Repo.Release (signRelease)
-import Debian.Repo.Types ( BinaryPackageLocal, binaryPackageName, PackageIDLocal,
-                           BinaryPackage(packageID, packageInfo), PackageID, PackageIndexLocal, PackageIndex(..),
-                           SourcePackage, PackageVersion(pkgVersion), Release, EnvPath, outsidePath, Release(..))
+import Debian.Repo.Types.EnvPath (EnvPath, outsidePath)
+import Debian.Repo.Types.PackageIndex (BinaryPackageLocal, binaryPackageName, PackageIDLocal,
+                                       BinaryPackage(packageID, packageInfo), PackageID, PackageIndexLocal, PackageIndex(..),
+                                       SourcePackage, PackageVersion(pkgVersion))
 import Debian.Repo.Types.LocalRepository (Layout(..), LocalRepository, repoLayout, repoRoot, repoReleaseInfoLocal)
+import Debian.Repo.Types.Release (Release(..))
 import Debian.Repo.Types.Repo (repoKey)
 import Debian.Repo.Types.Repository (fromLocalRepository)
 import Debian.Version.Text ()

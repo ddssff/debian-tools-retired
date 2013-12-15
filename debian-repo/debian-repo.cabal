@@ -46,7 +46,6 @@ Library
         Debian.Repo.Changes,
         Debian.Repo.Delete,
         Debian.Repo.Dependencies,
-        Debian.Repo.File,
         Debian.Repo.Insert,
         Debian.Repo.Monads.Apt,
         Debian.Repo.Monads.Deb,

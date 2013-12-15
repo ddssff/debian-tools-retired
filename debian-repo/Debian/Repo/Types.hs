@@ -10,12 +10,12 @@ module Debian.Repo.Types
     , module Debian.Repo.Types.Slice
     ) where
 
-import Debian.Repo.Types.AptImage
-import Debian.Repo.Types.EnvPath
-import Debian.Repo.Types.LocalRepository
-import Debian.Repo.Types.PackageIndex
-import Debian.Repo.Types.Release
-import Debian.Repo.Types.RemoteRepository
-import Debian.Repo.Types.Repo
-import Debian.Repo.Types.Repository
-import Debian.Repo.Types.Slice
+import Debian.Repo.Types.AptImage (AptBuildCache(..), AptCache(..), AptImage(..))
+import Debian.Repo.Types.EnvPath (appendPath, EnvPath(..), EnvRoot(..), outsidePath, rootEnvPath)
+import Debian.Repo.Types.LocalRepository (copyLocalRepo, flushLocalRepository, Layout(..), LocalRepository(..), poolDir', prepareLocalRepository, readLocalRepo, repoLayout, repoReleaseInfoLocal, repoRoot, setRepositoryCompatibility)
+import Debian.Repo.Types.PackageIndex (BinaryPackage(..), BinaryPackageLocal, binaryPackageName, makeBinaryPackageID, makeSourcePackageID, PackageID(..), PackageIDLocal, PackageIndex(..), PackageIndexLocal, PackageVersion(..), PkgVersion(..), prettyBinaryPackage, prettyPackageID, prettyPkgVersion, SourceControl(..), SourceFileSpec(..), SourcePackage(..), SourcePackageLocal, sourcePackageName)
+import Debian.Repo.Types.Release (getReleaseInfoRemote, parseArchitectures, parseComponents, parseReleaseFile, Release(..))
+import Debian.Repo.Types.RemoteRepository (RemoteRepository(..), repoReleaseNames)
+import Debian.Repo.Types.Repo (compatibilityFile, libraryCompatibilityLevel, Repo(..), RepoKey(..), repoKeyURI, repoURI)
+import Debian.Repo.Types.Repository (fromLocalRepository, Repository(..), unLocalRepository, unRemoteRepository)
+import Debian.Repo.Types.Slice (NamedSliceList(..), Slice(..), SliceList(..))

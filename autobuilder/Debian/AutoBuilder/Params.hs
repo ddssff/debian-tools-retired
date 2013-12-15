@@ -9,21 +9,20 @@ module Debian.AutoBuilder.Params
     , adjustVendorTag -- Export for testing
     ) where
 
-import Control.Monad.Trans ( liftIO )
-import Data.List ( isSuffixOf )
+import Control.Monad.Trans (liftIO)
+import Data.List (isSuffixOf)
 import Data.Maybe (catMaybes, fromMaybe)
 import Debian.AutoBuilder.Env ()
 import Debian.AutoBuilder.Types.CacheRec (CacheRec(..))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
-import Debian.Release ( ReleaseName(relName), releaseName' )
-import Debian.Sources ( SliceName(..) )
-import Debian.Repo (verifySourcesList, repoSources)
-import Debian.Repo.Monads.Apt (MonadApt)
+import Debian.Release (ReleaseName(relName), releaseName')
+import Debian.Repo (repoSources, verifySourcesList)
 import Debian.Repo.Monads.Deb (MonadDeb)
 import Debian.Repo.Monads.Top (MonadTop(askTop), sub)
 import Debian.Repo.Types.Slice (NamedSliceList(..), SliceList(..))
-import System.Directory ( createDirectoryIfMissing, getPermissions, writable )
-import System.Environment ( getEnv )
+import Debian.Sources (SliceName(..))
+import System.Directory (createDirectoryIfMissing, getPermissions, writable)
+import System.Environment (getEnv)
 import System.Process.Progress (qPutStrLn)
 
 -- |Create a Cache object from a parameter set.

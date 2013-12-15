@@ -30,7 +30,6 @@ import System.Process.Progress (runProcessQ, collectOutputs)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.XML.HaXml (htmlprint)
 import Text.XML.HaXml.Types
-import Text.XML.HaXml.Html.Parse (htmlParse)
 import Text.XML.HaXml.Posn
 import Text.ParserCombinators.ReadP (readP_to_S)
 

@@ -33,11 +33,11 @@ import qualified Debian.Repo.Package as DRP ( sourceFilePaths, toBinaryPackage, 
 import Debian.Repo.Release ( prepareRelease, signRelease, findReleases )
 import Debian.Repo.Repository ( repoArchList )
 import Debian.Release (SubSection(section), Section(..), ReleaseName, parseSection', releaseName', sectionName, sectionName')
-import Debian.Repo.Types ( BinaryPackageLocal, prettyBinaryPackage, SourcePackage(sourcePackageID), sourcePackageName,
-                           BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal, PackageIndex(..),
-                           Release(releaseAliases, releaseComponents, releaseName),
-                           EnvPath, outsidePath, Release(..))
+import Debian.Repo.Types.EnvPath (EnvPath, outsidePath)
 import Debian.Repo.Types.LocalRepository (LocalRepository, Layout(..), repoLayout, repoRoot, poolDir')
+import Debian.Repo.Types.PackageIndex (BinaryPackageLocal, prettyBinaryPackage, SourcePackage(sourcePackageID), sourcePackageName,
+                                       BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal,PackageIndex(..))
+import Debian.Repo.Types.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
 import Debian.Repo.Types.Repo (repoKey)
 import Debian.Repo.Types.Repository (Repository)
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )

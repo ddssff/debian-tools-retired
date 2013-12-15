@@ -14,19 +14,17 @@ module Debian.Repo.Types.LocalRepository
     , setRepositoryCompatibility
     ) where
 
-import Control.Applicative.Error (Failing(Failure, Success))
 import Control.Monad (filterM, when)
 import Control.Monad.Trans (liftIO, MonadIO)
 import Data.List (groupBy, isPrefixOf, partition, sort)
 import Data.Maybe (catMaybes)
-import Data.Text as T (Text, unpack)
+import Data.Text as T (unpack)
 import Debian.Changes (ChangedFileSpec(changedFileSection), ChangesFile(changeInfo))
-import qualified Debian.Control.Text as T (Control'(Control), ControlFunctions(parseControl), fieldValue)
+import qualified Debian.Control.Text as T (fieldValue)
 import Debian.Release (parseReleaseName, ReleaseName(..), releaseName', Section, sectionName', SubSection(section))
-import qualified Debian.Repo.File as F (File(..), readFile)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types.EnvPath (EnvPath, outsidePath)
-import Debian.Repo.Types.Release (makeReleaseInfo, Release)
+import Debian.Repo.Types.Release (Release, parseReleaseFile)
 import Debian.Repo.Types.Repo (compatibilityFile, libraryCompatibilityLevel, Repo(..), RepoKey(..))
 import Extra.Files (maybeWriteFile)
 import Extra.List (partitionM)
@@ -110,20 +108,6 @@ readLocalRepo root layout =
 
 isSymLink :: FilePath -> IO Bool
 isSymLink path = F.getSymbolicLinkStatus path >>= return . F.isSymbolicLink
-
-parseReleaseFile :: FilePath -> ReleaseName -> [ReleaseName] -> IO Release
-parseReleaseFile path dist aliases =
-    liftIO (F.readFile path) >>= return . parseRelease dist aliases
-
-parseRelease :: ReleaseName -> [ReleaseName] -> F.File Text -> Release
-parseRelease name aliases file =
-    case F.text file of
-      Failure msgs -> error $ "Could not read " ++ show (F.path file) ++ ": " ++ show msgs
-      Success t ->
-          case T.parseControl (show (F.path file)) t of
-            Left msg -> error $ "Failure parsing " ++ show (F.path file) ++ ": " ++ show msg
-            Right (T.Control []) -> error $ "Empty release file: " ++ show (F.path file)
-            Right (T.Control (info : _)) -> makeReleaseInfo (F.File {F.path = F.path file, F.text = Success info}) name aliases
 
 -- | Create or verify the existance of the directories which will hold
 -- a repository on the local machine.  Verify the index files for each of

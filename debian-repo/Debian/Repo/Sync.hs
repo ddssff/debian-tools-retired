@@ -11,6 +11,7 @@ import System.FilePath (dropTrailingPathSeparator)
 import System.Process (proc)
 import System.Process.Progress (runProcessF, keepResult)
 
+prefixes :: Maybe (B.ByteString, B.ByteString)
 prefixes = Just (" 1> ", " 2> ")
 
 rsync :: (Functor m, MonadIO m) => [String] -> FilePath -> FilePath -> m ExitCode
