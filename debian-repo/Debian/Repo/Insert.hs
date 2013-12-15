@@ -34,8 +34,9 @@ import Debian.Repo.Release ( prepareRelease, signRelease, findReleases )
 import Debian.Release (SubSection(section), Section(..), ReleaseName, parseSection', releaseName', sectionName, sectionName')
 import Debian.Repo.Types.EnvPath (EnvPath, outsidePath)
 import Debian.Repo.Types.LocalRepository (LocalRepository, Layout(..), repoLayout, repoRoot, poolDir')
-import Debian.Repo.Types.PackageIndex (BinaryPackageLocal, prettyBinaryPackage, SourcePackage(sourcePackageID), sourcePackageName,
-                                       BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal,PackageIndex(..))
+import Debian.Repo.Types.PackageID (PackageID(packageName, packageVersion), prettyPackageID)
+import Debian.Repo.Types.PackageIndex (prettyBinaryPackage, SourcePackage(sourcePackageID),
+                                       BinaryPackage(packageID, packageInfo), PackageIndex(..))
 import Debian.Repo.Types.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
 import Debian.Repo.Types.Repo (repoKey, repoArchList)
 import Debian.Repo.Types.Repository (Repository)
@@ -269,7 +270,7 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
       -- do this all at once, rather than one package at a time
       updateIndexes :: EnvPath -> [Release] -> [InstallResult] -> IO [InstallResult]
       updateIndexes root releases results =
-          do (pairLists :: [Either InstallResult [((LocalRepository, Release, PackageIndexLocal), B.Paragraph)]]) <-
+          do (pairLists :: [Either InstallResult [((LocalRepository, Release, PackageIndex), B.Paragraph)]]) <-
                  mapM (uncurry $ buildInfo root releases) (zip changeFileList results)
              let sortedByIndex = sortBy compareIndex (concat (keepRight pairLists))
              let groupedByIndex = undistribute (groupBy (\ a b -> compareIndex a b == EQ) sortedByIndex)
@@ -278,27 +279,27 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
                Ok -> return $ List.map (either id (const Ok)) pairLists
                problem -> return $ List.map (const problem) results
           where
-            compareIndex :: ((LocalRepository, Release, PackageIndexLocal), B.Paragraph) -> ((LocalRepository, Release, PackageIndexLocal), B.Paragraph) -> Ordering
+            compareIndex :: ((LocalRepository, Release, PackageIndex), B.Paragraph) -> ((LocalRepository, Release, PackageIndex), B.Paragraph) -> Ordering
             compareIndex (a, _) (b, _) = compare a b
       -- Build the control information to be added to the package indexes.
-      buildInfo :: EnvPath -> [Release] -> ChangesFile -> InstallResult -> IO (Either InstallResult [((LocalRepository, Release, PackageIndexLocal), B.Paragraph)])
+      buildInfo :: EnvPath -> [Release] -> ChangesFile -> InstallResult -> IO (Either InstallResult [((LocalRepository, Release, PackageIndex), B.Paragraph)])
       buildInfo root releases changes Ok =
           do case findRelease releases (changeRelease changes) of
                Just release ->
                    do (info :: [Either InstallResult B.Paragraph]) <- mapM (fileInfo root repo) indexFiles
                       case keepLeft info of
                         [] ->
-                            let (pairs :: [([(LocalRepository, Release, PackageIndexLocal)], Either InstallResult B.Paragraph)]) = zip (indexLists repo release) info in
-                            let (pairs' :: [([(LocalRepository, Release, PackageIndexLocal)], B.Paragraph)]) =
+                            let (pairs :: [([(LocalRepository, Release, PackageIndex)], Either InstallResult B.Paragraph)]) = zip (indexLists repo release) info in
+                            let (pairs' :: [([(LocalRepository, Release, PackageIndex)], B.Paragraph)]) =
                                     catMaybes $ List.map (\ (a, b) -> either (const Nothing) (\ b' -> Just (a, b')) b) pairs in
-                            let (pairs'' :: [((LocalRepository, Release, PackageIndexLocal), B.Paragraph)]) = concat (List.map distribute pairs') in
+                            let (pairs'' :: [((LocalRepository, Release, PackageIndex), B.Paragraph)]) = concat (List.map distribute pairs') in
                             return (Right pairs'')
                         results -> return (Left (mergeResults results))
                Nothing -> return . Left . Failed $ [NoSuchRelease (changeRelease changes)]
           where
-            indexLists :: LocalRepository -> Release -> [[(LocalRepository, Release, PackageIndexLocal)]]
+            indexLists :: LocalRepository -> Release -> [[(LocalRepository, Release, PackageIndex)]]
             indexLists repo release = List.map (indexes repo release) indexFiles
-            indexes :: LocalRepository -> Release -> ChangedFileSpec -> [(LocalRepository, Release, PackageIndexLocal)]
+            indexes :: LocalRepository -> Release -> ChangedFileSpec -> [(LocalRepository, Release, PackageIndex)]
             indexes repo release file = List.map (\ arch -> (repo, release, PackageIndex (section . changedFileSection $ file) arch)) (archList release changes file)
             indexFiles = dsc ++ debs
             (debs :: [ChangedFileSpec]) = filter f files
@@ -461,13 +462,13 @@ moveFile src dst =
 
 -- |Add control information to several package indexes, making sure
 -- that that no duplicate package ids are inserted.
-addPackagesToIndexes :: [((LocalRepository, Release, PackageIndexLocal), [B.Paragraph])] -> IO InstallResult
+addPackagesToIndexes :: [((LocalRepository, Release, PackageIndex), [B.Paragraph])] -> IO InstallResult
 addPackagesToIndexes pairs =
     do oldPackageLists <- mapM (\ (repo, release, index) -> DRP.getPackages (repoKey repo) release index) (List.map fst pairs)
        case partitionEithers oldPackageLists of
          ([], _) -> 
-             do let (oldPackageLists' :: [[BinaryPackageLocal]]) = rights oldPackageLists
-                let (indexMemberFns :: [BinaryPackageLocal -> Bool]) = List.map indexMemberFn oldPackageLists'
+             do let (oldPackageLists' :: [[BinaryPackage]]) = rights oldPackageLists
+                let (indexMemberFns :: [BinaryPackage -> Bool]) = List.map indexMemberFn oldPackageLists'
                 -- if none of the new packages are already in the index, add them
                 case concat (List.map (uncurry filter) (zip indexMemberFns newPackageLists)) of
                   [] -> do mapM_ updateIndex (zip3 indexes oldPackageLists' newPackageLists)
@@ -477,7 +478,7 @@ addPackagesToIndexes pairs =
     where
       updateIndex ((repo, release, index), oldPackages, newPackages) = DRP.putPackages repo release index (oldPackages ++ newPackages)
       indexes = List.map fst pairs
-      indexMemberFn :: [BinaryPackageLocal] -> BinaryPackageLocal -> Bool
+      indexMemberFn :: [BinaryPackage] -> BinaryPackage -> Bool
       indexMemberFn packages =
           let set = Set.fromList . List.map packageID $ packages
           in
@@ -507,12 +508,12 @@ findLive repo = {-(LocalRepository _ Nothing _)-}
       changesFilePaths root Pool releases package =
           List.map ((outsidePath root ++ "/installed/") ++) . changesFileNames releases $ package
       changesFileNames releases package =
-          List.map (\ arch -> intercalate "_" [show (pretty (sourcePackageName package)),
+          List.map (\ arch -> intercalate "_" [show (pretty (packageName . sourcePackageID $ package)),
                                                show (prettyDebianVersion . packageVersion . sourcePackageID $ package),
                                                show (prettyArch arch)] ++ ".changes") (nub (concat (architectures releases)))
       uploadFilePaths root releases package = Set.map ((outsidePath root ++ "/") ++) . uploadFileNames releases $ package
       uploadFileNames releases package =
-          Set.map (\ arch -> intercalate "_" [show (pretty (sourcePackageName package)),
+          Set.map (\ arch -> intercalate "_" [show (pretty (packageName . sourcePackageID $ package)),
                                               show (prettyDebianVersion . packageVersion . sourcePackageID $ package),
                                               show (prettyArch arch)] ++ ".upload") (Set.fromList (concat (architectures releases)))
       architectures releases = List.map head . group . sort . List.map releaseArchitectures $ releases

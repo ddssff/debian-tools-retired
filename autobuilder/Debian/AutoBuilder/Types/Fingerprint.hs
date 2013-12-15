@@ -28,7 +28,9 @@ import qualified Debian.Control.String as S
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (Relation(Rel), BinPkgName(..))
 import Debian.Repo.SourceTree (DebianSourceTreeC(entry), SourcePackageStatus(..))
-import Debian.Repo.Types.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), PkgVersion(PkgVersion, getName, getVersion), BinaryPackage(packageID), PackageID(packageVersion), binaryPackageName, prettyPkgVersion, readPkgVersion, showPkgVersion)
+import Debian.Repo.Types.PackageID (PackageID(packageName, packageVersion))
+import Debian.Repo.Types.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageID))
+import Debian.Repo.Types.PackageVersion (PkgVersion(PkgVersion, getName, getVersion), prettyPkgVersion, readPkgVersion, showPkgVersion)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.VersionPolicy(dropTag, parseTag)
 import Extra.Misc(columns)
@@ -126,7 +128,7 @@ targetFingerprint target buildDependencySolution =
 
 makeVersion :: BinaryPackage -> PkgVersion
 makeVersion package =
-    PkgVersion { getName = binaryPackageName package
+    PkgVersion { getName = packageName (packageID package)
                , getVersion = packageVersion (packageID package) }
 
 -- |Represents a decision whether to build a package, with a text juststification.

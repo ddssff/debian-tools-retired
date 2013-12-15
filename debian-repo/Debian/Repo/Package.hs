@@ -48,7 +48,8 @@ import Debian.Release (releaseName', sectionName')
 import Debian.Repo.Types.AptImage (AptCache(aptArch, rootDir))
 import Debian.Repo.Types.EnvPath (EnvRoot(rootPath), outsidePath)
 import Debian.Repo.Types.LocalRepository (LocalRepository, repoRoot)
-import Debian.Repo.Types.PackageIndex (BinaryPackageLocal, SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..), BinaryPackage(..), PackageID(..), makeSourcePackageID, makeBinaryPackageID, binaryPackageName, PackageIndexLocal, PackageIndex(..))
+import Debian.Repo.Types.PackageID (PackageID(..), makeSourcePackageID, makeBinaryPackageID)
+import Debian.Repo.Types.PackageIndex (SourceFileSpec(SourceFileSpec, sourceFileName), SourceControl(..), SourcePackage(..), BinaryPackage(..), PackageIndex(..))
 import Debian.Repo.Types.Release (Release(releaseName))
 import Debian.Repo.Types.Repo (RepoKey, repoKeyURI)
 import Debian.URI ( fileFromURIStrict )
@@ -73,7 +74,7 @@ sourceFilePaths package =
 -- generated this binary package.  
 binaryPackageSourceVersion :: BinaryPackage -> Maybe (String, DebianVersion)
 binaryPackageSourceVersion package =
-    let binaryName = binaryPackageName package
+    let binaryName = packageName . packageID $ package
         binaryVersion = packageVersion . packageID $ package in
     binarySourceVersion' binaryName binaryVersion (packageInfo package)
 
@@ -358,7 +359,7 @@ releaseBinaryPackages repo release =
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Write a set of packages into a package index.
-putPackages :: LocalRepository -> Release -> PackageIndexLocal ->  [BinaryPackageLocal] -> IO ()
+putPackages :: LocalRepository -> Release -> PackageIndex ->  [BinaryPackage] -> IO ()
 putPackages repo release index packages =
     writeAndZipFileWithBackup (outsidePath (repoRoot repo) </> packageIndexPath release index) (L.fromChunks [encodeUtf8 text]) >>= either (fail . intercalate "\n") return
     where

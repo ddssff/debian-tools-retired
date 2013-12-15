@@ -16,8 +16,9 @@ import Data.Set (toList)
 import Debian.Arch (Arch(Source, Binary), ArchCPU(..))
 import Debian.Control ()
 import qualified Debian.Control.Text as S ()
-import Debian.Repo.Types ( PackageVersion, PkgVersion(PkgVersion), prettyPkgVersion, pkgName, getName, getVersion, pkgVersion, BinaryPackage,
-                           binaryPackageName, packageID, pProvides, packageVersion)
+import Debian.Repo.Types.PackageID (PackageID (packageName, packageVersion))
+import Debian.Repo.Types.PackageIndex (BinaryPackage, packageID, pProvides)
+import Debian.Repo.Types.PackageVersion (PackageVersion, PkgVersion(PkgVersion), prettyPkgVersion, pkgVersion, pkgName, getName, getVersion)
 import Debian.Version ( DebianVersion )
 import Data.List ( sortBy, groupBy, intercalate, nub )
 import qualified Data.Map as Map ( insert, lookup, Map, empty, findWithDefault, fromListWith )
@@ -71,10 +72,10 @@ simplifyRelations available relations preferred arch =
     where
       relationsSimplified = expandVirtual arch nameMap providesMap relationsOfArch
           where
-            nameMap = listMap (map (\ package -> (binaryPackageName package, package)) available)
+            nameMap = listMap (map (\ package -> (packageName (packageID package), package)) available)
             providesMap =
                 listMap (concat (map (\ package -> 
-                                      let names = binaryPackageName package : map provides (pProvides package) in
+                                      let names = packageName (packageID package) : map provides (pProvides package) in
                                       map (\ name -> (name, package)) names) available))
             provides [Rel name Nothing Nothing] = name
             provides bzzt = error ("Invalid relation in Provides: " ++ show (map pretty bzzt))
@@ -104,7 +105,7 @@ expandVirtual arch nameMap providesMap relations =
       expand rel@(Rel name _ _) = map eqRel (filter (satisfies rel) (Map.findWithDefault [] name nameMap))
       eqRel :: BinaryPackage -> SimpleRelation
       eqRel package =
-          Just (PkgVersion {getName = binaryPackageName package, getVersion = packageVersion p})
+          Just (PkgVersion {getName = packageName (packageID package), getVersion = packageVersion p})
           where p = packageID package
       -- Does this package satisfy the relation?
       satisfies :: PackageVersion a => Relation -> a -> Bool

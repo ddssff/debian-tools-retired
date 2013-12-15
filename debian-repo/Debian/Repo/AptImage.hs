@@ -26,7 +26,8 @@ import Debian.Repo.Slice ( sourceSlices, binarySlices )
 import Debian.Repo.SourceTree ( DebianBuildTree(debTree'), DebianSourceTree(tree'), SourceTree(dir'), findDebianBuildTrees, entry )
 import Debian.Repo.Types.AptImage (AptImage(..), AptCache(..))
 import Debian.Repo.Types.EnvPath (EnvRoot(..))
-import Debian.Repo.Types.PackageIndex (SourcePackage(sourcePackageID), sourcePackageName, BinaryPackage, PackageID(packageVersion))
+import Debian.Repo.Types.PackageID (PackageID(packageVersion, packageName))
+import Debian.Repo.Types.PackageIndex (SourcePackage(sourcePackageID), BinaryPackage)
 import Debian.Repo.Types.Slice (NamedSliceList(sliceList, sliceListName), SliceList(slices))
 import Debian.Relation ( PkgName(..), SrcPkgName(..) )
 import Debian.Version ( DebianVersion, prettyDebianVersion )
@@ -145,7 +146,7 @@ aptGetSource :: (AptCache t)
 aptGetSource dir os package version =
     do liftIO $ createDirectoryIfMissing True dir
        ready <- findDebianBuildTrees dir
-       let newest = listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . sourcePackageName) . aptSourcePackages $ os
+       let newest = listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . packageName . sourcePackageID) . aptSourcePackages $ os
        let version' = maybe newest Just version
        case (version', ready) of
          (Nothing, _) ->

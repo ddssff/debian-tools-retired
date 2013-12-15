@@ -17,7 +17,7 @@ import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(p
 import Debian.Relation (BinPkgName(..))
 import Debian.Repo.Changes (findChangesFiles, changeKey, changePath)
 import Debian.Repo.Types.EnvPath (outsidePath)
-import Debian.Repo.Types.PackageIndex (PkgVersion(..), prettyPkgVersion, readPkgVersion, showPkgVersion)
+import Debian.Repo.Types.PackageVersion (PkgVersion(..), prettyPkgVersion, readPkgVersion, showPkgVersion)
 import Debian.Repo.Types.Release (Release(..))
 import Debian.Repo.Types.Repo (Repo(repoReleaseInfo))
 import Debian.Repo.Types.LocalRepository (LocalRepository, repoRoot)

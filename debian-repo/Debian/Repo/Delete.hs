@@ -29,9 +29,9 @@ import qualified Debian.Repo.Package as DRP (binaryPackageSourceID, sourcePackag
 import Debian.Repo.PackageIndex (packageIndexPath, packageIndexList, sourceIndexList, binaryIndexList)
 import Debian.Repo.Release (signRelease)
 import Debian.Repo.Types.EnvPath (EnvPath, outsidePath)
-import Debian.Repo.Types.PackageIndex (BinaryPackageLocal, binaryPackageName, PackageIDLocal,
-                                       BinaryPackage(packageID, packageInfo), PackageID, PackageIndexLocal, PackageIndex(..),
-                                       SourcePackage, PackageVersion(pkgVersion))
+import Debian.Repo.Types.PackageID (PackageID(packageName))
+import Debian.Repo.Types.PackageIndex (BinaryPackage(packageID, packageInfo), PackageIndex(..), SourcePackage)
+import Debian.Repo.Types.PackageVersion (PackageVersion(pkgVersion))
 import Debian.Repo.Types.LocalRepository (Layout(..), LocalRepository, repoLayout, repoRoot, repoReleaseInfoLocal)
 import Debian.Repo.Types.Release (Release(..))
 import Debian.Repo.Types.Repo (repoKey)
@@ -154,8 +154,8 @@ merge packages =
     where
       groupByName :: [(Release, PackageIndex, BinaryPackage)] -> [[(Release, PackageIndex, BinaryPackage)]]
       groupByName = groupBy equalNames . sortBy compareNames
-      equalNames (_, _, a') (_, _, b') = binaryPackageName a' == binaryPackageName b'
-      compareNames (_, _, a') (_, _, b') = compare (binaryPackageName a') (binaryPackageName b')
+      equalNames (_, _, a') (_, _, b') = packageName (packageID a') == packageName (packageID b')
+      compareNames (_, _, a') (_, _, b') = compare (packageName (packageID a')) (packageName (packageID b'))
       newestFirst = sortBy (flip compareVersions)
       compareVersions (_, _, a') (_, _, b') = compare (pkgVersion a') (pkgVersion b')
 
@@ -206,7 +206,7 @@ deleteGarbage repo =
           renameFile file (outsidePath root ++ "/removed/" ++ snd (splitFileName file))
 
 -- | Delete specific source packages and their associated binary packages.
-deleteSourcePackages :: Bool -> Maybe PGPKey -> LocalRepository -> [(Release, PackageIndex, PackageIDLocal BinPkgName)] -> IO [Release]
+deleteSourcePackages :: Bool -> Maybe PGPKey -> LocalRepository -> [(Release, PackageIndex, PackageID BinPkgName)] -> IO [Release]
 deleteSourcePackages _ _ _ [] = return []
 deleteSourcePackages dry keyname repo packages =
     do qPutStrLn ("deleteSourcePackages:\n " ++ intercalate"\n " (List.map (show . F.pretty . (\ (_, _, x) -> x)) packages))
@@ -232,20 +232,20 @@ deleteSourcePackages dry keyname repo packages =
       victim release index binaryPackage = Set.member (sourceIdent (release, index, binaryPackage)) (Set.fromList packages)
       getEntries :: Release -> PackageIndex -> IO [BinaryPackage]
       getEntries release index = DRP.getPackages (repoKey repo) release index >>= return . either (error . show) id
-      putIndex' :: Maybe PGPKey -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO Release
+      putIndex' :: Maybe PGPKey -> Release -> PackageIndex -> [BinaryPackage] -> IO Release
       putIndex' keyname release index entries =
           do let root = repoRoot repo
              case dry of
                True -> ePutStrLn ("dry run: not changing " ++ show index)
                False -> putIndex root release index entries >> signRelease keyname repo release
              return release
-      putIndex :: EnvPath -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO (Either [String] ())
+      putIndex :: EnvPath -> Release -> PackageIndex -> [BinaryPackage] -> IO (Either [String] ())
       putIndex root release index packages =
                 let text = formatControl (B.Control (List.map packageInfo packages)) in
                 liftIO $ writeAndZipFileWithBackup (outsidePath root </> packageIndexPath release index) (L.fromChunks [encodeUtf8 (mconcat text)])
 
 -- | Delete specific source packages and their associated binary packages.
-deleteBinaryPackages :: Bool -> Maybe PGPKey -> LocalRepository -> Set (Release, PackageIndex, PackageIDLocal BinPkgName) -> IO ()
+deleteBinaryPackages :: Bool -> Maybe PGPKey -> LocalRepository -> Set (Release, PackageIndex, PackageID BinPkgName) -> IO ()
 deleteBinaryPackages _ _ _ s | Set.null s = return ()
 deleteBinaryPackages dry keyname repo blacklist =
     mapM_ doIndex (Set.toList allIndexes)
@@ -272,14 +272,14 @@ deleteBinaryPackages dry keyname repo blacklist =
 
       getEntries :: Release -> PackageIndex -> IO [BinaryPackage]
       getEntries release index = DRP.getPackages (repoKey repo) release index >>= return . either (error . show) id
-      putIndex' :: Maybe PGPKey -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO Release
+      putIndex' :: Maybe PGPKey -> Release -> PackageIndex -> [BinaryPackage] -> IO Release
       putIndex' keyname release index entries =
           do let root = repoRoot repo
              case dry of
                True -> ePutStrLn ("dry run: not changing " ++ show index)
                False -> putIndex root release index entries >> signRelease keyname repo release
              return release
-      putIndex :: EnvPath -> Release -> PackageIndexLocal -> [BinaryPackageLocal] -> IO (Either [String] ())
+      putIndex :: EnvPath -> Release -> PackageIndex -> [BinaryPackage] -> IO (Either [String] ())
       putIndex root release index packages =
                 let text = formatControl (B.Control (List.map packageInfo packages)) in
                 liftIO $ writeAndZipFileWithBackup (outsidePath root </> packageIndexPath release index) (L.fromChunks [encodeUtf8 (mconcat text)])

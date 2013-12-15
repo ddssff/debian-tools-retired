@@ -37,7 +37,8 @@ import Debian.Repo.Slice (verifySourcesList)
 import Debian.Repo.SourcesList (parseSourcesList)
 import Debian.Repo.Types.AptImage (AptCache(aptArch, aptBaseSliceList, aptBinaryPackages, aptReleaseName, aptSourcePackages, globalCacheDir))
 import Debian.Repo.Types.EnvPath (EnvRoot(EnvRoot))
-import Debian.Repo.Types.PackageIndex (PackageID(packageVersion), PackageIndex(..), SourcePackage(sourcePackageID), sourcePackageName, BinaryPackage(packageID), binaryPackageName)
+import Debian.Repo.Types.PackageID (PackageID(packageVersion, packageName))
+import Debian.Repo.Types.PackageIndex (PackageIndex(..), SourcePackage(sourcePackageID), BinaryPackage(packageID))
 import Debian.Repo.Types.Release (Release(releaseName))
 import Debian.Repo.Types.Repo (Repo(repoReleaseInfo), repoKey, RepoKey)
 import Debian.Repo.Types.Slice (Slice(..))
@@ -97,7 +98,7 @@ aptSourcePackagesSorted os names =
     sortBy cmp . filterNames names . aptSourcePackages $ os
     where
       filterNames names' packages =
-          filter (flip elem names' . sourcePackageName) packages
+          filter (flip elem names' . packageName . sourcePackageID) packages
       cmp p1 p2 =
           compare v2 v1		-- Flip args to get newest first
           where
@@ -321,7 +322,7 @@ sourcePackages os names =
     where
       filterNames :: [SourcePackage] -> [SourcePackage]
       filterNames packages =
-          filter (flip elem names . sourcePackageName) packages
+          filter (flip elem names . packageName . sourcePackageID) packages
       cmp p1 p2 =
           compare v2 v1		-- Flip args to get newest first
           where
@@ -334,7 +335,7 @@ binaryPackages os names =
     where
       filterNames :: [BinaryPackage] -> [BinaryPackage]
       filterNames packages =
-          filter (flip elem names . binaryPackageName) packages
+          filter (flip elem names . packageName . packageID) packages
       cmp p1 p2 =
           compare v2 v1		-- Flip args to get newest first
           where
