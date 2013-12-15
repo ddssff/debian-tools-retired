@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Release
-    ( lookupRelease
-    , insertRelease
+    ( insertRelease
     , prepareRelease
     , findReleases
     , signRelease
@@ -10,10 +9,13 @@ module Debian.Repo.Release
     , mergeReleases
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Monad.State (MonadIO(..), filterM, liftM)
 import qualified Data.ByteString.Lazy.Char8 as L ( empty, readFile )
 import Data.Digest.Pure.MD5 (md5)
+import Data.Lens.Lazy (getL, modL)
 import Data.List (group, intercalate, sort)
+import Data.Map as Map (lookup, insert)
 import Data.Maybe ( catMaybes )
 import Data.Monoid ((<>))
 import Data.Text as T (Text, pack, intercalate)
@@ -21,12 +23,13 @@ import Data.Time ( getCurrentTime )
 import Debian.Arch (Arch(..), prettyArch)
 import qualified Debian.Control.Text as S ( Field'(Field), Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue )
 import Debian.Release (Section, ReleaseName, releaseName', sectionName')
-import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), findRelease, putRelease )
+import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), releaseMap)
 import Debian.Repo.PackageIndex ( packageIndexName, packageIndexDir, releaseDir, packageIndexList )
 import Debian.Repo.Types.EnvPath (outsidePath)
 import Debian.Repo.Types.LocalRepository (LocalRepository, repoLayout, repoRoot, repoReleaseInfoLocal, prepareLocalRepository)
 import Debian.Repo.Types.PackageIndex (PackageIndex(packageIndexArch, packageIndexComponent))
 import Debian.Repo.Types.Release (Release(..), parseComponents, parseArchitectures)
+import Debian.Repo.Types.Repo (Repo(repoKey))
 import Debian.Repo.Types.Repository (Repository, fromLocalRepository)
 import qualified Extra.Files as EF ( maybeWriteFile, prepareSymbolicLink, writeAndZipFile )
 import qualified Extra.GPGSign as EG ( PGPKey, pgpSignFiles, cd )
@@ -39,12 +42,10 @@ import System.Process.Progress (qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 lookupRelease :: MonadApt m => Repository -> ReleaseName -> m (Maybe Release)
-lookupRelease repo dist = getApt >>= return . findRelease repo dist
+lookupRelease repo dist = (Map.lookup (repoKey repo, dist) . getL releaseMap) <$> getApt
 
-insertRelease :: MonadApt m => Repository -> Release -> m Release
-insertRelease repo release =
-    getApt >>= putApt . putRelease repo dist release >> return release
-    where dist = releaseName release
+insertRelease :: MonadApt m => Repository -> Release -> m ()
+insertRelease repo release = getApt >>= putApt . modL releaseMap (Map.insert (repoKey repo, releaseName release) release)
 
 -- | Find or create a (local) release.
 prepareRelease :: MonadApt m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> m Release
@@ -68,6 +69,7 @@ prepareRelease repo dist aliases sections archList =
              repo' <- prepareLocalRepository root (repoLayout repo)
              --vPutStrLn 0 $ "prepareRelease: prepareLocalRepository -> " ++ show repo'
              insertRelease (fromLocalRepository repo') release
+             return release
       initIndex root' release index = initIndexFile (root' </> packageIndexDir release index) (packageIndexName index)
       initIndexFile dir name =
           do liftIO $ createDirectoryIfMissing True dir
@@ -187,12 +189,13 @@ findLocalRelease repo releaseInfo =
                Right (S.Control (paragraph : _)) ->
                    case (S.fieldValue "Components" paragraph, S.fieldValue "Architectures" paragraph) of
                      (Just components, Just architectures) ->
-                         insertRelease (fromLocalRepository repo)
-                                       (Release
+                         do let rel = (Release
                                         { releaseName = dist
                                         , releaseAliases = releaseAliases releaseInfo
                                         , releaseComponents = parseComponents components
                                         , releaseArchitectures = parseArchitectures architectures})
+                            insertRelease (fromLocalRepository repo) rel
+                            return rel
                      _ ->
                          error $ "Invalid release file: " ++ path
                _ -> error $ "Invalid release file: " ++ path

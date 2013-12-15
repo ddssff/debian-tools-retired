@@ -1,10 +1,11 @@
-{-# LANGUAGE FlexibleInstances, StandaloneDeriving, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances, PackageImports, StandaloneDeriving, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types.Repo
     ( Repo(..)
     , RepoKey(..)
     , repoURI
     , repoKeyURI
+    , repoArchList
     , libraryCompatibilityLevel
     , compatibilityFile
     ) where
@@ -13,10 +14,12 @@ import Control.Exception (throw)
 import Data.Char (isDigit)
 import Data.Maybe (fromJust)
 import Data.Text (unpack)
+import Debian.Arch (Arch)
 import Debian.Repo.Types.EnvPath (EnvPath(..))
-import Debian.Repo.Types.Release (Release)
+import Debian.Repo.Types.Release (Release(releaseArchitectures))
 import Debian.URI (fileFromURI, fromURI', URI')
 import qualified Debian.UTF8 as Deb (decode)
+import "Extra" Extra.List ( listIntersection )
 import Network.URI (parseURI, URI(uriPath))
 import System.FilePath ((</>))
 
@@ -71,3 +74,6 @@ repoURI = repoKeyURI . repoKey
 repoKeyURI :: RepoKey -> URI
 repoKeyURI (Local path) = fromJust . parseURI $ "file://" ++ envPath path
 repoKeyURI (Remote uri) = fromURI' uri
+
+repoArchList :: Repo r => r -> [Arch]
+repoArchList repo = listIntersection (map releaseArchitectures (repoReleaseInfo repo))

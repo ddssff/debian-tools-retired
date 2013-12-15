@@ -16,7 +16,7 @@ import Debian.Relation (BinPkgName)
 import Debian.Release (ReleaseName, releaseName', parseReleaseName, Section, parseSection')
 import Debian.Repo.Delete (deleteSourcePackages, deleteTrumped, deleteBinaryOrphans, deleteGarbage)
 import Debian.Repo.Insert (scanIncoming, InstallResult, explainError, resultToProblems, showErrors)
-import Debian.Repo.Monads.Apt (MonadApt, runAptIO)
+import Debian.Repo.Monads.Apt (MonadApt, runAptT)
 import Debian.Repo.Release (findReleases, prepareRelease, signReleases, mergeReleases)
 import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath, envPath)
 import Debian.Repo.Types.LocalRepository (LocalRepository, Layout, repoRoot, prepareLocalRepository, setRepositoryCompatibility)
@@ -48,7 +48,7 @@ main =
        let lockPath = outsidePath (root flags) ++ "/newdist.lock"
        liftIO $ createDirectoryIfMissing True (outsidePath (root flags))
        case printVersion flags of
-         False -> withLock lockPath (runAptIO (runFlags flags))
+         False -> withLock lockPath (runAptT (runFlags flags))
          True -> IO.putStrLn myVersion >> exitWith ExitSuccess
 
 -- dry :: Params -> IO () -> IO ()

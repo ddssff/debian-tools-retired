@@ -11,7 +11,7 @@ import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatc
 import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Map as Map (empty, fromList, Map, toList, union)
 import Data.Maybe (fromMaybe)
-import Debian.Repo.Monads.Apt (AptIOT, MonadApt(getRepoCache, putRepoCache), runAptT)
+import Debian.Repo.Monads.Apt (AptT, MonadApt(getRepoCache, putRepoCache), runAptT)
 import Debian.Repo.Monads.Top (MonadTop, runTopT, sub, TopT)
 import Debian.Repo.Types.RemoteRepository (RemoteRepository)
 import Debian.URI (URI')
@@ -19,21 +19,13 @@ import System.IO.Error (isDoesNotExistError)
 import qualified System.Posix.Files as F (removeLink)
 import System.Process.Progress (qPutStrLn)
 
-{-
-class MonadIO m => MonadRepoCache m where
-
-instance MonadApt m => MonadRepoCache m where
-    getRepoCache = getApt >>= return . getRepoMap
-    putRepoCache mp = modifyRepoCache (const mp)
--}
-
 -- | Like @MonadApt@, but is also an instance of MonadTop and tries to
 -- load and save a list of cached repositories from @top/repoCache@.
 class (MonadApt m, MonadTop m) => MonadDeb m
 
 instance MonadApt m => MonadDeb (TopT m)
 
-type DebT m = TopT (AptIOT m)
+type DebT m = TopT (AptT m)
 
 -- | To run a DebT we bracket an action with commands to load and save
 -- the repository list.

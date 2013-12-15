@@ -20,17 +20,19 @@ module Debian.Repo.Types.PackageIndex
     , PackageVersion(..)
     , PkgVersion(..)
     , prettyPkgVersion
+    , readPkgVersion
+    , showPkgVersion
     ) where
 
+import Control.Arrow (second)
 import Data.Text (Text)
 import Debian.Arch (Arch(..))
 import qualified Debian.Control.Text as T
 import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Release (Section(..))
-import Debian.Version ( DebianVersion, prettyDebianVersion )
+import Debian.Version (DebianVersion, prettyDebianVersion, parseDebianVersion)
 import System.Posix.Types ( FileOffset )
---import System.Unix.QIO (quieter, qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), Pretty(pretty))
 
 deriving instance Show (T.Field' Text)
@@ -162,3 +164,10 @@ data SourceFileSpec
 type PackageIDLocal n = PackageID n
 type BinaryPackageLocal = BinaryPackage
 type SourcePackageLocal = SourcePackage
+
+showPkgVersion :: PkgVersion -> String
+showPkgVersion v = show (prettyPkgVersion v)
+
+readPkgVersion :: String -> PkgVersion
+readPkgVersion s = case second (parseDebianVersion . (drop 1)) (span (/= '=') s) of
+                     (n, v) -> PkgVersion { getName = BinPkgName n, getVersion = v }

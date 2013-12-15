@@ -29,10 +29,10 @@ import Control.Exception (SomeException, try)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
-data Source = LocalPath FilePath | RemotePath URI
-
 -- |A file whose contents have been read into memory.
 data File a = File { path :: Source, text :: Failing a }
+
+data Source = LocalPath FilePath | RemotePath URI
 
 readFile :: FilePath -> IO (File T.Text)
 readFile x = File <$> return (LocalPath x) <*> (try (T.readFile x) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success)

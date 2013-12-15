@@ -27,9 +27,8 @@ import Debian.Control (lookupP, unControl, stripWS)
 import qualified Debian.Control.String as S
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (Relation(Rel), BinPkgName(..))
-import Debian.Repo.Repository (readPkgVersion, showPkgVersion)
 import Debian.Repo.SourceTree (DebianSourceTreeC(entry), SourcePackageStatus(..))
-import Debian.Repo.Types (SourcePackage(sourceParagraph, sourcePackageID), PkgVersion(PkgVersion, getName, getVersion), BinaryPackage(packageID), PackageID(packageVersion), binaryPackageName, prettyPkgVersion)
+import Debian.Repo.Types.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), PkgVersion(PkgVersion, getName, getVersion), BinaryPackage(packageID), PackageID(packageVersion), binaryPackageName, prettyPkgVersion, readPkgVersion, showPkgVersion)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.VersionPolicy(dropTag, parseTag)
 import Extra.Misc(columns)

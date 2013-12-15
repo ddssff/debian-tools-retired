@@ -56,7 +56,7 @@ import Debian.Sources (SliceName(..))
 import Debian.Repo (chrootEnv, syncEnv, syncPool, updateEnv, withProc)
 import Debian.Repo.Cache (binaryPackages, buildArchOfEnv, sourcePackages, aptSourcePackagesSorted)
 import Debian.Repo.Dependencies (simplifyRelations, solutions)
-import Debian.Repo.Changes (save, uploadLocal)
+import Debian.Repo.Changes (saveChangesFile, uploadLocal)
 import Debian.Repo.Insert (scanIncoming, showErrors)
 import Debian.Repo.OSImage (OSImage, updateLists)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
@@ -864,7 +864,7 @@ setRevisionInfo fingerprint changes {- @(Changes dir name version arch fields fi
                   do
                     size <- getFileStatus dscFilePath >>= return . fileSize
                     let changes' = changes {changeFiles = (otherFiles ++ [file {changedFileMD5sum = md5, changedFileSHA1sum = sha1, changedFileSHA256sum = sha256, changedFileSize = size}])}
-                    Debian.Repo.Changes.save changes'
+                    saveChangesFile changes'
                     return changes'
               e -> error (show e)
       -- A binary only build will have no .dsc file

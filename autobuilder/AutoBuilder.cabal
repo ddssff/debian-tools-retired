@@ -38,7 +38,7 @@ flag local-debian
 Library
 
   if flag(local-debian-repo)
-    Build-Depends: deepseq
+    Build-Depends: deepseq, data-lens, data-lens-template
     if flag(local-debian)
       Hs-Source-Dirs: ., ../../haskell-debian, ../debian-repo
     else

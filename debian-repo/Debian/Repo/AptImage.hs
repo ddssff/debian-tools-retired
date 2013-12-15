@@ -9,12 +9,19 @@ module Debian.Repo.AptImage
     , aptGetSource
     ) where
 
+import Control.Monad.Trans ( liftIO )
+import qualified Data.ByteString.Lazy as L
+import Data.Function ( on )
+import Data.Lens.Lazy (getL, modL)
+import Data.List ( intercalate, sortBy )
+import Data.Map as Map (lookup, insert)
+import Data.Maybe ( listToMaybe )
 import Debian.Changes ( ChangeLogEntry(logVersion) )
 import Debian.Release (ReleaseName(..))
 import Debian.Sources (SliceName(sliceName))
 import Debian.Repo.Cache ( SourcesChangedAction, cacheRootDir, sliceIndexes, buildArchOfRoot, updateCacheSources )
 import Debian.Repo.Package ( sourcePackagesOfIndex', binaryPackagesOfIndex' )
-import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), lookupAptImage, insertAptImage )
+import Debian.Repo.Monads.Apt (MonadApt(getApt, putApt), aptImageMap)
 import Debian.Repo.Slice ( sourceSlices, binarySlices )
 import Debian.Repo.SourceTree ( DebianBuildTree(debTree'), DebianSourceTree(tree'), SourceTree(dir'), findDebianBuildTrees, entry )
 import Debian.Repo.Types.AptImage (AptImage(..), AptCache(..))
@@ -23,11 +30,6 @@ import Debian.Repo.Types.PackageIndex (SourcePackage(sourcePackageID), sourcePac
 import Debian.Repo.Types.Slice (NamedSliceList(sliceList, sliceListName), SliceList(slices))
 import Debian.Relation ( PkgName(..), SrcPkgName(..) )
 import Debian.Version ( DebianVersion, prettyDebianVersion )
-import Control.Monad.Trans ( liftIO )
-import qualified Data.ByteString.Lazy as L
-import Data.Function ( on )
-import Data.List ( intercalate, sortBy )
-import Data.Maybe ( listToMaybe )
 import Extra.Files ( writeFileIfMissing, replaceFile )
 import System.Unix.Directory ( removeRecursiveSafely )
 import System.Process (shell)
@@ -60,7 +62,7 @@ prepareAptEnv :: MonadApt m =>
               -> m AptImage		-- The resulting environment
 prepareAptEnv cacheDir sourcesChangedAction sources =
     (\ x -> qPutStrLn ("Preparing apt-get environment for " ++ show (sliceName (sliceListName sources))) >> quieter 2 x) $
-    getApt >>= return . lookupAptImage (sliceListName sources) >>=
+    getApt >>= return . Map.lookup (sliceListName sources) . getL aptImageMap >>=
     maybe (prepareAptEnv' cacheDir sourcesChangedAction sources) return
 
 -- |Create a skeletal enviroment sufficient to run apt-get.
@@ -90,7 +92,7 @@ prepareAptEnv' cacheDir sourcesChangedAction sources =
                          , aptImageSourcePackages = []
                          , aptImageBinaryPackages = [] }
        os' <- updateCacheSources sourcesChangedAction os >>= updateAptEnv
-       getApt >>= putApt . insertAptImage (sliceListName sources) os'
+       getApt >>= putApt . modL aptImageMap (Map.insert (sliceListName sources) os')
        return os'
 
 -- |Run apt-get update and then retrieve all the packages referenced

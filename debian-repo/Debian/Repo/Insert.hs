@@ -27,18 +27,17 @@ import qualified Debian.Control.Text as B ( Field'(Field), Paragraph, Field, Con
                                                   appendFields, fieldValue, modifyField, raiseFields, renameField )
 import qualified Debian.Control.Text as S ( Control'(Control), ControlFunctions(parseControlFromFile) )
 import Debian.Relation (PkgName, BinPkgName)
-import Debian.Repo.Changes ( findChangesFiles, name, path )
+import Debian.Repo.Changes (findChangesFiles, changeName, changePath)
 import Debian.Repo.Monads.Apt (MonadApt)
 import qualified Debian.Repo.Package as DRP ( sourceFilePaths, toBinaryPackage, getPackages, releaseSourcePackages, releaseBinaryPackages, putPackages )
 import Debian.Repo.Release ( prepareRelease, signRelease, findReleases )
-import Debian.Repo.Repository ( repoArchList )
 import Debian.Release (SubSection(section), Section(..), ReleaseName, parseSection', releaseName', sectionName, sectionName')
 import Debian.Repo.Types.EnvPath (EnvPath, outsidePath)
 import Debian.Repo.Types.LocalRepository (LocalRepository, Layout(..), repoLayout, repoRoot, poolDir')
 import Debian.Repo.Types.PackageIndex (BinaryPackageLocal, prettyBinaryPackage, SourcePackage(sourcePackageID), sourcePackageName,
                                        BinaryPackage(packageID, packageInfo), PackageID(packageVersion), prettyPackageID, PackageIndexLocal,PackageIndex(..))
 import Debian.Repo.Types.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
-import Debian.Repo.Types.Repo (repoKey)
+import Debian.Repo.Types.Repo (repoKey, repoArchList)
 import Debian.Repo.Types.Repository (Repository)
 import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
 import Debian.Version.Text ()
@@ -353,17 +352,17 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
           do --vPutStrBl 1 stderr $ "  finish Rejected " ++ changesFileName changes
              mapM_ (\ name -> moveFile (outsidePath root ++ "/incoming/" ++ name) (outsidePath root ++ "/reject/" ++ name))
                       (List.map changedFileName (changeFiles changes))
-             moveFile (outsidePath root ++ "/incoming/" ++ Debian.Repo.Changes.name changes)
-                                (outsidePath root ++ "/reject/" ++ Debian.Repo.Changes.name changes)
+             moveFile (outsidePath root ++ "/incoming/" ++ changeName changes)
+                                (outsidePath root ++ "/reject/" ++ changeName changes)
       finish _ _ changes (Failed _) =
           do qPutStrLn $ "  Finish Failed " ++ changesFileName changes
              return ()
       installChangesFile :: EnvPath -> Layout -> ChangesFile -> IO ()
       installChangesFile root layout changes =
-          liftIO (moveFile (Debian.Repo.Changes.path changes) dst)
+          liftIO (moveFile (changePath changes) dst)
           where dst = case layout of
-                        Flat -> outsidePath root </> Debian.Repo.Changes.name changes
-                        Pool -> outsidePath root ++ "/installed/" ++ Debian.Repo.Changes.name changes
+                        Flat -> outsidePath root </> changeName changes
+                        Pool -> outsidePath root ++ "/installed/" ++ changeName changes
       findOrCreateRelease :: MonadApt m => [Release] -> ReleaseName -> m (Maybe Release)
       findOrCreateRelease releases name =
           case createSections of

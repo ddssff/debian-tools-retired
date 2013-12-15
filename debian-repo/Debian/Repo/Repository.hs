@@ -1,9 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables, PackageImports #-}
 module Debian.Repo.Repository
-    ( repoArchList
-    , readPkgVersion
-    , showPkgVersion
-    , verifyUploadURI
+    ( verifyUploadURI
     , uploadRemote
     ) where
 
@@ -15,12 +12,12 @@ import Data.List (sortBy, groupBy, isSuffixOf)
 import Data.Time ( NominalDiffTime )
 import qualified Data.Set as Set ( member, fromList )
 import Debian.Arch (Arch, parseArch)
-import Debian.Changes ( ChangesFile(changeDir, changePackage, changeRelease, changeVersion) )
+import Debian.Changes (ChangesFile(changeDir, changePackage, changeRelease, changeVersion))
 import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(parseControlFromFile), fieldValue)
 import Debian.Relation (BinPkgName(..))
-import Debian.Repo.Changes ( findChangesFiles, key, path )
+import Debian.Repo.Changes (findChangesFiles, changeKey, changePath)
 import Debian.Repo.Types.EnvPath (outsidePath)
-import Debian.Repo.Types.PackageIndex (PkgVersion(..), prettyPkgVersion)
+import Debian.Repo.Types.PackageIndex (PkgVersion(..), prettyPkgVersion, readPkgVersion, showPkgVersion)
 import Debian.Repo.Types.Release (Release(..))
 import Debian.Repo.Types.Repo (Repo(repoReleaseInfo))
 import Debian.Repo.Types.LocalRepository (LocalRepository, repoRoot)
@@ -140,10 +137,10 @@ uploadRemote repo uri =
       compareNameAndDist (Failure _) (Success _) = LT
       compareNameAndDist (Success _) (Failure _) = GT
       compareNameAndDist (Failure _) (Failure _) = EQ
-      notUploaded uploaded changes = not . Set.member (Debian.Repo.Changes.key changes) $ uploaded
+      notUploaded uploaded changes = not . Set.member (changeKey changes) $ uploaded
       --showReject (changes, tag) = Debian.Repo.Changes.name changes ++ ": " ++ tag
       dupload' (Failure x) = return (Failure x)
-      dupload' (Success c) = liftIO (dupload uri (outsidePath root) (Debian.Repo.Changes.path c))
+      dupload' (Success c) = liftIO (dupload uri (outsidePath root) (changePath c))
 
 validRevision' :: Failing ChangesFile -> IO (Failing ChangesFile)
 validRevision' (Failure x) = return (Failure x)
@@ -197,13 +194,6 @@ parseUploadFilename dir name =
       Just [_, name', version, arch] -> Success (Upload dir name' (parseDebianVersion version) (parseArch arch))
       _ -> Failure ["Invalid .upload file name: " ++ name]
 
-showPkgVersion :: PkgVersion -> String
-showPkgVersion v = show (prettyPkgVersion v)
-
-readPkgVersion :: String -> PkgVersion
-readPkgVersion s = case second (parseDebianVersion . (drop 1)) (span (/= '=') s) of
-                     (n, v) -> PkgVersion { getName = BinPkgName n, getVersion = v }
-
 {-
 accept :: (a -> Bool) -> (a -> (a, String)) -> ([a], [(a, String)]) -> ([a], [(a, String)])
 accept p tag (accepted, rejected) =
@@ -255,7 +245,3 @@ doCode cmd _ (ExitFailure n) =
 
 ignore :: forall a. IO (Either String [Output L.ByteString]) -> a -> IO (Either String [Output L.ByteString])
 ignore result _ = result
-
-repoArchList :: Repo r => r -> [Arch]
-repoArchList repo =
-    listIntersection (map releaseArchitectures (repoReleaseInfo repo))

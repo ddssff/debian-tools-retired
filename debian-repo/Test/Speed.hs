@@ -10,7 +10,7 @@ import Data.Either (partitionEithers)
 import Data.List as List (intercalate, map)
 import Data.Set as Set (Set, unions, fromList, size)
 import Debian.Arch (Arch(..))
-import Debian.Repo (runAptIO, findReleases)
+import Debian.Repo (runAptT, findReleases)
 import Debian.Repo.PackageIndex ( packageIndexPath, sourceIndexList, binaryIndexList )
 import Debian.Repo.Types (rootEnvPath, Release, PackageIndex(packageIndexArch),
                           BinaryPackage(..), SourcePackage)
@@ -50,7 +50,7 @@ root = rootEnvPath "/srv/deb/ubuntu"
 
 -- | How long does it take to parse the files in a repository?
 main :: IO ()
-main = runAptIO $ quieter (- 3) $
+main = runAptT $ quieter (- 3) $
     do repo <- prepareLocalRepository root (Just Pool)
        releases <- findReleases repo
        sources <- mapM (liftIO . releaseSourcePackages . (fromLocalRepository repo,)) releases >>= return . Set.unions
