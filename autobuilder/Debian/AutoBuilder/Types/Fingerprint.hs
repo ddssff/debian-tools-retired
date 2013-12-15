@@ -27,10 +27,11 @@ import Debian.Control (lookupP, unControl, stripWS)
 import qualified Debian.Control.String as S
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (Relation(Rel), BinPkgName(..))
+import Debian.Repo.Dependencies (prettySimpleRelation, readSimpleRelation, showSimpleRelation)
 import Debian.Repo.SourceTree (DebianSourceTreeC(entry), SourcePackageStatus(..))
-import Debian.Repo.Types.PackageID (PackageID(packageName, packageVersion))
+import Debian.Repo.Types.PackageID (PackageID(PackageID, packageName, packageVersion))
 import Debian.Repo.Types.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageID))
-import Debian.Repo.Types.PackageVersion (PkgVersion(PkgVersion, getName, getVersion), prettyPkgVersion, readPkgVersion, showPkgVersion)
+-- import Debian.Repo.Types.PackageVersion (PkgVersion(PkgVersion, getName, getVersion))
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.VersionPolicy(dropTag, parseTag)
 import Extra.Misc(columns)
@@ -47,7 +48,7 @@ data Fingerprint
                   (Maybe DebianVersion)
                   -- The version number in the changelog of the freshly downloaded
                   -- package, before any suffix is added by the autobuilder.
-                  [PkgVersion]
+                  [PackageID BinPkgName]
                   -- The names and version numbers of the build dependencies which
                   -- were present when the package was build.
                   (Maybe DebianVersion)
@@ -73,22 +74,22 @@ packageFingerprint (Just package) =
                       case words etc of
                         (sourceVersion : buildDeps)
                           | not (elem '=' sourceVersion) ->
-                              Fingerprint method' (Just (parseDebianVersion sourceVersion)) (map readPkgVersion buildDeps) (Just . packageVersion . sourcePackageID $ package)
-                        buildDeps -> Fingerprint method' Nothing (map readPkgVersion buildDeps) (Just . packageVersion . sourcePackageID $ package)
+                              Fingerprint method' (Just (parseDebianVersion sourceVersion)) (map readSimpleRelation buildDeps) (Just . packageVersion . sourcePackageID $ package)
+                        buildDeps -> Fingerprint method' Nothing (map readSimpleRelation buildDeps) (Just . packageVersion . sourcePackageID $ package)
             _ -> NoFingerprint
 
 showFingerprint :: Fingerprint -> S.Field
 showFingerprint (Fingerprint method (Just sourceVersion) versions _) =
-    S.Field ("Fingerprint", " " ++ show (show method) ++ " " ++ show (prettyDebianVersion sourceVersion) ++ " " ++ intercalate " " (map showPkgVersion versions))
+    S.Field ("Fingerprint", " " ++ show (show method) ++ " " ++ show (prettyDebianVersion sourceVersion) ++ " " ++ intercalate " " (map showSimpleRelation versions))
 showFingerprint _ = error "missing fingerprint info"
 
 showDependencies :: Fingerprint -> [String]
-showDependencies (Fingerprint _ _ deps _) = map showPkgVersion deps
+showDependencies (Fingerprint _ _ deps _) = map showSimpleRelation deps
 showDependencies _ = []
 
 -- | Show the dependency list without the version numbers.
 showDependencies' :: Fingerprint -> [String]
-showDependencies' (Fingerprint _ _ deps _) = map (show . pretty . getName) deps
+showDependencies' (Fingerprint _ _ deps _) = map (show . pretty . packageName) deps
 showDependencies' _ = []
 
 dependencyChanges :: Fingerprint -> Fingerprint -> String
@@ -100,10 +101,10 @@ dependencyChanges old new =
       padded = map concat . columns . map showDepChange $ changedDeps
       changedDeps = Set.toList (Set.difference (Set.fromList (deps new)) (Set.fromList (deps new)))
       showDepChange newDep =
-          case filter (hasName (getName newDep)) (deps old) of
-            [] -> [" " ++ unBinPkgName (getName newDep) ++ ": ", "(none)", " -> ", show (prettyDebianVersion (getVersion newDep))]
-            (oldDep : _) -> [" " ++ unBinPkgName (getName newDep) ++ ": ", show (prettyDebianVersion (getVersion oldDep)), " -> ", show (prettyDebianVersion (getVersion newDep))]
-      hasName name = ((== name) . getName)
+          case filter (hasName (packageName newDep)) (deps old) of
+            [] -> [" " ++ unBinPkgName (packageName newDep) ++ ": ", "(none)", " -> ", show (prettyDebianVersion (packageVersion newDep))]
+            (oldDep : _) -> [" " ++ unBinPkgName (packageName newDep) ++ ": ", show (prettyDebianVersion (packageVersion oldDep)), " -> ", show (prettyDebianVersion (packageVersion newDep))]
+      hasName name = ((== name) . packageName)
       prefix = "\n    "
       deps (Fingerprint _ _ x _) = x
       deps NoFingerprint = []
@@ -126,10 +127,10 @@ targetFingerprint target buildDependencySolution =
 -- |Convert to a simple name and version record to interface with older
 -- code.
 
-makeVersion :: BinaryPackage -> PkgVersion
+makeVersion :: BinaryPackage -> PackageID BinPkgName
 makeVersion package =
-    PkgVersion { getName = packageName (packageID package)
-               , getVersion = packageVersion (packageID package) }
+    PackageID { packageName = packageName (packageID package)
+              , packageVersion = packageVersion (packageID package) }
 
 -- |Represents a decision whether to build a package, with a text juststification.
 data BuildDecision
@@ -202,10 +203,10 @@ buildDecision cache target (Fingerprint _ oldSrcVersion builtDependencies repoVe
                   Arch ("Version " ++ maybe "Nothing" show (fmap prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missing ++ ")")
             _ | badDependencies /= [] && not allowBuildDependencyRegressions ->
                   Error ("Build dependency regression (allow with --allow-build-dependency-regressions): " ++ 
-                         concat (intersperse ", " (map (\ ver -> show (fmap prettyPkgVersion (builtVersion ver)) ++ " -> " ++ show (prettyPkgVersion ver)) badDependencies)))
+                         concat (intersperse ", " (map (\ ver -> show (prettySimpleRelation (builtVersion ver)) ++ " -> " ++ show (prettySimpleRelation (Just ver))) badDependencies)))
               | badDependencies /= [] ->
                   Auto ("Build dependency regression: " ++ 
-                        concat (intersperse ", " (map (\ ver -> show (fmap prettyPkgVersion (builtVersion ver)) ++ " -> " ++ show (prettyPkgVersion ver)) badDependencies)))
+                        concat (intersperse ", " (map (\ ver -> show (prettySimpleRelation (builtVersion ver)) ++ " -> " ++ show (prettySimpleRelation (Just ver))) badDependencies)))
               | autobuiltDependencies /= [] && isNothing oldSrcVersion ->
 		  -- If oldSrcVersion is Nothing, the autobuilder didn't make the previous build
                   -- so there are no recorded build dependencies.  In that case we don't really
@@ -233,13 +234,13 @@ buildDecision cache target (Fingerprint _ oldSrcVersion builtDependencies repoVe
       buildDependencyChangeText dependencies =
           "  " ++ intercalate "\n  " changes
           where
-            changes = map (\ (built, new) -> show (fmap prettyPkgVersion built) ++ " -> " ++ show (prettyPkgVersion new)) (zip builtVersions dependencies)
+            changes = map (\ (built, new) -> show (prettySimpleRelation built) ++ " -> " ++ show (prettySimpleRelation (Just new))) (zip builtVersions dependencies)
             builtVersions = map findDepByName dependencies
-            findDepByName new = find (\ old -> getName new == getName old) builtDependencies
+            findDepByName new = find (\ old -> packageName new == packageName old) builtDependencies
       -- The list of the revved and new dependencies which were built by the autobuilder.
       autobuiltDependencies = filter isTagged (revvedDependencies ++ newDependencies)
-      isTagged :: PkgVersion -> Bool
-      isTagged dep = isJust . snd . parseTag allTags . getVersion $ dep
+      isTagged :: PackageID BinPkgName -> Bool
+      isTagged dep = isJust . snd . parseTag allTags . packageVersion $ dep
       allTags :: [String]
       allTags = vendorTag : oldVendorTags
       -- If we are deciding whether to rebuild the same version of the source package,
@@ -254,18 +255,18 @@ buildDecision cache target (Fingerprint _ oldSrcVersion builtDependencies repoVe
           where
             -- If any dependency is older than the one we last built with it is an error.
             (bad, notBad) = partition isOlder sourceDependencies'
-            isOlder x = maybe False (\ built -> getVersion built > getVersion x) (builtVersion x)
+            isOlder x = maybe False (\ built -> packageVersion built > packageVersion x) (builtVersion x)
             -- If a dependency is newer it generally triggers a rebuild.
             (changed, notChanged) = partition isNewer notBad
-            isNewer x = maybe False (\ built -> getVersion built < getVersion x) (builtVersion x)
+            isNewer x = maybe False (\ built -> packageVersion built < packageVersion x) (builtVersion x)
 	    -- Dependencies which we have never seen before also generally trigger a rebuild.
             (new, unchanged) = partition (isNothing . builtVersion) notChanged
 	    -- What version of this dependency was most recently used to build?
-      builtVersion x = maybe Nothing (\ ver -> Just (PkgVersion (getName x) ver)) (Map.findWithDefault Nothing (getName x) builtDeps)
-      builtDeps = Map.fromList (map (\ p -> (getName p, Just (getVersion p))) builtDependencies)
+      builtVersion x = maybe Nothing (\ ver -> Just (PackageID (packageName x) ver)) (Map.findWithDefault Nothing (packageName x) builtDeps)
+      builtDeps = Map.fromList (map (\ p -> (packageName p, Just (packageVersion p))) builtDependencies)
       -- Remove any package not mentioned in the relaxed dependency list
       -- from the list of build dependencies which can trigger a rebuild.
-      sourceDependencies' = filter (\ x -> elem (getName x) (packageNames (targetRelaxed (relaxDepends cache (tgt target)) target))) sourceDependencies
+      sourceDependencies' = filter (\ x -> elem (packageName x) (packageNames (targetRelaxed (relaxDepends cache (tgt target)) target))) sourceDependencies
       -- All the package names mentioned in a dependency list
       packageNames :: G.DepInfo -> [BinPkgName]
       packageNames info {-(_, deps, _)-} = nub (map (\ (Rel name _ _) -> name) (concat (G.relations info)))

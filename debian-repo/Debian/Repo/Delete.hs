@@ -29,9 +29,8 @@ import qualified Debian.Repo.Package as DRP (binaryPackageSourceID, sourcePackag
 import Debian.Repo.PackageIndex (packageIndexPath, packageIndexList, sourceIndexList, binaryIndexList)
 import Debian.Repo.Release (signRelease)
 import Debian.Repo.Types.EnvPath (EnvPath, outsidePath)
-import Debian.Repo.Types.PackageID (PackageID(packageName))
+import Debian.Repo.Types.PackageID (PackageID(packageName, packageVersion))
 import Debian.Repo.Types.PackageIndex (BinaryPackage(packageID, packageInfo), PackageIndex(..), SourcePackage)
-import Debian.Repo.Types.PackageVersion (PackageVersion(pkgVersion))
 import Debian.Repo.Types.LocalRepository (Layout(..), LocalRepository, repoLayout, repoRoot, repoReleaseInfoLocal)
 import Debian.Repo.Types.Release (Release(..))
 import Debian.Repo.Types.Repo (repoKey)
@@ -157,7 +156,7 @@ merge packages =
       equalNames (_, _, a') (_, _, b') = packageName (packageID a') == packageName (packageID b')
       compareNames (_, _, a') (_, _, b') = compare (packageName (packageID a')) (packageName (packageID b'))
       newestFirst = sortBy (flip compareVersions)
-      compareVersions (_, _, a') (_, _, b') = compare (pkgVersion a') (pkgVersion b')
+      compareVersions (_, _, a') (_, _, b') = compare (packageVersion (packageID a')) (packageVersion (packageID b'))
 
 -- | Collect files that no longer appear in any package index and move
 -- them to the removed directory.  The .changes files are treated

@@ -10,21 +10,27 @@ module Debian.Repo.Dependencies
     ( simplifyRelations
     , solutions
     , testArch
+    , prettySimpleRelation
+    , showSimpleRelation
+    , readSimpleRelation
     ) where
 
+import Control.Arrow (second)
+import Data.Monoid ((<>))
 import Data.Set (toList)
 import Debian.Arch (Arch(Source, Binary), ArchCPU(..))
 import Debian.Control ()
 import qualified Debian.Control.Text as S ()
-import Debian.Repo.Types.PackageID (PackageID (packageName, packageVersion))
+import Debian.Relation (BinPkgName(BinPkgName))
+import Debian.Repo.Types.PackageID (PackageID(PackageID, packageName, packageVersion))
 import Debian.Repo.Types.PackageIndex (BinaryPackage, packageID, pProvides)
-import Debian.Repo.Types.PackageVersion (PackageVersion, PkgVersion(PkgVersion), prettyPkgVersion, pkgVersion, pkgName, getName, getVersion)
-import Debian.Version ( DebianVersion )
+-- import Debian.Repo.Types.PackageVersion (PackageVersion, PkgVersion(PkgVersion), pkgVersion, pkgName, getName, getVersion)
+import Debian.Version (DebianVersion, prettyDebianVersion, parseDebianVersion)
 import Data.List ( sortBy, groupBy, intercalate, nub )
 import qualified Data.Map as Map ( insert, lookup, Map, empty, findWithDefault, fromListWith )
 import Data.Maybe ( catMaybes )
 import qualified Data.Set as Set ( Set, union, singleton, toList )
-import Debian.Relation ( ArchitectureReq(..), BinPkgName, Relation(..), Relations, VersionReq(..) )
+import Debian.Relation ( ArchitectureReq(..), Relation(..), Relations, VersionReq(..) )
 import "Extra" Extra.List ( cartesianProduct )
 import Text.PrettyPrint.ANSI.Leijen (pretty, Doc, text)
 
@@ -34,11 +40,18 @@ type ProvidesMap = Map.Map BinPkgName [BinaryPackage]
 
 -- |A SimpleRelation just specifies a particular version of a package.
 -- The Nothing relation is always satisified.
-type SimpleRelation = Maybe PkgVersion
+type SimpleRelation = Maybe (PackageID BinPkgName)
 
 prettySimpleRelation :: SimpleRelation -> Doc
-prettySimpleRelation Nothing = text ""
-prettySimpleRelation (Just p) = prettyPkgVersion p
+prettySimpleRelation Nothing = text "Nothing"
+prettySimpleRelation (Just p) = pretty (packageName p) <> text "=" <> prettyDebianVersion (packageVersion p)
+
+showSimpleRelation :: PackageID BinPkgName -> String
+showSimpleRelation v = show (prettySimpleRelation (Just v))
+
+readSimpleRelation :: String -> PackageID BinPkgName
+readSimpleRelation s = case second (parseDebianVersion . (drop 1)) (span (/= '=') s) of
+                         (n, v) -> PackageID { packageName = BinPkgName n, packageVersion = v }
 
 -- |Each element is an or-list of specific package versions.
 type SimpleRelations = [[SimpleRelation]]
@@ -81,10 +94,10 @@ simplifyRelations available relations preferred arch =
             provides bzzt = error ("Invalid relation in Provides: " ++ show (map pretty bzzt))
             relationsOfArch = filter (/= []) (map (nub . filter (testArch arch)) relations)
       prefOrder a b = compare (isPreferred a) (isPreferred b)
-          where isPreferred = maybe False (flip elem preferred . getName)
-      versionOrder :: Maybe PkgVersion -> Maybe PkgVersion -> Ordering
-      versionOrder (Just a) (Just b) | getName a /= getName b = EQ
-      versionOrder (Just a) (Just b) = compare (getVersion b) (getVersion a)
+          where isPreferred = maybe False (flip elem preferred . packageName)
+      versionOrder :: SimpleRelation -> SimpleRelation -> Ordering
+      versionOrder (Just a) (Just b) | packageName a /= packageName b = EQ
+      versionOrder (Just a) (Just b) = compare (packageVersion b) (packageVersion a)
       versionOrder _ _ = EQ
 
 -- |Replace all relations by sets of equality relations on the exact
@@ -102,14 +115,14 @@ expandVirtual arch nameMap providesMap relations =
       expand (Rel _ _ (Just (ArchOnly archList))) | not (any (testArch' arch) (toList archList)) = [Nothing]
       expand (Rel _ _ (Just (ArchExcept archList))) | any (testArch' arch) (toList archList) = [Nothing]
       expand (Rel name Nothing Nothing) = map eqRel (Map.findWithDefault [] name providesMap)
-      expand rel@(Rel name _ _) = map eqRel (filter (satisfies rel) (Map.findWithDefault [] name nameMap))
+      expand rel@(Rel name _ _) = map eqRel (filter (satisfies rel . packageID) (Map.findWithDefault [] name nameMap))
       eqRel :: BinaryPackage -> SimpleRelation
       eqRel package =
-          Just (PkgVersion {getName = packageName (packageID package), getVersion = packageVersion p})
+          Just (PackageID {packageName = packageName (packageID package), packageVersion = packageVersion p})
           where p = packageID package
       -- Does this package satisfy the relation?
-      satisfies :: PackageVersion a => Relation -> a -> Bool
-      satisfies rel pkg = testRel (pkgVersion pkg) rel
+      satisfies :: Relation -> PackageID BinPkgName -> Bool
+      satisfies rel pkg = testRel (packageVersion pkg) rel
 
 -- Does this version satisfy the relation?
 testRel :: DebianVersion -> Relation -> Bool
@@ -169,7 +182,7 @@ solutions available relations limit =
             Right x -> Right x
     where
       available' = availMap available
-      solutions' :: (PackageVersion a) => Int -> [[[SimpleRelation]]] -> AvailMap a -> Either String [(Int, [a])]
+      solutions' :: Int -> [[[SimpleRelation]]] -> AvailMap (BinaryPackage) -> Either String [(Int, [BinaryPackage])]
       solutions' _ [] _ = Left "All candidate solutions failed"
       solutions' count (alternative : alternatives) available'' =
           if count > limit
@@ -184,12 +197,11 @@ solutions available relations limit =
 -- problem.  Each element of alternative represents the relations on a
 -- particular package.  So each one needs to be satisfied for the
 -- alternative to be satisfied.
-testAlternative :: (PackageVersion a) => AvailMap a -> [[SimpleRelation]] -> Either Excuse [a]
+testAlternative :: AvailMap (BinaryPackage) -> [[SimpleRelation]] -> Either Excuse [BinaryPackage]
 testAlternative available alternative =
-    -- 
     if all (/= []) solution then
         Right (map head solution) else
-        Left ("Couldn't satisfy these conditions:\n  " ++ 
+        Left ("Couldn't satisfy these conditions:\n  " ++
               intercalate "\n  " (map (show . map prettySimpleRelation) (mask (map (== []) solution) alternative))
               {- ++ " using the available packages: " ++ show available -})
     where
@@ -199,19 +211,19 @@ testAlternative available alternative =
 
 -- |Return the list of versions of a package that satisfy all of the
 -- relations.
-testPackage :: forall a. (PackageVersion a) => AvailMap a -> [SimpleRelation] -> [a]
+testPackage :: AvailMap (BinaryPackage) -> [SimpleRelation] -> [BinaryPackage]
 testPackage available rels =
     foldl satisfies [] rels
     where
       -- Which of these packages satisfy the relation?
       satisfies versions Nothing = versions
       satisfies versions (Just pkg) =
-          versions ++ maybe [] (filter (\ x -> pkgVersion x == pkgVersion pkg) . Set.toList) (Map.lookup (pkgName pkg) available)
+          versions ++ maybe [] (filter (\ x -> packageVersion (packageID x) == packageVersion pkg) . Set.toList) (Map.lookup (packageName pkg) available)
 
 groupByName :: [SimpleRelation] -> [[SimpleRelation]]
 groupByName relations =
     groupBy (\ a b -> compareNames a b == EQ) (sortBy compareNames relations)
-    where compareNames a b = compare (maybe Nothing (Just . getName) a) (maybe Nothing (Just . getName) b)
+    where compareNames a b = compare (maybe Nothing (Just . packageName) a) (maybe Nothing (Just . packageName) b)
 
 -- Turn a list of (k, a) pairs into a map from k -> [a].
 listMap :: (Ord k) => [(k, a)] -> Map.Map k [a]
@@ -221,5 +233,5 @@ listMap pairs =
 
 type AvailMap a = Map.Map BinPkgName (Set.Set a)
 
-availMap :: PackageVersion a => [a] -> AvailMap a
-availMap xs = Map.fromListWith Set.union (map (\ x -> (pkgName x, Set.singleton x)) xs)
+availMap :: [BinaryPackage] -> AvailMap BinaryPackage
+availMap xs = Map.fromListWith Set.union (map (\ x -> (packageName (packageID x), Set.singleton x)) xs)

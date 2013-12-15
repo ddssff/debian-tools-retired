@@ -19,7 +19,6 @@ import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, Bi
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Release (Section(..))
 import Debian.Repo.Types.PackageID (PackageID(packageVersion, packageName), prettyPackageID)
-import Debian.Repo.Types.PackageVersion (PackageVersion(pkgName, pkgVersion))
 import Debian.Version (DebianVersion, prettyDebianVersion, parseDebianVersion)
 import System.Posix.Types ( FileOffset )
 import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), Pretty(pretty))
@@ -65,10 +64,6 @@ instance Ord BinaryPackage where
 
 instance Eq BinaryPackage where
     a == b = (packageID a) == (packageID b)
-
-instance PackageVersion BinaryPackage where
-    pkgName = pkgName . packageID
-    pkgVersion = pkgVersion . packageID
 
 prettyBinaryPackage :: BinaryPackage -> Doc
 prettyBinaryPackage = prettyPackageID . packageID

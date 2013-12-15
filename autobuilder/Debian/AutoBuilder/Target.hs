@@ -55,7 +55,7 @@ import Debian.Repo.SourceTree (buildDebs)
 import Debian.Sources (SliceName(..))
 import Debian.Repo (chrootEnv, syncEnv, syncPool, updateEnv, withProc)
 import Debian.Repo.Cache (binaryPackages, buildArchOfEnv, sourcePackages, aptSourcePackagesSorted)
-import Debian.Repo.Dependencies (simplifyRelations, solutions)
+import Debian.Repo.Dependencies (simplifyRelations, solutions, prettySimpleRelation)
 import Debian.Repo.Changes (saveChangesFile, uploadLocal)
 import Debian.Repo.Insert (scanIncoming, showErrors)
 import Debian.Repo.OSImage (OSImage, updateLists)
@@ -63,10 +63,10 @@ import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames
 import Debian.Repo.SourceTree (SourceTreeC(..), DebianSourceTreeC(..),
                                DebianBuildTree, addLogEntry, copySourceTree,
                                findChanges, findOneDebianBuildTree, SourcePackageStatus(..))
-import Debian.Repo.Types (SourcePackage(sourceParagraph, sourcePackageID),
-                          AptCache(rootDir, aptBinaryPackages), EnvRoot(rootPath),
-                          PackageID(packageVersion), PkgVersion(..),
-                          BinaryPackage(packageInfo), prettyPkgVersion)
+import Debian.Repo.Types.AptImage (AptCache(rootDir, aptBinaryPackages))
+import Debian.Repo.Types.EnvPath (EnvRoot(rootPath))
+import Debian.Repo.Types.PackageID (PackageID(packageVersion))
+import Debian.Repo.Types.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageInfo))
 import Debian.Repo.Types.LocalRepository (LocalRepository)
 import Debian.Time(getCurrentLocalRFC822Time)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
@@ -84,7 +84,7 @@ import System.Process (proc, shell, CreateProcess(cwd), readProcessWithExitCode,
 import System.Process.Progress (mergeToStdout, keepStdout, keepResult, collectOutputs,
                                 keepResult, runProcessF, runProcess, quieter, noisier, qPutStrLn, ePutStr, ePutStrLn)
 import System.Process.Read (readCreateProcess)
-import Text.PrettyPrint.ANSI.Leijen (Doc, text, pretty)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Printf(printf)
 import Text.Regex(matchRegex, mkRegex)
 
@@ -102,9 +102,6 @@ instance Monad Failing where
 decode :: L.ByteString -> String
 decode = UTF8.toString . B.concat . L.toChunks
 
-prettySimpleRelation :: Maybe PkgVersion -> Doc
-prettySimpleRelation rel = maybe (text "Nothing") (\ v -> pretty (getName v) <> text "=" <> prettyDebianVersion (getVersion v)) rel
-
 -- |Generate the details section of the package's new changelog entry
 -- based on the target type and version info.  This includes the
 -- revision info and build dependency versions in a human readable
@@ -115,10 +112,10 @@ changelogText buildable old new = ("  * " ++ T.logText (download buildable) ++ "
 
 -- |Generate the string of build dependency versions:
 -- package1=version1 package2=version2 ...
-_formatVersions :: [PkgVersion] -> String
+_formatVersions :: [PackageID BinPkgName] -> String
 _formatVersions buildDeps =
     prefix ++
-    intercalate prefix (map (show . prettyPkgVersion) buildDeps) ++
+    intercalate prefix (map (show . prettySimpleRelation . Just) buildDeps) ++
     "\n"
     where prefix = "\n    "
 

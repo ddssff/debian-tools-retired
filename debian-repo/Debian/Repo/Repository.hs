@@ -16,8 +16,9 @@ import Debian.Changes (ChangesFile(changeDir, changePackage, changeRelease, chan
 import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(parseControlFromFile), fieldValue)
 import Debian.Relation (BinPkgName(..))
 import Debian.Repo.Changes (findChangesFiles, changeKey, changePath)
+import Debian.Repo.Dependencies (readSimpleRelation, showSimpleRelation)
 import Debian.Repo.Types.EnvPath (outsidePath)
-import Debian.Repo.Types.PackageVersion (PkgVersion(..), prettyPkgVersion, readPkgVersion, showPkgVersion)
+import Debian.Repo.Types.PackageID (PackageID)
 import Debian.Repo.Types.Release (Release(..))
 import Debian.Repo.Types.Repo (Repo(repoReleaseInfo))
 import Debian.Repo.Types.LocalRepository (LocalRepository, repoRoot)
@@ -164,16 +165,16 @@ validRevision' (Success c) = validRevision
       -- Parse the "Fingerprint:" value describing the origin of the
       -- package's source and the dependency versions used to build it:
       --   Revision: <revisionstring> dep1=ver1 dep2=ver2 ...
-      parseRevision :: String -> Failing (String, [PkgVersion])
+      parseRevision :: String -> Failing (String, [PackageID BinPkgName])
       parseRevision s =
           case reads s :: [(String, String)] of
             [(method, etc)] ->
                 case words etc of
                   (sourceVersion : buildDeps)
                     | not (elem '=' sourceVersion) ->
-                        Success (method, map readPkgVersion buildDeps)
+                        Success (method, map readSimpleRelation buildDeps)
                   buildDeps ->
-                        Success (method, map readPkgVersion buildDeps)
+                        Success (method, map readSimpleRelation buildDeps)
             _ -> Failure ["Invalid revision field: " ++ s]
 
 uploadKey :: UploadFile -> (String, DebianVersion, Arch)

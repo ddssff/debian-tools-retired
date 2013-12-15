@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types.PackageID
-    ( PackageID(packageVersion, packageName)
+    ( PackageID(PackageID, packageVersion, packageName)
     , prettyPackageID
     , makeBinaryPackageID
     , makeSourcePackageID
@@ -14,7 +14,6 @@ import qualified Debian.Control.Text as T
 import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Release (Section(..))
-import Debian.Repo.Types.PackageVersion (PackageVersion(..))
 import Debian.Version (DebianVersion, prettyDebianVersion, parseDebianVersion)
 import System.Posix.Types ( FileOffset )
 import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), Pretty(pretty))
@@ -37,7 +36,3 @@ makeBinaryPackageID n v = PackageID (BinPkgName n) v
 
 makeSourcePackageID :: String -> DebianVersion -> PackageID SrcPkgName
 makeSourcePackageID n v = PackageID (SrcPkgName n) v
-
-instance PackageVersion (PackageID BinPkgName) where
-    pkgName = packageName
-    pkgVersion = packageVersion

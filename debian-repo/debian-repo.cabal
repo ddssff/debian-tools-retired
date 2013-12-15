@@ -70,7 +70,6 @@ Library
         Debian.Repo.Types.LocalRepository,
         Debian.Repo.Types.PackageID,
         Debian.Repo.Types.PackageIndex,
-        Debian.Repo.Types.PackageVersion,
         Debian.Repo.Types.Release,
         Debian.Repo.Types.RemoteRepository,
         Debian.Repo.Types.Repo,
