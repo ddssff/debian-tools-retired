@@ -5,6 +5,7 @@ module Debian.Repo
     ( module Debian.Repo.AptImage
     , module Debian.Repo.Cache
     , module Debian.Repo.Changes
+    , module Debian.Repo.Deb.OSImage
     , module Debian.Repo.Dependencies
     , module Debian.Repo.Insert
     , module Debian.Repo.Monads.Apt
@@ -25,6 +26,7 @@ module Debian.Repo
 import Debian.Repo.AptImage
 import Debian.Repo.Cache
 import Debian.Repo.Changes
+import Debian.Repo.Deb.OSImage
 import Debian.Repo.Dependencies
 import Debian.Repo.Insert
 import Debian.Repo.Monads.Apt

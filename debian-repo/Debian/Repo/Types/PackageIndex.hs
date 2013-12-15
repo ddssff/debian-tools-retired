@@ -11,17 +11,15 @@ module Debian.Repo.Types.PackageIndex
     , SourceFileSpec(..)
     ) where
 
-import Control.Arrow (second)
-import Data.Text (Text)
+import Data.Text (Text(..))
 import Debian.Arch (Arch(..))
 import qualified Debian.Control.Text as T
-import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
+import qualified Debian.Relation as B (Relations)
 import Debian.Release (Section(..))
-import Debian.Repo.Types.PackageID (PackageID(packageVersion, packageName), prettyPackageID)
-import Debian.Version (DebianVersion, prettyDebianVersion, parseDebianVersion)
-import System.Posix.Types ( FileOffset )
-import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), Pretty(pretty))
+import Debian.Repo.Types.PackageID (PackageID, prettyPackageID)
+import System.Posix.Types (FileOffset)
+import Text.PrettyPrint.ANSI.Leijen (Doc)
 
 deriving instance Show (T.Field' Text)
 deriving instance Ord (T.Field' Text)

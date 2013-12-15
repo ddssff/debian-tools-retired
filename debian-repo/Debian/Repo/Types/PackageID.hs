@@ -7,16 +7,10 @@ module Debian.Repo.Types.PackageID
     , makeSourcePackageID
     ) where
 
-import Control.Arrow (second)
-import Data.Text (Text)
-import Debian.Arch (Arch(..))
-import qualified Debian.Control.Text as T
-import qualified Debian.Relation as B -- ( PkgName, prettyPkgName, Relations, BinPkgName(..), SrcPkgName(..) )
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
-import Debian.Release (Section(..))
-import Debian.Version (DebianVersion, prettyDebianVersion, parseDebianVersion)
-import System.Posix.Types ( FileOffset )
-import Text.PrettyPrint.ANSI.Leijen (Doc, text, (<>), Pretty(pretty))
+import qualified Debian.Relation as B (PkgName)
+import Debian.Version (DebianVersion, prettyDebianVersion)
+import Text.PrettyPrint.ANSI.Leijen ((<>), Doc, Pretty(pretty), text)
 
 -- | The 'PackageID' type fully identifies a package by name, version,
 -- and a 'PackageIndex' which identifies the package's release,

@@ -19,7 +19,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
-import Debian.Repo hiding (getVersion)
+import Debian.Repo
 import System.Exit
 import System.Directory (doesFileExist, createDirectoryIfMissing, removeFile)
 import System.FilePath ((</>))
@@ -176,6 +176,9 @@ validate text =
       Left _ -> Nothing
       Right _ -> Just text
 
+-- | Traverse the a hackage package page to find a version number.
+-- (Obsolete, since hackage2 we are using scrapeVersion, though it is
+-- fragile.)
 findVersion :: String -> Document Posn -> String
 findVersion package (Document _ _ (Elem _name _attrs content) _) =
     case doContentList content of
