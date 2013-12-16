@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, PackageImports, RankNTypes, ScopedTypeVariables, TypeSynonymInstances, UndecidableInstances #-}
-module Debian.Repo.Monads.Deb
+module Debian.Repo.Deb
     ( MonadDeb
     , runDebT
     ) where
@@ -11,9 +11,9 @@ import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatc
 import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Map as Map (empty, fromList, Map, toList, union)
 import Data.Maybe (fromMaybe)
-import Debian.Repo.Monads.Apt (AptT, MonadApt(getRepoCache, putRepoCache), runAptT)
-import Debian.Repo.Monads.Top (MonadTop, runTopT, sub, TopT)
-import Debian.Repo.Types.RemoteRepository (RemoteRepository)
+import Debian.Repo.Apt (AptT, MonadApt(getRepoCache, putRepoCache), runAptT)
+import Debian.Repo.RemoteRepository (RemoteRepository)
+import Debian.Repo.Top (MonadTop, runTopT, sub, TopT)
 import Debian.URI (URI')
 import System.IO.Error (isDoesNotExistError)
 import qualified System.Posix.Files as F (removeLink)

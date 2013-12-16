@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, PackageImports, StandaloneDeriving, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Debian.Repo.Types.Repo
+module Debian.Repo.Repo
     ( Repo(..)
     , RepoKey(..)
     , repoURI
@@ -15,11 +15,11 @@ import Data.Char (isDigit)
 import Data.Maybe (fromJust)
 import Data.Text (unpack)
 import Debian.Arch (Arch)
-import Debian.Repo.Types.EnvPath (EnvPath(..))
-import Debian.Repo.Types.Release (Release(releaseArchitectures))
+import Debian.Repo.EnvPath (EnvPath(..))
+import Debian.Repo.Release (Release(releaseArchitectures))
 import Debian.URI (fileFromURI, fromURI', URI')
 import qualified Debian.UTF8 as Deb (decode)
-import "Extra" Extra.List ( listIntersection )
+import "Extra" Extra.List (listIntersection)
 import Network.URI (parseURI, URI(uriPath))
 import System.FilePath ((</>))
 

@@ -3,13 +3,13 @@
 -- |Print the available version numbers of a package.
 module Main where
 
-import Control.Monad.Trans
-import Data.Maybe
+import Control.Monad.Trans (MonadIO(liftIO))
+import Data.Maybe (fromJust)
 import Debian.Arch (Arch(Binary), ArchCPU(..), ArchOS(..))
-import Debian.Repo.Monads.Apt (MonadApt, runAptT, prepareRepository)
-import Debian.Repo.Release
-import Debian.Repo.Types.Repo (RepoKey(Remote), repoReleaseInfo)
-import Debian.URI
+import Debian.Repo.Apt (MonadApt, prepareRepository, runAptT)
+import Debian.Repo.Apt.Release (insertRelease)
+import Debian.Repo.Repo (RepoKey(Remote), repoReleaseInfo)
+import Debian.URI (readURI')
 
 main :: IO ()
 main = runAptT main'

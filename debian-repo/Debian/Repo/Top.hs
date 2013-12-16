@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, TypeSynonymInstances #-}
 {-# OPTIONS -Wall #-}
-module Debian.Repo.Monads.Top
+module Debian.Repo.Top
     ( TopT
     , runTopT
     , MonadTop(askTop)

@@ -48,26 +48,28 @@ import qualified Debian.GenBuildDeps as G
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString(Relations, Relation(..))
 import Debian.Release (releaseName')
-import Debian.Repo.Monads.Apt (MonadApt)
-import Debian.Repo.Monads.Deb (MonadDeb)
-import Debian.Repo.Monads.Top (MonadTop)
+import Debian.Repo.Apt (MonadApt)
+import Debian.Repo.Apt.OSImage (syncPool, updateEnv)
+import Debian.Repo.Deb (MonadDeb)
 import Debian.Repo.SourceTree (buildDebs)
+import Debian.Repo.Top (MonadTop)
 import Debian.Sources (SliceName(..))
-import Debian.Repo (chrootEnv, syncEnv, syncPool, updateEnv, withProc)
+import Debian.Repo.OSImage (chrootEnv, syncEnv, withProc)
+import Debian.Repo.Apt.Insert (scanIncoming, showErrors)
+import Debian.Repo.AptImage (AptCache(rootDir, aptBinaryPackages))
 import Debian.Repo.Cache (binaryPackages, buildArchOfEnv, sourcePackages, aptSourcePackagesSorted)
 import Debian.Repo.Dependencies (simplifyRelations, solutions, prettySimpleRelation)
-import Debian.Repo.Changes (saveChangesFile, uploadLocal)
-import Debian.Repo.Insert (scanIncoming, showErrors)
+import Debian.Repo.Changes (saveChangesFile)
+import Debian.Repo.LocalRepository (uploadLocal)
 import Debian.Repo.OSImage (OSImage, updateLists)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.SourceTree (SourceTreeC(..), DebianSourceTreeC(..),
                                DebianBuildTree, addLogEntry, copySourceTree,
                                findChanges, findOneDebianBuildTree, SourcePackageStatus(..))
-import Debian.Repo.Types.AptImage (AptCache(rootDir, aptBinaryPackages))
-import Debian.Repo.Types.EnvPath (EnvRoot(rootPath))
-import Debian.Repo.Types.PackageID (PackageID(packageVersion))
-import Debian.Repo.Types.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageInfo))
-import Debian.Repo.Types.LocalRepository (LocalRepository)
+import Debian.Repo.EnvPath (EnvRoot(rootPath))
+import Debian.Repo.PackageID (PackageID(packageVersion))
+import Debian.Repo.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageInfo))
+import Debian.Repo.LocalRepository (LocalRepository)
 import Debian.Time(getCurrentLocalRFC822Time)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.VersionPolicy(parseTag, setTag)
@@ -387,7 +389,7 @@ buildPackage :: (MonadApt m, MonadTop m) =>
                 P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
 buildPackage cache cleanOS newVersion oldFingerprint newFingerprint !target status repo =
     checkDryRun >>
-    buildEnv (P.buildRelease (P.params cache)) >>= return . Debian.Repo.chrootEnv cleanOS >>= \ buildOS ->
+    buildEnv (P.buildRelease (P.params cache)) >>= return . chrootEnv cleanOS >>= \ buildOS ->
     liftIO (prepareBuildImage cache cleanOS newFingerprint buildOS target) >>=
     logEntry >>=
     noisier 1 . build buildOS >>=
@@ -499,7 +501,7 @@ prepareBuildImage cache dependOS sourceFingerprint buildOS target | P.strictness
           maybe (error ("No build tree at " ++ show newPath)) return
       prepareTree False _ =
           (\ x -> qPutStrLn "Copying build tree..." >> quieter 1 x) $
-          Debian.Repo.syncEnv dependOS buildOS >>
+          syncEnv dependOS buildOS >>
           copySourceTree (cleanSource target) newPath
       buildDepends = (P.buildDepends (P.params cache))
       noClean = P.noClean (P.params cache)
@@ -509,7 +511,7 @@ prepareBuildImage cache dependOS sourceFingerprint buildOS target =
     -- Install dependencies directly into the build environment
     findTree noClean >>=
     downloadDeps >>=
-    syncEnv noClean >>=
+    syncEnv' noClean >>=
     installDeps
     where
       -- findTree :: Bool -> IO (Failing DebianBuildTree)
@@ -523,10 +525,10 @@ prepareBuildImage cache dependOS sourceFingerprint buildOS target =
       downloadDeps buildTree = withTmp dependOS (downloadDependencies dependOS buildTree buildDepends sourceFingerprint) >>
                                return buildTree
 
-      syncEnv False buildTree =
+      syncEnv' False buildTree =
           (\ x -> qPutStrLn "Syncing buildOS" >> quieter 1 x) $
-              Debian.Repo.syncEnv dependOS buildOS >>= (\ os -> return (os, buildTree))
-      syncEnv True buildTree =
+              syncEnv dependOS buildOS >>= (\ os -> return (os, buildTree))
+      syncEnv' True buildTree =
           return (buildOS, buildTree)
 
       installDeps (buildOS, buildTree) =

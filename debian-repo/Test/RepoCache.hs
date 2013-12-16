@@ -4,9 +4,9 @@ import Control.Monad.State (StateT, get, put, runStateT)
 import Control.Monad.Trans (MonadIO)
 import Data.Map as Map (Map, empty)
 import Debian.Repo.Monads.Top (TopT, runTopT)
-import Debian.Repo.Types.EnvPath (rootEnvPath)
-import Debian.Repo.Types.Repo (RepoKey)
-import Debian.Repo.Types.Repository (MonadRepoCache(..), Repository, loadRepoCache)
+import Debian.Repo.EnvPath (rootEnvPath)
+import Debian.Repo.Repo (RepoKey)
+import Debian.Repo.Repository (MonadRepoCache(..), Repository, loadRepoCache)
 
 root = rootEnvPath "/srv/deb/ubuntu"
 home = "/home/dsf/.autobuilder"

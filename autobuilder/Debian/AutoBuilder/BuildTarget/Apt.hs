@@ -1,20 +1,24 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Apt where
 
-import Control.Monad
-import Control.Monad.Trans
-import Data.List (sort, nub)
+import Control.Monad (when)
+import Control.Monad.Trans (MonadIO(liftIO))
+import Data.List (nub, sort)
 import Data.Maybe (catMaybes)
-import qualified Debian.AutoBuilder.Types.CacheRec as P
+import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(allSources, params))
 import Debian.AutoBuilder.Types.Download (Download(..))
-import qualified Debian.AutoBuilder.Types.Packages as P
-import qualified Debian.AutoBuilder.Types.ParamRec as P
+import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag(AptPin), Packages(flags, spec))
+import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(flushSource, ifSourcesChanged))
 import Debian.Relation (SrcPkgName)
-import Debian.Repo
-import Debian.Repo.Types.Slice (NamedSliceList(sliceListName))
-import Debian.Sources
+import Debian.Repo.Apt.AptImage (aptGetSource, prepareAptEnv)
+import Debian.Repo.Cache (aptDir)
+import Debian.Repo.Deb (MonadDeb)
+import Debian.Repo.Slice (NamedSliceList(sliceListName))
+import Debian.Repo.SourceTree (topdir)
+import Debian.Repo.Top (askTop)
+import Debian.Sources (SliceName(SliceName, sliceName))
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
-import System.Unix.Directory
+import System.Unix.Directory (removeRecursiveSafely)
 
 documentation = [ "apt:<distribution>:<packagename> - a target of this form looks up"
                 , "the sources.list named <distribution> and retrieves the package with"
@@ -25,7 +29,7 @@ prepare cache target dist package =
     do top <- askTop
        os <- prepareAptEnv top (P.ifSourcesChanged (P.params cache)) distro
        when (P.flushSource (P.params cache)) (liftIO . removeRecursiveSafely $ aptDir os package)
-       tree <- liftIO $ Debian.Repo.aptGetSource (aptDir os package) os package version'
+       tree <- liftIO $ aptGetSource (aptDir os package) os package version'
        return $ Download {
                     package = target
                   , getTop = topdir tree

@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Debian.Repo.Types.PackageID
+module Debian.Repo.PackageID
     ( PackageID(PackageID, packageVersion, packageName)
     , prettyPackageID
     , makeBinaryPackageID

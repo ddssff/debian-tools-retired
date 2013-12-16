@@ -1,14 +1,14 @@
 {-# LANGUAGE FlexibleInstances, PackageImports, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Debian.Repo.Types.RemoteRepository
+module Debian.Repo.RemoteRepository
     ( RemoteRepository(..)
     , repoReleaseNames
     ) where
 
 import Debian.Release (ReleaseName)
 import qualified Debian.Repo.Pretty as F (Pretty(..))
-import Debian.Repo.Types.Release (Release(releaseName))
-import Debian.Repo.Types.Repo (Repo(repoKey, repoReleaseInfo), RepoKey(Remote))
+import Debian.Repo.Release (Release(releaseName))
+import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey(Remote))
 import Debian.URI (fromURI', URI')
 import Text.PrettyPrint.ANSI.Leijen (text)
 

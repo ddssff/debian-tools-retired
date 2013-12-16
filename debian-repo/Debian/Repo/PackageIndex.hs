@@ -1,5 +1,15 @@
+{-# LANGUAGE FlexibleInstances, StandaloneDeriving #-}
 module Debian.Repo.PackageIndex
-    ( packageIndexName
+    ( PackageIndex(..)
+
+    , BinaryPackage(..)
+    , prettyBinaryPackage
+
+    , SourcePackage(..)
+    , SourceControl(..)
+    , SourceFileSpec(..)
+
+    , packageIndexName
     , packageIndexPath
     , packageIndexDir
     , packageIndexPathList
@@ -8,18 +18,102 @@ module Debian.Repo.PackageIndex
     , sourceIndexList
     , binaryIndexList
     , releaseDir
-    , showIndexBrief
-    , debSourceFromIndex
     ) where
 
+import Data.Text (Text)
 import Debian.Arch (Arch(..), prettyArch)
-import Debian.Release (releaseName', sectionName')
-import Debian.Sources (SourceType(..), DebSource(..))
-import Debian.Repo.Types.PackageIndex (PackageIndex(..))
-import Debian.Repo.Types.Release (Release(..))
-import Debian.Repo.Types.Repo (repoURI)
-import Debian.Repo.Types.Repository (Repository)
-import System.FilePath ( (</>) )
+import qualified Debian.Control.Text as T
+import Debian.Relation (BinPkgName(..), SrcPkgName(..))
+import qualified Debian.Relation as B (Relations)
+import Debian.Release (releaseName', Section(..), sectionName')
+import Debian.Repo.PackageID (PackageID, prettyPackageID)
+import Debian.Repo.Release (Release(..))
+import System.Posix.Types (FileOffset)
+import Text.PrettyPrint.ANSI.Leijen (Doc)
+
+deriving instance Show (T.Field' Text)
+deriving instance Ord (T.Field' Text)
+deriving instance Show T.Paragraph
+deriving instance Ord T.Paragraph
+
+---------------- PACKAGES AND PACKAGE INDEXES -------------
+
+-- |The PackageIndex type is the meta-information of a file containing
+-- control information about debian packages, either source or binary.
+-- Though the control information for a binary package does not
+-- specify an architecture, the architecture here is that of the
+-- environment where the package information is cached.
+data PackageIndex
+    = PackageIndex { packageIndexComponent :: Section
+                   , packageIndexArch :: Arch
+                   } deriving (Eq, Ord, Show)
+
+{-
+instance PackageVersion BinaryPackage where
+    pkgName = binaryPackageName
+    pkgVersion = packageVersion . packageID
+-}
+
+-- | The 'BinaryPackage' type adds to the 'PackageID' type the control
+-- information obtained from the package index.
+data BinaryPackage
+    = BinaryPackage
+      { packageID :: PackageID BinPkgName
+      , packageInfo :: T.Paragraph
+      , pDepends :: B.Relations
+      , pPreDepends :: B.Relations
+      , pConflicts ::B.Relations
+      , pReplaces :: B.Relations
+      , pProvides :: B.Relations
+      }
+
+instance Ord BinaryPackage where
+    compare a b = compare (packageID a) (packageID b)
+
+instance Eq BinaryPackage where
+    a == b = (packageID a) == (packageID b)
+
+prettyBinaryPackage :: BinaryPackage -> Doc
+prettyBinaryPackage = prettyPackageID . packageID
+
+data SourcePackage
+    = SourcePackage
+      { sourcePackageID :: PackageID SrcPkgName
+      , sourceParagraph :: T.Paragraph
+      , sourceControl :: SourceControl
+      , sourceDirectory :: String
+      , sourcePackageFiles :: [SourceFileSpec]
+      } deriving (Show, Eq, Ord)
+
+-- |Source package information derived from the control paragraph.
+data SourceControl
+    = SourceControl
+      { source :: Text
+      , maintainer :: NameAddr
+      , uploaders :: [NameAddr]
+      , packageSection :: Maybe Section' -- Should this be the same type as the Section field in a .changes file?
+      , packagePriority :: Maybe Priority
+      , buildDepends :: [Package]
+      , buildDependsIndep :: [Package]
+      , buildConflicts :: [Package]
+      , buildConflictsIndep :: [Package]
+      , standardsVersion :: Maybe StandardsVersion -- There are packages that don't have this
+      , homepage :: Maybe Text -- There are packages that don't have this
+      } deriving (Show, Eq, Ord)
+
+type NameAddr = Text
+type StandardsVersion = Text
+type Section' = Text
+type Priority = Text
+type Package = Text
+
+data SourceFileSpec
+    = SourceFileSpec
+      { sourceFileMD5sum :: String
+      , sourceFileSize :: FileOffset
+      , sourceFileName :: FilePath
+      }
+    deriving (Show, Eq, Ord)
 
 packageIndexName :: PackageIndex -> FilePath
 packageIndexName index =
@@ -68,21 +162,3 @@ binaryIndexList release =
             --archIndex :: Arch -> PackageIndex
             archIndex arch = PackageIndex { packageIndexComponent = component
                                           , packageIndexArch = arch }
-
-showIndexBrief :: (Repository, Release) -> PackageIndex -> String
-showIndexBrief release index =
-    (releaseName' . releaseName . snd $ release) </> sectionName' (packageIndexComponent index) </> showArch (packageIndexArch index)
-    where showArch Source = "source"
-          showArch All = "all"
-          showArch x@(Binary _ _) = "binary-" ++ show (prettyArch x)
-
-debSourceFromIndex :: (Repository, Release) -> PackageIndex -> DebSource
-debSourceFromIndex (repo, release) index =
-    DebSource {sourceType = typ,
-               sourceUri = repoURI repo,
-               sourceDist = Right (dist, components)}
-    where
-      typ = case arch of (Binary _ _) -> Deb; Source -> DebSrc; All -> Deb
-      arch = packageIndexArch index
-      dist = releaseName $ release
-      components = releaseComponents $ release

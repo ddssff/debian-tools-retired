@@ -6,7 +6,6 @@
 module Debian.Repo.Cache
     ( SourcesChangedAction(..)
     , aptSourcePackagesSorted
-    , sliceIndexes
     , cacheDistDir
     , distDir
     , aptDir
@@ -19,41 +18,28 @@ module Debian.Repo.Cache
     , archFiles
     , buildArchOfEnv
     , buildArchOfRoot
-    , updateCacheSources
     , sourcePackages
     , binaryPackages
     ) where
 
 import Control.DeepSeq (force, NFData)
-import "mtl" Control.Monad.Trans (MonadIO(..))
 import Data.Data (Data)
 import Data.List (intercalate, sortBy)
 import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..), prettyArch)
 import Debian.Relation (BinPkgName, SrcPkgName(..))
 import Debian.Release (ReleaseName(relName), releaseName', sectionName')
-import Debian.Repo.Monads.Apt (MonadApt, prepareRepository)
-import Debian.Repo.Slice (verifySourcesList)
-import Debian.Repo.SourcesList (parseSourcesList)
-import Debian.Repo.Types.AptImage (AptCache(aptArch, aptBaseSliceList, aptBinaryPackages, aptReleaseName, aptSourcePackages, globalCacheDir))
-import Debian.Repo.Types.EnvPath (EnvRoot(EnvRoot))
-import Debian.Repo.Types.PackageID (PackageID(packageVersion, packageName))
-import Debian.Repo.Types.PackageIndex (PackageIndex(..), SourcePackage(sourcePackageID), BinaryPackage(packageID))
-import Debian.Repo.Types.Release (Release(releaseName))
-import Debian.Repo.Types.Repo (Repo(repoReleaseInfo), repoKey, RepoKey)
-import Debian.Repo.Types.Slice (Slice(..))
+import Debian.Repo.AptImage (AptCache(aptArch, aptBinaryPackages, aptReleaseName, aptSourcePackages, globalCacheDir))
+import Debian.Repo.EnvPath (EnvRoot(EnvRoot))
+import Debian.Repo.PackageID (PackageID(packageVersion, packageName))
+import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage(sourcePackageID))
 import Debian.Sources (DebSource(..), SourceType(..))
-import Extra.Files (replaceFile)
 import Network.URI (escapeURIString, URI(uriAuthority, uriPath, uriScheme), URIAuth(uriPort, uriRegName, uriUserInfo))
-import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>))
-import System.IO (hGetLine, stdin)
 import System.Posix.Env (setEnv)
 import System.Process (readProcessWithExitCode)
-import System.Process.Progress (ePutStr, ePutStrLn, qPutStrLn)
 import System.Unix.Chroot (useEnv)
-import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 instance NFData ExitCode
@@ -104,33 +90,6 @@ aptSourcePackagesSorted os names =
           where
             v1 = packageVersion . sourcePackageID $ p1
             v2 = packageVersion . sourcePackageID $ p2
-
--- |Return a list of the index files that contain the packages of a
--- slice.
-sliceIndexes :: (MonadApt m, AptCache a) => a -> Slice -> m [(RepoKey, Release, PackageIndex)]
-sliceIndexes cache slice =
-    prepareRepository (sliceRepoKey slice) >>= \ repo ->
-    case (sourceDist (sliceSource slice)) of
-      Left exact -> error $ "Can't handle exact path in sources.list: " ++ exact
-      Right (release, sections) -> return $ map (makeIndex repo release) sections
-    where
-      makeIndex repo release section =
-          (repoKey repo,
-           findReleaseInfo repo release,
-           PackageIndex { packageIndexComponent = section
-                        , packageIndexArch = case (sourceType (sliceSource slice)) of
-                                               DebSrc -> Source
-                                               Deb -> aptArch cache })
-      findReleaseInfo repo release =
-          case filter ((==) release . releaseName) (repoReleaseInfo repo) of
-            [x] -> x
-            [] -> error $ ("sliceIndexes: Invalid release name: " ++ releaseName' release ++
-                           "\n  You may need to remove ~/.autobuilder/repoCache." ++
-                           "\n  Available: " ++ (show . map releaseName . repoReleaseInfo $ repo)) ++
-                           "\n repoKey: " ++ show (repoKey repo) ++
-                           "\n repoReleaseInfo: " ++ show (repoReleaseInfo repo) ++
-                           "\n slice: " ++ show slice
-            xs -> error $ "Internal error 5 - multiple releases named " ++ releaseName' release ++ "\n" ++ show xs
 
 -- |Return the paths in the local cache of the index files of a slice list.
 aptCacheFiles :: AptCache a => a -> [DebSource] -> [FilePath]
@@ -258,62 +217,6 @@ data SourcesChangedAction =
     UpdateSources |
     RemoveRelease
     deriving (Eq, Show, Data, Typeable)
-
--- |Change the sources.list of an AptCache object, subject to the
--- value of sourcesChangedAction.
-updateCacheSources :: (MonadApt m, AptCache c) => SourcesChangedAction -> c -> m c
-updateCacheSources sourcesChangedAction distro =
-    -- (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
-    qPutStrLn "Updating cache sources" >>
-    do
-      let baseSources = aptBaseSliceList distro
-      --let distro@(ReleaseCache _ dist _) = releaseFromConfig' top text
-      let dir = Debian.Repo.Cache.distDir distro
-      distExists <- liftIO $ doesFileExist (Debian.Repo.Cache.sourcesPath distro)
-      case distExists of
-        True ->
-            do
-	      fileSources <- liftIO (readFile (Debian.Repo.Cache.sourcesPath distro)) >>= verifySourcesList Nothing . parseSourcesList
-	      case (fileSources == baseSources, sourcesChangedAction) of
-	        (True, _) -> return ()
-	        (False, SourcesChangedError) ->
-                    do
-                      ePutStrLn ("The sources.list in the existing '" ++ relName (aptReleaseName distro) ++
-                                 "' build environment doesn't match the parameters passed to the autobuilder" ++
-			         ":\n\n" ++ Debian.Repo.Cache.sourcesPath distro ++ ":\n\n" ++
-                                 show (pretty fileSources) ++
-			         "\nRun-time parameters:\n\n" ++
-                                 show (pretty baseSources) ++ "\n" ++
-			         "It is likely that the build environment in\n" ++
-                                 dir ++ " is invalid and should be rebuilt.")
-                      ePutStr $ "Remove it and continue (or exit)?  [y/n]: "
-                      result <- liftIO $ hGetLine stdin
-                      case result of
-                        ('y' : _) ->
-                            do
-                              liftIO $ removeRecursiveSafely dir
-                              liftIO $ createDirectoryIfMissing True dir
-                              liftIO $ replaceFile (Debian.Repo.Cache.sourcesPath distro) (show (pretty baseSources))
-                        _ ->
-                            error ("Please remove " ++ dir ++ " and restart.")
-                (False, RemoveRelease) ->
-                    do
-                      ePutStrLn $ "Removing suspect environment: " ++ dir
-                      liftIO $ removeRecursiveSafely dir
-                      liftIO $ createDirectoryIfMissing True dir
-                      liftIO $ replaceFile (Debian.Repo.Cache.sourcesPath distro) (show (pretty baseSources))
-                (False, UpdateSources) ->
-                    do
-                      -- The sources.list has changed, but it should be
-                      -- safe to update it.
-                      ePutStrLn $ "Updating environment with new sources.list: " ++ dir
-                      liftIO $ removeFile (Debian.Repo.Cache.sourcesPath distro)
-                      liftIO $ replaceFile (Debian.Repo.Cache.sourcesPath distro) (show (pretty baseSources))
-        False ->
-	    do
-              liftIO $ createDirectoryIfMissing True dir
-	      liftIO $ replaceFile (Debian.Repo.Cache.sourcesPath distro) (show (pretty baseSources))
-      return distro
 
 -- | Return a sorted list of available source packages, newest version first.
 sourcePackages :: AptCache a => a -> [SrcPkgName] -> [SourcePackage]

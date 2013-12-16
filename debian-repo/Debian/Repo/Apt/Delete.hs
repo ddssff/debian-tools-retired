@@ -1,7 +1,7 @@
 {-# LANGUAGE BangPatterns, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans -fno-warn-name-shadowing -fno-warn-missing-signatures #-}
 -- | Remove packages from a release.
-module Debian.Repo.Delete
+module Debian.Repo.Apt.Delete
     ( deleteTrumped
     , deleteBinaryOrphans
     , deleteGarbage
@@ -11,37 +11,36 @@ module Debian.Repo.Delete
 import Control.Applicative ((<$>))
 import Control.Exception (SomeException)
 import Control.Monad (filterM)
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy.Char8 as L (fromChunks)
 import Data.Either (partitionEithers)
-import Data.List as List (intercalate, sortBy, groupBy, isSuffixOf, partition, map, filter)
+import Data.List as List (filter, groupBy, intercalate, isSuffixOf, map, partition, sortBy)
 import Data.Monoid (mconcat)
-import Data.Set as Set (Set, size, fromList, member, toList, difference, empty, null, map, union, fold, toAscList)
+import Data.Set as Set (difference, empty, fold, fromList, map, member, null, Set, size, toAscList, toList, union)
 import Data.Text as T (pack, unpack)
 import Data.Text.Encoding (encodeUtf8)
 import Debian.Arch (Arch(..))
 import Debian.Control (formatControl)
 import qualified Debian.Control.Text as B (Control'(Control))
 import Debian.Relation (BinPkgName)
-import Debian.Repo.Insert (findLive)
-import Debian.Repo.Monads.Apt (MonadApt)
-import qualified Debian.Repo.Package as DRP (binaryPackageSourceID, sourcePackageBinaryIDs, getPackages, sourcePackagesOfIndex)
-import Debian.Repo.PackageIndex (packageIndexPath, packageIndexList, sourceIndexList, binaryIndexList)
-import Debian.Repo.Release (signRelease)
-import Debian.Repo.Types.EnvPath (EnvPath, outsidePath)
-import Debian.Repo.Types.PackageID (PackageID(packageName, packageVersion))
-import Debian.Repo.Types.PackageIndex (BinaryPackage(packageID, packageInfo), PackageIndex(..), SourcePackage)
-import Debian.Repo.Types.LocalRepository (Layout(..), LocalRepository, repoLayout, repoRoot, repoReleaseInfoLocal)
-import Debian.Repo.Types.Release (Release(..))
-import Debian.Repo.Types.Repo (repoKey)
-import Debian.Repo.Types.Repository (fromLocalRepository)
+import Debian.Repo.Apt (MonadApt)
+import Debian.Repo.Apt.Insert (findLive)
+import Debian.Repo.Apt.Release (signRelease)
+import Debian.Repo.EnvPath (EnvPath, outsidePath)
+import Debian.Repo.LocalRepository (Layout(..), LocalRepository, repoLayout, repoReleaseInfoLocal, repoRoot)
+import qualified Debian.Repo.Package as DRP (binaryPackageSourceID, getPackages, sourcePackageBinaryIDs, sourcePackagesOfIndex)
+import Debian.Repo.PackageID (PackageID(packageName, packageVersion))
+import Debian.Repo.PackageIndex (binaryIndexList, BinaryPackage(packageID, packageInfo), PackageIndex(..), packageIndexList, packageIndexPath, sourceIndexList, SourcePackage)
+import qualified Debian.Repo.Pretty as F (Pretty(..))
+import Debian.Repo.Release (Release(..))
+import Debian.Repo.Repo (repoKey)
+import Debian.Repo.Repository (fromLocalRepository)
 import Debian.Version.Text ()
-import Extra.GPGSign ( PGPKey )
-import Extra.Files ( writeAndZipFileWithBackup )
-import System.FilePath ( splitFileName, (</>) )
+import Extra.Files (writeAndZipFileWithBackup)
+import Extra.GPGSign (PGPKey)
 import System.Directory (doesDirectoryExist, doesFileExist, getDirectoryContents, renameFile)
-import System.Process.Progress (qPutStr, qPutStrLn, ePutStrLn)
-import qualified Debian.Repo.Pretty as F ( Pretty(..) )
+import System.FilePath ((</>), splitFileName)
+import System.Process.Progress (ePutStrLn, qPutStr, qPutStrLn)
 
 -- |Delete any packages from a dist which are trumped by newer
 -- packages.  These packages are not technically garbage because they
@@ -76,7 +75,7 @@ findTrumped repo release =
 -- packages.  These packages are not technically garbage because they
 -- can still be installed by explicitly giving their version number to
 -- apt, but it is not really a good idea to use them.
-deleteBinaryOrphans :: forall m. (MonadApt m) => Bool -> Maybe PGPKey -> LocalRepository -> [Release] -> m ()
+deleteBinaryOrphans :: (MonadIO m, Functor m) => Bool -> Maybe PGPKey -> LocalRepository -> [Release] -> m ()
 deleteBinaryOrphans _ _ _ [] = error "deleteBinaryOrphans called with empty release list"
 deleteBinaryOrphans dry keyname repo releases =
     do -- All the source packages in the repository

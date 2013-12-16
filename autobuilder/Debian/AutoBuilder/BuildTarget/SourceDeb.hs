@@ -11,7 +11,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Control.String as S
 import qualified Debian.Version as V
-import Debian.Repo.Monads.Apt (MonadApt)
+import Debian.Repo.Apt (MonadApt)
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.Process (shell)

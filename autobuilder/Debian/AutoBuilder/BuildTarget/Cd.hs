@@ -5,7 +5,7 @@ module Debian.AutoBuilder.BuildTarget.Cd where
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Repo.Monads.Apt (MonadApt)
+import Debian.Repo.Apt (MonadApt)
 import System.FilePath ((</>))
 
 documentation = [ "cd:<relpath>:<target> - A target of this form modifies another target by"

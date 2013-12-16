@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
-module Debian.Repo.Deb.OSImage
+module Debian.Repo.Apt.OSImage
     ( prepareEnv
     , updateEnv
     , syncPool
@@ -12,20 +12,21 @@ import qualified Data.ByteString.Lazy as L (empty)
 import Data.List (intercalate)
 import Debian.Arch (Arch)
 import Debian.Release (ReleaseName(..))
-import Debian.Repo.Cache (buildArchOfRoot, distDir, sliceIndexes, SourcesChangedAction(SourcesChangedError), sourcesPath)
-import Debian.Repo.Monads.Apt (MonadApt)
-import Debian.Repo.Monads.Deb (MonadDeb)
-import Debian.Repo.Monads.Top (MonadTop(askTop))
+import Debian.Repo.Apt (MonadApt)
+import Debian.Repo.Apt.Cache (sliceIndexes)
+import Debian.Repo.Apt.Package (binaryPackagesOfIndex', sourcePackagesOfIndex')
+import Debian.Repo.Apt.Slice (verifySourcesList)
+import Debian.Repo.AptImage (AptBuildCache(..))
+import Debian.Repo.Cache (buildArchOfRoot, distDir, SourcesChangedAction(SourcesChangedError), sourcesPath)
+import Debian.Repo.Deb (MonadDeb)
+import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath, envRoot), EnvRoot(rootPath), rootEnvPath)
+import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository, prepareLocalRepository)
 import Debian.Repo.OSImage (neuterEnv, OSImage(..), updateLists)
-import Debian.Repo.Package (binaryPackagesOfIndex', sourcePackagesOfIndex')
+import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.SSH (sshCopy)
-import Debian.Repo.Slice (binarySlices, sourceSlices, verifySourcesList)
+import Debian.Repo.Slice (binarySlices, NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..), sourceSlices)
 import Debian.Repo.SourcesList (parseSourcesList)
-import Debian.Repo.Types.AptImage (AptBuildCache(..))
-import Debian.Repo.Types.EnvPath (EnvPath(EnvPath, envPath, envRoot), EnvRoot(rootPath), rootEnvPath)
-import Debian.Repo.Types.LocalRepository (copyLocalRepo, LocalRepository, prepareLocalRepository)
-import Debian.Repo.Types.PackageIndex (BinaryPackage, SourcePackage)
-import Debian.Repo.Types.Slice (NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..))
+import Debian.Repo.Top (MonadTop(askTop))
 import Debian.Sources (DebSource(sourceDist, sourceUri), SliceName(sliceName))
 import Debian.URI (URI(uriScheme), uriToString')
 import Extra.Files (replaceFile)

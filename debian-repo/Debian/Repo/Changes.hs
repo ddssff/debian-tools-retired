@@ -8,7 +8,6 @@
 module Debian.Repo.Changes
     ( findChangesFiles
     , saveChangesFile
-    , uploadLocal
 {-
     , parseChangesFilename
     , parseChangesFile
@@ -18,26 +17,20 @@ module Debian.Repo.Changes
     , changeName
     ) where
 
-import "mtl" Control.Monad.Trans ( MonadIO(..) )
-import Data.List ( isSuffixOf )
-import Data.Maybe ( catMaybes )
+import Data.List (isSuffixOf)
+import Data.Maybe (catMaybes)
 import Data.Monoid ((<>), mconcat)
-import Data.Text (Text, pack, unpack)
-import Debian.Arch (Arch, prettyArch, parseArch)
-import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName, parseChanges )
-import qualified Debian.Control.Text as S ( Paragraph'(..), Control'(Control), ControlFunctions(parseControlFromFile), fieldValue, modifyField )
+import Data.Text (pack, Text, unpack)
+import Debian.Arch (Arch, parseArch, prettyArch)
+import Debian.Changes (ChangedFileSpec(..), ChangesFile(..), changesFileName, parseChanges)
+import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(parseControlFromFile), fieldValue, modifyField, Paragraph'(..))
 import Debian.Release (parseReleaseName, parseSection)
-import Debian.Repo.Types.EnvPath (outsidePath)
-import Debian.Repo.Types.LocalRepository (LocalRepository, repoRoot)
-import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
-import Extra.Files ( replaceFile )
-import System.FilePath ( splitFileName, (</>) )
-import System.Directory ( doesFileExist, getDirectoryContents )
-import qualified System.Posix.Files as F ( createLink, removeLink )
-import Text.PrettyPrint.ANSI.Leijen (pretty)
-import Text.Regex ( matchRegex, matchRegexAll, mkRegex )
-import qualified Debian.Control.Text as B ()
 import Debian.URI ()
+import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
+import Extra.Files (replaceFile)
+import System.Directory (getDirectoryContents)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
+import Text.Regex (matchRegex, matchRegexAll, mkRegex)
 
 findChangesFiles :: FilePath -> IO [ChangesFile]
 findChangesFiles dir =
@@ -168,20 +161,3 @@ showSHA1List files = mconcat (map (("\n " <>) . showSHA1) files)
 showSHA256List :: [ChangedFileSpec] -> Text
 showSHA256List files = mconcat (map (("\n " <>) . showSHA256) files)
     where showSHA256 x = pack $ changedFileSHA256sum x ++ " " ++ show (changedFileSize x) ++ " " ++ changedFileName x
-
--- | Move a build result into a local repository's 'incoming' directory.
-uploadLocal :: LocalRepository -> ChangesFile -> IO ()
-uploadLocal repo changesFile =
-    do let paths = map (\ file -> changeDir changesFile </> changedFileName file) (changeFiles changesFile)
-       mapM_ (liftIO . install (outsidePath root)) (changePath changesFile : paths)
-    where
-      root = repoRoot repo
-      -- Hard link a file into the incoming directory
-      install root path =
-	  do removeIfExists (dest root path)
-	     F.createLink path (dest root path)
-             -- F.removeLink path
-      dest root path = root ++ "/incoming/" ++ snd (splitFileName path)
-      removeIfExists path =
-	  do exists <- doesFileExist path
-	     if exists then F.removeLink path  else return ()

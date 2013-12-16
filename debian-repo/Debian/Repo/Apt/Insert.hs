@@ -1,9 +1,9 @@
 {-# LANGUAGE BangPatterns, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-name-shadowing -fno-warn-missing-signatures #-}
 -- |Insert packages into a release.
-module Debian.Repo.Insert
+module Debian.Repo.Apt.Insert
     ( scanIncoming
-    , InstallResult(..)
+    , InstallResult(Ok, Failed, Rejected)
     , resultToProblems
     , showErrors
     , explainError
@@ -11,49 +11,47 @@ module Debian.Repo.Insert
     ) where
 
 import Control.Monad (foldM, when)
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy.Char8 as L (readFile)
 import Data.Digest.Pure.MD5 (md5)
-import Data.Either ( partitionEithers, rights )
-import Data.List as List ( group, sort, intercalate, sortBy, groupBy, isSuffixOf, partition, map )
-import Data.Maybe ( catMaybes )
+import Data.Either (partitionEithers, rights)
+import Data.List as List (group, groupBy, intercalate, isSuffixOf, map, partition, sort, sortBy)
+import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
-import Data.Set as Set (Set, fromList, insert, member, empty, unions, map, union, fold)
-import Data.Text as T (Text, pack, unpack)
+import Data.Set as Set (empty, fold, fromList, insert, map, member, Set, union, unions)
+import Data.Text as T (pack, Text, unpack)
 import Debian.Arch (Arch(..), prettyArch)
-import Debian.Changes ( ChangesFile(..), ChangedFileSpec(..), changesFileName )
+import Debian.Changes (ChangedFileSpec(..), ChangesFile(..), changesFileName)
 import Debian.Control (Paragraph')
-import qualified Debian.Control.Text as B ( Field'(Field), Paragraph, Field, ControlFunctions(parseControlFromHandle), Control,
-                                                  appendFields, fieldValue, modifyField, raiseFields, renameField )
-import qualified Debian.Control.Text as S ( Control'(Control), ControlFunctions(parseControlFromFile) )
-import Debian.Relation (PkgName, BinPkgName)
-import Debian.Repo.Changes (findChangesFiles, changeName, changePath)
-import Debian.Repo.Monads.Apt (MonadApt)
-import qualified Debian.Repo.Package as DRP ( sourceFilePaths, toBinaryPackage, getPackages, releaseSourcePackages, releaseBinaryPackages, putPackages )
-import Debian.Repo.Release ( prepareRelease, signRelease, findReleases )
-import Debian.Release (SubSection(section), Section(..), ReleaseName, parseSection', releaseName', sectionName, sectionName')
-import Debian.Repo.Types.EnvPath (EnvPath, outsidePath)
-import Debian.Repo.Types.LocalRepository (LocalRepository, Layout(..), repoLayout, repoRoot, poolDir')
-import Debian.Repo.Types.PackageID (PackageID(packageName, packageVersion), prettyPackageID)
-import Debian.Repo.Types.PackageIndex (prettyBinaryPackage, SourcePackage(sourcePackageID),
-                                       BinaryPackage(packageID, packageInfo), PackageIndex(..))
-import Debian.Repo.Types.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
-import Debian.Repo.Types.Repo (repoKey, repoArchList)
-import Debian.Repo.Types.Repository (Repository)
-import Debian.Version ( parseDebianVersion, DebianVersion, prettyDebianVersion )
+import qualified Debian.Control.Text as B (appendFields, Control, ControlFunctions(parseControlFromHandle), Field, Field'(Field), fieldValue, modifyField, Paragraph, raiseFields, renameField)
+import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(parseControlFromFile))
+import Debian.Relation (BinPkgName, PkgName)
+import Debian.Release (parseSection', ReleaseName, releaseName', Section(..), sectionName, sectionName', SubSection(section))
+import Debian.Repo.Apt (MonadApt)
+import Debian.Repo.Apt.Release (findReleases, prepareRelease, signRelease)
+import Debian.Repo.Changes (changeName, changePath, findChangesFiles)
+import Debian.Repo.EnvPath (EnvPath, outsidePath)
+import Debian.Repo.LocalRepository (Layout(..), LocalRepository, poolDir', repoLayout, repoRoot)
+import qualified Debian.Repo.Package as DRP (getPackages, putPackages, releaseBinaryPackages, releaseSourcePackages, sourceFilePaths, toBinaryPackage)
+import Debian.Repo.PackageID (PackageID(packageName, packageVersion), prettyPackageID)
+import Debian.Repo.PackageIndex (BinaryPackage(packageID, packageInfo), PackageIndex(..), prettyBinaryPackage, SourcePackage(sourcePackageID))
+import qualified Debian.Repo.Pretty as F (Pretty(..))
+import Debian.Repo.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
+import Debian.Repo.Repo (repoArchList, repoKey)
+import Debian.Repo.Repository (Repository)
+import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.Version.Text ()
-import Extra.GPGSign ( PGPKey )
-import Extra.Misc ( listDiff )
+import Extra.GPGSign (PGPKey)
+import Extra.Misc (listDiff)
+import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
+import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
-import System.Directory ( createDirectoryIfMissing, doesFileExist, removeFile)
-import System.Exit ( ExitCode(..) )
 import System.IO ()
-import qualified System.Posix.Files as F ( createLink, fileSize, getFileStatus )
-import System.Posix.Types ( FileOffset )
-import System.Process ( runInteractiveCommand, waitForProcess )
+import qualified System.Posix.Files as F (createLink, fileSize, getFileStatus)
+import System.Posix.Types (FileOffset)
+import System.Process (runInteractiveCommand, waitForProcess)
 import System.Process.Progress (qPutStrLn)
-import qualified Debian.Repo.Pretty as F ( Pretty(..) )
-import Text.PrettyPrint.ANSI.Leijen (Pretty(..), text, cat, pretty)
+import Text.PrettyPrint.ANSI.Leijen (cat, pretty, Pretty(..), text)
 
 data InstallResult 
     = Ok
@@ -80,8 +78,9 @@ instance Show Problem where
     show (BadChecksum path a b) = "BadChecksum " ++ path ++ " " ++ show a ++ " " ++ show b
     show (OtherProblem s) = "OtherProblem " ++ show s
 
-nub :: (Ord a) => [a] -> [a]
-nub = List.map head . group . sort
+-- | This nub doesn't preserve order
+nub' :: (Ord a) => [a] -> [a]
+nub' = List.map head . group . sort
 
 mergeResults :: [InstallResult] -> InstallResult
 mergeResults results =
@@ -198,7 +197,7 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
              return results''
          True ->
              mapM_ (liftIO . uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'') >>
-             mapM_ (liftIO . signRelease keyname repo) (catMaybes . List.map (findRelease releases) . nub . sort . List.map changeRelease $ changeFileList) >>
+             mapM_ (liftIO . signRelease keyname repo) (catMaybes . List.map (findRelease releases) . nub' . List.map changeRelease $ changeFileList) >>
              return results''
     where
       -- Hard link the files of each package into the repository pool,
@@ -210,7 +209,7 @@ installPackages createSections keyname repo{-@(LocalRepository root layout _)-} 
           maybe (return (live, releases, Failed [NoSuchRelease (changeRelease changes)] : results)) installFiles'
           where
             installFiles' release =
-                let sections = nub . sort . List.map (section . changedFileSection) . changeFiles $ changes in
+                let sections = nub' . List.map (section . changedFileSection) . changeFiles $ changes in
                 case (createSections, listDiff sections (releaseComponents release)) of
                   (_, []) -> installFiles'' release
                   (True, missing) ->
@@ -510,7 +509,7 @@ findLive repo = {-(LocalRepository _ Nothing _)-}
       changesFileNames releases package =
           List.map (\ arch -> intercalate "_" [show (pretty (packageName . sourcePackageID $ package)),
                                                show (prettyDebianVersion . packageVersion . sourcePackageID $ package),
-                                               show (prettyArch arch)] ++ ".changes") (nub (concat (architectures releases)))
+                                               show (prettyArch arch)] ++ ".changes") (nub' (concat (architectures releases)))
       uploadFilePaths root releases package = Set.map ((outsidePath root ++ "/") ++) . uploadFileNames releases $ package
       uploadFileNames releases package =
           Set.map (\ arch -> intercalate "_" [show (pretty (packageName . sourcePackageID $ package)),

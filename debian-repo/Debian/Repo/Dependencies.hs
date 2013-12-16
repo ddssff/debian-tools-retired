@@ -16,23 +16,21 @@ module Debian.Repo.Dependencies
     ) where
 
 import Control.Arrow (second)
+import Data.List (groupBy, intercalate, nub, sortBy)
+import qualified Data.Map as Map (empty, findWithDefault, fromListWith, insert, lookup, Map)
+import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import Data.Set (toList)
+import qualified Data.Set as Set (Set, singleton, toList, union)
 import Debian.Arch (Arch(Source, Binary), ArchCPU(..))
 import Debian.Control ()
 import qualified Debian.Control.Text as S ()
-import Debian.Relation (BinPkgName(BinPkgName))
-import Debian.Repo.Types.PackageID (PackageID(PackageID, packageName, packageVersion))
-import Debian.Repo.Types.PackageIndex (BinaryPackage, packageID, pProvides)
--- import Debian.Repo.Types.PackageVersion (PackageVersion, PkgVersion(PkgVersion), pkgVersion, pkgName, getName, getVersion)
-import Debian.Version (DebianVersion, prettyDebianVersion, parseDebianVersion)
-import Data.List ( sortBy, groupBy, intercalate, nub )
-import qualified Data.Map as Map ( insert, lookup, Map, empty, findWithDefault, fromListWith )
-import Data.Maybe ( catMaybes )
-import qualified Data.Set as Set ( Set, union, singleton, toList )
-import Debian.Relation ( ArchitectureReq(..), Relation(..), Relations, VersionReq(..) )
-import "Extra" Extra.List ( cartesianProduct )
-import Text.PrettyPrint.ANSI.Leijen (pretty, Doc, text)
+import Debian.Relation (ArchitectureReq(..), BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(..))
+import Debian.Repo.PackageID (PackageID(PackageID, packageName, packageVersion))
+import Debian.Repo.PackageIndex (BinaryPackage, packageID, pProvides)
+import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
+import "Extra" Extra.List (cartesianProduct)
+import Text.PrettyPrint.ANSI.Leijen (Doc, pretty, text)
 
 type Excuse = String
 

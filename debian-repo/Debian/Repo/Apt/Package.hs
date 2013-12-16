@@ -1,64 +1,47 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
-module Debian.Repo.Package
-    ( -- * Source and binary packages
-      sourceFilePaths
-    , binaryPackageSourceVersion
-    , binarySourceVersion
-    , sourcePackageBinaryNames
-    , sourceBinaryNames
-    , toSourcePackage
-    , toBinaryPackage
-    , binaryPackageSourceID
-    , sourcePackageBinaryIDs
-    , sourcePackagesOfIndex
-    , binaryPackagesOfIndex
-    , getPackages
-    , putPackages
-    , releaseSourcePackages
-    , releaseBinaryPackages
+module Debian.Repo.Apt.Package
+    ( sourcePackagesOfIndex'
+    , binaryPackagesOfIndex'
     ) where
 
-import Control.Exception as E (ErrorCall(ErrorCall), SomeException(..), try)
+import Control.Applicative ((<$>))
+import Control.Exception as E (catch)
 import "mtl" Control.Monad.Trans (MonadIO(..))
-import qualified Data.ByteString.Lazy.Char8 as L (ByteString, fromChunks)
-import Data.Either (partitionEithers)
-import Data.List as List (intercalate, intersperse, map, partition)
+import Data.Lens.Lazy (getL, modL)
+import Data.List as List (intercalate, map, partition)
+import Data.Map as Map (insert, lookup)
 import Data.Maybe (catMaybes)
-import Data.Set as Set (fromList, map, Set, unions)
-import qualified Data.Text as T (concat, pack, Text, unpack)
-import Data.Text.Encoding (encodeUtf8)
-import Debian.Apt.Index (Compression(..), controlFromIndex)
-import Debian.Arch (Arch(Source))
-import Debian.Control (ControlFunctions(asString, stripWS), formatParagraph, Paragraph')
-import qualified Debian.Control.Text as B (Control'(Control), ControlFunctions(lookupP), Field, Field'(Field), fieldValue, Paragraph)
-import Debian.Relation (BinPkgName(..))
+import qualified Data.Text as T (Text, unpack)
+import Debian.Arch (Arch(..), prettyArch)
+import Debian.Control (ControlFunctions(stripWS), formatParagraph)
+import qualified Debian.Control.Text as B (Control'(Control), ControlFunctions(lookupP), ControlFunctions(parseControlFromHandle), Field, Field'(Field), fieldValue, Paragraph)
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
-import Debian.Repo.EnvPath (outsidePath)
-import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
-import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(..))
-import Debian.Repo.PackageIndex (binaryIndexList, BinaryPackage(..), PackageIndex(..), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec, sourceFileName), sourceIndexList, SourcePackage(..))
-import Debian.Repo.Release (Release)
+import Debian.Release (releaseName', sectionName')
+import Debian.Repo.Apt (binaryPackageMap, MonadApt(getApt, putApt), sourcePackageMap)
+import Debian.Repo.AptImage (AptCache(aptArch, rootDir))
+import Debian.Repo.EnvPath (EnvRoot(rootPath))
+import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
+import Debian.Repo.PackageIndex (BinaryPackage(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..))
+import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (RepoKey, repoKeyURI)
-import Debian.URI (fileFromURIStrict)
-import Debian.Version (DebianVersion, parseDebianVersion)
-import qualified Debian.Version as V (buildDebianVersion, epoch, revision, version)
-import Extra.Files (writeAndZipFileWithBackup)
-import Network.URI (URI(uriPath))
-import System.FilePath ((</>))
-import Text.Regex (matchRegex, mkRegex, splitRegex)
+import Debian.Version (parseDebianVersion)
+import Network.URI (escapeURIString, URI(..), URIAuth(..), uriToString)
+import System.FilePath (takeDirectory)
+import qualified System.IO as IO (hClose, IOMode(ReadMode), openBinaryFile)
+import System.IO.Unsafe (unsafeInterleaveIO)
+import System.Posix (getFileStatus)
 
-{-
 uriToString' :: URI -> String
 uriToString' uri = uriToString id uri ""
--}
 
+{-
 sourceFilePaths :: SourcePackage -> Set FilePath
 sourceFilePaths package =
     Set.map ((sourceDirectory package) </>) . Set.map sourceFileName . Set.fromList . sourcePackageFiles $ package
 
 -- | Return the name and version number of the source package that
--- generated this binary package.
+-- generated this binary package.  
 binaryPackageSourceVersion :: BinaryPackage -> Maybe (String, DebianVersion)
 binaryPackageSourceVersion package =
     let binaryName = packageName . packageID $ package
@@ -100,10 +83,11 @@ sourcePackageBinaryNames package =
     sourceBinaryNames (sourceParagraph package)
 
 sourceBinaryNames :: B.Paragraph -> [BinPkgName]
-sourceBinaryNames paragraph =
+sourceBinaryNames paragraph = 
     case B.fieldValue "Binary" paragraph of
       Just names -> List.map BinPkgName (splitRegex (mkRegex "[ ,\t\n]+") (T.unpack names))
       _ -> error ("Source package info has no 'Binary' field:\n" ++ (T.unpack . formatParagraph $ paragraph))
+-}
 
 toSourcePackage :: PackageIndex -> B.Paragraph -> SourcePackage
 toSourcePackage index package =
@@ -162,7 +146,7 @@ toBinaryPackage :: Release -> PackageIndex -> B.Paragraph -> BinaryPackage
 toBinaryPackage release index p =
     case (B.fieldValue "Package" p, B.fieldValue "Version" p) of
       (Just name, Just version) ->
-          BinaryPackage
+          BinaryPackage 
           { packageID =
                 makeBinaryPackageID (T.unpack name) (parseDebianVersion (T.unpack version))
           , packageInfo = p
@@ -178,6 +162,7 @@ tryParseRel :: Maybe B.Field -> B.Relations
 tryParseRel (Just (B.Field (_, relStr))) = either (error . show) id (B.parseRelations relStr)
 tryParseRel _ = []
 
+{-
 -- | Parse the /Source/ field of a binary package's control
 -- information, this may specify a version number for the source
 -- package if it differs from the version number of the binary
@@ -237,8 +222,24 @@ sourcePackagesOfIndex repo release index =
     case packageIndexArch index of
       Source -> liftIO (getPackages repo release index) >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
       _ -> return (Right [])
+-}
+-- FIXME: assuming the index is part of the cache
+sourcePackagesOfIndex' :: (AptCache a, MonadApt m) => a -> RepoKey -> Release -> PackageIndex -> m [SourcePackage]
+sourcePackagesOfIndex' cache repo release index =
+    do -- state <- getApt
+       -- let cached = lookupSourcePackages path state <$> getApt
+       cached <- (Map.lookup path . getL sourcePackageMap) <$> getApt
+       status <- liftIO $ getFileStatus path `E.catch` (\ (_ :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory (rootPath (rootDir cache)) ++ " and try again - sorry about that.")
+       case cached of
+         Just (status', packages) | status == status' -> return packages
+         _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
+                 let packages = List.map (toSourcePackage index) paragraphs
+                 getApt >>= putApt . modL sourcePackageMap (Map.insert path (status, packages))
+                 -- sourcePackageMap %= Map.insert path (status, packages)
+                 return packages
+    where
+      path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
 
-{-
 indexCacheFile :: (AptCache a) => a -> RepoKey -> Release -> PackageIndex -> FilePath
 indexCacheFile apt repo release index =
     case (aptArch apt, packageIndexArch index) of
@@ -295,8 +296,22 @@ indexPrefix repo release index =
     case last a of
       '_' -> (init a) +?+ b
       _ -> a ++ "_" ++ b
--}
 
+-- FIXME: assuming the index is part of the cache 
+binaryPackagesOfIndex' :: (MonadApt m, AptCache a) => a -> RepoKey -> Release -> PackageIndex -> m [BinaryPackage]
+binaryPackagesOfIndex' cache repo release index =
+    do cached <- (Map.lookup path . getL binaryPackageMap) <$> getApt
+       status <- liftIO $ getFileStatus path
+       case cached of
+         Just (status', packages) | status == status' -> return packages
+         _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
+                 let packages = List.map (toBinaryPackage release index) paragraphs
+                 getApt >>= putApt . modL binaryPackageMap (Map.insert path (status, packages))
+                 return packages
+    where
+      path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
+
+{-
 -- | Return a list of all source packages.
 releaseSourcePackages :: {- MonadRepoCache k r -} MonadIO m => RepoKey -> Release -> m (Set SourcePackage)
 releaseSourcePackages repo release =
@@ -322,8 +337,8 @@ putPackages repo release index packages =
     writeAndZipFileWithBackup (outsidePath (repoRoot repo) </> packageIndexPath release index) (L.fromChunks [encodeUtf8 text]) >>= either (fail . intercalate "\n") return
     where
       text = T.concat (intersperse (T.pack "\n") . List.map formatParagraph . List.map packageInfo $ packages)
+-}
 
-{-
 readParagraphs :: FilePath -> IO [B.Paragraph]
 readParagraphs path =
     do --IO.hPutStrLn IO.stderr ("OSImage.paragraphsFromFile " ++ path)			-- Debugging output
@@ -332,4 +347,3 @@ readParagraphs path =
        IO.hClose h
        --IO.hPutStrLn IO.stderr ("OSImage.paragraphsFromFile " ++ path ++ " done.")	-- Debugging output
        return paragraphs
--}

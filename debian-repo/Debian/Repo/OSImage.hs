@@ -20,14 +20,14 @@ import Data.Time (NominalDiffTime)
 import Debian.Arch (Arch)
 import Debian.Relation (ParseRelations(..), Relations)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(..))
+import Debian.Repo.AptImage (AptBuildCache(..), AptCache(..))
+import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(rootPath), outsidePath)
+import Debian.Repo.LocalRepository (LocalRepository)
+import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
+import Debian.Repo.Repo (repoKey, repoURI)
+import Debian.Repo.Repository (fromLocalRepository)
+import Debian.Repo.Slice (Slice(Slice, sliceRepoKey, sliceSource), SliceList(..))
 import Debian.Repo.Sync (rsync)
-import Debian.Repo.Types.AptImage (AptBuildCache(..), AptCache(..))
-import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(rootPath), outsidePath)
-import Debian.Repo.Types.LocalRepository (LocalRepository)
-import Debian.Repo.Types.PackageIndex (BinaryPackage, SourcePackage)
-import Debian.Repo.Types.Repo (repoKey, repoURI)
-import Debian.Repo.Types.Repository (fromLocalRepository)
-import Debian.Repo.Types.Slice (Slice(Slice, sliceRepoKey, sliceSource), SliceList(..))
 import Debian.Sources (DebSource(DebSource), SourceType(Deb, DebSrc))
 import "Extra" Extra.List (isSublistOf)
 import Extra.Misc (sameInode, sameMd5sum)
@@ -111,18 +111,6 @@ osFullDistro os =
       name = relName (osReleaseName os)
       repo' = osLocalCopy os
       -- repo' = repoCD (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) repo
-
-{-
-getSourcePackages :: MonadApt m => OSImage -> m [SourcePackage]
-getSourcePackages os =
-    do indexes <- mapM (sliceIndexes os) (slices . sourceSlices . aptSliceList $ os) >>= return . concat
-       mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' os repo rel index) indexes >>= return . concat
-
-getBinaryPackages :: MonadApt m => OSImage -> m [BinaryPackage]
-getBinaryPackages os =
-    do indexes <- mapM (sliceIndexes os) (slices . binarySlices . aptSliceList $ os) >>= return . concat
-       mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' os repo rel index) indexes >>= return . concat
--}
 
 data UpdateError
     = Changed ReleaseName FilePath SliceList SliceList

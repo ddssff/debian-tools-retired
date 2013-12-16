@@ -6,8 +6,8 @@ module Debian.AutoBuilder.Env
 
 import Control.Monad.Trans (MonadIO)
 import Debian.Release (ReleaseName, releaseName')
-import Debian.Repo (EnvRoot(EnvRoot))
-import Debian.Repo.Monads.Top (MonadTop, sub)
+import Debian.Repo.Top (MonadTop, sub)
+import Debian.Repo.EnvPath (EnvRoot(EnvRoot))
 import System.FilePath ((</>))
 
 buildEnvOfRelease :: (MonadIO m, MonadTop m) => ReleaseName -> m EnvRoot

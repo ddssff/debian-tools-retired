@@ -4,7 +4,7 @@
 -- |AptIO is an instance of the RWS monad used to manage the global
 -- state and output style parameters of clients of the Apt library,
 -- such as the autobuilder.
-module Debian.Repo.Monads.Apt
+module Debian.Repo.Apt
     ( MonadApt(..)
     , AptT
     , runAptT
@@ -28,14 +28,14 @@ import Data.Lens.Lazy (access, (~=))
 import Data.Lens.Template (makeLenses)
 import Data.Map as Map (empty, insert, lookup, Map)
 import Debian.Release (ReleaseName)
-import Debian.Repo.Types.AptImage (AptImage)
-import Debian.Repo.Types.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot))
-import Debian.Repo.Types.LocalRepository (prepareLocalRepository)
-import Debian.Repo.Types.PackageIndex (BinaryPackage, SourcePackage)
-import Debian.Repo.Types.Release (getReleaseInfoRemote, Release)
-import Debian.Repo.Types.RemoteRepository (RemoteRepository, RemoteRepository(RemoteRepository))
-import Debian.Repo.Types.Repo (RepoKey(..))
-import Debian.Repo.Types.Repository (Repository, Repository(LocalRepo, RemoteRepo))
+import Debian.Repo.AptImage (AptImage)
+import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot))
+import Debian.Repo.LocalRepository (prepareLocalRepository)
+import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
+import Debian.Repo.Release (getReleaseInfoRemote, Release)
+import Debian.Repo.RemoteRepository (RemoteRepository, RemoteRepository(RemoteRepository))
+import Debian.Repo.Repo (RepoKey(..))
+import Debian.Repo.Repository (Repository, Repository(LocalRepo, RemoteRepo))
 import Debian.Sources (SliceName)
 import Debian.URI (fromURI', toURI', URI(uriPath, uriScheme), URI')
 import System.IO.Unsafe (unsafeInterleaveIO)

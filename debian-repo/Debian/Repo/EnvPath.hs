@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Debian.Repo.Types.EnvPath
+module Debian.Repo.EnvPath
     ( EnvRoot(..)
     , EnvPath(..)
     , outsidePath
