@@ -17,7 +17,7 @@ module Debian.Repo.Apt
     , binaryPackageMap
 
     , prepareRemoteRepository
-    , prepareRepository
+    , foldRepository
 
     , MonadDeb
     , runDebT
@@ -37,12 +37,11 @@ import Data.Maybe (fromMaybe)
 import Debian.Release (ReleaseName)
 import Debian.Repo.AptImage (AptImage)
 import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot))
-import Debian.Repo.LocalRepository (prepareLocalRepository)
+import Debian.Repo.LocalRepository (LocalRepository, prepareLocalRepository)
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Release (getReleaseInfoRemote, Release)
 import Debian.Repo.RemoteRepository (RemoteRepository, RemoteRepository(RemoteRepository))
-import Debian.Repo.Repo (RepoKey(..))
-import Debian.Repo.Repository (Repository, Repository(LocalRepo, RemoteRepo))
+import Debian.Repo.Repo (RepoKey(..), Repo)
 import Debian.Repo.Top (MonadTop, runTopT, sub, TopT)
 import Debian.Sources (SliceName)
 import Debian.URI (fromURI', toURI', URI(uriPath, uriScheme), URI')
@@ -123,17 +122,25 @@ loadRemoteRepository uri =
        modifyRepoCache (Map.insert uri repo)
        return repo
 
-prepareRepository :: MonadApt m => RepoKey -> m Repository
-prepareRepository key =
-    case key of
-      Local path -> prepareLocalRepository path Nothing >>= return . LocalRepo
-      Remote uri' -> repositoryFromURI (fromURI' uri')
+-- foldRepository :: forall m r a. MonadApt m => (r -> m a) -> RepoKey -> m a
+-- foldRepository f key =
+--     case key of
+--       Local path -> prepareLocalRepository path Nothing >>= f
+--       Remote uri' ->
+--           let uri = fromURI' uri' in
+--           case uriScheme uri of
+--             "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= f
+--             _ -> prepareRemoteRepository uri >>= f
 
-repositoryFromURI :: MonadApt m => URI -> m Repository
-repositoryFromURI uri =
-    case uriScheme uri of
-      "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= return . LocalRepo
-      _ -> prepareRemoteRepository uri >>= return . RemoteRepo
+foldRepository :: forall m a. MonadApt m => (LocalRepository -> m a) -> (RemoteRepository -> m a) -> RepoKey -> m a
+foldRepository f g key =
+    case key of
+      Local path -> prepareLocalRepository path Nothing >>= f
+      Remote uri' ->
+          let uri = fromURI' uri' in
+          case uriScheme uri of
+            "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= f
+            _ -> prepareRemoteRepository uri >>= g
 
 --instance Read URI where
 --    readsPrec _ s = [(fromJust (parseURI s), "")]

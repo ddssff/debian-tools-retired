@@ -3,9 +3,6 @@
 module Debian.Repo.LocalRepository
     ( LocalRepository(..)
     , Layout(..)
-    , repoRoot
-    , repoLayout
-    , repoReleaseInfoLocal
     , poolDir'
     , readLocalRepo
     , prepareLocalRepository
@@ -34,7 +31,7 @@ import Debian.Relation (BinPkgName(..))
 import Debian.Release (parseReleaseName, ReleaseName(..), releaseName', Section, sectionName', SubSection(section))
 import Debian.Repo.Changes (changeKey, changePath, findChangesFiles)
 import Debian.Repo.Dependencies (readSimpleRelation)
-import Debian.Repo.EnvPath (EnvPath, outsidePath)
+import Debian.Repo.EnvPath (EnvPath(envPath), outsidePath)
 import Debian.Repo.PackageID (PackageID)
 import Debian.Repo.Release (parseReleaseFile, Release)
 import Debian.Repo.Repo (compatibilityFile, libraryCompatibilityLevel, Repo(..), RepoKey(..))
@@ -45,6 +42,7 @@ import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Bool (cond)
 import Extra.Files (maybeWriteFile, replaceFile)
 import Extra.List (partitionM)
+import Network.URI (URI(..))
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getDirectoryContents)
 import System.Exit (ExitCode(ExitFailure), ExitCode(ExitSuccess))
 import System.FilePath ((</>), splitFileName)
@@ -52,29 +50,28 @@ import qualified System.Posix.Files as F (createLink, fileMode, getFileStatus, g
 import System.Process (readProcessWithExitCode, shell, showCommandForUser)
 import System.Process.Progress (foldOutputsL, Output, qPutStrLn, quieter, runProcessV, timeTask)
 import System.Unix.Directory (removeRecursiveSafely)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
+import qualified Debian.Repo.Pretty as F (Pretty(..))
+import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
 import Text.Regex (matchRegex, mkRegex)
-
 
 data LocalRepository
     = LocalRepository
-      { repoRoot_ :: EnvPath
-      , repoLayout_ :: (Maybe Layout)
-      , repoReleaseInfoLocal_ :: [Release]
+      { repoRoot :: EnvPath
+      , repoLayout :: (Maybe Layout)
+      , repoReleaseInfoLocal :: [Release]
       } deriving (Read, Show, Ord, Eq)
+
+instance F.Pretty LocalRepository where
+    pretty (LocalRepository root _ _) =
+        text $ show $ URI { uriScheme = "file:"
+                          , uriAuthority = Nothing
+                          , uriPath = envPath root
+                          , uriQuery = ""
+                          , uriFragment = "" }
 
 -- |The possible file arrangements for a repository.  An empty
 -- repository does not yet have either of these attributes.
 data Layout = Flat | Pool deriving (Eq, Ord, Read, Show, Bounded, Enum)
-
-repoRoot :: LocalRepository -> EnvPath
-repoRoot = repoRoot_
-
-repoLayout :: LocalRepository -> Maybe Layout
-repoLayout = repoLayout_
-
-repoReleaseInfoLocal :: LocalRepository -> [Release]
-repoReleaseInfoLocal = repoReleaseInfoLocal_
 
 instance Repo LocalRepository where
     repoKey (LocalRepository path _ _) = Local path -- fromJust . parseURI $ "file://" ++ envPath path
@@ -112,9 +109,9 @@ readLocalRepo root layout =
        let aliases = map (checkAliases  . partition (uncurry (==))) distGroups
        releaseInfo <- mapM (liftIO . getReleaseInfo) aliases
        qPutStrLn ("LocalRepository releaseInfo " ++ show root ++ ": " ++ show releaseInfo)
-       let repo = LocalRepository { repoRoot_ = root
-                                  , repoLayout_ = layout
-                                  , repoReleaseInfoLocal_ = releaseInfo }
+       let repo = LocalRepository { repoRoot = root
+                                  , repoLayout = layout
+                                  , repoReleaseInfoLocal = releaseInfo }
        return repo
     where
       fstEq (a, _) (b, _) = a == b
@@ -171,7 +168,7 @@ copyLocalRepo dest repo =
        liftIO $ createDirectoryIfMissing True (outsidePath dest)
        result <- liftIO $ rsync [] (outsidePath (repoRoot repo)) (outsidePath dest)
        case result of
-         ExitSuccess -> return $ repo {repoRoot_ = dest}
+         ExitSuccess -> return $ repo {repoRoot = dest}
          code -> error $ "*** FAILURE syncing local repository " ++ src ++ " -> " ++ dst ++ ": " ++ show code
     where
       src = outsidePath (repoRoot repo)

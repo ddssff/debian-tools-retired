@@ -23,7 +23,6 @@ import Debian.Repo.LocalRepository (LocalRepository, Layout, repoRoot, prepareLo
 import Debian.Repo.PackageID (PackageID, makeBinaryPackageID)
 import Debian.Repo.PackageIndex (PackageIndex(PackageIndex))
 import Debian.Repo.Release (Release, parseArchitectures, releaseName, releaseAliases, releaseComponents, releaseArchitectures)
-import Debian.Repo.Repository (fromLocalRepository)
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
 import Extra.Email (sendEmails)
 import Extra.GPGSign (PGPKey(Default, Key))
@@ -173,7 +172,7 @@ getReleases root' layout' dists section' archList' =
     do repo <- prepareLocalRepository root' layout'
        existingReleases <- findReleases repo
        requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
-       return $ mergeReleases (fromLocalRepository repo) (existingReleases ++ requiredReleases)
+       return $ mergeReleases repo (existingReleases ++ requiredReleases)
 
 deletePackages :: Bool -> LocalRepository -> [Release] -> Params -> Maybe PGPKey -> IO [Release]
 deletePackages dry repo rels flags keyname =

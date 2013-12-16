@@ -2,12 +2,10 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.RemoteRepository
     ( RemoteRepository(..)
-    , repoReleaseNames
     ) where
 
-import Debian.Release (ReleaseName)
 import qualified Debian.Repo.Pretty as F (Pretty(..))
-import Debian.Repo.Release (Release(releaseName))
+import Debian.Repo.Release (Release)
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey(Remote))
 import Debian.URI (fromURI', URI')
 import Text.PrettyPrint.ANSI.Leijen (text)
@@ -26,8 +24,3 @@ instance F.Pretty URI' where
 
 instance F.Pretty RemoteRepository where
     pretty (RemoteRepository s _) = F.pretty s
-
--- Nice code to do caching, but I figured out how to fix the old code.
-
-repoReleaseNames :: RemoteRepository -> [ReleaseName]
-repoReleaseNames (RemoteRepository _ rels) = map releaseName rels

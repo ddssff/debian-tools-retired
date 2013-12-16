@@ -29,7 +29,6 @@ import Debian.Repo.LocalRepository (LocalRepository, prepareLocalRepository, rep
 import Debian.Repo.PackageIndex (PackageIndex(packageIndexArch, packageIndexComponent), packageIndexDir, packageIndexList, packageIndexName, releaseDir)
 import Debian.Repo.Release (parseArchitectures, parseComponents, Release(..))
 import Debian.Repo.Repo (Repo(repoKey))
-import Debian.Repo.Repository (fromLocalRepository, Repository)
 import qualified Extra.Files as EF (maybeWriteFile, prepareSymbolicLink, writeAndZipFile)
 import qualified Extra.GPGSign as EG (cd, PGPKey, pgpSignFiles)
 import qualified Extra.Time as ET (formatDebianDate)
@@ -40,17 +39,17 @@ import qualified System.Posix.Files as F (fileSize, getFileStatus)
 import System.Process.Progress (qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-lookupRelease :: MonadApt m => Repository -> ReleaseName -> m (Maybe Release)
+lookupRelease :: (Repo r, MonadApt m) => r -> ReleaseName -> m (Maybe Release)
 lookupRelease repo dist = (Map.lookup (repoKey repo, dist) . getL releaseMap) <$> getApt
 
-insertRelease :: MonadApt m => Repository -> Release -> m ()
+insertRelease :: (Repo r, MonadApt m) => r -> Release -> m ()
 insertRelease repo release = getApt >>= putApt . modL releaseMap (Map.insert (repoKey repo, releaseName release) release)
 
 -- | Find or create a (local) release.
 prepareRelease :: MonadApt m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> m Release
 prepareRelease repo dist aliases sections archList =
     -- vPutStrLn 0 ("prepareRelease " ++ name ++ ": " ++ show repo ++ " sections " ++ show sections) >>
-    lookupRelease (fromLocalRepository repo) dist >>= maybe prepare (const prepare) -- return -- JAS - otherwise --create-section does not do anything
+    lookupRelease repo dist >>= maybe prepare (const prepare) -- return -- JAS - otherwise --create-section does not do anything
     where
       prepare :: MonadApt m => m Release
       prepare =
@@ -67,7 +66,7 @@ prepareRelease repo dist aliases sections archList =
              -- something rather than Nothing.
              repo' <- prepareLocalRepository root (repoLayout repo)
              --vPutStrLn 0 $ "prepareRelease: prepareLocalRepository -> " ++ show repo'
-             insertRelease (fromLocalRepository repo') release
+             insertRelease repo' release
              return release
       initIndex root' release index = initIndexFile (root' </> packageIndexDir release index) (packageIndexName index)
       initIndexFile dir name =
@@ -160,8 +159,8 @@ pad :: Char -> Int -> String -> String
 pad padchar padlen s = replicate p padchar ++ s
     where p = padlen - length s
 
--- Merge a list of releases so each dist only appears once
-mergeReleases :: Repository -> [Release] -> Release
+-- | Merge a list of releases so each dist only appears once
+mergeReleases :: Repo r => r -> [Release] -> Release
 mergeReleases _repo releases =
     Release { releaseName = (releaseName . head $ releases)
             , releaseAliases = aliases
@@ -178,7 +177,7 @@ findReleases repo = mapM (findLocalRelease repo) (repoReleaseInfoLocal repo)
 
 findLocalRelease :: MonadApt m => LocalRepository -> Release -> m Release
 findLocalRelease repo releaseInfo =
-    lookupRelease (fromLocalRepository repo) dist >>= maybe readRelease return
+    lookupRelease repo dist >>= maybe readRelease return
     where
       readRelease :: MonadApt m => m Release
       readRelease =
@@ -193,7 +192,7 @@ findLocalRelease repo releaseInfo =
                                         , releaseAliases = releaseAliases releaseInfo
                                         , releaseComponents = parseComponents components
                                         , releaseArchitectures = parseArchitectures architectures})
-                            insertRelease (fromLocalRepository repo) rel
+                            insertRelease repo rel
                             return rel
                      _ ->
                          error $ "Invalid release file: " ++ path

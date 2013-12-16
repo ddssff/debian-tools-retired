@@ -27,7 +27,7 @@ import qualified Debian.Control.Text as B (Control'(Control), ControlFunctions(l
 import Debian.Relation (PkgName(..), SrcPkgName(..))
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (ReleaseName(..), releaseName', sectionName')
-import Debian.Repo.Apt (aptImageMap, binaryPackageMap, MonadApt(getApt, putApt), prepareRepository, sourcePackageMap, MonadDeb)
+import Debian.Repo.Apt (aptImageMap, binaryPackageMap, MonadApt(getApt, putApt), foldRepository, sourcePackageMap, MonadDeb)
 import Debian.Repo.Apt.Slice (updateCacheSources, verifySourcesList)
 import Debian.Repo.AptImage (OSCache(..), AptCache(..), AptImage(..), localeGen, neuterEnv, OSImage(..), updateLists, buildArchOfRoot, cacheRootDir, distDir, SourcesChangedAction, SourcesChangedAction(SourcesChangedError), sourcesPath)
 import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath, envRoot), EnvRoot(..), rootEnvPath)
@@ -149,13 +149,15 @@ getBinaryPackages' os =
 
 -- |Return a list of the index files that contain the packages of a
 -- slice.
-sliceIndexes :: (MonadApt m, AptCache a) => a -> Slice -> m [(RepoKey, Release, PackageIndex)]
+sliceIndexes :: forall m a. (MonadApt m, AptCache a) => a -> Slice -> m [(RepoKey, Release, PackageIndex)]
 sliceIndexes cache slice =
-    prepareRepository (sliceRepoKey slice) >>= \ repo ->
-    case (sourceDist (sliceSource slice)) of
-      Left exact -> error $ "Can't handle exact path in sources.list: " ++ exact
-      Right (release, sections) -> return $ map (makeIndex repo release) sections
+    foldRepository f f (sliceRepoKey slice)
     where
+      f :: Repo r => r -> m [(RepoKey, Release, PackageIndex)]
+      f repo =
+          case (sourceDist (sliceSource slice)) of
+            Left exact -> error $ "Can't handle exact path in sources.list: " ++ exact
+            Right (release, sections) -> return $ map (makeIndex repo release) sections
       makeIndex repo release section =
           (repoKey repo,
            findReleaseInfo repo release,
@@ -476,9 +478,9 @@ updateOSEnv os =
                 os' <- syncLocalPool os
                 _ <- liftIO $ updateLists os'
                 _ <- liftIO $ sshCopy (rootPath root)
-                source <- getSourcePackages' os'
+                source' <- getSourcePackages' os'
                 binary <- getBinaryPackages' os'
-                return . Right $ os' {osSourcePackages = source, osBinaryPackages = binary}
+                return . Right $ os' {osSourcePackages = source', osBinaryPackages = binary}
     where
       verifySources :: MonadApt m => m (Either UpdateError OSImage)
       verifySources =
@@ -661,18 +663,18 @@ indexPrefix repo release index =
       uriText = prefix scheme user' pass' reg port path
       -- If user is given and password is not, the user name is
       -- added to the file name.  Otherwise it is not.  Really.
-      prefix "http:" (Just user) Nothing (Just host) port path =
-          user ++ host ++ port ++ escape path
-      prefix "http:" _ _ (Just host) port path =
-          host ++ port ++ escape path
-      prefix "ftp:" _ _ (Just host) _ path =
-          host ++ escape path
-      prefix "file:" Nothing Nothing Nothing "" path =
-          escape path
-      prefix "ssh:" (Just user) Nothing (Just host) port path =
-          user ++ host ++ port ++ escape path
-      prefix "ssh" _ _ (Just host) port path =
-          host ++ port ++ escape path
+      prefix "http:" (Just user'') Nothing (Just host) port' path' =
+          user'' ++ host ++ port' ++ escape path'
+      prefix "http:" _ _ (Just host) port' path' =
+          host ++ port' ++ escape path'
+      prefix "ftp:" _ _ (Just host) _ path' =
+          host ++ escape path'
+      prefix "file:" Nothing Nothing Nothing "" path' =
+          escape path'
+      prefix "ssh:" (Just user'') Nothing (Just host) port' path' =
+          user'' ++ host ++ port' ++ escape path'
+      prefix "ssh" _ _ (Just host) port' path' =
+          host ++ port' ++ escape path'
       prefix _ _ _ _ _ _ = error ("invalid repo URI: " ++ (uriToString' . repoKeyURI $ repo))
       maybeOfString "" = Nothing
       maybeOfString s = Just s
@@ -680,7 +682,7 @@ indexPrefix repo release index =
       wordsBy :: Eq a => (a -> Bool) -> [a] -> [[a]]
       wordsBy p s =
           case (break p s) of
-            (s, []) -> [s]
+            (s', []) -> [s']
             (h, t) -> h : wordsBy p (drop 1 t)
 
 (+?+) :: String -> String -> String

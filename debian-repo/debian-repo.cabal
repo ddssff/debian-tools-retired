@@ -60,7 +60,6 @@ Library
         Debian.Repo.RemoteRepository,
         Debian.Repo.Release,
         Debian.Repo.Repo,
-        Debian.Repo.Repository,
         Debian.Repo.Slice,
         Debian.Repo.SourcesList,
         Debian.Repo.SourceTree,

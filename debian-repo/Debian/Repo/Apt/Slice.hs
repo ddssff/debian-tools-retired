@@ -24,7 +24,6 @@ import Debian.Repo.AptImage (AptCache(aptBaseSliceList, aptReleaseName), distDir
 import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..))
 import Debian.Repo.LocalRepository (prepareLocalRepository)
 import Debian.Repo.Repo (repoKey)
-import Debian.Repo.Repository (Repository(LocalRepo, RemoteRepo))
 import Debian.Repo.Slice (Slice(..), SliceList(..))
 import Debian.Repo.SourcesList (parseSourcesList)
 import Debian.Sources (DebSource(..), SourceType(Deb, DebSrc))
@@ -38,26 +37,6 @@ import System.Process.Progress (ePutStr, ePutStrLn, qPutStrLn)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Regex (mkRegex, splitRegex)
-
-{-
-sourceSlices :: SliceList -> SliceList
-sourceSlices = SliceList . filter ((== DebSrc) . sourceType . sliceSource) . slices
-
-binarySlices :: SliceList -> SliceList
-binarySlices = SliceList . filter ((== Deb) . sourceType . sliceSource) . slices
-
-inexactPathSlices :: SliceList -> SliceList
-inexactPathSlices = SliceList . filter (either (const False) (const True) . sourceDist . sliceSource) . slices
-
-releaseSlices :: ReleaseName -> SliceList -> SliceList
-releaseSlices release list =
-    SliceList . filter (isRelease . sourceDist . sliceSource) $ (slices list)
-    where isRelease = either (const False) (\ (x, _) -> x == release)
-
-appendSliceLists :: [SliceList] -> SliceList
-appendSliceLists lists =
-    SliceList { slices = concat (map slices lists) }
--}
 
 -- |Examine the repository whose root is at the given URI and return a
 -- set of sources that includes all of its releases.  This is used to
@@ -102,21 +81,6 @@ readRelease uri name =
     where
       uri' = uri {uriPath = uriPath uri </> "dists" </> unpack name </> "Release"}
 
-{-
-parseNamedSliceList :: MonadApt m => (String, String) -> m (Maybe NamedSliceList)
-parseNamedSliceList (name, text) =
-    (verifySourcesList Nothing . parseSourcesList) text >>=
-    \ sources -> return . Just $ NamedSliceList { sliceListName = SliceName name, sliceList = sources }
-
--- |Create ReleaseCache info from an entry in the config file, which
--- includes a dist name and the lines of the sources.list file.
--- This also creates the basic
-parseNamedSliceList' :: MonadApt m => (String, String) -> m NamedSliceList
-parseNamedSliceList' (name, text) =
-    do sources <- (verifySourcesList Nothing . parseSourcesList) text
-       return $ NamedSliceList { sliceListName = SliceName name, sliceList = sources }
--}
-
 -- | Make sure all the required local and remote repository objects
 -- used by a sources.list file are in our cache.
 verifySourcesList :: MonadApt m => Maybe EnvRoot -> [DebSource] -> m SliceList
@@ -125,10 +89,6 @@ verifySourcesList chroot list =
     (\ xs -> return $ SliceList { slices = xs })
 
 {-
-verifySourceLine :: MonadApt m => Maybe EnvRoot -> String -> m Slice
-verifySourceLine chroot str = verifyDebSource chroot (parseSourceLine str)
--}
-
 verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m Slice
 verifyDebSource chroot line =
     repo >>= \ repo' -> return $ Slice {sliceRepoKey = repoKey repo', sliceSource = line}
@@ -137,6 +97,15 @@ verifyDebSource chroot line =
           case uriScheme (sourceUri line) of
             "file:" -> prepareLocalRepository (EnvPath chroot' (uriPath (sourceUri line))) Nothing >>= return . LocalRepo
             _ -> prepareRemoteRepository (sourceUri line) >>= return . RemoteRepo
+      chroot' = fromMaybe (EnvRoot "") chroot
+-}
+
+verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m Slice
+verifyDebSource chroot line =
+    case uriScheme (sourceUri line) of
+      "file:" -> prepareLocalRepository (EnvPath chroot' (uriPath (sourceUri line))) Nothing >>= \ repo' -> return $ Slice {sliceRepoKey = repoKey repo', sliceSource = line}
+      _ -> prepareRemoteRepository (sourceUri line) >>= \ repo' -> return $ Slice {sliceRepoKey = repoKey repo', sliceSource = line}
+    where
       chroot' = fromMaybe (EnvRoot "") chroot
 
 -- |Change the sources.list of an AptCache object, subject to the

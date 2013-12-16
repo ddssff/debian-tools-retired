@@ -42,7 +42,6 @@ import Debian.Repo.LocalRepository (LocalRepository)
 import Debian.Repo.PackageID (PackageID(packageVersion, packageName))
 import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage(sourcePackageID))
 import Debian.Repo.Repo (repoKey, repoURI)
-import Debian.Repo.Repository (fromLocalRepository)
 import Debian.Repo.Slice (Slice(Slice, sliceRepoKey, sliceSource), SliceList, SliceList(..))
 import Debian.Repo.Sync (rsync)
 import Debian.Sources (DebSource(..), SourceType(..))
@@ -385,8 +384,8 @@ osFullDistro os =
     SliceList { slices = slices (osBaseDistro os) ++ slices localSources }
     where
       localSources :: SliceList
-      localSources = SliceList {slices = [Slice {sliceRepoKey = repoKey (fromLocalRepository repo'), sliceSource = src},
-                                          Slice {sliceRepoKey = repoKey (fromLocalRepository repo'), sliceSource = bin}]}
+      localSources = SliceList {slices = [Slice {sliceRepoKey = repoKey repo', sliceSource = src},
+                                          Slice {sliceRepoKey = repoKey repo', sliceSource = bin}]}
       src = DebSource Deb (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
       bin = DebSource DebSrc (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
       name = relName (osReleaseName os)

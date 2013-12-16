@@ -23,8 +23,7 @@ import Debian.Repo.LocalRepository (Layout(Pool), prepareLocalRepository)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
 import Debian.Repo.PackageIndex (binaryIndexList, BinaryPackage(..), PackageIndex(packageIndexArch), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), sourceIndexList, SourcePackage(..))
 import Debian.Repo.Release (Release)
-import Debian.Repo.Repo (repoURI)
-import Debian.Repo.Repository (fromLocalRepository, Repository)
+import Debian.Repo.Repo (Repo, repoURI)
 import Debian.Version (parseDebianVersion)
 import GHC.IO.Exception (IOErrorType(UserError), IOException)
 import Network.URI (URI(..), URIAuth(..), uriToString)
@@ -48,8 +47,8 @@ main :: IO ()
 main = runAptT $ quieter (- 3) $
     do repo <- prepareLocalRepository root (Just Pool)
        releases <- findReleases repo
-       sources <- mapM (liftIO . releaseSourcePackages . (fromLocalRepository repo,)) releases >>= return . Set.unions
-       binaries <- mapM (liftIO . releaseBinaryPackages . (fromLocalRepository repo,)) releases >>= return . Set.unions
+       sources <- mapM (liftIO . releaseSourcePackages . (repo,)) releases >>= return . Set.unions
+       binaries <- mapM (liftIO . releaseBinaryPackages . (repo,)) releases >>= return . Set.unions
        -- requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
        -- return $ mergeReleases (existingReleases ++ requiredReleases)
        liftIO (hPutStrLn stderr ("rels:\n " ++ intercalate "\n " (List.map show releases) ++ "\n\n" ++
@@ -57,7 +56,7 @@ main = runAptT $ quieter (- 3) $
                                  "binary packages:\n " ++ {-intercalate "\n " (List.map show (toList binaries))-} show (size binaries) ++ "\n"))
 
 -- | Return a list of all source packages.
-releaseSourcePackages :: (Repository, Release) -> IO (Set SourcePackage)
+releaseSourcePackages :: Repo r => (r, Release) -> IO (Set SourcePackage)
 releaseSourcePackages (repo, release) =
     mapM (sourcePackagesOfIndex (repo, release)) (sourceIndexList release) >>= return . test
     where
@@ -67,7 +66,7 @@ releaseSourcePackages (repo, release) =
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Return a list of all the binary packages for all supported architectures.
-releaseBinaryPackages :: (Repository, Release) -> IO (Set BinaryPackage)
+releaseBinaryPackages :: Repo r => (r, Release) -> IO (Set BinaryPackage)
 releaseBinaryPackages (repo, release) =
     mapM (binaryPackagesOfIndex (repo, release)) (binaryIndexList release) >>= return . test
     where
@@ -76,21 +75,21 @@ releaseBinaryPackages (repo, release) =
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
 
 -- | Get the contents of a package index
-sourcePackagesOfIndex :: (Repository, Release) -> PackageIndex -> IO (Either SomeException [SourcePackage])
+sourcePackagesOfIndex :: Repo r => (r, Release) -> PackageIndex -> IO (Either SomeException [SourcePackage])
 sourcePackagesOfIndex (repo, release) index =
     case packageIndexArch index of
       Source -> getPackages (repo, release) index >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
       _ -> return (Right [])
 
 -- | Get the contents of a package index
-binaryPackagesOfIndex :: (Repository, Release) -> PackageIndex -> IO (Either SomeException [BinaryPackage])
+binaryPackagesOfIndex :: Repo r => (r, Release) -> PackageIndex -> IO (Either SomeException [BinaryPackage])
 binaryPackagesOfIndex (repo, release) index =
     case packageIndexArch index of
       Source -> return (Right [])
       _ -> getPackages (repo, release) index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
 
 -- | Get the contents of a package index
-getPackages :: (Repository, Release) -> PackageIndex -> IO (Either SomeException [BinaryPackage])
+getPackages :: Repo r => (r, Release) -> PackageIndex -> IO (Either SomeException [BinaryPackage])
 getPackages (repo, release) index =
     qPutStrLn ("fileFromURIStrict " ++ show uri') >>
     fileFromURIStrict uri' >>= return . either (Left . SomeException) Right >>= {- showStream >>= -} readControl
@@ -100,7 +99,7 @@ getPackages (repo, release) index =
       readControl (Right s) =
           try (case controlFromIndex Uncompressed (show uri') (force s) of
                  Left e -> return $ Left (SomeException (ErrorCall (show uri' ++ ": " ++ show e)))
-                 Right (B.Control control) -> return (Right $ List.map (toBinaryPackage (repo, release) index) control)) >>=
+                 Right (B.Control control) -> return (Right $ List.map (toBinaryPackage release index) control)) >>=
           return . either (\ (e :: SomeException) -> Left . SomeException . ErrorCall . ((show uri' ++ ":") ++) . show $ e) id
       uri' = uri {uriPath = uriPath uri </> packageIndexPath release index}
       uri = repoURI repo
@@ -130,7 +129,7 @@ toSourcePackage index package =
           merge . catMaybes . List.map parseSourcesFiles . lines . T.unpack $ text
       parseSourcesFiles line =
           case words line of
-            [md5sum, size, name] -> Just (Right (SourceFileSpec md5sum (read size) name))
+            [md5sum, size', name] -> Just (Right (SourceFileSpec md5sum (read size') name))
             [] -> Nothing
             _ -> Just (Left ("Invalid line in Files list: '" ++ show line ++ "'"))
       merge x = case partition (either (const True) (const False)) x of
@@ -158,8 +157,8 @@ parseSourceParagraph p =
                   , homepage = fmap stripWS $ B.fieldValue "Homepage" p })
       _x -> Left ["parseSourceParagraph - One or more required fields (Package, Maintainer, Standards-Version) missing: " ++ show p]
 
-toBinaryPackage :: (Repository, Release) -> PackageIndex -> B.Paragraph -> BinaryPackage
-toBinaryPackage (repo, release) index p =
+toBinaryPackage :: Release -> PackageIndex -> B.Paragraph -> BinaryPackage
+toBinaryPackage release index p =
     case (B.fieldValue "Package" p, B.fieldValue "Version" p) of
       (Just name, Just version) ->
           BinaryPackage 

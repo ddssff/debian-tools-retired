@@ -16,7 +16,6 @@ import Control.Monad.State(MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import Data.List as List (intercalate, null)
-import Data.Maybe (mapMaybe)
 import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildTarget (retrieve)
@@ -32,20 +31,20 @@ import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (DebT)
 import Debian.Release ({-parseSection',-} releaseName')
 import Debian.Sources (SliceName(..))
-import Debian.Repo.Apt (MonadApt, runAptT, prepareRepository, MonadDeb)
+import Debian.Repo.Apt (MonadApt, runAptT, foldRepository, MonadDeb)
 import Debian.Repo.Apt.AptImage (prepareAptEnv, prepareOSEnv)
 import Debian.Repo.Apt.Package (deleteGarbage)
 import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
 import Debian.Repo.AptImage (OSImage(osLocalMaster, osLocalCopy), buildEssential, chrootEnv)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
+import Debian.Repo.Release (Release(releaseName))
+import Debian.Repo.Repo (repoReleaseInfo)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
                           appendSliceLists, inexactPathSlices, releaseSlices)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Top (MonadTop(askTop), runTopT)
 import Debian.Repo.EnvPath (EnvRoot(rootPath), EnvPath(..), rootEnvPath)
 import Debian.Repo.LocalRepository (LocalRepository, repoRoot, prepareLocalRepository)
-import Debian.Repo.RemoteRepository (repoReleaseNames)
-import Debian.Repo.Repository (unRemoteRepository)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
@@ -272,9 +271,8 @@ runParameterSet init cache =
 -- that we build - exists on the upload server ("P.uploadURI params").
 doVerifyBuildRepo :: MonadApt m => C.CacheRec -> m ()
 doVerifyBuildRepo cache =
-    do repos <- mapM prepareRepository (map sliceRepoKey . slices . C.buildRepoSources $ cache) >>= return . mapMaybe unRemoteRepository
-       let names = concatMap repoReleaseNames repos
-       when (not (any (== (P.buildRelease params)) names))
+    do repoNames <- mapM (foldRepository f g) (map sliceRepoKey . slices . C.buildRepoSources $ cache) >>= return . map releaseName . concat
+       when (not (any (== (P.buildRelease params)) repoNames))
             (case P.uploadURI params of
                Just uri ->
                    let ssh = case uriAuthority uri of
@@ -287,6 +285,8 @@ doVerifyBuildRepo cache =
                            "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-section=" ++ rel ++ ",main" ++
                            "\nYou will also need to remove the local file ~/.autobuilder/repoCache.")
     where
+      f = return . repoReleaseInfo
+      g = return . repoReleaseInfo
       params = C.params cache
 
 retrieveTargetList :: MonadDeb m => DebT IO () -> C.CacheRec -> OSImage -> m [Either String Buildable]

@@ -11,7 +11,6 @@ module Debian.Repo
     , module Debian.Repo.Dependencies
     , module Debian.Repo.Package
     , module Debian.Repo.PackageIndex
-    , module Debian.Repo.Repository
     , module Debian.Repo.Slice
     , module Debian.Repo.SourcesList
     , module Debian.Repo.SourceTree
@@ -28,7 +27,6 @@ import Debian.Repo.Changes
 import Debian.Repo.Dependencies
 import Debian.Repo.Package
 import Debian.Repo.PackageIndex
-import Debian.Repo.Repository
 import Debian.Repo.Slice
 import Debian.Repo.SourcesList
 import Debian.Repo.SourceTree

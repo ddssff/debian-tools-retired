@@ -45,8 +45,7 @@ import Debian.Repo.PackageIndex (binaryIndexList, BinaryPackage(packageID, packa
 import Debian.Repo.Prelude (nub')
 import qualified Debian.Repo.Pretty as F (Pretty(..))
 import Debian.Repo.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
-import Debian.Repo.Repo (repoArchList, repoKey, RepoKey, repoKeyURI)
-import Debian.Repo.Repository (fromLocalRepository, Repository)
+import Debian.Repo.Repo (Repo, repoArchList, repoKey, RepoKey, repoKeyURI)
 import Debian.URI (fileFromURIStrict)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.Version.Text ()
@@ -434,7 +433,7 @@ findLive repo = {-(LocalRepository _ Nothing _)-}
                                               show (prettyArch arch)] ++ ".upload") (Set.fromList (concat (architectures releases)))
       architectures releases = nub' . List.map releaseArchitectures $ releases
 
-instance F.Pretty (Repository, Release, PackageIndex) where
+instance (F.Pretty r, Repo r) => F.Pretty (r, Release, PackageIndex) where
     pretty (repo, r, i) = text $
         intercalate "/" [show (F.pretty repo),
                          "dist",
@@ -448,7 +447,7 @@ instance F.Pretty (Release, PackageIndex) where
 		         show (F.pretty (packageIndexComponent i)),
                          show (prettyArch (packageIndexArch i))]
 
-instance F.Pretty (Repository, Release) where
+instance (F.Pretty r, Repo r) => F.Pretty (r, Release) where
     pretty (repo, r) = cat [F.pretty repo, text " ", F.pretty r]
 
 instance F.Pretty Release where
@@ -644,7 +643,7 @@ deleteSourcePackages dry keyname repo packages =
           qPutStrLn ("deleteSourcePackages - nothing to remove from " ++ show index) >>
           return release
       put release index (junk, keep) =
-          qPutStrLn ("deleteSourcePackages  - Removing packages from " ++ show (F.pretty (fromLocalRepository repo, release, index)) ++ ":\n  " ++ intercalate "\n " (List.map (show . F.pretty . packageID) junk)) >>
+          qPutStrLn ("deleteSourcePackages  - Removing packages from " ++ show (F.pretty (repo, release, index)) ++ ":\n  " ++ intercalate "\n " (List.map (show . F.pretty . packageID) junk)) >>
           putIndex' keyname release index keep
       allIndexes = Set.fold Set.union Set.empty (Set.map (\ r -> Set.fromList (List.map (r,) (packageIndexList r))) (fromList (repoReleaseInfoLocal repo))) -- concatMap allIndexes (Set.toList indexes)
       -- (indexes, invalid) = Set.partition (\ (_, i) -> packageIndexArch i == Source) (Set.fromList (List.map (\ (r, i, _) -> (r, i)) (repoReleaseInfoLocal repo)))
@@ -682,7 +681,7 @@ deleteBinaryPackages dry keyname repo blacklist =
           qPutStrLn ("deleteBinaryPackages - nothing to remove from " ++ show index) >>
           return release
       put release index (junk, keep) =
-          qPutStrLn ("deleteBinaryPackages - removing " ++ show (length junk) ++ " packages from " ++ show (F.pretty (fromLocalRepository repo, release, index)) ++ ", leaving " ++ show (length keep) {- ++ ":\n " ++ intercalate "\n " (List.map (show . F.pretty . packageID) junk) -}) >>
+          qPutStrLn ("deleteBinaryPackages - removing " ++ show (length junk) ++ " packages from " ++ show (F.pretty (repo, release, index)) ++ ", leaving " ++ show (length keep) {- ++ ":\n " ++ intercalate "\n " (List.map (show . F.pretty . packageID) junk) -}) >>
           putIndex' keyname release index keep
       allIndexes = Set.fold Set.union Set.empty (Set.map (\ r -> Set.fromList (List.map (r,) (packageIndexList r))) (fromList (repoReleaseInfoLocal repo)))
 

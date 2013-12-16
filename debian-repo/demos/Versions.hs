@@ -6,7 +6,7 @@ module Main where
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.Maybe (fromJust)
 import Debian.Arch (Arch(Binary), ArchCPU(..), ArchOS(..))
-import Debian.Repo.Apt (MonadApt, prepareRepository, runAptT)
+import Debian.Repo.Apt (MonadApt, foldRepository, runAptT)
 import Debian.Repo.Apt.Release (insertRelease)
 import Debian.Repo.Repo (RepoKey(Remote), repoReleaseInfo)
 import Debian.URI (readURI')
@@ -16,11 +16,21 @@ main = runAptT main'
 
 main' :: MonadApt m => m ()
 main' =
+    do foldRepository f g (Remote (fromJust (readURI' uri)))
+    where
+      f repo =
+          do releases <- mapM (insertRelease repo) (repoReleaseInfo repo)
+             liftIO (putStrLn ("\n" ++ show releases))
+      g repo = 
+          do releases <- mapM (insertRelease repo) (repoReleaseInfo repo)
+             liftIO (putStrLn ("\n" ++ show releases))
+{-
     do repo <- prepareRepository (Remote (fromJust (readURI' uri)))
        releases <- mapM (insertRelease repo) (repoReleaseInfo repo)
        -- let binaryIndexes = map (filter (\ i -> packageIndexArch i == arch)) (map binaryIndexList releases)
        -- _binaryPackages <- mapM (packageLists release) binaryIndexes
        liftIO (putStrLn ("\n" ++ show releases))
+-}
 {-
     where
       insert repo info = insertRelease repo 
