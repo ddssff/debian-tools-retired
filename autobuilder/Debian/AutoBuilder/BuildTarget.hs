@@ -31,11 +31,10 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (DebT)
 import Debian.Relation (SrcPkgName(..))
-import Debian.Repo.AptImage (rootDir)
+import Debian.Repo.Apt (MonadDeb)
+import Debian.Repo.AptImage (rootDir, OSImage)
 import Debian.Repo.EnvPath (rootPath)
-import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
-import Debian.Repo.Deb (MonadDeb)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
 import System.Process (proc)

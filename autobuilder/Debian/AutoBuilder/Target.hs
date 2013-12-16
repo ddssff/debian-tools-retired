@@ -48,28 +48,24 @@ import qualified Debian.GenBuildDeps as G
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString(Relations, Relation(..))
 import Debian.Release (releaseName')
-import Debian.Repo.Apt (MonadApt)
-import Debian.Repo.Apt.OSImage (syncPool, updateEnv)
-import Debian.Repo.Deb (MonadDeb)
+import Debian.Repo.Apt (MonadApt, MonadDeb)
+import Debian.Repo.Apt.AptImage (syncLocalPool, updateOSEnv)
 import Debian.Repo.SourceTree (buildDebs)
 import Debian.Repo.Top (MonadTop)
 import Debian.Sources (SliceName(..))
-import Debian.Repo.OSImage (chrootEnv, syncEnv, withProc)
-import Debian.Repo.Apt.Insert (scanIncoming, showErrors)
-import Debian.Repo.AptImage (AptCache(rootDir, aptBinaryPackages))
-import Debian.Repo.Cache (binaryPackages, buildArchOfEnv, sourcePackages, aptSourcePackagesSorted)
-import Debian.Repo.Dependencies (simplifyRelations, solutions, prettySimpleRelation)
+import Debian.Repo.Apt.Package (scanIncoming)
+import Debian.Repo.AptImage (AptCache(rootDir, aptBinaryPackages), OSImage, updateLists, chrootEnv, syncEnv, withProc, binaryPackages, buildArchOfEnv, sourcePackages, aptSourcePackagesSorted)
 import Debian.Repo.Changes (saveChangesFile)
-import Debian.Repo.LocalRepository (uploadLocal)
-import Debian.Repo.OSImage (OSImage, updateLists)
+import Debian.Repo.Dependencies (simplifyRelations, solutions, prettySimpleRelation)
+import Debian.Repo.EnvPath (EnvRoot(rootPath))
+import Debian.Repo.InstallResult (showErrors)
+import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
+import Debian.Repo.PackageID (PackageID(packageVersion))
+import Debian.Repo.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageInfo))
 import Debian.Repo.SourceTree (SourceTreeC(..), DebianSourceTreeC(..),
                                DebianBuildTree, addLogEntry, copySourceTree,
                                findChanges, findOneDebianBuildTree, SourcePackageStatus(..))
-import Debian.Repo.EnvPath (EnvRoot(rootPath))
-import Debian.Repo.PackageID (PackageID(packageVersion))
-import Debian.Repo.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageInfo))
-import Debian.Repo.LocalRepository (LocalRepository)
 import Debian.Time(getCurrentLocalRFC822Time)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.VersionPolicy(parseTag, setTag)
@@ -214,7 +210,7 @@ buildLoop cache globalBuildDeps localRepo poolOS cleanOS' !targets =
                      -- dependencies are added to unbuilt.
                      (\ mRepo ->
                           do cleanOS'' <- maybe (return cleanOS')
-                                               (\ _ -> updateEnv cleanOS' >>= either (\ e -> error ("Failed to update clean OS:\n " ++ show e)) return)
+                                               (\ _ -> updateOSEnv cleanOS' >>= either (\ e -> error ("Failed to update clean OS:\n " ++ show e)) return)
                                                mRepo
                              -- Add to unbuilt any blocked packages that weren't already failed by
                              -- some other build
@@ -348,7 +344,7 @@ buildTarget ::
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
 buildTarget cache cleanOS globalBuildDeps repo poolOS !target =
     do
-      _cleanOS' <- quieter 2 $ syncPool cleanOS
+      _cleanOS' <- quieter 2 $ syncLocalPool cleanOS
       -- Get the control file from the clean source and compute the
       -- build dependencies
       let debianControl = targetControl target
@@ -553,7 +549,7 @@ withTmp buildOS task =
 -- architecture are available.
 getReleaseControlInfo :: OSImage -> Target -> (Maybe SourcePackage, SourcePackageStatus, String)
 getReleaseControlInfo cleanOS target =
-    case zip sourcePackages (map (isComplete binaryPackages) sourcePackagesWithBinaryNames) of
+    case zip sourcePackages' (map (isComplete binaryPackages') sourcePackagesWithBinaryNames) of
       (info, status@Complete) : _ -> (Just info, All, message status)
       (info, status@(Missing missing)) : _ -> (Just info, Indep missing, message status)
       _ -> (Nothing, None, message Complete)
@@ -561,18 +557,18 @@ getReleaseControlInfo cleanOS target =
       packageName = G.sourceName (targetDepends target)
       message status =
           intercalate "\n"
-                  (["  Source Package Versions: " ++ show (map (second prettyDebianVersion . sourcePackageVersion) sourcePackages),
+                  (["  Source Package Versions: " ++ show (map (second prettyDebianVersion . sourcePackageVersion) sourcePackages'),
                     "  Required Binary Package Names:"] ++
-                   map (("   " ++) . show) (zip (map (second prettyDebianVersion . sourcePackageVersion) sourcePackages) (map sourcePackageBinaryNames sourcePackages)) ++
+                   map (("   " ++) . show) (zip (map (second prettyDebianVersion . sourcePackageVersion) sourcePackages') (map sourcePackageBinaryNames sourcePackages')) ++
                    missingMessage status ++
-                   ["  Binary Package Versions: " ++ show (map (second prettyDebianVersion . binaryPackageVersion) binaryPackages),
+                   ["  Binary Package Versions: " ++ show (map (second prettyDebianVersion . binaryPackageVersion) binaryPackages'),
                     "  Available Binary Packages of Source Package:"] ++
-                   map (("   " ++) . show) (zip (map (second prettyDebianVersion . sourcePackageVersion) sourcePackages) (map (availableDebNames binaryPackages) sourcePackages)))
+                   map (("   " ++) . show) (zip (map (second prettyDebianVersion . sourcePackageVersion) sourcePackages') (map (availableDebNames binaryPackages') sourcePackages')))
       missingMessage Complete = []
       missingMessage (Missing missing) = ["  Missing Binary Package Names: "] ++ map (\ p -> "   " ++ unBinPkgName p) missing
-      sourcePackagesWithBinaryNames = zip sourcePackages (map sourcePackageBinaryNames sourcePackages)
-      binaryPackages = Debian.Repo.Cache.binaryPackages cleanOS (nub . concat . map sourcePackageBinaryNames $ sourcePackages)
-      sourcePackages = sortBy compareVersion . Debian.Repo.Cache.sourcePackages cleanOS $ [packageName]
+      sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
+      binaryPackages' = binaryPackages cleanOS (nub . concat . map sourcePackageBinaryNames $ sourcePackages')
+      sourcePackages' = sortBy compareVersion . sourcePackages cleanOS $ [packageName]
       sourcePackageVersion package =
           case ((fieldValue "Package" . sourceParagraph $ package), (fieldValue "Version" . sourceParagraph $ package)) of
             (Just name, Just version) -> (T.unpack name, parseDebianVersion (T.unpack version))

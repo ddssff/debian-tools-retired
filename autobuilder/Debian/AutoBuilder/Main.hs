@@ -32,14 +32,11 @@ import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (DebT)
 import Debian.Release ({-parseSection',-} releaseName')
 import Debian.Sources (SliceName(..))
-import Debian.Repo.Apt (MonadApt, runAptT, prepareRepository)
-import Debian.Repo.Apt.AptImage (prepareAptEnv)
-import Debian.Repo.Apt.Cache (updateCacheSources)
-import Debian.Repo.Apt.Delete (deleteGarbage)
-import Debian.Repo.Apt.OSImage (prepareEnv)
-import Debian.Repo.Apt.Slice (repoSources)
-import Debian.Repo.Deb (MonadDeb)
-import Debian.Repo.OSImage(OSImage(osLocalMaster, osLocalCopy), buildEssential, chrootEnv)
+import Debian.Repo.Apt (MonadApt, runAptT, prepareRepository, MonadDeb)
+import Debian.Repo.Apt.AptImage (prepareAptEnv, prepareOSEnv)
+import Debian.Repo.Apt.Package (deleteGarbage)
+import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
+import Debian.Repo.AptImage (OSImage(osLocalMaster, osLocalCopy), buildEssential, chrootEnv)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
                           appendSliceLists, inexactPathSlices, releaseSlices)
@@ -141,7 +138,7 @@ prepareDependOS params buildRelease localRepo =
        exists <- liftIO $ doesDirectoryExist (rootPath dependRoot)
        when (not exists || P.flushDepends params)
             (do cleanRoot <- cleanEnv (P.buildRelease params)
-                _ <- prepareEnv cleanRoot
+                _ <- prepareOSEnv cleanRoot
                                 buildRelease
                                 localRepo
                                 (P.flushRoot params)
@@ -151,7 +148,7 @@ prepareDependOS params buildRelease localRepo =
                                 (P.components params)
                 _ <- rsync ["-x"] (rootPath cleanRoot) (rootPath dependRoot)
                 return ())
-       prepareEnv dependRoot
+       prepareOSEnv dependRoot
                   buildRelease
                   localRepo
                   False

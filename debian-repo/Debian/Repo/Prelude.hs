@@ -6,9 +6,11 @@
 -- such as the autobuilder.
 module Debian.Repo.Prelude
     ( countTasks
+    , nub'
     ) where
 
 import Control.Monad.State (MonadIO)
+import Data.List as List (group, map, sort)
 import System.Process.Progress (ePutStrLn)
 import Text.Printf (printf)
 
@@ -20,3 +22,7 @@ countTasks tasks =
       countTask :: MonadIO m => Int -> (Int, (String, m a)) -> m a
       countTask count (index, (message, task)) =
           ePutStrLn (printf "[%2d of %2d] %s:" index count message) >> task
+
+-- | This nub doesn't preserve order
+nub' :: (Ord a) => [a] -> [a]
+nub' = List.map head . group . sort

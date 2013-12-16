@@ -18,15 +18,22 @@ module Debian.Repo.Apt
 
     , prepareRemoteRepository
     , prepareRepository
+
+    , MonadDeb
+    , runDebT
     ) where
 
-import Control.Monad (void)
+import Control.Applicative.Error (maybeRead)
+import Control.Exception (SomeException)
+import Control.Monad (unless, void)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatchIO)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.State (get, MonadIO(..), MonadTrans(..), put, StateT(runStateT))
 import Data.Lens.Lazy (access, (~=))
 import Data.Lens.Template (makeLenses)
-import Data.Map as Map (empty, insert, lookup, Map)
+import Data.Map as Map (empty, fromList, insert, lookup, Map, toList, union)
+import Data.Maybe (fromMaybe)
 import Debian.Release (ReleaseName)
 import Debian.Repo.AptImage (AptImage)
 import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot))
@@ -36,10 +43,14 @@ import Debian.Repo.Release (getReleaseInfoRemote, Release)
 import Debian.Repo.RemoteRepository (RemoteRepository, RemoteRepository(RemoteRepository))
 import Debian.Repo.Repo (RepoKey(..))
 import Debian.Repo.Repository (Repository, Repository(LocalRepo, RemoteRepo))
+import Debian.Repo.Top (MonadTop, runTopT, sub, TopT)
 import Debian.Sources (SliceName)
 import Debian.URI (fromURI', toURI', URI(uriPath, uriScheme), URI')
+import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix.Files (deviceID, fileID, FileStatus, modificationTime)
+import qualified System.Posix.Files as F (removeLink)
+import System.Process.Progress (qPutStrLn)
 
 instance Ord FileStatus where
     compare a b = compare (deviceID a, fileID a, modificationTime a) (deviceID b, fileID b, modificationTime b)
@@ -147,3 +158,53 @@ repositoryFromURI uri =
 --                          writeCache ((uri, info) : pairs) >> return info
 --      writeCache :: [(URI, [ReleaseInfo])] -> IO ()
 --      writeCache pairs = writeFile (show pairs) cachePath
+
+-- | Like @MonadApt@, but is also an instance of MonadTop and tries to
+-- load and save a list of cached repositories from @top/repoCache@.
+class (MonadApt m, MonadTop m) => MonadDeb m
+
+instance MonadApt m => MonadDeb (TopT m)
+
+type DebT m = TopT (AptT m)
+
+-- | To run a DebT we bracket an action with commands to load and save
+-- the repository list.
+runDebT :: (MonadCatchIO m, Functor m) => FilePath -> DebT m a -> m a
+runDebT top action = runAptT $ runTopT top $ bracket loadRepoCache (\ r -> saveRepoCache >> return r) (\ () -> action)
+
+-- | Load the value of the repo cache map from a file as a substitute for
+-- downloading information from the remote repositories.  These values may
+-- go out of date, as when a new release is added to a repository.  When this
+-- happens some ugly errors will occur and the cache will have to be flushed.
+loadRepoCache :: MonadDeb m => m ()
+loadRepoCache =
+    do dir <- sub "repoCache"
+       liftIO (loadRepoCache' dir `catch` (\ (e :: SomeException) -> qPutStrLn (show e) >> return Map.empty)) >>= putRepoCache
+    where
+      loadRepoCache' :: FilePath -> IO (Map URI' RemoteRepository)
+      loadRepoCache' repoCache =
+          do qPutStrLn "Loading repo cache..."
+             file <- readFile repoCache
+             case maybeRead file of
+               Nothing ->
+                   error ("Ignoring invalid repoCache: " ++ show file)
+               Just pairs ->
+                   qPutStrLn ("Loaded " ++ show (length pairs) ++ " entries from the repo cache.") >>
+                   return (fromList pairs)
+
+-- | Write the repo cache map into a file.
+saveRepoCache :: MonadDeb m => m ()
+saveRepoCache =
+          do path <- sub "repoCache"
+             live <- getRepoCache
+             repoCache <- liftIO $ loadCache path
+             let merged = show . Map.toList $ Map.union live repoCache
+             liftIO (F.removeLink path `IO.catch` (\e -> unless (isDoesNotExistError e) (ioError e))) >> liftIO (writeFile path merged)
+             return ()
+          where
+            -- isRemote uri = uriScheme uri /= "file:"
+            -- isRemote (uri, _) = uriScheme uri /= "file:"
+            loadCache :: FilePath -> IO (Map.Map URI' RemoteRepository)
+            loadCache path =
+                readFile path `IO.catch` (\ (_ :: SomeException) -> return "[]") >>=
+                return . Map.fromList . fromMaybe [] . maybeRead

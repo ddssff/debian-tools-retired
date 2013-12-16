@@ -20,7 +20,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.Repo as R
-import Debian.Repo.Deb (MonadDeb)
+import Debian.Repo.Apt (MonadDeb)
 import Debian.Repo.Top (sub)
 import Debian.URI
 import Magic

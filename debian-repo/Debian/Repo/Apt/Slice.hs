@@ -6,6 +6,7 @@
 module Debian.Repo.Apt.Slice
     ( verifySourcesList
     , repoSources
+    , updateCacheSources
     ) where
 
 import Control.Exception (throw)
@@ -17,17 +18,25 @@ import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text as T (pack, Text, unpack)
 import Debian.Control (Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph')
 import Debian.Control.Text (decodeParagraph)
-import Debian.Release (parseReleaseName, parseSection')
+import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
 import Debian.Repo.Apt (MonadApt, prepareRemoteRepository)
+import Debian.Repo.AptImage (AptCache(aptBaseSliceList, aptReleaseName), distDir, SourcesChangedAction(..), sourcesPath)
 import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..))
 import Debian.Repo.LocalRepository (prepareLocalRepository)
 import Debian.Repo.Repo (repoKey)
 import Debian.Repo.Repository (Repository(LocalRepo, RemoteRepo))
 import Debian.Repo.Slice (Slice(..), SliceList(..))
+import Debian.Repo.SourcesList (parseSourcesList)
 import Debian.Sources (DebSource(..), SourceType(Deb, DebSrc))
 import Debian.URI (dirFromURI, fileFromURI)
+import Extra.Files (replaceFile)
 import Network.URI (URI(uriScheme, uriPath))
+import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
 import System.FilePath ((</>))
+import System.IO (hGetLine, stdin)
+import System.Process.Progress (ePutStr, ePutStrLn, qPutStrLn)
+import System.Unix.Directory (removeRecursiveSafely)
+import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Regex (mkRegex, splitRegex)
 
 {-
@@ -108,6 +117,8 @@ parseNamedSliceList' (name, text) =
        return $ NamedSliceList { sliceListName = SliceName name, sliceList = sources }
 -}
 
+-- | Make sure all the required local and remote repository objects
+-- used by a sources.list file are in our cache.
 verifySourcesList :: MonadApt m => Maybe EnvRoot -> [DebSource] -> m SliceList
 verifySourcesList chroot list =
     mapM (verifyDebSource chroot) list >>=
@@ -127,3 +138,59 @@ verifyDebSource chroot line =
             "file:" -> prepareLocalRepository (EnvPath chroot' (uriPath (sourceUri line))) Nothing >>= return . LocalRepo
             _ -> prepareRemoteRepository (sourceUri line) >>= return . RemoteRepo
       chroot' = fromMaybe (EnvRoot "") chroot
+
+-- |Change the sources.list of an AptCache object, subject to the
+-- value of sourcesChangedAction.
+updateCacheSources :: (MonadApt m, AptCache c) => SourcesChangedAction -> c -> m c
+updateCacheSources sourcesChangedAction distro =
+    -- (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
+    qPutStrLn "Updating cache sources" >>
+    do
+      let baseSources = aptBaseSliceList distro
+      --let distro@(ReleaseCache _ dist _) = releaseFromConfig' top text
+      let dir = distDir distro
+      distExists <- liftIO $ doesFileExist (sourcesPath distro)
+      case distExists of
+        True ->
+            do
+	      fileSources <- liftIO (readFile (sourcesPath distro)) >>= verifySourcesList Nothing . parseSourcesList
+	      case (fileSources == baseSources, sourcesChangedAction) of
+	        (True, _) -> return ()
+	        (False, SourcesChangedError) ->
+                    do
+                      ePutStrLn ("The sources.list in the existing '" ++ relName (aptReleaseName distro) ++
+                                 "' build environment doesn't match the parameters passed to the autobuilder" ++
+			         ":\n\n" ++ sourcesPath distro ++ ":\n\n" ++
+                                 show (pretty fileSources) ++
+			         "\nRun-time parameters:\n\n" ++
+                                 show (pretty baseSources) ++ "\n" ++
+			         "It is likely that the build environment in\n" ++
+                                 dir ++ " is invalid and should be rebuilt.")
+                      ePutStr $ "Remove it and continue (or exit)?  [y/n]: "
+                      result <- liftIO $ hGetLine stdin
+                      case result of
+                        ('y' : _) ->
+                            do
+                              liftIO $ removeRecursiveSafely dir
+                              liftIO $ createDirectoryIfMissing True dir
+                              liftIO $ replaceFile (sourcesPath distro) (show (pretty baseSources))
+                        _ ->
+                            error ("Please remove " ++ dir ++ " and restart.")
+                (False, RemoveRelease) ->
+                    do
+                      ePutStrLn $ "Removing suspect environment: " ++ dir
+                      liftIO $ removeRecursiveSafely dir
+                      liftIO $ createDirectoryIfMissing True dir
+                      liftIO $ replaceFile (sourcesPath distro) (show (pretty baseSources))
+                (False, UpdateSources) ->
+                    do
+                      -- The sources.list has changed, but it should be
+                      -- safe to update it.
+                      ePutStrLn $ "Updating environment with new sources.list: " ++ dir
+                      liftIO $ removeFile (sourcesPath distro)
+                      liftIO $ replaceFile (sourcesPath distro) (show (pretty baseSources))
+        False ->
+	    do
+              liftIO $ createDirectoryIfMissing True dir
+	      liftIO $ replaceFile (sourcesPath distro) (show (pretty baseSources))
+      return distro
