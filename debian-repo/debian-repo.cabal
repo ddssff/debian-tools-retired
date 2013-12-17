@@ -63,8 +63,6 @@ Library
         Debian.Repo.Slice,
         Debian.Repo.SourcesList,
         Debian.Repo.SourceTree,
-        Debian.Repo.SourceTree.Classes,
-        Debian.Repo.SourceTree.Types,
         Debian.Repo.SSH,
         Debian.Repo.Sync,
         Debian.Repo.Top,
