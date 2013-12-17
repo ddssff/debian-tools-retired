@@ -4,7 +4,6 @@
 -- the @installed/@ subdirectory of the repository.
 {-# LANGUAGE PackageImports, OverloadedStrings #-}
 {-# OPTIONS -fno-warn-name-shadowing -fno-warn-missing-signatures #-}
--- |Basic types for the Apt library.
 module Debian.Repo.Changes
     ( findChangesFiles
     , saveChangesFile
