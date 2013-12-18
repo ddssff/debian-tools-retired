@@ -186,6 +186,11 @@ data ParamRec =
     -- dependencies.  This only affects newly created environments, so if
     -- you change this value use the flushRoot option to get it to take
     -- effect.
+    , optionalIncludePackages :: [String]
+    -- ^ Additional additional packages that might not be immediately
+    -- available when a release is created - specifically,
+    -- seereason-keyring, which must be built and uploaded to each new
+    -- distribution, at least the way we do things.
     , excludePackages :: [String]
     -- ^ Specify packages for build-env to omit from the package list
     -- even if they are marked essential
@@ -309,6 +314,7 @@ prettyPrint x =
             , "globalRelaxInfo=" ++ take 120 (show (globalRelaxInfo x))
             , "noClean=" ++ take 120 (show (noClean x))
             , "includePackages=" ++ take 120 (show (includePackages x))
+            , "optionalIncludePackages=" ++ take 120 (show (optionalIncludePackages x))
             , "excludePackages=" ++ take 120 (show (excludePackages x))
             , "components=" ++ take 120 (show (components x))
             , "buildRelease=" ++ take 120 (show (buildRelease x))

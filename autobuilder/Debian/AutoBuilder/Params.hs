@@ -3,7 +3,7 @@ module Debian.AutoBuilder.Params
     ( computeTopDir
     , buildCache
     , findSlice
-    , localPoolDir
+    -- , localPoolDir Debian.AutoBuilder.LocalRepo.poolDir
     , baseRelease
     , isDevelopmentRelease
     , adjustVendorTag -- Export for testing
@@ -12,10 +12,10 @@ module Debian.AutoBuilder.Params
 import Control.Monad.Trans (liftIO)
 import Data.List (isSuffixOf)
 import Data.Maybe (catMaybes, fromMaybe)
-import Debian.AutoBuilder.Env ()
+import qualified Debian.AutoBuilder.LocalRepo as Local (subDir)
 import Debian.AutoBuilder.Types.CacheRec (CacheRec(..))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
-import Debian.Release (ReleaseName(relName), releaseName')
+import Debian.Release (ReleaseName(relName))
 import Debian.Repo.Apt (MonadDeb)
 import Debian.Repo.Apt.Slice (repoSources, verifySourcesList)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(..))
@@ -31,7 +31,7 @@ buildCache params =
     do top <- askTop
        qPutStrLn ("Preparing autobuilder cache in " ++ top ++ "...")
        mapM_ (\ name -> sub name >>= \ path -> liftIO (createDirectoryIfMissing True path))
-                  [".", "darcs", "deb-dir", "dists", "hackage", "localpools", "quilt", "tmp"]
+                  [".", "darcs", "deb-dir", "dists", "hackage", Local.subDir, "quilt", "tmp"]
        all <- mapM parseNamedSliceList (sources params)
        let uri = maybe (uploadURI params) Just (buildURI params)
        build <- maybe (return $ SliceList { slices = [] }) (repoSources Nothing) uri
@@ -68,10 +68,6 @@ findSlice cache dist =
       [x] -> Right x
       [] -> Left ("No sources.list found for " ++ sliceName dist)
       xs -> Left ("Multiple sources.lists found for " ++ sliceName dist ++ "\n" ++ show (map (sliceName . sliceListName) xs))
-
--- |Location of the local repository for uploaded packages.
-localPoolDir :: MonadTop m => CacheRec -> m FilePath
-localPoolDir cache = askTop >>= \ top -> return $ top ++ "/localpools/" ++ releaseName' (buildRelease (params cache))
 
 -- | Packages uploaded to the build release will be compatible
 -- with packages in this release.

@@ -30,7 +30,7 @@ import qualified Data.Set as Set
 import qualified Data.Text as T (Text, pack, unpack)
 import Data.Time(NominalDiffTime)
 import Debian.Arch (Arch)
-import Debian.AutoBuilder.Env (buildEnv)
+import Debian.AutoBuilder.BuildEnv (prepareBuildOS)
 import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Types.Buildable (Buildable(..), Target(tgt, cleanSource, targetDepends), targetName, prepareTarget, targetRelaxed, targetControl, relaxDepends, failing, debianSourcePackageName)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
@@ -51,10 +51,9 @@ import Debian.Release (releaseName')
 import Debian.Repo.Apt (MonadApt, MonadDeb)
 import Debian.Repo.Apt.AptImage (syncLocalPool, updateOSEnv)
 import Debian.Repo.SourceTree (buildDebs)
-import Debian.Repo.Top (MonadTop)
 import Debian.Sources (SliceName(..))
 import Debian.Repo.Apt.Package (scanIncoming)
-import Debian.Repo.AptImage (AptCache(rootDir, aptBinaryPackages), OSImage, updateLists, chrootEnv, syncEnv, withProc, binaryPackages, buildArchOfEnv, sourcePackages, aptSourcePackagesSorted)
+import Debian.Repo.AptImage (AptCache(rootDir, aptBinaryPackages), OSImage, updateLists, syncEnv, withProc, binaryPackages, buildArchOfEnv, sourcePackages, aptSourcePackagesSorted)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (simplifyRelations, solutions, prettySimpleRelation)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
@@ -152,12 +151,12 @@ partitionFailing xs =
 -- and then the function to process the incoming queue is called.
 buildTargets :: (MonadDeb m, AptCache t) => P.CacheRec -> OSImage -> Relations -> LocalRepository -> t -> [Buildable] -> m (LocalRepository, [Target])
 buildTargets _ _ _ localRepo _ [] = return (localRepo, [])
-buildTargets cache dependOS globalBuildDeps localRepo poolOS !targetSpecs =
+buildTargets cache dependOS globalBuildDeps localRepo pool !targetSpecs =
     do
       qPutStrLn "\nAssembling source trees:\n"
       targets <- prepareTargets cache dependOS globalBuildDeps targetSpecs
       qPutStrLn "\nBuilding all targets:"
-      failed <- buildLoop cache globalBuildDeps localRepo poolOS dependOS targets
+      failed <- buildLoop cache globalBuildDeps localRepo pool dependOS targets
       return (localRepo, failed)
     where
       -- targetList <- liftIO $ countAndPrepareTargets cache globalBuildDeps cleanOS targetSpecs
@@ -166,35 +165,35 @@ buildTargets cache dependOS globalBuildDeps localRepo poolOS !targetSpecs =
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
 buildLoop :: (MonadDeb m, AptCache t) => P.CacheRec -> Relations -> LocalRepository -> t -> OSImage -> [Target] -> m [Target]
-buildLoop cache globalBuildDeps localRepo poolOS cleanOS' !targets =
-    Set.toList <$> loop cleanOS' (Set.fromList targets) Set.empty
+buildLoop cache globalBuildDeps localRepo pool dependOS !targets =
+    Set.toList <$> loop dependOS (Set.fromList targets) Set.empty
     where
       -- This loop computes the ready targets and builds one.
       loop :: MonadDeb m => OSImage -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
       loop _ unbuilt failed | Set.null unbuilt = return failed
-      loop cleanOS' unbuilt failed =
+      loop dependOS unbuilt failed =
           ePutStrLn "Computing ready targets..." >>
           case readyTargets cache (goals (Set.toList unbuilt)) (Set.toList unbuilt) of
             [] -> return failed
             triples -> do noisier 1 $ qPutStrLn (makeTable triples)
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
-                          loop2 cleanOS' (Set.difference unbuilt ready) failed triples
+                          loop2 dependOS (Set.difference unbuilt ready) failed triples
       loop2 :: MonadDeb m =>
                OSImage
             -> Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
             -> Set.Set Target -- failed: Targets which either failed to build or were blocked by a target that failed to build
             -> [(Target, [Target], [Target])] -- ready: the list of known buildable targets
             -> m (Set.Set Target)
-      loop2 cleanOS' unbuilt failed [] =
+      loop2 dependOS unbuilt failed [] =
           -- Out of ready targets, re-do the dependency computation
-          loop cleanOS' unbuilt failed
-      loop2 cleanOS' unbuilt failed ((target, blocked, _) : ready') =
+          loop dependOS unbuilt failed
+      loop2 dependOS unbuilt failed ((target, blocked, _) : ready') =
           do ePutStrLn (printf "[%2d of %2d] TARGET: %s - %s"
                         (length targets - (Set.size unbuilt + length ready')) (length targets) (P.unTargetName (targetName target)) (show (T.method (download (tgt target)))))
              -- Build one target.
              result <- if Set.member (targetName target) (P.discard (P.params cache))
                        then return (Failure ["--discard option set"])
-                       else (Success <$> buildTarget cache cleanOS' globalBuildDeps localRepo poolOS target) `IO.catch` handleBuildException
+                       else (Success <$> buildTarget cache dependOS globalBuildDeps localRepo pool target) `IO.catch` handleBuildException
              failing -- On failure the target and its dependencies get
                      -- added to failed.
                      (\ errs ->
@@ -205,17 +204,17 @@ buildLoop cache globalBuildDeps localRepo poolOS cleanOS' !targets =
                                  unbuilt' = Set.difference unbuilt (Set.fromList blocked)
                                  -- Add the target and its dependencies to failed
                                  failed' = Set.insert target  . Set.union (Set.fromList blocked) $ failed
-                             loop2 cleanOS' unbuilt' failed' ready')
+                             loop2 dependOS unbuilt' failed' ready')
                      -- On success the target is discarded and its
                      -- dependencies are added to unbuilt.
                      (\ mRepo ->
-                          do cleanOS'' <- maybe (return cleanOS')
-                                               (\ _ -> updateOSEnv cleanOS' >>= either (\ e -> error ("Failed to update clean OS:\n " ++ show e)) return)
+                          do dependOS' <- maybe (return dependOS)
+                                               (\ _ -> updateOSEnv dependOS >>= either (\ e -> error ("Failed to update clean OS:\n " ++ show e)) return)
                                                mRepo
                              -- Add to unbuilt any blocked packages that weren't already failed by
                              -- some other build
                              let unbuilt' = Set.union unbuilt (Set.difference (Set.fromList blocked) failed)
-                             loop2 cleanOS'' unbuilt' failed ready')
+                             loop2 dependOS' unbuilt' failed ready')
                      result
       handleBuildException :: MonadIO m => SomeException -> m (Failing (Maybe LocalRepository))
       handleBuildException e =
@@ -334,7 +333,7 @@ qError message = qPutStrLn message >> error message
 
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
-    (MonadApt m, MonadTop m, AptCache t) =>
+    (MonadDeb m, AptCache t) =>
     P.CacheRec ->			-- configuration info
     OSImage ->				-- cleanOS
     Relations ->			-- The build-essential relations
@@ -342,26 +341,26 @@ buildTarget ::
     t ->
     Target ->
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
-buildTarget cache cleanOS globalBuildDeps repo poolOS !target =
+buildTarget cache dependOS globalBuildDeps repo poolOS !target =
     do
-      _cleanOS' <- quieter 2 $ syncLocalPool cleanOS
+      _dependOS <- quieter 2 $ syncLocalPool dependOS
       -- Get the control file from the clean source and compute the
       -- build dependencies
       let debianControl = targetControl target
-      arch <- liftIO $ buildArchOfEnv (rootDir cleanOS)
-      let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) cleanOS globalBuildDeps debianControl
+      arch <- liftIO $ buildArchOfEnv (rootDir dependOS)
+      let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) dependOS globalBuildDeps debianControl
       case solns of
         Failure excuses -> qError $ intercalate "\n  " ("Couldn't satisfy build dependencies" : excuses)
         Success [] -> qError "Internal error 4"
         Success ((_count, sourceDependencies) : _) ->
             do -- Get the newest available version of a source package,
                -- along with its status, either Indep or All
-               let (releaseControlInfo, releaseStatus, _message) = getReleaseControlInfo cleanOS target
+               let (releaseControlInfo, releaseStatus, _message) = getReleaseControlInfo dependOS target
                let repoVersion = fmap (packageVersion . sourcePackageID) releaseControlInfo
                    oldFingerprint = packageFingerprint releaseControlInfo
                -- Get the changelog entry from the clean source
                let newFingerprint = targetFingerprint target sourceDependencies
-                   newVersion = computeNewVersion cache cleanOS poolOS target
+                   newVersion = computeNewVersion cache dependOS poolOS target
                    decision = buildDecision cache target oldFingerprint newFingerprint releaseStatus
                ePutStrLn ("Build decision: " ++ show decision)
                -- quieter (const 0) $ qPutStrLn ("newVersion: " ++ show (fmap prettyDebianVersion newVersion))
@@ -377,16 +376,16 @@ buildTarget cache cleanOS globalBuildDeps repo poolOS !target =
                      case decision of
                        Error message -> qError ("Failure making build decision: " ++ message)
                        No _ -> return Nothing
-                       _ ->  buildPackage cache cleanOS buildVersion oldFingerprint newFingerprint target releaseStatus repo >>=
+                       _ ->  buildPackage cache dependOS buildVersion oldFingerprint newFingerprint target releaseStatus repo >>=
                              return . Just
 
 -- | Build a package and upload it to the local repository.
-buildPackage :: (MonadApt m, MonadTop m) =>
+buildPackage :: MonadDeb m =>
                 P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
-buildPackage cache cleanOS newVersion oldFingerprint newFingerprint !target status repo =
+buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target status repo =
     checkDryRun >>
-    buildEnv (P.buildRelease (P.params cache)) >>= return . chrootEnv cleanOS >>= \ buildOS ->
-    liftIO (prepareBuildImage cache cleanOS newFingerprint buildOS target) >>=
+    prepareBuildOS (P.buildRelease (P.params cache)) dependOS >>= \ buildOS ->
+    liftIO (prepareBuildImage cache dependOS newFingerprint buildOS target) >>=
     logEntry >>=
     noisier 1 . build buildOS >>=
     find >>=
@@ -477,7 +476,7 @@ buildPackage cache cleanOS newVersion oldFingerprint newFingerprint !target stat
             (_, errors) <- scanIncoming True Nothing repo
             case errors of
               -- Update lists to reflect the availability of the package we just built
-              [] -> liftIO (updateLists cleanOS) >> return repo
+              [] -> liftIO (updateLists dependOS) >> return repo
               _ -> error $ "Local upload failed:\n " ++ showErrors (map snd errors)
 
 -- |Prepare the build image by copying the clean image, installing
@@ -548,7 +547,7 @@ withTmp buildOS task =
 -- available in a release.  Make sure that the files for this build
 -- architecture are available.
 getReleaseControlInfo :: OSImage -> Target -> (Maybe SourcePackage, SourcePackageStatus, String)
-getReleaseControlInfo cleanOS target =
+getReleaseControlInfo dependOS target =
     case zip sourcePackages' (map (isComplete binaryPackages') sourcePackagesWithBinaryNames) of
       (info, status@Complete) : _ -> (Just info, All, message status)
       (info, status@(Missing missing)) : _ -> (Just info, Indep missing, message status)
@@ -567,8 +566,8 @@ getReleaseControlInfo cleanOS target =
       missingMessage Complete = []
       missingMessage (Missing missing) = ["  Missing Binary Package Names: "] ++ map (\ p -> "   " ++ unBinPkgName p) missing
       sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
-      binaryPackages' = binaryPackages cleanOS (nub . concat . map sourcePackageBinaryNames $ sourcePackages')
-      sourcePackages' = sortBy compareVersion . sourcePackages cleanOS $ [packageName]
+      binaryPackages' = binaryPackages dependOS (nub . concat . map sourcePackageBinaryNames $ sourcePackages')
+      sourcePackages' = sortBy compareVersion . sourcePackages dependOS $ [packageName]
       sourcePackageVersion package =
           case ((fieldValue "Package" . sourceParagraph $ package), (fieldValue "Version" . sourceParagraph $ package)) of
             (Just name, Just version) -> (T.unpack name, parseDebianVersion (T.unpack version))
@@ -624,7 +623,7 @@ data Status = Complete | Missing [BinPkgName]
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
 computeNewVersion :: AptCache t => P.CacheRec -> OSImage -> t -> Target -> Failing DebianVersion
-computeNewVersion cache cleanOS poolOS target =
+computeNewVersion cache dependOS poolOS target =
     case P.doNotChangeVersion (P.params cache) of
       True -> Success sourceVersion
       False ->
@@ -675,7 +674,7 @@ computeNewVersion cache cleanOS poolOS target =
       -- than this.
       current = if buildTrumped then Nothing else releaseControlInfo
       buildTrumped = elem (targetName target) (P.buildTrumped (P.params cache))
-      (releaseControlInfo, _releaseStatus, _message) = getReleaseControlInfo cleanOS target
+      (releaseControlInfo, _releaseStatus, _message) = getReleaseControlInfo dependOS target
 
 -- FIXME: Most of this code should move into Debian.Repo.Dependencies
 buildDepSolutions' :: Arch -> [BinPkgName] -> OSImage -> Relations -> Control' T.Text -> Failing [(Int, [BinaryPackage])]

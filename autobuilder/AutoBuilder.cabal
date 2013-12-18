@@ -1,5 +1,5 @@
 Name:           AutoBuilder
-Version:        6.56.1
+Version:        6.57
 License:        BSD3
 Copyright:      (c) 2006-2013, SeeReason Partners LLC
 Author:         David Fox <dsf@seereason.com>
@@ -45,7 +45,7 @@ Library
       Build-Depends: debian >= 3.78
       Hs-Source-Dirs: ., ../debian-repo
   else
-    Build-Depends: debian-repo >= 5.42, debian >= 3.78
+    Build-Depends: debian-repo >= 5.49, debian >= 3.78
 
   if flag(local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src
@@ -94,6 +94,7 @@ Library
       , zlib
   GHC-Options: -O2 -threaded -Wall -fno-warn-missing-signatures -fno-warn-name-shadowing -fno-warn-type-defaults
   Exposed-modules:
+    Debian.AutoBuilder.BuildEnv,
     Debian.AutoBuilder.BuildTarget,
     Debian.AutoBuilder.BuildTarget.Apt,
     Debian.AutoBuilder.BuildTarget.Bzr,
@@ -112,7 +113,7 @@ Library
     Debian.AutoBuilder.BuildTarget.Tla,
     Debian.AutoBuilder.BuildTarget.Twice,
     Debian.AutoBuilder.BuildTarget.Uri,
-    Debian.AutoBuilder.Env,
+    Debian.AutoBuilder.LocalRepo,
     Debian.AutoBuilder.Main,
     Debian.AutoBuilder.Params,
     Debian.AutoBuilder.Target,

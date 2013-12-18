@@ -115,7 +115,7 @@ scrapeVersion text =
     dropInfix "<strong>" $
     text
 
-head' (x : xs) = x
+head' (x : _xs) = x
 head' [] = error "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 2"
 
 -- | Remove everything until after the first occurrence of i

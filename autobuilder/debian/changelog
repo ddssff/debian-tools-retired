@@ -1,3 +1,11 @@
+autobuilder (6.57) unstable; urgency=low
+
+  * Collect code for the local repository in LocalRepo
+  * Collect code for the build environement in BuildEnv
+  * Use the new optionaIncludePackages feature of debian-repo
+
+ -- David Fox <dsf@seereason.com>  Wed, 18 Dec 2013 14:48:11 -0800
+
 autobuilder (6.56.1) unstable; urgency=low
 
   * Fix bug involving the CabalPin flag and scraping version numbers from

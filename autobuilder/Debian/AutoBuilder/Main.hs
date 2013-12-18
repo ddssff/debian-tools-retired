@@ -18,8 +18,8 @@ import Data.Either (partitionEithers)
 import Data.List as List (intercalate, null)
 import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
+import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
 import Debian.AutoBuilder.BuildTarget (retrieve)
-import Debian.AutoBuilder.Env (cleanEnv, dependEnv, buildEnv)
 import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Target(buildTargets, showTargets)
 import Debian.AutoBuilder.Types.Buildable (Target, targetName, Buildable, asBuildable)
@@ -32,26 +32,24 @@ import Debian.Debianize (DebT)
 import Debian.Release ({-parseSection',-} releaseName')
 import Debian.Sources (SliceName(..))
 import Debian.Repo.Apt (MonadApt, runAptT, foldRepository, MonadDeb)
-import Debian.Repo.Apt.AptImage (prepareAptEnv, prepareOSEnv)
-import Debian.Repo.Apt.Package (deleteGarbage)
+import Debian.Repo.Apt.AptImage (prepareAptEnv)
 import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
-import Debian.Repo.AptImage (OSImage(osLocalMaster, osLocalCopy), buildEssential, chrootEnv)
+import Debian.Repo.AptImage (OSImage(osLocalMaster, osLocalCopy), buildEssential)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
                           appendSliceLists, inexactPathSlices, releaseSlices)
-import Debian.Repo.Sync (rsync)
 import Debian.Repo.Top (MonadTop(askTop), runTopT)
-import Debian.Repo.EnvPath (EnvRoot(rootPath), EnvPath(..), rootEnvPath)
-import Debian.Repo.LocalRepository (LocalRepository, repoRoot, prepareLocalRepository)
+import Debian.Repo.EnvPath (EnvPath(..))
+import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
 import Prelude hiding (null)
 import System.Environment (getArgs, getEnv)
-import System.Directory(createDirectoryIfMissing, doesDirectoryExist)
+import System.Directory(createDirectoryIfMissing)
 import System.Exit(ExitCode(..), exitWith)
 import qualified System.IO as IO
 import System.Process (proc)
@@ -127,35 +125,6 @@ doParameterSet init results params =
       allTargetNames :: Set P.TargetName
       allTargetNames = P.foldPackages (\ name _ _ result -> insert name result) (P.buildPackages params) empty
 
-prepareDependOS :: MonadDeb m => P.ParamRec -> NamedSliceList -> FilePath -> m OSImage
-prepareDependOS params buildRelease localRepo =
-    do when (P.flushPool params) (liftIO (removeRecursiveSafely localRepo))
-       repo <- prepareLocalRepository (rootEnvPath localRepo) Nothing
-       -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
-       when (P.cleanUp params) (deleteGarbage repo)
-       dependRoot <- dependEnv (P.buildRelease params)
-       exists <- liftIO $ doesDirectoryExist (rootPath dependRoot)
-       when (not exists || P.flushDepends params)
-            (do cleanRoot <- cleanEnv (P.buildRelease params)
-                _ <- prepareOSEnv cleanRoot
-                                buildRelease
-                                localRepo
-                                (P.flushRoot params)
-                                (P.ifSourcesChanged params)
-                                (P.includePackages params)
-                                (P.excludePackages params)
-                                (P.components params)
-                _ <- rsync ["-x"] (rootPath cleanRoot) (rootPath dependRoot)
-                return ())
-       prepareOSEnv dependRoot
-                  buildRelease
-                  localRepo
-                  False
-                  (P.ifSourcesChanged params)
-                  (P.includePackages params)
-                  (P.excludePackages params)
-                  (P.components params)
-
 runParameterSet :: MonadDeb m => DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet init cache =
     do
@@ -169,7 +138,7 @@ runParameterSet init cache =
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       -- localRepo <- prepareLocalRepo cache			-- Prepare the local repository for initial uploads
       -- qPutStrLn $ "runParameterSet localRepo: " ++ show localRepo
-      dependOS <- P.localPoolDir cache >>= prepareDependOS params buildRelease
+      dependOS <- prepareDependOS params buildRelease
       _ <- updateCacheSources (P.ifSourcesChanged params) dependOS
       -- Compute the essential and build essential packages, they will all
       -- be implicit build dependencies.
@@ -185,10 +154,10 @@ runParameterSet init cache =
       let poolSources = NamedSliceList { sliceListName = SliceName (sliceName (sliceListName buildRelease) ++ "-all")
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
       -- Build an apt-get environment which we can use to retrieve all the package lists
-      poolOS <-prepareAptEnv top (P.ifSourcesChanged params) poolSources
+      pool <-prepareAptEnv top (P.ifSourcesChanged params) poolSources
       (failures, targets) <- retrieveTargetList init cache dependOS >>= return . partitionEithers
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
-      buildResult <- buildTargets cache dependOS globalBuildDeps (osLocalMaster dependOS) poolOS targets
+      buildResult <- buildTargets cache dependOS globalBuildDeps (osLocalMaster dependOS) pool targets
       -- If all targets succeed they may be uploaded to a remote repo
       result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))
       return result
@@ -298,7 +267,7 @@ retrieveTargetList init cache dependOS =
       -- retrieveTargetList' :: MonadDeb m => OSImage -> m [Either String Download]
       retrieveTargetList' dependOS =
           do qPutStr ("\n" ++ showTargets allTargets ++ "\n")
-             buildOS <- chrootEnv dependOS <$> buildEnv (P.buildRelease (C.params cache))
+             buildOS <- prepareBuildOS (P.buildRelease (C.params cache)) dependOS
              when (P.report params) (ePutStrLn . doReport $ allTargets)
              qPutStrLn "Retrieving all source code:\n"
              countTasks' (map (\ (target :: P.Packages) ->
