@@ -116,9 +116,8 @@ module Debian.Debianize.Types
     , binaryPackages
     ) where
 
-import Debian.Debianize.Types.Base
-import Debian.Debianize.Types.Atoms
 import Control.Category ((.))
+import Data.Generics (Typeable)
 import Data.Lens.Lazy (Lens, lens, iso, getL)
 import Data.Map as Map (Map)
 import Data.Monoid (Monoid(..))
@@ -126,7 +125,8 @@ import Data.Set as Set (Set)
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog)
-import Debian.Debianize.Types.Base (maybeLens, listElemLens)
+import Debian.Debianize.Prelude (maybeLens, listElemLens)
+import Debian.Debianize.Types.Atoms
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S
 import Debian.Debianize.VersionSplits (VersionSplits)
@@ -140,6 +140,11 @@ import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Distribution.Simple.Compiler (CompilerId)
 import Prelude hiding (init, init, log, log, unlines, (.))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
+
+-- | This is a special filepath that represents the top of a directory
+-- tree.  For a cabal package this directory would contain the .cabal
+-- file, for a debian package it would contain the debian directory.
+newtype Top = Top {unTop :: FilePath} deriving (Eq, Ord, Show, Typeable)
 
 binaryDebDescription :: BinPkgName -> Lens Atoms B.BinaryDebDescription
 binaryDebDescription b = maybeLens (B.newBinaryDebDescription b) (iso id id) . listElemLens ((== b) . getL B.package) . S.binaryPackages . control

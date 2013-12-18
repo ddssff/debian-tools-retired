@@ -15,19 +15,17 @@ module Debian.Debianize.Types.Atoms
     ) -} where
 
 import Control.Category ((.))
-import Data.Lens.Lazy (Lens, lens, iso, getL)
+import Data.Lens.Lazy (Lens, lens)
 import Data.Map as Map (Map)
 import Data.Monoid (Monoid(..))
 import Data.Set as Set (Set)
 import Data.Text (Text)
 import Data.Version (Version)
 import Debian.Changes (ChangeLog)
-import Debian.Debianize.Types.Base (maybeLens, listElemLens)
-import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S
 import Debian.Debianize.VersionSplits (VersionSplits)
 import Debian.Orphans ()
-import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat, StandardsVersion)
+import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat)
 import Debian.Relation (BinPkgName, Relations, SrcPkgName)
 import Debian.Version (DebianVersion)
 import Distribution.License (License)

@@ -37,20 +37,23 @@ module Debian.Debianize.Prelude
     , (+=)
     , (++=)
     , (+++=)
+    , listElemLens
+    , maybeLens
     , fromEmpty
     , fromSingleton
     , Pretty(pretty)
     ) where
 
 import Control.Applicative ((<$>))
+import Control.Category ((.))
 import Control.Exception as E (catch, try, bracket, IOException)
 import Control.Monad (when)
 import Control.Monad.Reader (ReaderT, ask)
 import Control.Monad.State (MonadState, StateT, get, put)
 import Data.Char (isSpace)
 import qualified Data.Lens.Lazy as Lens ((~=), (%=))
+import Data.Lens.Lazy (getL, Lens, lens, modL, setL)
 import Data.List as List (isSuffixOf, intercalate, map, lines)
-import Data.Lens.Lazy (Lens, modL)
 import Data.Map as Map (Map, foldWithKey, empty, fromList, findWithDefault, insert, map, lookup, insertWith)
 import Data.Maybe (catMaybes, mapMaybe, listToMaybe, fromMaybe, fromJust)
 import Data.Monoid (Monoid, (<>), mappend)
@@ -65,7 +68,7 @@ import Debian.Version.String (parseDebianVersion)
 import qualified Debian.Relation as D
 import Distribution.Package (PackageIdentifier(..), PackageName(..))
 import Distribution.Verbosity (Verbosity, intToVerbosity)
-import Prelude hiding (map, lookup)
+import Prelude hiding (map, lookup, (.))
 import System.Directory (doesFileExist, doesDirectoryExist, removeFile, renameFile, removeDirectory, getDirectoryContents, getCurrentDirectory, setCurrentDirectory)
 import System.Exit(ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>), dropExtension)
@@ -256,7 +259,7 @@ foldEmpty _ f l = f l
 
 -- | If the current value of getL x is Nothing, replace it with f.
 maybeL :: Lens a (Maybe b) -> Maybe b -> a -> a
-maybeL lens mb x = modL lens (maybe mb Just) x
+maybeL l mb x = modL l (maybe mb Just) x
 
 indent :: [Char] -> String -> String
 indent prefix s = unlines (List.map (prefix ++) (List.lines s))
@@ -284,30 +287,54 @@ intToVerbosity' n = fromJust (intToVerbosity (max 0 (min 3 n)))
 
 -- | Set a lens value.  (This is a version of Data.Lens.Lazy.~= that returns () instead of b.)
 (~=) :: Monad m => Lens a b -> b -> StateT a m ()
-lens ~= x = lens Lens.~= x >> return ()
+l ~= x = l Lens.~= x >> return ()
 
 -- | Set @b@ if it currently isNothing and the argument isJust, that is
 --  1. Nothing happens if the argument isNothing
 --  2. Nothing happens if the current value isJust
 (~?=) :: Monad m => Lens a (Maybe b) -> Maybe b -> StateT a m ()
-lens ~?= (Just x) = lens Lens.%= maybe (Just x) Just >> return ()
+l ~?= (Just x) = l Lens.%= maybe (Just x) Just >> return ()
 _ ~?= _ = return ()
 
 -- | Modify a value.  (This is a version of Data.Lens.Lazy.%= that returns () instead of a.)
 (%=) :: Monad m => Lens a b -> (b -> b) -> StateT a m ()
-lens %= f = lens Lens.%= f >> return ()
+l %= f = l Lens.%= f >> return ()
 
 -- | Insert an element into a @(Set b)@
 (+=) :: (Monad m, Ord b) => Lens a (Set b) -> b -> StateT a m ()
-lens += x = lens %= Set.insert x
+l += x = l %= Set.insert x
 
 -- | Insert an element into a @(Map b c)@
 (++=) :: (Monad m, Ord b) => Lens a (Map b c) -> (b, c) -> StateT a m ()
-lens ++= (k, a) = lens %= Map.insert k a
+l ++= (k, a) = l %= Map.insert k a
 
 -- | Insert an element into a @(Map b (Set c))@
 (+++=) :: (Monad m, Ord b, Monoid c) => Lens a (Map b c) -> (b, c) -> StateT a m ()
-lens +++= (k, a) = lens %= Map.insertWith mappend k a
+l +++= (k, a) = l %= Map.insertWith mappend k a
+
+listElemLens :: (a -> Bool) -> Lens [a] (Maybe a)
+listElemLens p =
+    lens lensGet lensPut
+    where
+      lensGet xs =
+          case span (not . p) xs of
+            (_, x : _) -> Just x
+            _ -> Nothing
+      lensPut Nothing xs =
+          case span (not . p) xs of
+            (pre, _ : post) -> pre ++ post
+            _ -> xs
+      lensPut (Just x) xs =
+          case span (not . p) xs of
+            (pre, _ : post) -> pre ++ (x : post)
+            _ -> xs ++ [x]
+
+maybeLens :: a -> Lens a b -> Lens (Maybe a) b
+maybeLens def l =
+    lens (getL l . fromMaybe def)
+         (\ a b -> case (a, b) of
+                     (_, Nothing) -> Just (setL l a def)
+                     (_, Just b') -> Just (setL l a b'))
 
 fromEmpty :: Set a -> Set a -> Set a
 fromEmpty d s | Set.null s = d

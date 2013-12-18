@@ -191,7 +191,6 @@ Library
    Debian.Debianize.SubstVars
    Debian.Debianize.Types
    Debian.Debianize.Types.Atoms
-   Debian.Debianize.Types.Base
    Debian.Debianize.Types.BinaryDebDescription
    Debian.Debianize.Types.SourceDebDescription
    Debian.Debianize.VersionSplits
