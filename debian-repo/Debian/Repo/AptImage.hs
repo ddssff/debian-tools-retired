@@ -468,16 +468,15 @@ localeGen locale os =
 -- is done in order to make it safe to install files into it when it
 -- isn't "live".  If this operation fails it is assumed that the
 -- image is damaged, so it is removed.
-neuterEnv :: OSImage -> IO OSImage
+neuterEnv :: OSImage -> IO ()
 neuterEnv os =
-    do
-      ePutStr ("Neutering OS image (" ++ stripDist (rootPath root) ++ ")...")
-      result <- try $ mapM_ (neuterFile os) neuterFiles
-      either (\ (e :: SomeException) -> error $ "Failed to neuter environment " ++ rootPath root ++ ": " ++ show e)
-             (\ _ -> return os)
-             result
+    do qPutStr ("Neutering OS image (" ++ stripDist root ++ ")...")
+       result <- try $ mapM_ (neuterFile os) neuterFiles
+       either (\ (e :: SomeException) -> error $ "Failed to neuter environment " ++ root ++ ": " ++ show e)
+              (\ _ -> qPutStrLn "done.")
+              result
     where
-      root = osRoot os
+      root = rootPath (osRoot os)
 
 neuterFiles :: [(FilePath, Bool)]
 neuterFiles = [("/sbin/start-stop-daemon", True),

@@ -292,22 +292,23 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
                        show (pretty computed) ++ "\ninstalled:\n" ++
                        show (pretty installed)
       recreate arch os (Left reason) =
-          do ePutStrLn $ "Removing and recreating build environment at " ++ rootPath root ++ ": " ++ show reason
-             -- ePutStrLn ("removeRecursiveSafely " ++ rootPath root)
-             liftIO (removeRecursiveSafely (rootPath root))
-             -- ePutStrLn ("createDirectoryIfMissing True " ++ show (distDir os))
-             liftIO (createDirectoryIfMissing True (distDir os))
-             -- ePutStrLn ("writeFile " ++ show (sourcesPath os) ++ " " ++ show (show . osBaseDistro $ os))
-             liftIO (replaceFile (sourcesPath os) (show . pretty . osBaseDistro $ os))
-             liftIO (try (getEnv "LANG") :: IO (Either SomeException String)) >>= \ localeName ->
-                 buildEnv root distro arch (osLocalMaster os) (osLocalCopy os) include exclude components >>=
-                     liftIO . (localeGen (either (const "en_US.UTF-8") id localeName)) >>=
-                         liftIO . neuterEnv >>= syncLocalPool
+          do liftIO $ do ePutStrLn $ "Removing and recreating build environment at " ++ rootPath root ++ ": " ++ show reason
+                         -- ePutStrLn ("removeRecursiveSafely " ++ rootPath root)
+                         removeRecursiveSafely (rootPath root)
+                         -- ePutStrLn ("createDirectoryIfMissing True " ++ show (distDir os))
+                         createDirectoryIfMissing True (distDir os)
+                         -- ePutStrLn ("writeFile " ++ show (sourcesPath os) ++ " " ++ show (show . osBaseDistro $ os))
+                         replaceFile (sourcesPath os) (show . pretty . osBaseDistro $ os)
+             os' <- buildEnv root distro arch (osLocalMaster os) (osLocalCopy os) include exclude components
+             liftIO $ do doLocales os'
+                         neuterEnv os'
+             syncLocalPool os'
       doInclude os = liftIO $
           do runAptGet os (rootPath root) ["-y", "--force-yes", "install"] (map (\ s -> (BinPkgName s, Nothing)) include)
              runAptGet os (rootPath root) ["-y", "--force-yes", "install"] (map (\ s -> (BinPkgName s, Nothing)) optional) `catchIOError` (\ e -> ePutStrLn ("Ignoring exception on optional package install: " ++ show e))
-             return os
-      doLocales os = liftIO $ localeGen "en_US.UTF-8" os
+      doLocales os =
+          do localeName <- liftIO (try (getEnv "LANG") :: IO (Either SomeException String))
+             liftIO $ localeGen (either (const "en_US.UTF-8") id localeName) os
 
 -- |Prepare a minimal \/dev directory
 {-# WARNING prepareDevs "This function should check all the result codes" #-}
