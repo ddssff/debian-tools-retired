@@ -450,13 +450,13 @@ syncEnv src dst =
                failed -> fail $ "umount failure(s): " ++ show failed
 
 -- | FIXME - we should notice the locale problem and run this.
-localeGen :: String -> OSImage -> IO OSImage
+localeGen :: String -> OSImage -> IO ()
 localeGen locale os =
     do
-      ePutStr ("Generating locale " ++  locale ++ " (" ++ stripDist (rootPath root) ++ ")...")
+      qPutStr ("Generating locale " ++  locale ++ " (" ++ stripDist (rootPath root) ++ ")...")
       result <- try $ useEnv (rootPath root) forceList (runProcess (shell cmd) L.empty) >>= return . collectOutputs
       either (\ (e :: SomeException) -> error $ "Failed to generate locale " ++ rootPath root ++ ": " ++ show e)
-             (\ _ -> return os)
+             (\ _ -> qPutStr ("done"))
              result
     where
       root = osRoot os

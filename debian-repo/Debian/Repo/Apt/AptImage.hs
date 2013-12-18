@@ -274,7 +274,12 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
                    , osLocalCopy = copy
                    , osSourcePackages = []
                    , osBinaryPackages = [] }
-       update os >>= recreate arch os >>= doInclude >>= syncLocalPool
+       -- update os >>= recreate arch os >>= doInclude >>= doLocales >>= syncLocalPool
+       os' <- update os
+       os'' <- recreate arch os os'
+       doInclude os''
+       doLocales os''
+       syncLocalPool os''
     where
       update _ | flush = return (Left Flushed)
       update os = updateOSEnv os
@@ -302,6 +307,7 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
           do runAptGet os (rootPath root) ["-y", "--force-yes", "install"] (map (\ s -> (BinPkgName s, Nothing)) include)
              runAptGet os (rootPath root) ["-y", "--force-yes", "install"] (map (\ s -> (BinPkgName s, Nothing)) optional) `catchIOError` (\ e -> ePutStrLn ("Ignoring exception on optional package install: " ++ show e))
              return os
+      doLocales os = liftIO $ localeGen "en_US.UTF-8" os
 
 -- |Prepare a minimal \/dev directory
 {-# WARNING prepareDevs "This function should check all the result codes" #-}
