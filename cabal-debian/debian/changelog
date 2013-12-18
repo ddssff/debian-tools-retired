@@ -1,3 +1,11 @@
+haskell-cabal-debian (4.0.4) unstable; urgency=low
+
+  * Restore the test data, the problem I had with long filenames
+    is solved by using cabal sdist to create the tarball rather
+    than runhaskell Setup sdist.
+
+ -- David Fox <dsf@seereason.com>  Wed, 18 Dec 2013 09:37:34 -0800
+
 haskell-cabal-debian (4.0.3) unstable; urgency=low
 
   * Include the build dependencies of the executables in the debian
