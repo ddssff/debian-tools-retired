@@ -245,7 +245,7 @@ newTag vendor (Just name) extra = VersionTag { extraNumber = extra, vendorTag = 
 
 -- | Format a tag as a string.
 showTag :: (String -> String) -> VersionTag -> String
-showTag alias v@(VersionTag {..}) =
+showTag alias (VersionTag {..}) =
    let (vendor, vendorBuildNumber) = vendorTag in
    maybe "" (("r" ++) . show) extraNumber ++
          vendor ++ show vendorBuildNumber ++

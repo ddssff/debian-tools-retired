@@ -56,8 +56,8 @@ parseComponents compList =
       re = mkRegex "[ ,]+"
 
 parseReleaseFile :: FilePath -> ReleaseName -> [ReleaseName] -> IO Release
-parseReleaseFile path dist aliases =
-    liftIO (readFile path) >>= return . parseRelease dist aliases
+parseReleaseFile path' dist aliases =
+    liftIO (readFile path') >>= return . parseRelease dist aliases
 
 parseRelease :: ReleaseName -> [ReleaseName] -> File Text -> Release
 parseRelease dist aliases file =

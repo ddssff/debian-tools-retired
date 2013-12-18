@@ -81,10 +81,10 @@ instance Repo LocalRepository where
 -- section and name would be installed given the layout of the
 -- repository.
 poolDir :: LocalRepository -> Section -> String -> FilePath
-poolDir r section source =
+poolDir r section' source =
     case repoLayout r of
       Just Pool ->
-          "pool/" ++ sectionName' section </> prefixDir </> source
+          "pool/" ++ sectionName' section' </> prefixDir </> source
               where prefixDir =
                         if isPrefixOf "lib" source
                         then take (min 4 (length source)) source
@@ -417,11 +417,11 @@ uploadLocal repo changesFile =
     where
       root = repoRoot repo
       -- Hard link a file into the incoming directory
-      install root path =
-	  do removeIfExists (dest root path)
-	     F.createLink path (dest root path)
+      install root' path =
+	  do removeIfExists (dest root' path)
+	     F.createLink path (dest root' path)
              -- F.removeLink path
-      dest root path = root ++ "/incoming/" ++ snd (splitFileName path)
+      dest root' path = root' ++ "/incoming/" ++ snd (splitFileName path)
       removeIfExists path =
 	  do exists <- doesFileExist path
 	     if exists then F.removeLink path  else return ()

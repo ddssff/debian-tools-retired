@@ -80,9 +80,9 @@ findChanges tree =
 
 -- |Rewrite the changelog with an added entry.
 addLogEntry :: DebianSourceTreeC t => ChangeLogEntry -> t -> IO ()
-addLogEntry entry debtree =
--- readFile changelogPath >>= replaceFile changelogPath . ((show (pretty entry)) ++)
-  withFile changelogPath ReadMode (\ handle -> hGetContents handle >>= replaceFile changelogPath . ((show (pretty entry) ++ "\n\n") ++))
+addLogEntry entry'' debtree =
+-- readFile changelogPath >>= replaceFile changelogPath . ((show (pretty entry'')) ++)
+  withFile changelogPath ReadMode (\ handle -> hGetContents handle >>= replaceFile changelogPath . ((show (pretty entry'') ++ "\n\n") ++))
     where
       changelogPath = (debdir debtree) ++ "/debian/changelog"
 
@@ -159,14 +159,17 @@ copyDebianBuildTree = copySourceTree
 findDebianSourceTrees :: DebianSourceTreeC t => FilePath -> IO [(FilePath, t)]
 findDebianSourceTrees path =
     getSubDirectories path >>= \ (subdirs :: [FilePath]) ->
-    foldM (\ pairs subdir -> try (findSourceTree (path </> subdir)) >>=
-                             either (\ (_ :: SomeException) -> return pairs) (\ tree -> return ((subdir, tree) : pairs))) [] subdirs
+    foldM (\ pairs subdir'' ->
+               try (findSourceTree (path </> subdir'')) >>=
+               either (\ (_ :: SomeException) -> return pairs) (\ tree -> return ((subdir'', tree) : pairs))) [] subdirs
 
 -- |Find all the debian source trees in a directory.
 findDebianBuildTrees :: DebianBuildTreeC t => FilePath -> IO [t]
 findDebianBuildTrees path =
     getSubDirectories path >>=
-    foldM (\ trees subdir -> try (findBuildTree path subdir) >>= either (\ (_ :: SomeException) -> return trees) (\ tree -> return $ tree : trees)) []
+    foldM (\ trees subdir'' ->
+               try (findBuildTree path subdir'') >>=
+               either (\ (_ :: SomeException) -> return trees) (\ tree -> return $ tree : trees)) []
 
 -- |Find a DebianBuildTree inside a directory.  It finds all the
 -- DebianSourceTrees, and if they all have the same package name it
