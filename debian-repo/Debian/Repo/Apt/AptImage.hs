@@ -11,7 +11,7 @@ module Debian.Repo.Apt.AptImage
 import Control.Applicative ((<$>))
 import Control.Exception (SomeException, try)
 import Control.Exception as E (catch)
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy as L (empty)
 import Data.Function (on)
 import Data.Lens.Lazy (getL, modL)
@@ -24,14 +24,14 @@ import Debian.Arch (Arch, Arch(..), prettyArch)
 import Debian.Changes (ChangeLogEntry(logVersion))
 import Debian.Control (ControlFunctions(stripWS), formatParagraph)
 import qualified Debian.Control.Text as B (Control'(Control), ControlFunctions(lookupP), ControlFunctions(parseControlFromHandle), Field, Field'(Field), fieldValue, Paragraph)
-import Debian.Relation (PkgName(..), SrcPkgName(..))
+import Debian.Relation (PkgName(..), SrcPkgName(..), BinPkgName(BinPkgName))
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.Apt (aptImageMap, binaryPackageMap, MonadApt(getApt, putApt), foldRepository, sourcePackageMap, MonadDeb)
 import Debian.Repo.Apt.Slice (updateCacheSources, verifySourcesList)
 import Debian.Repo.AptImage (OSCache(..), AptCache(..), AptImage(..), localeGen, neuterEnv, OSImage(..), updateLists, buildArchOfRoot, cacheRootDir, distDir, SourcesChangedAction, SourcesChangedAction(SourcesChangedError), sourcesPath)
-import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath, envRoot), EnvRoot(..), rootEnvPath)
-import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository, prepareLocalRepository)
+import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath, envRoot), EnvRoot(..))
+import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageVersion, packageName))
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
 import Debian.Repo.Release (Release(releaseName))
@@ -51,9 +51,10 @@ import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>), splitFileName, takeDirectory)
 import qualified System.IO as IO (hClose, IOMode(ReadMode), openBinaryFile)
+import System.IO.Error (catchIOError)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix (getFileStatus)
-import System.Process (shell)
+import System.Process (CreateProcess(cwd), shell, proc)
 import System.Process.Progress (doOutput, ePutStr, ePutStrLn, foldOutputsL, oneResult, qPutStr, qPutStrLn, quieter, readProcessChunks, runProcess, runProcessF)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -103,13 +104,12 @@ prepareAptEnv' cacheDir sourcesChangedAction sources =
 {-# NOINLINE updateAptEnv #-}
 updateAptEnv :: MonadApt m => AptImage -> m AptImage
 updateAptEnv os =
-    liftIO (runProcessF (Just (" 1> ", " 2> ")) (shell cmd) L.empty) >>
+    liftIO (runProcessF (Just (" 1> ", " 2> ")) (proc "apt-get" (aptOpts os ++ ["update"])) L.empty) >>
     getSourcePackages os >>= return . sortBy cmp >>= \ sourcePackages ->
     getBinaryPackages os >>= \ binaryPackages ->
     return $ os { aptImageSourcePackages = sourcePackages
                 , aptImageBinaryPackages = binaryPackages }
     where
-      cmd = "apt-get" ++ aptOpts os ++ " update"
       -- Flip args to get newest version first
       cmp = flip (compare `on` (packageVersion . sourcePackageID))
 {-
@@ -195,7 +195,7 @@ aptGetSource dir os package version =
              | requested == (logVersion . entry $ tree) ->
                  return tree
          (Just requested, []) ->
-             do runAptGet os dir "source" [(package, Just requested)]
+             do runAptGet os dir ["source"] [(package, Just requested)]
                 trees <- findDebianBuildTrees dir
                 case trees of
                   [tree] -> return tree
@@ -204,28 +204,31 @@ aptGetSource dir os package version =
              do -- One or more incorrect versions are available, remove them
                 liftIO $ removeRecursiveSafely dir
                 qPutStr $ "Retrieving APT source for " ++ unSrcPkgName package
-                runAptGet os dir "source" [(package, Just requested)]
+                runAptGet os dir ["source"] [(package, Just requested)]
                 trees <- findDebianBuildTrees dir
                 case trees of
                   [tree] -> return tree
                   _ -> fail $ "apt-get source failed (2): trees=" ++ show (map (dir' . tree' . debTree') trees)
 
--- | Note that apt-get source works for binary or source package names.
-runAptGet :: (PkgName n, AptCache t) => t -> FilePath -> String -> [(n, Maybe DebianVersion)] -> IO ()
-runAptGet os dir command packages =
-    createDirectoryIfMissing True dir >> runProcessF (Just (" 1> ", " 2> ")) (shell cmd) L.empty >> return ()
+-- | Run an apt-get command in a particular directory with a
+-- particular list of packages.  Note that apt-get source works for
+-- binary or source package names.
+runAptGet :: (PkgName n, AptCache t) => t -> FilePath -> [String] -> [(n, Maybe DebianVersion)] -> IO ()
+runAptGet os dir args packages =
+    createDirectoryIfMissing True dir >> runProcessF (Just (" 1> ", " 2> ")) p L.empty >> return ()
     where
-      cmd = (intercalate " " ("cd" : dir : "&&" : "apt-get" : aptOpts os : command : map formatPackage packages))
+      p = (proc "apt-get" args') {cwd = Just dir}
+      args' = aptOpts os ++ args ++ map formatPackage packages
       formatPackage (name, Nothing) = show (pretty name)
       formatPackage (name, Just version) = show (pretty name) ++ "=" ++ show (prettyDebianVersion version)
 
-aptOpts :: AptCache t => t -> String
+aptOpts :: AptCache t => t -> [String]
 aptOpts os =
-    (" -o=Dir::State::status=" ++ root ++ "/var/lib/dpkg/status" ++
-     " -o=Dir::State::Lists=" ++ root ++ "/var/lib/apt/lists" ++
-     " -o=Dir::Cache::Archives=" ++ root ++ "/var/cache/apt/archives" ++
-     " -o=Dir::Etc::SourceList=" ++ root ++ "/etc/apt/sources.list" ++
-     " -o=Dir::Etc::SourceParts=" ++ root ++ "/etc/apt/sources.list.d")
+    [ "-o=Dir::State::status=" ++ root ++ "/var/lib/dpkg/status"
+    , "-o=Dir::State::Lists=" ++ root ++ "/var/lib/apt/lists"
+    , "-o=Dir::Cache::Archives=" ++ root ++ "/var/cache/apt/archives"
+    , "-o=Dir::Etc::SourceList=" ++ root ++ "/etc/apt/sources.list"
+    , "-o=Dir::Etc::SourceParts=" ++ root ++ "/etc/apt/sources.list.d" ]
     where root = rootPath . rootDir $ os
 
 {-
@@ -247,17 +250,18 @@ instance Show UpdateError where
 prepareOSEnv :: MonadDeb m =>
               EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list of the base distribution
-           -> FilePath                  -- ^ The location of the local upload repository
+           -> LocalRepository           -- ^ The location of the local upload repository
            -> Bool			-- ^ If true, remove and rebuild the image
            -> SourcesChangedAction	-- ^ What to do if called with a sources.list that
 					-- differs from the previous call (unimplemented)
            -> [String]			-- ^ Extra packages to install - e.g. keyrings
+           -> [String]			-- ^ More packages to install, but these may not be available
+                                        -- immediately - e.g seereason-keyring.  Ignore exceptions.
            -> [String]			-- ^ Packages to exclude
            -> [String]			-- ^ Components of the base repository
            -> m OSImage
-prepareOSEnv root distro local flush ifSourcesChanged include exclude components =
+prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude components =
     do top <- askTop
-       repo <- prepareLocalRepository (rootEnvPath local) Nothing
        copy <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) repo
        ePutStrLn ("Preparing clean " ++ sliceName (sliceListName distro) ++ " build environment at " ++ rootPath root ++ ", osLocalRepoMaster: " ++ show repo)
        arch <- liftIO buildArchOfRoot
@@ -270,7 +274,7 @@ prepareOSEnv root distro local flush ifSourcesChanged include exclude components
                    , osLocalCopy = copy
                    , osSourcePackages = []
                    , osBinaryPackages = [] }
-       update os >>= recreate arch os >>= syncLocalPool
+       update os >>= recreate arch os >>= doInclude >>= syncLocalPool
     where
       update _ | flush = return (Left Flushed)
       update os = updateOSEnv os
@@ -294,6 +298,10 @@ prepareOSEnv root distro local flush ifSourcesChanged include exclude components
                  buildEnv root distro arch (osLocalMaster os) (osLocalCopy os) include exclude components >>=
                      liftIO . (localeGen (either (const "en_US.UTF-8") id localeName)) >>=
                          liftIO . neuterEnv >>= syncLocalPool
+      doInclude os = liftIO $
+          do runAptGet os (rootPath root) ["-y", "--force-yes", "install"] (map (\ s -> (BinPkgName s, Nothing)) include)
+             runAptGet os (rootPath root) ["-y", "--force-yes", "install"] (map (\ s -> (BinPkgName s, Nothing)) optional) `catchIOError` (\ e -> ePutStrLn ("Ignoring exception on optional package install: " ++ show e))
+             return os
 
 -- |Prepare a minimal \/dev directory
 {-# WARNING prepareDevs "This function should check all the result codes" #-}

@@ -7,7 +7,6 @@ module Debian.Repo.LocalRepository
     , readLocalRepo
     , prepareLocalRepository
     , copyLocalRepo -- repoCD
-    , flushLocalRepository
     , setRepositoryCompatibility
     , verifyUploadURI
     , uploadRemote
@@ -49,7 +48,6 @@ import System.FilePath ((</>), splitFileName)
 import qualified System.Posix.Files as F (createLink, fileMode, getFileStatus, getSymbolicLinkStatus, isSymbolicLink, readSymbolicLink, removeLink, setFileMode)
 import System.Process (readProcessWithExitCode, shell, showCommandForUser)
 import System.Process.Progress (foldOutputsL, Output, qPutStrLn, quieter, runProcessV, timeTask)
-import System.Unix.Directory (removeRecursiveSafely)
 import qualified Debian.Repo.Pretty as F (Pretty(..))
 import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
 import Text.Regex (matchRegex, mkRegex)
@@ -188,13 +186,6 @@ computeLayout root =
         (True, _) -> return (Just Flat)
         (False, True) -> return (Just Pool)
         _ -> return Nothing
-
--- | Remove all the packages from the repository and then re-create
--- the empty releases.
-flushLocalRepository :: MonadIO m => LocalRepository -> m LocalRepository
-flushLocalRepository r =
-    do liftIO $ removeRecursiveSafely (outsidePath (repoRoot r))
-       prepareLocalRepository (repoRoot r) (repoLayout r)
 
 -- | Create or update the compatibility level file for a repository.
 setRepositoryCompatibility :: LocalRepository -> IO ()

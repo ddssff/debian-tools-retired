@@ -1,3 +1,12 @@
+haskell-debian-repo (5.49) unstable; urgency=low
+
+  * Re-create empty releases after removing them in flushLocalRepository.
+  * Do apt-get install on all the includePackages packages on every build
+  * Add an optionalIncludePackages for packages that should be installed
+    but may might not be available
+
+ -- David Fox <dsf@seereason.com>  Wed, 18 Dec 2013 11:38:52 -0800
+
 haskell-debian-repo (5.48) unstable; urgency=low
 
   * Do loadRepoCache and saveRepoCache in DebT monad runner.
