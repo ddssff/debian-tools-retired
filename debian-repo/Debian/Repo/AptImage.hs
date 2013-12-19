@@ -2,29 +2,32 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.AptImage
     ( AptCache(..)
-    , OSCache(..)
     , AptImage(..)
+    , cacheRootDir
+    , distDir
+    , aptDir
+    , sourcesPath
+    , aptSourcePackagesSorted
+    , buildArchOfEnv
+    , buildArchOfRoot
+    , SourcesChangedAction(..)
+    , sourcePackages
+    , binaryPackages
+    , aptGetSource
+    , aptGetUpdate
+
+    , OSCache(..)
     , OSImage(..)
-    , updateLists
-    , neuterEnv
-    , restoreEnv
     , chrootEnv
     , syncEnv
     , localeGen
-    , removeEnv
+    , neuterEnv
+    , restoreEnv
     , buildEssential
+    , removeEnv
+    , updateLists
     , withProc
-
-    , SourcesChangedAction(..)
-    , aptSourcePackagesSorted
-    , distDir
-    , aptDir
-    , cacheRootDir
-    , sourcesPath
-    , buildArchOfEnv
-    , buildArchOfRoot
-    , sourcePackages
-    , binaryPackages
+    , aptGetInstall
     ) where
 
 import Control.DeepSeq (force, NFData)
@@ -60,7 +63,60 @@ import System.Unix.Mount (umountBelow)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Regex (matchRegex, mkRegex)
 
+import Debian.Relation (PkgName(..))
+import System.Process (CreateProcess(cwd))
+import Debian.Version (DebianVersion, prettyDebianVersion)
+
 instance NFData ExitCode
+
+-- | The AptCache class abstracts the basic properties of an apt-get
+-- environment.  This represents some of the properties of an OSImage,
+-- a complete build environment.  It is enough to run apt-get, and
+-- thus obtain repository info and download source code packages from
+-- a remote repository.
+class (Ord t, Eq t, Show t) => AptCache t where
+    globalCacheDir :: t -> FilePath
+    -- | The directory you might chroot to.
+    rootDir :: t -> EnvRoot
+    -- | The sources.list without the local repository
+    aptBaseSliceList :: t -> SliceList
+    -- | The build architecture
+    aptArch :: t -> Arch
+    -- | Return the all source packages in this AptCache.
+    aptSourcePackages :: t -> [SourcePackage]
+    -- | Return the all binary packages for the architecture of this AptCache.
+    aptBinaryPackages :: t -> [BinaryPackage]
+    -- | Name of release
+    aptReleaseName :: t -> ReleaseName
+
+-- | The AptImage object is an instance of AptCache.
+data AptImage =
+    AptImage { aptGlobalCacheDir :: FilePath
+             , aptImageRoot :: EnvRoot
+             , aptImageArch :: Arch
+             , aptImageSliceList :: SliceList
+             , aptImageReleaseName :: ReleaseName
+             , aptImageSourcePackages :: [SourcePackage]
+             , aptImageBinaryPackages :: [BinaryPackage]
+             }
+
+instance Show AptImage where
+    show apt = "AptImage " ++ relName (aptImageReleaseName apt)
+
+instance AptCache AptImage where
+    globalCacheDir = aptGlobalCacheDir
+    rootDir = aptImageRoot
+    aptArch = aptImageArch
+    aptBaseSliceList = aptImageSliceList
+    aptSourcePackages = aptImageSourcePackages
+    aptBinaryPackages = aptImageBinaryPackages
+    aptReleaseName = aptImageReleaseName
+
+instance Ord AptImage where
+    compare a b = compare (aptImageReleaseName a) (aptImageReleaseName b)
+
+instance Eq AptImage where
+    a == b = compare a b == EQ
 
 -- The following are path functions which can be used while
 -- constructing instances of AptCache.  Each is followed by a
@@ -88,16 +144,6 @@ cacheSourcesPath cacheDir release = cacheDistDir cacheDir release </> "sources"
 sourcesPath :: AptCache c => c -> FilePath
 sourcesPath cache = cacheSourcesPath (globalCacheDir cache) (aptReleaseName cache)
 
--- Additional functions which can only be used on already constructed
--- instances of AptCache.
-
--- | A directory holding all files downloaded by apt-get source for a
--- certain package
-{-
-sourceDir :: AptCache t => t -> String -> FilePath
-sourceDir c package = distDir c ++ "/apt/" ++ package
--}
-
 -- |Return all the named source packages sorted by version
 aptSourcePackagesSorted :: AptCache t => t -> [SrcPkgName] -> [SourcePackage]
 aptSourcePackagesSorted os names =
@@ -111,69 +157,6 @@ aptSourcePackagesSorted os names =
             v1 = packageVersion . sourcePackageID $ p1
             v2 = packageVersion . sourcePackageID $ p2
 
--- |Return the paths in the local cache of the index files of a slice list.
-{-
-aptCacheFiles :: AptCache a => a -> [DebSource] -> [FilePath]
-aptCacheFiles apt sources = concat . map (aptCacheFilesOfSlice apt) $ sources
-
--- |Return the paths in the local cache of the index files of a single slice.
-aptCacheFilesOfSlice :: AptCache a => a -> DebSource -> [FilePath]
-aptCacheFilesOfSlice apt slice = archFiles (aptArch apt) slice
-
--- |Return the list of files that apt-get update would write into
--- \/var\/lib\/apt\/lists when it processed the given list of DebSource.
-archFiles :: Arch -> DebSource -> [FilePath]
-archFiles arch deb =
-    case (arch, deb) of
-      (Binary _ _, DebSource DebSrc _ _) ->
-          map (++ "_source_Sources") (archFiles' deb)
-      (Binary _os _cpu, DebSource Deb _ _) ->
-          map (++ ("_binary-" ++ show (prettyArch arch) ++ "_Packages")) (archFiles' deb)
-      (x, _) -> error $ "Invalid build architecture: " ++ show x
-
-archFiles' :: DebSource -> [FilePath]
-archFiles' deb =
-    let uri = sourceUri deb
-        distro = sourceDist deb in
-    let scheme = uriScheme uri
-        auth = uriAuthority uri
-        path = uriPath uri in
-    let userpass = maybe "" uriUserInfo auth
-        reg = maybeOfString $ maybe "" uriRegName auth
-        port = maybe "" uriPort auth in
-    let (user, pass) = break (== ':') userpass in
-    let user' = maybeOfString user
-        pass' = maybeOfString pass in
-    let uriText = prefix scheme user' pass' reg port path in
-    -- what about dist?
-    either (\ exact -> [(escapeURIString (/= '@') ("/var/lib/apt/lists/" ++ uriText ++ escape exact))])
-           (\ (dist, sections) ->
-                map (\ section ->
-                         (escapeURIString (/= '@') ("/var/lib/apt/lists/" ++ uriText +?+ "dists_") ++
-                          releaseName' dist ++ "_" ++ sectionName' section))
-                    sections)
-           distro
-    where
-      -- If user is given and password is not, the user name is
-      -- added to the file name.  Otherwise it is not.  Really.
-      prefix "http:" (Just user) Nothing (Just host) port path =
-          user ++ host ++ port ++ escape path
-      prefix "http:" _ _ (Just host) port path =
-          host ++ port ++ escape path
-      prefix "ftp:" _ _ (Just host) _ path =
-          host ++ escape path
-      prefix "file:" Nothing Nothing Nothing "" path =
-          escape path
-      prefix "ssh:" (Just user) Nothing (Just host) port path =
-          user ++ host ++ port ++ escape path
-      prefix "ssh" _ _ (Just host) port path =
-          host ++ port ++ escape path
-      prefix _ _ _ _ _ _ = error ("invalid DebSource: " ++ show (pretty deb))
-      maybeOfString "" = Nothing
-      maybeOfString s = Just s
-      escape s = intercalate "_" (wordsBy (== '/') s)
--}
-
 buildArchOfEnv :: EnvRoot -> IO Arch
 buildArchOfEnv (EnvRoot root)  =
     do setEnv "LOGNAME" "root" True -- This is required for dpkg-architecture to work in a build environment
@@ -183,17 +166,6 @@ buildArchOfEnv (EnvRoot root)  =
          (ExitSuccess, os : _, ExitSuccess, cpu : _) ->
              return $ Binary (ArchOS os) (ArchCPU cpu)
          _ -> error $ "Failure computing build architecture of build env at " ++ root ++ ": " ++ show (a, b)
-{-
-  (err, _) <- useEnv root forceList (readProcessChunks (shell cmd) L.empty) >>= return . collectOutputs
-       case code of
-         (ExitSuccess : _) ->
-             case words (UTF8.toString (B.concat (L.toChunks out))) of
-               [] -> error $ "Invalid output from " ++ cmd
-               (arch : _) -> return (Binary arch)
-         _ -> error $ "Failure: " ++ cmd ++ " -> " ++ show code ++ "\n\nstdout:\n\n" ++ show out ++ "\n\nstderr:\n\n" ++ show err
-    where
-      cmd = "export LOGNAME=root; dpkg-architecture -qDEB_BUILD_ARCH"
--}
 
 buildArchOfRoot :: IO Arch
 buildArchOfRoot =
@@ -208,33 +180,6 @@ buildArchOfRoot =
       parseArchOS x = ArchOS x
       parseArchCPU "any" = ArchCPUAny
       parseArchCPU x = ArchCPU x
-{-
-    do (code, out, err, _) <- runProcess (shell cmd) L.empty >>= return . collectOutputs
-       case code of
-         (ExitSuccess : _) ->
-             case words (UTF8.toString (B.concat (L.toChunks out))) of
-               [] -> error $ "Invalid output from " ++ cmd
-               (arch : _) -> return (Binary arch)
-         _ -> error $ "Failure: " ++ cmd ++ " -> " ++ show code ++ "\n\nstdout:\n\n" ++ show out ++ "\n\nstderr:\n\n" ++ show err
-    where
-      cmd = "dpkg-architecture -qDEB_BUILD_ARCH"
--}
-
-{-
-(+?+) :: String -> String -> String
-(+?+) a ('_' : b) = a +?+ b
-(+?+) "" b = b
-(+?+) a b =
-    case last a of
-      '_' -> (init a) +?+ b
-      _ -> a ++ "_" ++ b
-
-wordsBy :: Eq a => (a -> Bool) -> [a] -> [[a]]
-wordsBy p s =
-    case (break p s) of
-      (s', []) -> [s']
-      (h, t) -> h : wordsBy p (drop 1 t)
--}
 
 data SourcesChangedAction =
     SourcesChangedError |
@@ -269,61 +214,35 @@ binaryPackages os names =
             v1 = packageVersion . packageID $ p1
             v2 = packageVersion . packageID $ p2
 
--- | The AptCache class abstracts the basic properties of an apt-get
--- environment.  This represents some of the properties of an OSImage,
--- a complete build environment.  It is enough to run apt-get, and
--- thus obtain repository info and download source code packages from
--- a remote repository.
-class (Ord t, Eq t, Show t) => AptCache t where
-    globalCacheDir :: t -> FilePath
-    -- | The directory you might chroot to.
-    rootDir :: t -> EnvRoot
-    -- | The sources.list without the local repository
-    aptBaseSliceList :: t -> SliceList
-    -- | The build architecture
-    aptArch :: t -> Arch
-    -- | Return the all source packages in this AptCache.
-    aptSourcePackages :: t -> [SourcePackage]
-    -- | Return the all binary packages for the architecture of this AptCache.
-    aptBinaryPackages :: t -> [BinaryPackage]
-    -- | Name of release
-    aptReleaseName :: t -> ReleaseName
+-- | Run an apt-get command in a particular directory with a
+-- particular list of packages.  Note that apt-get source works for
+-- binary or source package names.
+aptGetSource :: (PkgName n, AptCache t) => t -> FilePath -> [(n, Maybe DebianVersion)] -> IO ()
+aptGetSource os dir packages =
+    createDirectoryIfMissing True dir >> runProcessF (Just (" 1> ", " 2> ")) p L.empty >> return ()
+    where
+      p = (proc "apt-get" args') {cwd = Just dir}
+      args' = aptOpts os ++ ["source"] ++ map formatPackage packages
+      formatPackage (name, Nothing) = show (pretty name)
+      formatPackage (name, Just version) = show (pretty name) ++ "=" ++ show (prettyDebianVersion version)
+
+aptGetUpdate :: AptCache t => t -> IO ()
+aptGetUpdate os =
+    do _ <- runProcessF (Just (" 1> ", " 2> ")) (proc "apt-get" (aptOpts os ++ ["update"])) L.empty
+       return ()
+
+aptOpts :: AptCache t => t -> [String]
+aptOpts os =
+    [ "-o=Dir::State::status=" ++ root ++ "/var/lib/dpkg/status"
+    , "-o=Dir::State::Lists=" ++ root ++ "/var/lib/apt/lists"
+    , "-o=Dir::Cache::Archives=" ++ root ++ "/var/cache/apt/archives"
+    , "-o=Dir::Etc::SourceList=" ++ root ++ "/etc/apt/sources.list"
+    , "-o=Dir::Etc::SourceParts=" ++ root ++ "/etc/apt/sources.list.d" ]
+    where root = rootPath . rootDir $ os
 
 class AptCache t => OSCache t where
     -- | The sources.list
     aptSliceList :: t -> SliceList
-
--- | The AptImage object is an instance of AptCache.
-data AptImage =
-    AptImage { aptGlobalCacheDir :: FilePath
-             , aptImageRoot :: EnvRoot
-             , aptImageArch :: Arch
-             , aptImageSliceList :: SliceList
-             , aptImageReleaseName :: ReleaseName
-             , aptImageSourcePackages :: [SourcePackage]
-             , aptImageBinaryPackages :: [BinaryPackage]
-             }
-
-instance Show AptImage where
-    show apt = "AptImage " ++ relName (aptImageReleaseName apt)
-
-instance AptCache AptImage where
-    globalCacheDir = aptGlobalCacheDir
-    rootDir = aptImageRoot
-    aptArch = aptImageArch
-    aptBaseSliceList = aptImageSliceList
-    aptSourcePackages = aptImageSourcePackages
-    aptBinaryPackages = aptImageBinaryPackages
-    aptReleaseName = aptImageReleaseName
-
-instance Ord AptImage where
-    compare a b = compare (aptImageReleaseName a) (aptImageReleaseName b)
-
-instance Eq AptImage where
-    a == b = compare a b == EQ
-
-forceList :: [a] -> IO [a]
-forceList output = evaluate (length output) >> return output
 
 -- |This type represents an OS image located at osRoot built from a
 -- particular osBaseDistro using a particular osArch.  If an
@@ -401,31 +320,6 @@ instance Show UpdateError where
     show (Changed r p l1 l2) = unwords ["Changed", show r, show p, show (pretty l1), show (pretty l2)]
     show (Missing r p) = unwords ["Missing", show r, show p]
     show Flushed = "Flushed"
-
-{-
--- |Prepare a minimal \/dev directory
-{-# WARNING prepareDevs "This function should check all the result codes" #-}
-prepareDevs :: FilePath -> IO ()
-prepareDevs root = do
-  mapM_ prepareDev devices
-  where
-    devices :: [(FilePath, String, Int, Int)]
-    devices = [(root ++ "/dev/null", "c", 1, 3),
-               (root ++ "/dev/zero", "c", 1, 5),
-               (root ++ "/dev/full", "c", 1, 7),
-               (root ++ "/dev/console", "c", 5, 1),
-               (root ++ "/dev/random", "c", 1, 8),
-               (root ++ "/dev/urandom", "c", 1, 9)] ++
-              (map (\ n -> (root ++ "/dev/loop" ++ show n, "b", 7, n)) [0..7]) ++
-              (map (\ n -> (root ++ "/dev/loop/" ++ show n, "b", 7, n)) [0..7])
-    prepareDev (path, typ, major, minor) = do
-                     createDirectoryIfMissing True (fst (splitFileName path))
-                     let cmd = "mknod " ++ path ++ " " ++ typ ++ " " ++ show major ++ " " ++ show minor ++ " 2> /dev/null"
-                     exists <- doesFileExist path
-                     case exists of
-                       False -> readProcessChunks (shell cmd) L.empty >>= return . oneResult
-                       True -> return ExitSuccess
--}
 
 -- | Set the location of the OSImage's root directory - where you
 -- would cd to before running chroot.
@@ -633,3 +527,21 @@ withProc buildOS task =
             (\ _ -> task)
     where
       dir = rootPath (rootDir buildOS) ++ "/proc"
+
+-- | Run an apt-get command in a particular directory with a
+-- particular list of packages.  Note that apt-get source works for
+-- binary or source package names.
+aptGetInstall :: (PkgName n, OSCache t) => t -> [(n, Maybe DebianVersion)] -> IO ()
+aptGetInstall os packages =
+    useEnv (rootPath (rootDir os)) (return . force) $
+           do _ <- runProcessF (Just (" 1> ", " 2> ")) p L.empty
+              return ()
+    where
+      p = proc "apt-get" args'
+      args' = ["-y", "--force-yes", "install"] ++ map formatPackage packages
+      formatPackage (name, Nothing) = show (pretty name)
+      formatPackage (name, Just version) = show (pretty name) ++ "=" ++ show (prettyDebianVersion version)
+
+-- | This is a deepseq thing
+forceList :: [a] -> IO [a]
+forceList output = evaluate (length output) >> return output

@@ -11,7 +11,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag(AptPin), Pa
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(flushSource, ifSourcesChanged))
 import Debian.Relation (SrcPkgName)
 import Debian.Repo.Apt (MonadDeb)
-import Debian.Repo.Apt.AptImage (aptGetSource, prepareAptEnv)
+import Debian.Repo.Apt.AptImage (prepareSource, prepareAptEnv)
 import Debian.Repo.AptImage (aptDir)
 import Debian.Repo.Slice (NamedSliceList(sliceListName))
 import Debian.Repo.SourceTree (topdir)
@@ -29,7 +29,7 @@ prepare cache target dist package =
     do top <- askTop
        os <- prepareAptEnv top (P.ifSourcesChanged (P.params cache)) distro
        when (P.flushSource (P.params cache)) (liftIO . removeRecursiveSafely $ aptDir os package)
-       tree <- liftIO $ aptGetSource (aptDir os package) os package version'
+       tree <- liftIO $ prepareSource (aptDir os package) os package version'
        return $ Download {
                     package = target
                   , getTop = topdir tree
