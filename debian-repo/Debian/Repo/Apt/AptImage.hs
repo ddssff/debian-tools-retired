@@ -26,7 +26,7 @@ import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.Apt (aptImageMap, binaryPackageMap, foldRepository, MonadApt(getApt, putApt), MonadDeb, sourcePackageMap)
 import Debian.Repo.Apt.Slice (updateCacheSources, verifySourcesList)
-import Debian.Repo.AptImage (_pbuilderBuild', AptCache(aptArch, rootDir), aptGetInstall, aptGetUpdate, AptImage, aptImageBinaryPackages, aptImageSliceList, aptImageSourcePackages, buildArchOfRoot, buildEnv', distDir, localeGen, neuterEnv, osBaseDistro, osBinaryPackages, OSCache(aptSliceList), OSImage, osLocalCopy, osLocalMaster, osReleaseName, osRoot, osSourcePackages, prepareAptEnv'', prepareOSEnv', SourcesChangedAction(SourcesChangedError), sourcesPath, syncLocalPool, updateLists)
+import Debian.Repo.AptImage (_pbuilderBuild', AptCache(aptArch, rootDir), aptGetInstall, aptGetUpdate, AptImage, aptImageBinaryPackages, aptImageSliceList, aptImageSourcePackages, buildArchOfRoot, buildEnv', distDir, localeGen, neuterEnv, osBaseDistro, osBinaryPackages, OSImage, osFullDistro, osLocalCopy, osLocalMaster, osReleaseName, osRoot, osSourcePackages, prepareAptEnv'', prepareOSEnv', SourcesChangedAction(SourcesChangedError), sourcesPath, syncLocalPool, updateLists)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageVersion))
@@ -68,7 +68,7 @@ prepareAptEnv cacheDir sourcesChangedAction sources =
 
 prepareAptEnv' :: MonadApt m => FilePath -> SourcesChangedAction -> NamedSliceList -> m AptImage
 prepareAptEnv' cacheDir sourcesChangedAction sources =
-    do os <- prepareAptEnv'' cacheDir sourcesChangedAction sources
+    do os <- prepareAptEnv'' cacheDir sources
        os' <- updateCacheSources sourcesChangedAction os >>= updateAptEnv
        getApt >>= putApt . modL aptImageMap (Map.insert (sliceListName sources) os')
        return os'
@@ -113,12 +113,12 @@ getBinaryPackages os =
 
 getSourcePackages' :: MonadApt m => OSImage -> m [SourcePackage]
 getSourcePackages' os =
-    do indexes <- mapM (sliceIndexes os) (slices . sourceSlices . aptSliceList $ os) >>= return . concat
+    do indexes <- mapM (sliceIndexes os) (slices . sourceSlices . osFullDistro $ os) >>= return . concat
        mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' os repo rel index) indexes >>= return . concat
 
 getBinaryPackages' :: MonadApt m => OSImage -> m [BinaryPackage]
 getBinaryPackages' os =
-    do indexes <- mapM (sliceIndexes os) (slices . binarySlices . aptSliceList $ os) >>= return . concat
+    do indexes <- mapM (sliceIndexes os) (slices . binarySlices . osFullDistro $ os) >>= return . concat
        mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' os repo rel index) indexes >>= return . concat
 
 -- |Return a list of the index files that contain the packages of a
@@ -176,7 +176,7 @@ prepareOSEnv :: MonadDeb m =>
            -> m OSImage
 prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude components =
     do top <- askTop
-       os <- prepareOSEnv' top root distro repo flush ifSourcesChanged include optional exclude components
+       os <- prepareOSEnv' top root distro repo
        os' <- update os
        arch <- liftIO buildArchOfRoot -- This should be stored in os, but it is a Maybe - why?
        os'' <- recreate arch os os'
@@ -266,7 +266,7 @@ updateOSEnv os =
     where
       verifySources :: MonadApt m => m (Either UpdateError OSImage)
       verifySources =
-          do let computed = remoteOnly (aptSliceList os)
+          do let computed = remoteOnly (osFullDistro os)
                  sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
              text <- liftIO (try $ readFile sourcesPath')
              installed <-

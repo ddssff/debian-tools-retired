@@ -22,6 +22,7 @@ module Debian.Repo.AptImage
 
     , OSImage
     , osBaseDistro
+    , osFullDistro
     , osLocalMaster
     , osLocalCopy
     , osSourcePackages
@@ -30,7 +31,6 @@ module Debian.Repo.AptImage
     , osRoot
     , osArch
 
-    , OSCache(..)
     , chrootEnv
     , syncEnv
     , localeGen
@@ -285,10 +285,6 @@ aptOpts os =
     , "-o=Dir::Etc::SourceParts=" ++ root ++ "/etc/apt/sources.list.d" ]
     where root = rootPath . rootDir $ os
 
-class AptCache t => OSCache t where
-    -- | The sources.list
-    aptSliceList :: t -> SliceList
-
 instance Show OSImage where
     show os = intercalate " " ["OS {",
                                rootPath (getL osRoot os),
@@ -315,9 +311,6 @@ instance AptCache OSImage where
     aptSourcePackages = getL osSourcePackages
     aptBinaryPackages = getL osBinaryPackages
     aptReleaseName = getL osReleaseName
-
-instance OSCache OSImage where
-    aptSliceList = osFullDistro
 
 -- |The sources.list is the list associated with the distro name, plus
 -- the local sources where we deposit newly built packages.
@@ -554,7 +547,7 @@ withProc buildOS task =
 -- | Run an apt-get command in a particular directory with a
 -- particular list of packages.  Note that apt-get source works for
 -- binary or source package names.
-aptGetInstall :: (PkgName n, OSCache t) => t -> [(n, Maybe DebianVersion)] -> IO ()
+aptGetInstall :: PkgName n => OSImage -> [(n, Maybe DebianVersion)] -> IO ()
 aptGetInstall os packages =
     useEnv (rootPath (rootDir os)) (return . force) $
            do _ <- runProcessF (Just (" 1> ", " 2> ")) p L.empty
@@ -575,16 +568,8 @@ prepareOSEnv' :: MonadIO m =>
            -> EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list of the base distribution
            -> LocalRepository           -- ^ The location of the local upload repository
-           -> Bool			-- ^ If true, remove and rebuild the image
-           -> SourcesChangedAction	-- ^ What to do if called with a sources.list that
-					-- differs from the previous call (unimplemented)
-           -> [String]			-- ^ Extra packages to install - e.g. keyrings
-           -> [String]			-- ^ More packages to install, but these may not be available
-                                        -- immediately - e.g seereason-keyring.  Ignore exceptions.
-           -> [String]			-- ^ Packages to exclude
-           -> [String]			-- ^ Components of the base repository
            -> m OSImage
-prepareOSEnv' top root distro repo flush ifSourcesChanged include optional exclude components =
+prepareOSEnv' top root distro repo =
     do copy <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) repo
        ePutStrLn ("Preparing clean " ++ sliceName (sliceListName distro) ++ " build environment at " ++ rootPath root ++ ", osLocalRepoMaster: " ++ show repo)
        arch <- liftIO buildArchOfRoot
@@ -667,7 +652,7 @@ _pbuilderBuild' cacheDir root distro arch repo copy _extraEssential _omitEssenti
                    , _osBinaryPackages = [] }
        let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
        -- Rewrite the sources.list with the local pool added.
-       liftIO $ replaceFile sourcesPath' (show . pretty . aptSliceList $ os)
+       liftIO $ replaceFile sourcesPath' (show . pretty . osFullDistro $ os)
        return os
     where
       codefn _ ExitSuccess = return ()
@@ -720,7 +705,7 @@ buildEnv' top root distro arch repo copy include exclude components =
                   , _osBinaryPackages = [] }
       let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
       -- Rewrite the sources.list with the local pool added.
-      liftIO $ replaceFile sourcesPath' (show . pretty . aptSliceList $ os)
+      liftIO $ replaceFile sourcesPath' (show . pretty . osFullDistro $ os)
       return os
     where
       codefn _ ExitSuccess = return ()
@@ -749,8 +734,8 @@ buildEnv' top root distro arch repo copy include exclude components =
                "rm -rf " ++ woot,
                "mv " ++ wootNew ++ " " ++ woot]
 
-prepareAptEnv'' :: MonadIO m => FilePath -> SourcesChangedAction -> NamedSliceList -> m AptImage
-prepareAptEnv'' cacheDir sourcesChangedAction sources =
+prepareAptEnv'' :: MonadIO m => FilePath -> NamedSliceList -> m AptImage
+prepareAptEnv'' cacheDir sources =
     do let root = rootPath (cacheRootDir cacheDir (ReleaseName (sliceName (sliceListName sources))))
        --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
        liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
