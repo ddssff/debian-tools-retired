@@ -9,6 +9,7 @@ module Debian.Repo.Apt.AptImage
     ) where
 
 import Control.Applicative ((<$>))
+import Control.DeepSeq (force)
 import Control.Exception (SomeException, try)
 import Control.Exception as E (catch)
 import Control.Monad.Trans (MonadIO, liftIO)
@@ -56,6 +57,7 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix (getFileStatus)
 import System.Process (CreateProcess(cwd), shell, proc)
 import System.Process.Progress (doOutput, ePutStr, ePutStrLn, foldOutputsL, oneResult, qPutStr, qPutStrLn, quieter, readProcessChunks, runProcess, runProcessF)
+import System.Unix.Chroot (useEnv)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
@@ -231,6 +233,20 @@ aptOpts os =
     , "-o=Dir::Etc::SourceParts=" ++ root ++ "/etc/apt/sources.list.d" ]
     where root = rootPath . rootDir $ os
 
+-- | Run an apt-get command in a particular directory with a
+-- particular list of packages.  Note that apt-get source works for
+-- binary or source package names.
+runAptGet' :: (PkgName n, AptCache t) => t -> EnvRoot -> [String] -> [(n, Maybe DebianVersion)] -> IO ()
+runAptGet' os dir args packages =
+    useEnv (rootPath dir) (return . force) $
+           do runProcessF (Just (" 1> ", " 2> ")) p L.empty
+              return ()
+    where
+      p = proc "apt-get" args'
+      args' = args ++ map formatPackage packages
+      formatPackage (name, Nothing) = show (pretty name)
+      formatPackage (name, Just version) = show (pretty name) ++ "=" ++ show (prettyDebianVersion version)
+
 {-
 forceList :: [a] -> IO [a]
 forceList output = evaluate (length output) >> return output
@@ -304,8 +320,8 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
                          neuterEnv os'
              syncLocalPool os'
       doInclude os = liftIO $
-          do runAptGet os (rootPath root) ["-y", "--force-yes", "install"] (map (\ s -> (BinPkgName s, Nothing)) include)
-             runAptGet os (rootPath root) ["-y", "--force-yes", "install"] (map (\ s -> (BinPkgName s, Nothing)) optional) `catchIOError` (\ e -> ePutStrLn ("Ignoring exception on optional package install: " ++ show e))
+          do runAptGet' os root ["-y", "--force-yes", "install"] (map (\ s -> (BinPkgName s, Nothing)) include)
+             runAptGet' os root ["-y", "--force-yes", "install"] (map (\ s -> (BinPkgName s, Nothing)) optional) `catchIOError` (\ e -> ePutStrLn ("Ignoring exception on optional package install: " ++ show e))
       doLocales os =
           do localeName <- liftIO (try (getEnv "LANG") :: IO (Either SomeException String))
              liftIO $ localeGen (either (const "en_US.UTF-8") id localeName) os
