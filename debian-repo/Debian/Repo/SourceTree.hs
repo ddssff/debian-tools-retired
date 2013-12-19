@@ -33,6 +33,7 @@ import Debian.Changes (ChangeLogEntry(..), ChangesFile(..), parseEntries)
 import Debian.Control.Text (Control, Control'(Control), ControlFunctions(parseControl), Field'(Comment), Paragraph'(..))
 import Debian.Relation (BinPkgName, SrcPkgName(unSrcPkgName))
 import Debian.Repo.AptCache (AptCache(rootDir), aptGetSource, aptSourcePackages)
+import Debian.Repo.AptImage (AptImage, aptDir)
 import Debian.Repo.Changes (findChangesFiles)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.OSImage (OSImage)
@@ -298,25 +299,24 @@ instance DebianBuildTreeC DebianBuildTree where
     findBuildTree path d = findSourceTree (path </> d) >>= return . DebianBuildTree path d
 
 -- |Retrieve a source package via apt-get.
-prepareSource :: (AptCache t)
-             => FilePath			-- Where to put the source
-             -> t				-- Where to apt-get from
+prepareSource :: AptImage			-- Where to apt-get from
              -> SrcPkgName			-- The name of the package
              -> Maybe DebianVersion		-- The desired version, if Nothing get newest
              -> IO DebianBuildTree		-- The resulting source tree
-prepareSource dir os package version =
-    do liftIO $ createDirectoryIfMissing True dir
+prepareSource apt package version =
+    do let dir = aptDir apt package
+       liftIO $ createDirectoryIfMissing True dir
        ready <- findDebianBuildTrees dir
-       let newest = listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . packageName . sourcePackageID) . aptSourcePackages $ os
+       let newest = listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . packageName . sourcePackageID) . aptSourcePackages $ apt
        let version' = maybe newest Just version
        case (version', ready) of
          (Nothing, _) ->
-             fail $ "No available versions of " ++ unSrcPkgName package ++ " in " ++ rootPath (rootDir os)
+             fail $ "No available versions of " ++ unSrcPkgName package ++ " in " ++ rootPath (rootDir apt)
          (Just requested, [tree])
              | requested == (logVersion . entry $ tree) ->
                  return tree
          (Just requested, []) ->
-             do aptGetSource os dir [(package, Just requested)]
+             do aptGetSource apt dir [(package, Just requested)]
                 trees <- findDebianBuildTrees dir
                 case trees of
                   [tree] -> return tree
@@ -325,7 +325,7 @@ prepareSource dir os package version =
              do -- One or more incorrect versions are available, remove them
                 liftIO $ removeRecursiveSafely dir
                 qPutStr $ "Retrieving APT source for " ++ unSrcPkgName package
-                aptGetSource os dir [(package, Just requested)]
+                aptGetSource apt dir [(package, Just requested)]
                 trees <- findDebianBuildTrees dir
                 case trees of
                   [tree] -> return tree

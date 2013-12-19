@@ -2,6 +2,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.AptImage
     ( AptImage
+    , aptDir
     , aptImageSliceList
     , aptImageSourcePackages
     , aptImageBinaryPackages
@@ -21,7 +22,7 @@ import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (BinPkgName, ParseRelations(..), PkgName(..), Relations, SrcPkgName(..))
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(ReleaseName, relName))
-import Debian.Repo.AptCache (AptCache(..))
+import Debian.Repo.AptCache (AptCache(..), distDir)
 import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot(rootPath), EnvRoot(EnvRoot), outsidePath)
 import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
 import Debian.Repo.PackageID (PackageID(packageVersion, packageName))
@@ -78,6 +79,11 @@ instance Ord AptImage where
 
 instance Eq AptImage where
     a == b = compare a b == EQ
+
+-- | The location of the top directory of a source packages's files in
+-- an AptImage (but not an OSImage.)
+aptDir :: AptImage -> SrcPkgName -> FilePath
+aptDir cache package = distDir cache </> "apt" </> unSrcPkgName package
 
 -- The following are path functions which can be used while
 -- constructing instances of AptCache.  Each is followed by a

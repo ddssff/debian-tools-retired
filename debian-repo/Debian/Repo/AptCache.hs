@@ -1,10 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.AptCache
-    ( AptCache(..)
-    , cacheRootDir
+    ( AptCache(globalCacheDir, rootDir, aptBaseSliceList, aptArch, aptSourcePackages, aptBinaryPackages, aptReleaseName)
     , distDir
-    , aptDir
     , sourcesPath
     , aptSourcePackagesSorted
     , buildArchOfEnv
@@ -82,26 +80,14 @@ class (Ord t, Eq t, Show t) => AptCache t where
 -- corresponding function that gives the same result when applied to
 -- an AptCache instance.
 
--- | A directory which will hold all the cached files for this
--- NamedSliceList.
-cacheDistDir :: FilePath -> ReleaseName -> FilePath
-cacheDistDir cacheDir release = cacheDir ++ "/dists/" ++ relName release
-
-cacheRootDir :: FilePath -> ReleaseName -> EnvRoot
-cacheRootDir cacheDir release = EnvRoot (cacheDistDir cacheDir release ++ "/aptEnv")
-
+-- | The directory in a repository where the package index files for a
+-- particular dist or release is stored.
 distDir :: AptCache c => c -> FilePath
-distDir cache = cacheDistDir (globalCacheDir cache) (aptReleaseName cache)
+distDir cache = globalCacheDir cache </> "dists" </> relName (aptReleaseName cache)
 
-aptDir :: AptCache c => c -> SrcPkgName -> FilePath
-aptDir cache package = distDir cache ++ "/apt/" ++ unSrcPkgName package
-
--- | The path where a text of the SliceList is stored.
-cacheSourcesPath :: FilePath -> ReleaseName -> FilePath
-cacheSourcesPath cacheDir release = cacheDistDir cacheDir release </> "sources"
-
+-- | The path of the text file containing the sources.list (aka SliceList)
 sourcesPath :: AptCache c => c -> FilePath
-sourcesPath cache = cacheSourcesPath (globalCacheDir cache) (aptReleaseName cache)
+sourcesPath cache = distDir cache </> "sources"
 
 -- |Return all the named source packages sorted by version
 aptSourcePackagesSorted :: AptCache t => t -> [SrcPkgName] -> [SourcePackage]
