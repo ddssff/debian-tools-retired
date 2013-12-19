@@ -88,18 +88,6 @@ verifySourcesList chroot list =
     mapM (verifyDebSource chroot) list >>=
     (\ xs -> return $ SliceList { slices = xs })
 
-{-
-verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m Slice
-verifyDebSource chroot line =
-    repo >>= \ repo' -> return $ Slice {sliceRepoKey = repoKey repo', sliceSource = line}
-    where
-      repo =
-          case uriScheme (sourceUri line) of
-            "file:" -> prepareLocalRepository (EnvPath chroot' (uriPath (sourceUri line))) Nothing >>= return . LocalRepo
-            _ -> prepareRemoteRepository (sourceUri line) >>= return . RemoteRepo
-      chroot' = fromMaybe (EnvRoot "") chroot
--}
-
 verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m Slice
 verifyDebSource chroot line =
     case uriScheme (sourceUri line) of

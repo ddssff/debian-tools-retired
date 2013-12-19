@@ -3,60 +3,55 @@
 module Debian.Repo.Apt.AptImage
     ( prepareAptEnv
     , prepareOSEnv
-    , prepareSource
     , updateOSEnv
-    , syncLocalPool
     ) where
 
 import Control.Applicative ((<$>))
 import Control.Exception (SomeException, try)
 import Control.Exception as E (catch)
-import Control.Monad.Trans (MonadIO, liftIO)
+import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
 import Data.Function (on)
-import Data.Lens.Lazy (getL, setL, modL)
+import Data.Lens.Lazy (getL, modL, setL)
 import Data.List (intercalate, sortBy)
 import Data.List as List (map, partition)
 import Data.Map as Map (insert, lookup)
-import Data.Maybe (catMaybes, listToMaybe)
+import Data.Maybe (catMaybes)
 import qualified Data.Text as T (Text, unpack)
 import Debian.Arch (Arch, Arch(..), prettyArch)
-import Debian.Changes (ChangeLogEntry(logVersion))
 import Debian.Control (ControlFunctions(stripWS), formatParagraph)
 import qualified Debian.Control.Text as B (Control'(Control), ControlFunctions(lookupP), ControlFunctions(parseControlFromHandle), Field, Field'(Field), fieldValue, Paragraph)
-import Debian.Relation (SrcPkgName(..), BinPkgName(BinPkgName))
+import Debian.Relation (BinPkgName(BinPkgName))
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (ReleaseName(..), releaseName', sectionName')
-import Debian.Repo.Apt (aptImageMap, binaryPackageMap, MonadApt(getApt, putApt), foldRepository, sourcePackageMap, MonadDeb)
+import Debian.Repo.Apt (aptImageMap, binaryPackageMap, foldRepository, MonadApt(getApt, putApt), MonadDeb, sourcePackageMap)
 import Debian.Repo.Apt.Slice (updateCacheSources, verifySourcesList)
-import Debian.Repo.AptImage (OSCache(..), AptCache(..), AptImage(..), localeGen, neuterEnv, OSImage(..), updateLists, buildArchOfRoot, cacheRootDir, distDir, SourcesChangedAction, SourcesChangedAction(SourcesChangedError), sourcesPath, aptGetUpdate, aptGetSource, aptGetInstall,
-                             aptImageSliceList, osBaseDistro, osLocalMaster, osLocalCopy, osSourcePackages, osLocalMaster, osBinaryPackages, osReleaseName, osRoot)
-import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath, envRoot), EnvRoot(..))
-import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
-import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageVersion, packageName))
+import Debian.Repo.AptImage (_pbuilderBuild', AptCache(aptArch, rootDir), aptGetInstall, aptGetUpdate, AptImage, aptImageBinaryPackages, aptImageSliceList, aptImageSourcePackages, buildArchOfRoot, buildEnv', distDir, localeGen, neuterEnv, osBaseDistro, osBinaryPackages, OSCache(aptSliceList), OSImage, osLocalCopy, osLocalMaster, osReleaseName, osRoot, osSourcePackages, prepareAptEnv'', prepareOSEnv', SourcesChangedAction(SourcesChangedError), sourcesPath, syncLocalPool, updateLists)
+import Debian.Repo.EnvPath (EnvRoot(rootPath))
+import Debian.Repo.LocalRepository (LocalRepository)
+import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
 import Debian.Repo.SSH (sshCopy)
-import Debian.Repo.Slice (binarySlices, NamedSliceList(sliceList, sliceListName), Slice(..), Slice(sliceSource), SliceList(slices), sourceSlices)
-import Debian.Repo.SourceTree (DebianBuildTree(debTree'), DebianSourceTree(tree'), entry, findDebianBuildTrees, SourceTree(dir'))
+import Debian.Repo.Slice (binarySlices, NamedSliceList(sliceListName), Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices)
 import Debian.Repo.SourcesList (parseSourcesList)
 import Debian.Repo.Top (MonadTop(askTop))
 import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SliceName(sliceName), SourceType(..))
 import Debian.URI (URI(uriScheme), uriToString')
-import Debian.Version (DebianVersion, parseDebianVersion)
-import Extra.Files (replaceFile, writeFileIfMissing)
+import Debian.Version (parseDebianVersion)
+import Extra.Files (replaceFile)
 import Network.URI (escapeURIString, URI(uriAuthority, uriPath), URIAuth(uriPort, uriRegName, uriUserInfo))
 import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess))
-import System.FilePath ((</>), splitFileName, takeDirectory)
+import System.FilePath (splitFileName, takeDirectory)
 import qualified System.IO as IO (hClose, IOMode(ReadMode), openBinaryFile)
 import System.IO.Error (catchIOError)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix (getFileStatus)
 import System.Process (shell)
-import System.Process.Progress (doOutput, ePutStr, ePutStrLn, foldOutputsL, oneResult, qPutStr, qPutStrLn, quieter, readProcessChunks, runProcess)
+import System.Process.Progress (ePutStrLn, oneResult, qPutStrLn, quieter, readProcessChunks)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
@@ -73,28 +68,7 @@ prepareAptEnv cacheDir sourcesChangedAction sources =
 
 prepareAptEnv' :: MonadApt m => FilePath -> SourcesChangedAction -> NamedSliceList -> m AptImage
 prepareAptEnv' cacheDir sourcesChangedAction sources =
-    do let root = rootPath (cacheRootDir cacheDir (ReleaseName (sliceName (sliceListName sources))))
-       --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
-       liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
-       liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
-       liftIO $ createDirectoryIfMissing True (root ++ "/var/cache/apt/archives/partial")
-       liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/dpkg")
-       liftIO $ createDirectoryIfMissing True (root ++ "/etc/apt")
-       liftIO $ writeFileIfMissing True (root ++ "/var/lib/dpkg/status") ""
-       liftIO $ writeFileIfMissing True (root ++ "/var/lib/dpkg/diversions") ""
-       -- We need to create the local pool before updating so the
-       -- sources.list will be valid.
-       let sourceListText = show (pretty (sliceList sources))
-       -- ePut ("writeFile " ++ (root ++ "/etc/apt/sources.list") ++ "\n" ++ sourceListText)
-       liftIO $ replaceFile (root ++ "/etc/apt/sources.list") sourceListText
-       arch <- liftIO $ buildArchOfRoot
-       let os = AptImage { _aptGlobalCacheDir = cacheDir
-                         , _aptImageRoot = EnvRoot root
-                         , _aptImageArch = arch
-                         , _aptImageReleaseName = ReleaseName . sliceName . sliceListName $ sources
-                         , _aptImageSliceList = sliceList sources
-                         , _aptImageSourcePackages = []
-                         , _aptImageBinaryPackages = [] }
+    do os <- prepareAptEnv'' cacheDir sourcesChangedAction sources
        os' <- updateCacheSources sourcesChangedAction os >>= updateAptEnv
        getApt >>= putApt . modL aptImageMap (Map.insert (sliceListName sources) os')
        return os'
@@ -108,8 +82,7 @@ updateAptEnv os =
     do liftIO $ aptGetUpdate os
        sourcePackages <- getSourcePackages os >>= return . sortBy cmp
        binaryPackages <- getBinaryPackages os
-       return $ os { _aptImageSourcePackages = sourcePackages
-                   , _aptImageBinaryPackages = binaryPackages }
+       return $ setL aptImageSourcePackages sourcePackages $ setL aptImageBinaryPackages binaryPackages $ os
     where
       -- Flip args to get newest version first
       cmp = flip (compare `on` (packageVersion . sourcePackageID))
@@ -177,45 +150,6 @@ sliceIndexes cache slice =
                            "\n slice: " ++ show slice
             xs -> error $ "Internal error 5 - multiple releases named " ++ releaseName' release ++ "\n" ++ show xs
 
--- |Retrieve a source package via apt-get.
-prepareSource :: (AptCache t)
-             => FilePath			-- Where to put the source
-             -> t				-- Where to apt-get from
-             -> SrcPkgName			-- The name of the package
-             -> Maybe DebianVersion		-- The desired version, if Nothing get newest
-             -> IO DebianBuildTree		-- The resulting source tree
-prepareSource dir os package version =
-    do liftIO $ createDirectoryIfMissing True dir
-       ready <- findDebianBuildTrees dir
-       let newest = listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . packageName . sourcePackageID) . aptSourcePackages $ os
-       let version' = maybe newest Just version
-       case (version', ready) of
-         (Nothing, _) ->
-             fail $ "No available versions of " ++ unSrcPkgName package ++ " in " ++ rootPath (rootDir os)
-         (Just requested, [tree])
-             | requested == (logVersion . entry $ tree) ->
-                 return tree
-         (Just requested, []) ->
-             do aptGetSource os dir [(package, Just requested)]
-                trees <- findDebianBuildTrees dir
-                case trees of
-                  [tree] -> return tree
-                  _ -> fail $ "apt-get source failed in " ++ dir ++ " (1): trees=" ++ show (map (dir' . tree' . debTree') trees)
-         (Just requested, _) ->
-             do -- One or more incorrect versions are available, remove them
-                liftIO $ removeRecursiveSafely dir
-                qPutStr $ "Retrieving APT source for " ++ unSrcPkgName package
-                aptGetSource os dir [(package, Just requested)]
-                trees <- findDebianBuildTrees dir
-                case trees of
-                  [tree] -> return tree
-                  _ -> fail $ "apt-get source failed (2): trees=" ++ show (map (dir' . tree' . debTree') trees)
-
-{-
-forceList :: [a] -> IO [a]
-forceList output = evaluate (length output) >> return output
--}
-
 data UpdateError
     = Changed ReleaseName FilePath SliceList SliceList
     | Missing ReleaseName FilePath
@@ -242,20 +176,9 @@ prepareOSEnv :: MonadDeb m =>
            -> m OSImage
 prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude components =
     do top <- askTop
-       copy <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) repo
-       ePutStrLn ("Preparing clean " ++ sliceName (sliceListName distro) ++ " build environment at " ++ rootPath root ++ ", osLocalRepoMaster: " ++ show repo)
-       arch <- liftIO buildArchOfRoot
-       let os = OS { _osGlobalCacheDir = top
-                   , _osRoot = root
-                   , _osBaseDistro = sliceList distro
-                   , _osReleaseName = ReleaseName . sliceName . sliceListName $ distro
-                   , _osArch = arch
-                   , _osLocalMaster = repo
-                   , _osLocalCopy = copy
-                   , _osSourcePackages = []
-                   , _osBinaryPackages = [] }
-       -- update os >>= recreate arch os >>= doInclude >>= doLocales >>= syncLocalPool
+       os <- prepareOSEnv' top root distro repo flush ifSourcesChanged include optional exclude components
        os' <- update os
+       arch <- liftIO buildArchOfRoot -- This should be stored in os, but it is a Maybe - why?
        os'' <- recreate arch os os'
        doInclude os''
        doLocales os''
@@ -290,29 +213,6 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
           do localeName <- liftIO (try (getEnv "LANG") :: IO (Either SomeException String))
              liftIO $ localeGen (either (const "en_US.UTF-8") id localeName) os
 
--- |Prepare a minimal \/dev directory
-{-# WARNING prepareDevs "This function should check all the result codes" #-}
-prepareDevs :: FilePath -> IO ()
-prepareDevs root = do
-  mapM_ prepareDev devices
-  where
-    devices :: [(FilePath, String, Int, Int)]
-    devices = [(root ++ "/dev/null", "c", 1, 3),
-               (root ++ "/dev/zero", "c", 1, 5),
-               (root ++ "/dev/full", "c", 1, 7),
-               (root ++ "/dev/console", "c", 5, 1),
-               (root ++ "/dev/random", "c", 1, 8),
-               (root ++ "/dev/urandom", "c", 1, 9)] ++
-              (map (\ n -> (root ++ "/dev/loop" ++ show n, "b", 7, n)) [0..7]) ++
-              (map (\ n -> (root ++ "/dev/loop/" ++ show n, "b", 7, n)) [0..7])
-    prepareDev (path, typ, major, minor) = do
-                     createDirectoryIfMissing True (fst (splitFileName path))
-                     let cmd = "mknod " ++ path ++ " " ++ typ ++ " " ++ show major ++ " " ++ show minor ++ " 2> /dev/null"
-                     exists <- doesFileExist path
-                     case exists of
-                       False -> readProcessChunks (shell cmd) L.empty >>= return . oneResult
-                       True -> return ExitSuccess
-
 _pbuilderBuild :: MonadApt m =>
             FilePath
          -> EnvRoot
@@ -325,74 +225,8 @@ _pbuilderBuild :: MonadApt m =>
          -> [String]
          -> m OSImage
 _pbuilderBuild cacheDir root distro arch repo copy _extraEssential _omitEssential _extra =
-      -- We can't create the environment if the sources.list has any
-      -- file:// URIs because they can't yet be visible inside the
-      -- environment.  So we grep them out, create the environment, and
-      -- then add them back in.
-    do ePutStrLn ("Creating clean build environment (" ++ sliceName (sliceListName distro) ++ ")")
-       ePutStrLn ("# " ++ cmd)
-       liftIO (runProcess (shell cmd) L.empty) >>= liftIO . doOutput >>= foldOutputsL codefn outfn errfn exnfn (return ())
-       ePutStrLn "done."
-       let os = OS { _osGlobalCacheDir = cacheDir
-                   , _osRoot = root
-                   , _osBaseDistro = sliceList distro
-                   , _osReleaseName = ReleaseName . sliceName . sliceListName $ distro
-                   , _osArch = arch
-                   , _osLocalMaster = repo
-                   , _osLocalCopy = copy
-                   , _osSourcePackages = []
-                   , _osBinaryPackages = [] }
-       let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
-       -- Rewrite the sources.list with the local pool added.
-       liftIO $ replaceFile sourcesPath' (show . pretty . aptSliceList $ os)
+    do os <- _pbuilderBuild' cacheDir root distro arch repo copy _extraEssential _omitEssential _extra
        updateOSEnv os >>= either (error . show) return
-    where
-      codefn _ ExitSuccess = return ()
-      codefn _ failure = error ("Could not create build environment:\n " ++ cmd ++ " -> " ++ show failure)
-      outfn _ _ = return ()
-      errfn _ _ = return ()
-      exnfn _ _ = return ()
-{-
-      (output, result) <-
-          do output <- liftIO (lazyCommandV cmd L.empty)
-             ePutStrLn ("Creating clean build environment (" ++ sliceName (sliceListName distro) ++ ")")
-             ePutStrLn ("# " ++ cmd)
-             return . keepStderr . mergeToStderr $ output
-      case result of
-        -- It is fatal if we can't build the environment
-        [Result ExitSuccess] ->
-            do ePutStrLn "done."
-               let os = OS { osGlobalCacheDir = cacheDir
-                           , osRoot = root
-                           , osBaseDistro = sliceList distro
-                           , osReleaseName = ReleaseName . sliceName . sliceListName $ distro
-                           , osArch = arch
-                           , osLocalRepoMaster = repo
-                           , osSourcePackages = []
-                           , osBinaryPackages = [] }
-               let sourcesPath = rootPath root ++ "/etc/apt/sources.list"
-               -- Rewrite the sources.list with the local pool added.
-               liftIO $ replaceFile sourcesPath (show . pretty . aptSliceList $ os)
-               updateEnv os >>= either (error . show) return
-        failure ->
-            (ePutStr . L.unpack $ output) >>
-            error ("Could not create build environment:\n " ++ cmd ++ " -> " ++ show failure)
-    where
--}
-      cmd = intercalate " " $ [ "pbuilder"
-                              , "--create"
-                              , "--distribution", (sliceName . sliceListName $ distro)
-                              , "--basetgz", cacheDir </> "pbuilderBase"
-                              , "--buildplace", rootPath root
-                              , "--preserve-buildplace"
-                              ]
-{-
-      cmd = ("build-env --allow-missing-indexes --immediate-configure-false " ++
-             " -o " ++ rootPath root ++ " -s " ++ cacheSourcesPath cacheDir (ReleaseName (sliceName (sliceListName distro))) ++
-             " --with '" ++ intercalate " " extra ++ "'" ++
-             " --with-essential '" ++ intercalate " " extraEssential ++ "'" ++
-             " --omit-essential '" ++ intercalate " " omitEssential ++ "'")
- -}
 
 -- Create a new clean build environment in root.clean
 -- FIXME: create an ".incomplete" flag and remove it when build-env succeeds
@@ -408,63 +242,16 @@ buildEnv :: MonadDeb m =>
          -> m OSImage
 buildEnv root distro arch repo copy include exclude components =
     quieter (-1) $
-    do
-      top <- askTop
-      ePutStr (unlines [ "Creating clean build environment (" ++ sliceName (sliceListName distro) ++ ")"
-                       , "  root: " ++ show root
-                       , "  baseDist: " ++ show baseDist
-                       , "  mirror: " ++ show mirror ])
-      -- We can't create the environment if the sources.list has any
-      -- file:// URIs because they can't yet be visible inside the
-      -- environment.  So we grep them out, create the environment, and
-      -- then add them back in.
-      runProcess (shell cmd) L.empty >>= foldOutputsL codefn outfn errfn exnfn (return ())
-      ePutStrLn "done."
-      let os = OS { _osGlobalCacheDir = top
-                  , _osRoot = root
-                  , _osBaseDistro = sliceList distro
-                  , _osReleaseName = ReleaseName . sliceName . sliceListName $ distro
-                  , _osArch = arch
-                  , _osLocalMaster = repo
-                  , _osLocalCopy = copy
-                  , _osSourcePackages = []
-                  , _osBinaryPackages = [] }
-      let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
-      -- Rewrite the sources.list with the local pool added.
-      liftIO $ replaceFile sourcesPath' (show . pretty . aptSliceList $ os)
-      updateOSEnv os >>= either (error . show) return
-    where
-      codefn _ ExitSuccess = return ()
-      codefn _ failure = error ("Could not create build environment:\n " ++ cmd ++ " -> " ++ show failure)
-      outfn _ _ = return ()
-      errfn _ _ = return ()
-      exnfn _ _ = return ()
-
-      woot = rootPath root
-      wootNew = woot ++ ".new"
-      baseDist = either id (relName . fst) . sourceDist . sliceSource . head . slices . sliceList $ distro
-      mirror = uriToString' . sourceUri . sliceSource . head . slices . sliceList $ distro
-      cmd = intercalate " && "
-              ["set -x",
-               "rm -rf " ++ wootNew,
-               ("debootstrap " ++
-                (if include /= [] then "--include=" ++ intercalate "," include ++ " " else "") ++
-                (if exclude /= [] then "--exclude=" ++ intercalate "," exclude ++ " " else "") ++
-                "--variant=buildd " ++
-                "--components=" ++ intercalate "," components ++ " " ++
-                baseDist ++ " " ++
-                wootNew ++ " " ++
-                mirror),
-               "cat " ++ wootNew ++ "/etc/apt/sources.list | sed -e 's/^deb /deb-src /' >>" ++ wootNew ++ "/etc/apt/sources.list",
-               "mkdir -p " ++ woot,
-               "rm -rf " ++ woot,
-               "mv " ++ wootNew ++ " " ++ woot]
+    do top <- askTop
+       os <- buildEnv' top root distro arch repo copy include exclude components
+       updateOSEnv os >>= either (error . show) return
 
 -- |Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.
 updateOSEnv :: MonadApt m => OSImage -> m (Either UpdateError OSImage)
 updateOSEnv os =
-    do liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc") >> readFile "/etc/resolv.conf" >>= writeFile (rootPath root ++ "/etc/resolv.conf")
+    do liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc")
+       liftIO $ readFile "/etc/resolv.conf" >>= writeFile (rootPath root ++ "/etc/resolv.conf")
        verified <- verifySources
        case verified of
          Left x -> return $ Left x
@@ -496,27 +283,28 @@ updateOSEnv os =
       remoteOnly :: SliceList -> SliceList
       remoteOnly x = x {slices = filter r (slices x)} where r y = (uriScheme . sourceUri . sliceSource $ y) /= "file:"
 
--- |Use rsync to synchronize the pool of locally built packages from
--- outside the build environment to the location inside the environment
--- where apt can see and install the packages.
-syncLocalPool :: {- MonadRepoCache k r -} MonadApt m => OSImage -> m OSImage
-syncLocalPool os =
-    do repo' <- copyLocalRepo (EnvPath {envRoot = getL osRoot os, envPath = "/work/localpool"}) (getL osLocalMaster os)
-       return $ setL osLocalCopy repo' os
-{-
-    where
-      rsync' repo =
-          do result <- rsync [] (outsidePath (repoRoot repo)) (rootPath root ++ "/work/localpool")
-             case result of
-               ExitFailure n -> return (Left $ "*** FAILURE syncing local pool from " ++ outsidePath (repoRoot repo) ++ ": " ++ show n)
-               _ -> return (Right ())
-      root = osRoot os
--}
-
-{-
-stripDist :: FilePath -> FilePath
-stripDist path = maybe path (\ n -> drop (n + 7) path) (isSublistOf "/dists/" path)
--}
+-- |Prepare a minimal \/dev directory
+{-# WARNING prepareDevs "This function should check all the result codes" #-}
+prepareDevs :: FilePath -> IO ()
+prepareDevs root = do
+  mapM_ prepareDev devices
+  where
+    devices :: [(FilePath, String, Int, Int)]
+    devices = [(root ++ "/dev/null", "c", 1, 3),
+               (root ++ "/dev/zero", "c", 1, 5),
+               (root ++ "/dev/full", "c", 1, 7),
+               (root ++ "/dev/console", "c", 5, 1),
+               (root ++ "/dev/random", "c", 1, 8),
+               (root ++ "/dev/urandom", "c", 1, 9)] ++
+              (map (\ n -> (root ++ "/dev/loop" ++ show n, "b", 7, n)) [0..7]) ++
+              (map (\ n -> (root ++ "/dev/loop/" ++ show n, "b", 7, n)) [0..7])
+    prepareDev (path, typ, major, minor) = do
+                     createDirectoryIfMissing True (fst (splitFileName path))
+                     let cmd = "mknod " ++ path ++ " " ++ typ ++ " " ++ show major ++ " " ++ show minor ++ " 2> /dev/null"
+                     exists <- doesFileExist path
+                     case exists of
+                       False -> readProcessChunks (shell cmd) L.empty >>= return . oneResult
+                       True -> return ExitSuccess
 
 -- FIXME: assuming the index is part of the cache
 sourcePackagesOfIndex' :: (AptCache a, MonadApt m) => a -> RepoKey -> Release -> PackageIndex -> m [SourcePackage]

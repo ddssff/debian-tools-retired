@@ -11,79 +11,71 @@ module Debian.AutoBuilder.Target
     , decode
     ) where
 
-import Control.Arrow (second)
 import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
-import Control.Exception (SomeException, try, throw, evaluate, AsyncException(UserInterrupt), fromException, toException)
+import Control.Arrow (second)
+import Control.Exception (AsyncException(UserInterrupt), evaluate, fromException, SomeException, throw, toException, try)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
-import Control.Monad.RWS(MonadIO, liftIO, when)
-import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy.Char8 as L
-import qualified Data.ByteString.UTF8 as UTF8
+import Control.Monad.RWS (liftIO, MonadIO, when)
+import qualified Data.ByteString.Char8 as B (concat)
+import qualified Data.ByteString.Lazy.Char8 as L (ByteString, concat, empty, toChunks, unpack)
+import qualified Data.ByteString.UTF8 as UTF8 (toString)
 import Data.Either (partitionEithers)
 import Data.Function (on)
-import Data.List(intersperse, intercalate, intersect, isSuffixOf,
-                 nub, partition, sortBy)
-import Data.Maybe(catMaybes, fromJust, isNothing, listToMaybe)
+import Data.List (intercalate, intersect, intersperse, isSuffixOf, nub, partition, sortBy)
+import Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe)
 import Data.Monoid ((<>))
-import qualified Data.Set as Set
-import qualified Data.Text as T (Text, pack, unpack)
-import Data.Time(NominalDiffTime)
+import qualified Data.Set as Set (difference, empty, fromList, insert, member, null, partition, Set, size, toList, union)
+import qualified Data.Text as T (pack, Text, unpack)
+import Data.Time (NominalDiffTime)
 import Debian.Arch (Arch)
 import Debian.AutoBuilder.BuildEnv (prepareBuildOS)
-import qualified Debian.AutoBuilder.Params as P
-import Debian.AutoBuilder.Types.Buildable (Buildable(..), Target(tgt, cleanSource, targetDepends), targetName, prepareTarget, targetRelaxed, targetControl, relaxDepends, failing, debianSourcePackageName)
-import qualified Debian.AutoBuilder.Types.CacheRec as P
-import qualified Debian.AutoBuilder.Types.Download as T
-import Debian.AutoBuilder.Types.Fingerprint (Fingerprint, packageFingerprint, showFingerprint, dependencyChanges, targetFingerprint, showDependencies', BuildDecision(..), buildDecision)
-import qualified Debian.AutoBuilder.Types.Packages as P
-import qualified Debian.AutoBuilder.Types.ParamRec as P
-import qualified Debian.AutoBuilder.Version as V
-import Debian.Changes (ChangesFile(changeRelease, changeInfo, changeFiles, changeDir),
-                       ChangedFileSpec(changedFileSize, changedFileName, changedFileMD5sum, changedFileSHA1sum, changedFileSHA256sum),
-                       ChangeLogEntry(logWho, logVersion, logDists, logDate, logComments))
-import Debian.Control
--- import Debian.Control
-import qualified Debian.GenBuildDeps as G
+import qualified Debian.AutoBuilder.Params as P (baseRelease, isDevelopmentRelease)
+import Debian.AutoBuilder.Types.Buildable (Buildable(..), debianSourcePackageName, failing, prepareTarget, relaxDepends, Target(tgt, cleanSource, targetDepends), targetControl, targetName, targetRelaxed)
+import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
+import qualified Debian.AutoBuilder.Types.Download as T (Download(buildWrapper, getTop, logText), flags, handle, method)
+import Debian.AutoBuilder.Types.Fingerprint (buildDecision, BuildDecision(..), dependencyChanges, Fingerprint, packageFingerprint, showDependencies', showFingerprint, targetFingerprint)
+import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, packageCount, PackageFlag(UDeb), Packages, TargetName(unTargetName))
+import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(autobuilderEmail, buildDepends, buildRelease, buildTrumped, discard, doNotChangeVersion, dryRun, extraReleaseTag, goals, noClean, oldVendorTags, preferred, releaseAliases, setEnv, strictness, vendorTag), Strictness(Lax))
+import qualified Debian.AutoBuilder.Version as V (autoBuilderVersion)
+import Debian.Changes (ChangedFileSpec(changedFileSize, changedFileName, changedFileMD5sum, changedFileSHA1sum, changedFileSHA256sum), ChangeLogEntry(logWho, logVersion, logDists, logDate, logComments), ChangesFile(changeRelease, changeInfo, changeFiles, changeDir))
+import Debian.Control (Control'(Control), ControlFunctions(parseControlFromFile), Field'(Comment, Field), fieldValue, Paragraph'(..), raiseFields)
+import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, readyTriples), buildDependencies, compareSource, DepInfo(binaryNames, relations, sourceName))
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
-import Debian.Relation.ByteString(Relations, Relation(..))
+import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (releaseName')
 import Debian.Repo.Apt (MonadApt, MonadDeb)
-import Debian.Repo.Apt.AptImage (syncLocalPool, updateOSEnv)
-import Debian.Repo.SourceTree (buildDebs)
-import Debian.Sources (SliceName(..))
+import Debian.Repo.Apt.AptImage (updateOSEnv)
 import Debian.Repo.Apt.Package (scanIncoming)
-import Debian.Repo.AptImage (AptCache(rootDir, aptBinaryPackages), OSImage, updateLists, syncEnv, withProc, binaryPackages, buildArchOfEnv, sourcePackages, aptSourcePackagesSorted)
+import Debian.Repo.AptImage (AptCache(rootDir, aptBinaryPackages), aptSourcePackagesSorted, binaryPackages, buildArchOfEnv, OSImage, sourcePackages, syncEnv, syncLocalPool, updateLists, withProc)
 import Debian.Repo.Changes (saveChangesFile)
-import Debian.Repo.Dependencies (simplifyRelations, solutions, prettySimpleRelation)
+import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.InstallResult (showErrors)
 import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
-import Debian.Repo.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageInfo))
-import Debian.Repo.SourceTree (SourceTreeC(..), DebianSourceTreeC(..),
-                               DebianBuildTree, addLogEntry, copySourceTree,
-                               findChanges, findOneDebianBuildTree, SourcePackageStatus(..))
-import Debian.Time(getCurrentLocalRFC822Time)
-import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
-import Debian.VersionPolicy(parseTag, setTag)
-import Extra.Files(replaceFile)
-import "Extra" Extra.List(dropPrefix)
-import Extra.Misc(columns)
-import System.Directory (doesFileExist, doesDirectoryExist, removeDirectory, createDirectoryIfMissing)
-import System.Exit(ExitCode(ExitSuccess, ExitFailure), exitWith)
+import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID))
+import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..))
+import Debian.Sources (SliceName(..))
+import Debian.Time (getCurrentLocalRFC822Time)
+import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
+import Debian.VersionPolicy (parseTag, setTag)
+import Extra.Files (replaceFile)
+import "Extra" Extra.List (dropPrefix)
+import Extra.Misc (columns)
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, removeDirectory)
+import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
-import System.Posix.Files(fileSize, getFileStatus)
-import System.Unix.Chroot (useEnv)
-import System.Process (proc, shell, CreateProcess(cwd), readProcessWithExitCode, showCommandForUser, readProcess)
-import System.Process.Progress (mergeToStdout, keepStdout, keepResult, collectOutputs,
-                                keepResult, runProcessF, runProcess, quieter, noisier, qPutStrLn, ePutStr, ePutStrLn)
+import System.Posix.Files (fileSize, getFileStatus)
+import System.Process (CreateProcess(cwd), proc, readProcess, readProcessWithExitCode, shell, showCommandForUser)
+import System.Process.Progress (collectOutputs, ePutStr, ePutStrLn, keepResult, keepResult, keepStdout, mergeToStdout, noisier, qPutStrLn, quieter, runProcess, runProcessF)
 import System.Process.Read (readCreateProcess)
+import System.Unix.Chroot (useEnv)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
-import Text.Printf(printf)
-import Text.Regex(matchRegex, mkRegex)
+import Text.Printf (printf)
+import Text.Regex (matchRegex, mkRegex)
 
 instance Ord Target where
     compare = compare `on` debianSourcePackageName
