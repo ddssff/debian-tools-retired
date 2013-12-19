@@ -32,7 +32,7 @@ Library
   if flag(local-debian)
     Hs-Source-Dirs: ., ../../haskell-debian
   else
-    Build-Depends: debian >= 3.78
+    Build-Depends: debian >= 3.80
 
   Build-Depends:
         ansi-wl-pprint, base, bytestring, Cabal, containers, data-lens, data-lens-template, deepseq, directory, Extra >= 1.43, filepath, MonadCatchIO-mtl,
@@ -77,7 +77,7 @@ Executable debian-versions
   if flag(local-debian)
     Hs-Source-Dirs: ., ../../haskell-debian
   else
-    Build-Depends: debian >= 3.78
+    Build-Depends: debian >= 3.80
 
 Executable newdist
   Buildable: True
@@ -86,7 +86,7 @@ Executable newdist
   if flag(local-debian)
     Hs-Source-Dirs: ., ../../haskell-debian
   else
-    Build-Depends: debian >= 3.78
+    Build-Depends: debian >= 3.80
 
 Executable speedtest
   Buildable: True
@@ -95,7 +95,7 @@ Executable speedtest
   if flag(local-debian)
     Hs-Source-Dirs: ., ../../haskell-debian
   else
-    Build-Depends: debian >= 3.78
+    Build-Depends: debian >= 3.80
 
 Executable speedtest2
   Buildable: True
@@ -104,4 +104,4 @@ Executable speedtest2
   if flag(local-debian)
     Hs-Source-Dirs: ., ../../haskell-debian
   else
-    Build-Depends: debian >= 3.78
+    Build-Depends: debian >= 3.80

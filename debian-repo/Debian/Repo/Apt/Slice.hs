@@ -20,11 +20,11 @@ import Debian.Control (Control'(Control), ControlFunctions(parseControl), fieldV
 import Debian.Control.Text (decodeParagraph)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
 import Debian.Repo.Apt (MonadApt, prepareRemoteRepository)
-import Debian.Repo.AptCache (AptCache(aptBaseSliceList, aptReleaseName), distDir, SourcesChangedAction(..), sourcesPath)
+import Debian.Repo.AptCache (AptCache(aptBaseSources), distDir, SourcesChangedAction(..), sourcesPath)
 import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..))
 import Debian.Repo.LocalRepository (prepareLocalRepository)
 import Debian.Repo.Repo (repoKey)
-import Debian.Repo.Slice (Slice(..), SliceList(..))
+import Debian.Repo.Slice (Slice(..), SliceList(..), NamedSliceList(sliceList), sliceListName)
 import Debian.Repo.SourcesList (parseSourcesList)
 import Debian.Sources (DebSource(..), SourceType(Deb, DebSrc))
 import Debian.URI (dirFromURI, fileFromURI)
@@ -103,7 +103,7 @@ updateCacheSources sourcesChangedAction distro =
     -- (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
     qPutStrLn "Updating cache sources" >>
     do
-      let baseSources = aptBaseSliceList distro
+      let baseSources = aptBaseSources distro
       --let distro@(ReleaseCache _ dist _) = releaseFromConfig' top text
       let dir = distDir distro
       distExists <- liftIO $ doesFileExist (sourcesPath distro)
@@ -111,11 +111,11 @@ updateCacheSources sourcesChangedAction distro =
         True ->
             do
 	      fileSources <- liftIO (readFile (sourcesPath distro)) >>= verifySourcesList Nothing . parseSourcesList
-	      case (fileSources == baseSources, sourcesChangedAction) of
+	      case (fileSources == sliceList baseSources, sourcesChangedAction) of
 	        (True, _) -> return ()
 	        (False, SourcesChangedError) ->
                     do
-                      ePutStrLn ("The sources.list in the existing '" ++ relName (aptReleaseName distro) ++
+                      ePutStrLn ("The sources.list in the existing '" ++ (relName . sliceListName $ baseSources) ++
                                  "' build environment doesn't match the parameters passed to the autobuilder" ++
 			         ":\n\n" ++ sourcesPath distro ++ ":\n\n" ++
                                  show (pretty fileSources) ++

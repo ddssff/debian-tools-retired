@@ -43,7 +43,7 @@ import Debian.Control (Control'(Control), ControlFunctions(parseControlFromFile)
 import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, readyTriples), buildDependencies, compareSource, DepInfo(binaryNames, relations, sourceName))
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
-import Debian.Release (releaseName')
+import Debian.Release (ReleaseName(relName), releaseName')
 import Debian.Repo.Apt (MonadApt, MonadDeb)
 import Debian.Repo.Apt.AptImage (updateOSEnv)
 import Debian.Repo.Apt.Package (scanIncoming)
@@ -58,7 +58,6 @@ import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID))
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..))
-import Debian.Sources (SliceName(..))
 import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.VersionPolicy (parseTag, setTag)
@@ -624,7 +623,7 @@ computeNewVersion cache dependOS poolOS target =
               oldVendors = P.oldVendorTags (P.params cache)
               release = if (P.isDevelopmentRelease (P.params cache)) then
                             Nothing else
-                            (Just (sliceName (P.baseRelease (P.params cache))))
+                            (Just (relName (P.baseRelease (P.params cache))))
               extra = P.extraReleaseTag (P.params cache)
               aliases = \ x -> maybe x id (lookup x (P.releaseAliases (P.params cache))) in
 {-

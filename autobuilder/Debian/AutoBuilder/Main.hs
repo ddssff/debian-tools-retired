@@ -30,7 +30,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (DebT)
-import Debian.Release ({-parseSection',-} releaseName')
+import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Sources (SliceName(..))
 import Debian.Repo.Apt (MonadApt, runAptT, foldRepository, MonadDeb)
 import Debian.Repo.Apt.AptImage (prepareAptEnv)
@@ -152,7 +152,7 @@ runParameterSet init cache =
       -- Compute a list of sources for all the releases in the repository we will upload to,
       -- used to avoid creating package versions that already exist.  Also include the sources
       -- for the local repository to avoid collisions there as well.
-      let poolSources = NamedSliceList { sliceListName = SliceName (sliceName (sliceListName buildRelease) ++ "-all")
+      let poolSources = NamedSliceList { sliceListName = ReleaseName (relName (sliceListName buildRelease) ++ "-all")
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
       -- Build an apt-get environment which we can use to retrieve all the package lists
       pool <-prepareAptEnv top (P.ifSourcesChanged params) poolSources
@@ -167,7 +167,7 @@ runParameterSet init cache =
       baseRelease =  either (error . show) id (P.findSlice cache (P.baseRelease params))
       buildRepoSources = C.buildRepoSources cache
       buildReleaseSources = releaseSlices (P.buildRelease params) (inexactPathSlices buildRepoSources)
-      buildRelease = NamedSliceList { sliceListName = SliceName (releaseName' (P.buildRelease params))
+      buildRelease = NamedSliceList { sliceListName = ReleaseName (releaseName' (P.buildRelease params))
                                     , sliceList = appendSliceLists [sliceList baseRelease, buildReleaseSources] }
       doRequiredVersion :: IO ()
       doRequiredVersion =
@@ -185,10 +185,10 @@ runParameterSet init cache =
                 ePutStr (" Version >= " ++ show (prettyDebianVersion v) ++ " is required" ++ maybe "" ((++) ":") s)
       doShowParams = ePutStr $ "Configuration parameters:\n" ++ P.prettyPrint params
       doShowSources =
-          either (error . show) doShow (P.findSlice cache (SliceName (releaseName' (P.buildRelease params))))
+          either (error . show) doShow (P.findSlice cache (ReleaseName (releaseName' (P.buildRelease params))))
           where
             doShow sources =
-                do qPutStrLn $ (sliceName . sliceListName $ sources) ++ ":"
+                do qPutStrLn $ (relName . sliceListName $ sources) ++ ":"
                    qPutStrLn . show . pretty . sliceList $ sources
                    exitWith ExitSuccess
       doFlush top =

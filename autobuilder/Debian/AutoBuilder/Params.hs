@@ -15,12 +15,11 @@ import Data.Maybe (catMaybes, fromMaybe)
 import qualified Debian.AutoBuilder.LocalRepo as Local (subDir)
 import Debian.AutoBuilder.Types.CacheRec (CacheRec(..))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
-import Debian.Release (ReleaseName(relName))
+import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo.Apt (MonadDeb)
 import Debian.Repo.Apt.Slice (repoSources, verifySourcesList)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(..))
 import Debian.Repo.Top (MonadTop(askTop), sub)
-import Debian.Sources (SliceName(..))
 import System.Directory (createDirectoryIfMissing, getPermissions, writable)
 import System.Environment (getEnv)
 import System.Process.Progress (qPutStrLn)
@@ -39,7 +38,7 @@ buildCache params =
     where
       parseNamedSliceList (name, lines) =
           do sources <- verifySourcesList Nothing lines
-             return $ NamedSliceList { sliceListName = SliceName name, sliceList = sources }
+             return $ NamedSliceList { sliceListName = ReleaseName name, sliceList = sources }
 
 -- |An instance of RunClass contains all the information we need to
 -- run the autobuilder.
@@ -62,18 +61,18 @@ computeTopDir params =
          True -> return top
 
 -- |Find a release by name, among all the "Sources" entries given in the configuration.
-findSlice :: CacheRec -> SliceName -> Either String NamedSliceList
+findSlice :: CacheRec -> ReleaseName -> Either String NamedSliceList
 findSlice cache dist =
     case filter ((== dist) . sliceListName) (allSources cache) of
       [x] -> Right x
-      [] -> Left ("No sources.list found for " ++ sliceName dist)
-      xs -> Left ("Multiple sources.lists found for " ++ sliceName dist ++ "\n" ++ show (map (sliceName . sliceListName) xs))
+      [] -> Left ("No sources.list found for " ++ relName dist)
+      xs -> Left ("Multiple sources.lists found for " ++ relName dist ++ "\n" ++ show (map (relName . sliceListName) xs))
 
 -- | Packages uploaded to the build release will be compatible
 -- with packages in this release.
-baseRelease :: ParamRec -> SliceName
+baseRelease :: ParamRec -> ReleaseName
 baseRelease params =
-    maybe (error $ "Unknown release suffix: " ++ rel) SliceName
+    maybe (error $ "Unknown release suffix: " ++ rel) ReleaseName
               (dropOneSuffix (releaseSuffixes params) rel)
     where rel = (relName (buildRelease params))
 

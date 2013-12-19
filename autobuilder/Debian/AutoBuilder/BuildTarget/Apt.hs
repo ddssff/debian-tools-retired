@@ -10,13 +10,13 @@ import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag(AptPin), Packages(flags, spec))
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(flushSource, ifSourcesChanged))
 import Debian.Relation (SrcPkgName)
+import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo.Apt (MonadDeb)
 import Debian.Repo.Apt.AptImage (prepareAptEnv)
 import Debian.Repo.AptImage (aptDir)
 import Debian.Repo.Slice (NamedSliceList(sliceListName))
 import Debian.Repo.SourceTree (topdir, prepareSource)
 import Debian.Repo.Top (askTop)
-import Debian.Sources (SliceName(SliceName, sliceName))
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
 import System.Unix.Directory (removeRecursiveSafely)
 
@@ -33,14 +33,14 @@ prepare cache target dist package =
        return $ Download {
                     package = target
                   , getTop = topdir tree
-                  , logText = "Built from " ++ sliceName (sliceListName distro) ++ " apt pool, apt-revision: " ++ show (P.spec target)
+                  , logText = "Built from " ++ relName (sliceListName distro) ++ " apt pool, apt-revision: " ++ show (P.spec target)
                   , mVersion = Nothing
                   , origTarball = Nothing
                   , cleanTarget = \ _ -> return ([], 0)
                   , buildWrapper = id }
     where
-      distro = maybe (error $ "Invalid dist: " ++ sliceName dist') id (findRelease (P.allSources cache) dist')
-      dist' = SliceName dist
+      distro = maybe (error $ "Invalid dist: " ++ relName dist') id (findRelease (P.allSources cache) dist')
+      dist' = ReleaseName dist
       version' = case (nub (sort (catMaybes (map (\ flag -> case flag of
                                                               P.AptPin s -> Just (parseDebianVersion s)
                                                               _ -> Nothing) (P.flags target))))) of
@@ -51,4 +51,4 @@ prepare cache target dist package =
           case filter ((== dist) . sliceListName) distros of
             [a] -> Just a
             [] -> Nothing
-            a -> error $ ("Multiple sources.lists found for " ++ sliceName dist ++ ": " ++ show (map (sliceName . sliceListName) a))
+            a -> error $ ("Multiple sources.lists found for " ++ relName dist ++ ": " ++ show (map (relName . sliceListName) a))

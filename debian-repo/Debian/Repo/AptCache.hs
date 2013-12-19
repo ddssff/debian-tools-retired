@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.AptCache
-    ( AptCache(globalCacheDir, rootDir, aptBaseSliceList, aptArch, aptSourcePackages, aptBinaryPackages, aptReleaseName)
+    ( AptCache(globalCacheDir, rootDir, aptBaseSources, aptArch, aptSourcePackages, aptBinaryPackages), aptReleaseName
     , distDir
     , sourcesPath
     , aptSourcePackagesSorted
@@ -34,7 +34,7 @@ import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage(sourceP
 import Debian.Repo.Repo (repoKey, repoURI)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(Slice, sliceRepoKey, sliceSource), SliceList, SliceList(..))
 import Debian.Repo.Sync (rsync)
-import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SliceName(sliceName), SourceType(..), SourceType(..))
+import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SourceType(..), SourceType(..))
 import Debian.URI (uriToString')
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Extra.Files (replaceFile, writeFileIfMissing)
@@ -64,16 +64,17 @@ class (Ord t, Eq t, Show t) => AptCache t where
     globalCacheDir :: t -> FilePath
     -- | The directory you might chroot to.
     rootDir :: t -> EnvRoot
-    -- | The sources.list without the local repository
-    aptBaseSliceList :: t -> SliceList
+    -- | The sources.list excluding lines for the local repository
+    aptBaseSources :: t -> NamedSliceList
     -- | The build architecture
     aptArch :: t -> Arch
     -- | Return the all source packages in this AptCache.
     aptSourcePackages :: t -> [SourcePackage]
     -- | Return the all binary packages for the architecture of this AptCache.
     aptBinaryPackages :: t -> [BinaryPackage]
-    -- | Name of release
-    aptReleaseName :: t -> ReleaseName
+
+aptReleaseName :: AptCache c => c -> ReleaseName
+aptReleaseName c = error "aptReleaseName" -- aptBaseNamedSources c
 
 -- The following are path functions which can be used while
 -- constructing instances of AptCache.  Each is followed by a

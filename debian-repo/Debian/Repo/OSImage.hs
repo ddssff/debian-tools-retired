@@ -8,7 +8,6 @@ module Debian.Repo.OSImage
     , osLocalCopy
     , osSourcePackages
     , osBinaryPackages
-    , osReleaseName
     , osRoot
     , osArch
 
@@ -50,7 +49,7 @@ import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage(sourceP
 import Debian.Repo.Repo (repoKey, repoURI)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(Slice, sliceRepoKey, sliceSource), SliceList, SliceList(..))
 import Debian.Repo.Sync (rsync)
-import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SliceName(sliceName), SourceType(..), SourceType(..))
+import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SourceType(..), SourceType(..))
 import Debian.URI (uriToString')
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Extra.Files (replaceFile, writeFileIfMissing)
@@ -77,8 +76,7 @@ import Text.Regex (matchRegex, mkRegex)
 data OSImage
     = OS { _osGlobalCacheDir :: FilePath
          , _osRoot :: EnvRoot
-         , _osBaseDistro :: SliceList
-         , _osReleaseName :: ReleaseName
+         , _osBaseDistro :: NamedSliceList
          , _osArch :: Arch
 	 -- | The associated local repository, where packages we
          -- build inside this image are first uploaded to.
@@ -129,7 +127,7 @@ data SourcesChangedAction =
 instance Show OSImage where
     show os = intercalate " " ["OS {",
                                rootPath (getL osRoot os),
-                               relName (getL osReleaseName os),
+                               relName (sliceListName (getL osBaseDistro os)),
                                show (getL osArch os),
                                show (getL osLocalCopy os)]
 
@@ -148,23 +146,22 @@ instance AptCache OSImage where
     rootDir = getL osRoot
     aptArch = getL osArch
     -- aptSliceList = getL osFullDistro
-    aptBaseSliceList = getL osBaseDistro
+    aptBaseSources = getL osBaseDistro
     aptSourcePackages = getL osSourcePackages
     aptBinaryPackages = getL osBinaryPackages
-    aptReleaseName = getL osReleaseName
 
 -- |The sources.list is the list associated with the distro name, plus
 -- the local sources where we deposit newly built packages.
 osFullDistro :: OSImage -> SliceList
 osFullDistro os =
-    SliceList { slices = slices (getL osBaseDistro os) ++ slices localSources }
+    SliceList { slices = slices (sliceList (getL osBaseDistro os)) ++ slices localSources }
     where
       localSources :: SliceList
       localSources = SliceList {slices = [Slice {sliceRepoKey = repoKey repo', sliceSource = src},
                                           Slice {sliceRepoKey = repoKey repo', sliceSource = bin}]}
       src = DebSource Deb (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
       bin = DebSource DebSrc (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
-      name = relName (getL osReleaseName os)
+      name = relName (sliceListName (getL osBaseDistro os))
       repo' = getL osLocalCopy os
       -- repo' = repoCD (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) repo
 
@@ -412,12 +409,11 @@ prepareOSEnv' :: MonadIO m =>
            -> m OSImage
 prepareOSEnv' top root distro repo =
     do copy <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) repo
-       ePutStrLn ("Preparing clean " ++ sliceName (sliceListName distro) ++ " build environment at " ++ rootPath root ++ ", osLocalRepoMaster: " ++ show repo)
+       ePutStrLn ("Preparing clean " ++ relName (sliceListName distro) ++ " build environment at " ++ rootPath root ++ ", osLocalRepoMaster: " ++ show repo)
        arch <- liftIO buildArchOfRoot
        let os = OS { _osGlobalCacheDir = top
                    , _osRoot = root
-                   , _osBaseDistro = sliceList distro
-                   , _osReleaseName = ReleaseName . sliceName . sliceListName $ distro
+                   , _osBaseDistro = distro
                    , _osArch = arch
                    , _osLocalMaster = repo
                    , _osLocalCopy = copy
@@ -478,14 +474,13 @@ _pbuilderBuild' cacheDir root distro arch repo copy _extraEssential _omitEssenti
       -- file:// URIs because they can't yet be visible inside the
       -- environment.  So we grep them out, create the environment, and
       -- then add them back in.
-    do ePutStrLn ("Creating clean build environment (" ++ sliceName (sliceListName distro) ++ ")")
+    do ePutStrLn ("Creating clean build environment (" ++ relName (sliceListName distro) ++ ")")
        ePutStrLn ("# " ++ cmd)
        liftIO (runProcess (shell cmd) L.empty) >>= liftIO . doOutput >>= foldOutputsL codefn outfn errfn exnfn (return ())
        ePutStrLn "done."
        let os = OS { _osGlobalCacheDir = cacheDir
                    , _osRoot = root
-                   , _osBaseDistro = sliceList distro
-                   , _osReleaseName = ReleaseName . sliceName . sliceListName $ distro
+                   , _osBaseDistro = distro
                    , _osArch = arch
                    , _osLocalMaster = repo
                    , _osLocalCopy = copy
@@ -503,7 +498,7 @@ _pbuilderBuild' cacheDir root distro arch repo copy _extraEssential _omitEssenti
       exnfn _ _ = return ()
       cmd = intercalate " " $ [ "pbuilder"
                               , "--create"
-                              , "--distribution", (sliceName . sliceListName $ distro)
+                              , "--distribution", (relName . sliceListName $ distro)
                               , "--basetgz", cacheDir </> "pbuilderBase"
                               , "--buildplace", rootPath root
                               , "--preserve-buildplace"
@@ -525,7 +520,7 @@ buildEnv' :: MonadIO m =>
 buildEnv' top root distro arch repo copy include exclude components =
     quieter (-1) $
     do
-      ePutStr (unlines [ "Creating clean build environment (" ++ sliceName (sliceListName distro) ++ ")"
+      ePutStr (unlines [ "Creating clean build environment (" ++ relName (sliceListName distro) ++ ")"
                        , "  root: " ++ show root
                        , "  baseDist: " ++ show baseDist
                        , "  mirror: " ++ show mirror ])
@@ -537,8 +532,7 @@ buildEnv' top root distro arch repo copy include exclude components =
       ePutStrLn "done."
       let os = OS { _osGlobalCacheDir = top
                   , _osRoot = root
-                  , _osBaseDistro = sliceList distro
-                  , _osReleaseName = ReleaseName . sliceName . sliceListName $ distro
+                  , _osBaseDistro = distro
                   , _osArch = arch
                   , _osLocalMaster = repo
                   , _osLocalCopy = copy

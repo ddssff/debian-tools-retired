@@ -27,19 +27,19 @@ import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.Apt (aptImageMap, binaryPackageMap, foldRepository, MonadApt(getApt, putApt), MonadDeb, sourcePackageMap)
 import Debian.Repo.Apt.Slice (updateCacheSources, verifySourcesList)
 import Debian.Repo.AptCache (AptCache(aptArch, rootDir), aptGetUpdate, buildArchOfRoot, distDir, SourcesChangedAction(SourcesChangedError), sourcesPath)
-import Debian.Repo.AptImage (AptImage, aptImageBinaryPackages, aptImageSliceList, aptImageSourcePackages, prepareAptEnv'')
+import Debian.Repo.AptImage (AptImage, aptImageBinaryPackages, aptImageSources, aptImageSourcePackages, prepareAptEnv'')
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
-import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildEnv', localeGen, neuterEnv, osBaseDistro, osBinaryPackages, OSImage, osFullDistro, osLocalCopy, osLocalMaster, osReleaseName, osRoot, osSourcePackages, prepareOSEnv', syncLocalPool, updateLists)
+import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildEnv', localeGen, neuterEnv, osBaseDistro, osBinaryPackages, OSImage, osFullDistro, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, prepareOSEnv', syncLocalPool, updateLists)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
 import Debian.Repo.SSH (sshCopy)
-import Debian.Repo.Slice (binarySlices, NamedSliceList(sliceListName), Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices)
+import Debian.Repo.Slice (binarySlices, NamedSliceList(sliceListName, sliceList), Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices)
 import Debian.Repo.SourcesList (parseSourcesList)
 import Debian.Repo.Top (MonadTop(askTop))
-import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SliceName(sliceName), SourceType(..))
+import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SourceType(..))
 import Debian.URI (URI(uriScheme), uriToString')
 import Debian.Version (parseDebianVersion)
 import Extra.Files (replaceFile)
@@ -64,7 +64,7 @@ prepareAptEnv :: MonadApt m =>
               -> NamedSliceList		-- The sources.list
               -> m AptImage		-- The resulting environment
 prepareAptEnv cacheDir sourcesChangedAction sources =
-    (\ x -> qPutStrLn ("Preparing apt-get environment for " ++ show (sliceName (sliceListName sources))) >> quieter 2 x) $
+    (\ x -> qPutStrLn ("Preparing apt-get environment for " ++ show (relName (sliceListName sources))) >> quieter 2 x) $
     getApt >>= return . Map.lookup (sliceListName sources) . getL aptImageMap >>=
     maybe (prepareAptEnv' cacheDir sourcesChangedAction sources) return
 
@@ -104,13 +104,13 @@ updateAptEnv os =
 getSourcePackages :: MonadApt m => AptImage -> m [SourcePackage]
 getSourcePackages os =
     do qPutStrLn "AptImage.getSourcePackages"
-       indexes <- mapM (sliceIndexes os) (slices . sourceSlices . getL aptImageSliceList $ os) >>= return . concat
+       indexes <- mapM (sliceIndexes os) (slices . sourceSlices . sliceList . getL aptImageSources $ os) >>= return . concat
        mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' os repo rel index) indexes >>= return . concat
 
 getBinaryPackages :: MonadApt m => AptImage -> m [BinaryPackage]
 getBinaryPackages os =
     do qPutStrLn "AptImage.getBinaryPackages"
-       indexes <- mapM (sliceIndexes os) (slices . binarySlices . getL aptImageSliceList $ os) >>= return . concat
+       indexes <- mapM (sliceIndexes os) (slices . binarySlices . sliceList . getL aptImageSources $ os) >>= return . concat
        mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' os repo rel index) indexes >>= return . concat
 
 getSourcePackages' :: MonadApt m => OSImage -> m [SourcePackage]
@@ -276,10 +276,10 @@ updateOSEnv os =
                    Left (_ :: SomeException) -> return Nothing
                    Right s -> verifySourcesList (Just root) (parseSourcesList s) >>= return . Just . remoteOnly
              case installed of
-               Nothing -> return $ Left $ Missing (getL osReleaseName os) sourcesPath'
+               Nothing -> return $ Left $ Missing (sliceListName (getL osBaseDistro os)) sourcesPath'
                Just installed'
                    | installed' /= computed ->
-                       return $ Left $ Changed (getL osReleaseName os) sourcesPath' computed installed'
+                       return $ Left $ Changed (sliceListName (getL osBaseDistro os)) sourcesPath' computed installed'
                _ -> return $ Right os
       root = getL osRoot os
       remoteOnly :: SliceList -> SliceList

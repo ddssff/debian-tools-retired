@@ -3,17 +3,19 @@
 module Debian.Repo.AptImage
     ( AptImage
     , aptDir
-    , aptImageSliceList
+    , aptImageSources
     , aptImageSourcePackages
     , aptImageBinaryPackages
     , prepareAptEnv''
     ) where
 
+import Control.Category ((.))
 import Control.DeepSeq (force, NFData)
 import Control.Exception (bracket, evaluate, SomeException, try)
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString, empty)
 import Data.Data (Data)
+import Data.Function (on)
 import Data.Lens.Lazy (getL, setL)
 import Data.Lens.Template (makeLenses)
 import Data.List (intercalate, sortBy)
@@ -30,12 +32,13 @@ import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage(sourceP
 import Debian.Repo.Repo (repoKey, repoURI)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(Slice, sliceRepoKey, sliceSource), SliceList, SliceList(..))
 import Debian.Repo.Sync (rsync)
-import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SliceName(sliceName), SourceType(..), SourceType(..))
+import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SourceType(..), SourceType(..))
 import Debian.URI (uriToString')
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Extra.Files (replaceFile, writeFileIfMissing)
 import "Extra" Extra.List (isSublistOf)
 import Extra.Misc (sameInode, sameMd5sum)
+import Prelude hiding ((.))
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile, renameFile)
 import System.Exit (ExitCode(ExitFailure), ExitCode(ExitSuccess))
 import System.FilePath ((</>))
@@ -54,8 +57,7 @@ data AptImage =
     AptImage { _aptGlobalCacheDir :: FilePath
              , _aptImageRoot :: EnvRoot
              , _aptImageArch :: Arch
-             , _aptImageSliceList :: SliceList
-             , _aptImageReleaseName :: ReleaseName
+             , _aptImageSources :: NamedSliceList
              , _aptImageSourcePackages :: [SourcePackage]
              , _aptImageBinaryPackages :: [BinaryPackage]
              }
@@ -63,19 +65,18 @@ data AptImage =
 $(makeLenses [''AptImage])
 
 instance Show AptImage where
-    show apt = "AptImage " ++ relName (getL aptImageReleaseName apt)
+    show apt = "AptImage " ++ relName (sliceListName (getL aptImageSources apt))
 
 instance AptCache AptImage where
     globalCacheDir = getL aptGlobalCacheDir
     rootDir = getL aptImageRoot
     aptArch = getL aptImageArch
-    aptBaseSliceList = getL aptImageSliceList
+    aptBaseSources = getL aptImageSources
     aptSourcePackages = getL aptImageSourcePackages
     aptBinaryPackages = getL aptImageBinaryPackages
-    aptReleaseName = getL aptImageReleaseName
 
 instance Ord AptImage where
-    compare a b = compare (getL aptImageReleaseName a) (getL aptImageReleaseName b)
+    compare a b = compare (sliceListName . getL aptImageSources $ a) (sliceListName . getL aptImageSources $ b)
 
 instance Eq AptImage where
     a == b = compare a b == EQ
@@ -120,7 +121,7 @@ data SourcesChangedAction =
 
 prepareAptEnv'' :: MonadIO m => FilePath -> NamedSliceList -> m AptImage
 prepareAptEnv'' cacheDir sources =
-    do let root = rootPath (cacheRootDir cacheDir (ReleaseName (sliceName (sliceListName sources))))
+    do let root = rootPath (cacheRootDir cacheDir (sliceListName sources))
        --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
        liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
        liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
@@ -138,8 +139,9 @@ prepareAptEnv'' cacheDir sources =
        let os = AptImage { _aptGlobalCacheDir = cacheDir
                          , _aptImageRoot = EnvRoot root
                          , _aptImageArch = arch
-                         , _aptImageReleaseName = ReleaseName . sliceName . sliceListName $ sources
-                         , _aptImageSliceList = sliceList sources
+                         , _aptImageSources = sources
+                         -- , _aptImageReleaseName = ReleaseName . sliceName . sliceListName $ sources
+                         -- , _aptImageSliceList = sliceList sources
                          , _aptImageSourcePackages = []
                          , _aptImageBinaryPackages = [] }
        return os

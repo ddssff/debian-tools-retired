@@ -32,6 +32,9 @@ data NamedSliceList
 instance Pretty SliceList where
     pretty = vcat . map (pretty . sliceSource) . slices
 
+instance Pretty NamedSliceList where
+    pretty = pretty . sliceList
+
 deriving instance Show SourceType
 deriving instance Show DebSource
 
