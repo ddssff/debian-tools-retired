@@ -6,9 +6,11 @@ module Debian.Repo
     , module Debian.Repo.Apt.AptImage
     , module Debian.Repo.Apt.Package
     , module Debian.Repo.Apt.Release
+    , module Debian.Repo.AptCache
     , module Debian.Repo.AptImage
     , module Debian.Repo.Changes
     , module Debian.Repo.Dependencies
+    , module Debian.Repo.OSImage
     , module Debian.Repo.Package
     , module Debian.Repo.PackageIndex
     , module Debian.Repo.Slice
@@ -22,9 +24,11 @@ import Debian.Repo.Apt
 import Debian.Repo.Apt.AptImage
 import Debian.Repo.Apt.Package
 import Debian.Repo.Apt.Release
+import Debian.Repo.AptCache
 import Debian.Repo.AptImage
 import Debian.Repo.Changes
 import Debian.Repo.Dependencies
+import Debian.Repo.OSImage
 import Debian.Repo.Package
 import Debian.Repo.PackageIndex
 import Debian.Repo.Slice

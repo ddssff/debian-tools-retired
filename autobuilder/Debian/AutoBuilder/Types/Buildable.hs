@@ -34,7 +34,8 @@ import Debian.Control (Control'(Control), fieldValue,  Paragraph'(Paragraph), Fi
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
-import Debian.Repo.AptImage (AptCache(rootDir), OSImage)
+import Debian.Repo.AptCache (AptCache(rootDir))
+import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.SourceTree (DebianBuildTree(..), control, entry, subdir, debdir, findDebianBuildTrees, findBuildTree, copySourceTree,
                                DebianSourceTree(..), findSourceTree {-, SourceTree(dir')-})
 import Debian.Repo.EnvPath (EnvRoot(rootPath))

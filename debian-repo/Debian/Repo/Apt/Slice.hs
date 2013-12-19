@@ -20,7 +20,7 @@ import Debian.Control (Control'(Control), ControlFunctions(parseControl), fieldV
 import Debian.Control.Text (decodeParagraph)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
 import Debian.Repo.Apt (MonadApt, prepareRemoteRepository)
-import Debian.Repo.AptImage (AptCache(aptBaseSliceList, aptReleaseName), distDir, SourcesChangedAction(..), sourcesPath)
+import Debian.Repo.AptCache (AptCache(aptBaseSliceList, aptReleaseName), distDir, SourcesChangedAction(..), sourcesPath)
 import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..))
 import Debian.Repo.LocalRepository (prepareLocalRepository)
 import Debian.Repo.Repo (repoKey)

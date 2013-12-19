@@ -12,7 +12,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(flushSource, i
 import Debian.Relation (SrcPkgName)
 import Debian.Repo.Apt (MonadDeb)
 import Debian.Repo.Apt.AptImage (prepareAptEnv)
-import Debian.Repo.AptImage (aptDir)
+import Debian.Repo.AptCache (aptDir)
 import Debian.Repo.Slice (NamedSliceList(sliceListName))
 import Debian.Repo.SourceTree (topdir, prepareSource)
 import Debian.Repo.Top (askTop)
