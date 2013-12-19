@@ -14,7 +14,7 @@ import Control.Exception as E (catch)
 import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy as L (empty)
 import Data.Function (on)
-import Data.Lens.Lazy (getL, modL)
+import Data.Lens.Lazy (getL, setL, modL)
 import Data.List (intercalate, sortBy)
 import Data.List as List (map, partition)
 import Data.Map as Map (insert, lookup)
@@ -29,7 +29,8 @@ import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.Apt (aptImageMap, binaryPackageMap, MonadApt(getApt, putApt), foldRepository, sourcePackageMap, MonadDeb)
 import Debian.Repo.Apt.Slice (updateCacheSources, verifySourcesList)
-import Debian.Repo.AptImage (OSCache(..), AptCache(..), AptImage(..), localeGen, neuterEnv, OSImage(..), updateLists, buildArchOfRoot, cacheRootDir, distDir, SourcesChangedAction, SourcesChangedAction(SourcesChangedError), sourcesPath, aptGetUpdate, aptGetSource, aptGetInstall)
+import Debian.Repo.AptImage (OSCache(..), AptCache(..), AptImage(..), localeGen, neuterEnv, OSImage(..), updateLists, buildArchOfRoot, cacheRootDir, distDir, SourcesChangedAction, SourcesChangedAction(SourcesChangedError), sourcesPath, aptGetUpdate, aptGetSource, aptGetInstall,
+                             aptImageSliceList, osBaseDistro, osLocalMaster, osLocalCopy, osSourcePackages, osLocalMaster, osBinaryPackages, osReleaseName, osRoot)
 import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath, envRoot), EnvRoot(..))
 import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageVersion, packageName))
@@ -87,13 +88,13 @@ prepareAptEnv' cacheDir sourcesChangedAction sources =
        -- ePut ("writeFile " ++ (root ++ "/etc/apt/sources.list") ++ "\n" ++ sourceListText)
        liftIO $ replaceFile (root ++ "/etc/apt/sources.list") sourceListText
        arch <- liftIO $ buildArchOfRoot
-       let os = AptImage { aptGlobalCacheDir = cacheDir
-                         , aptImageRoot = EnvRoot root
-                         , aptImageArch = arch
-                         , aptImageReleaseName = ReleaseName . sliceName . sliceListName $ sources
-                         , aptImageSliceList = sliceList sources
-                         , aptImageSourcePackages = []
-                         , aptImageBinaryPackages = [] }
+       let os = AptImage { _aptGlobalCacheDir = cacheDir
+                         , _aptImageRoot = EnvRoot root
+                         , _aptImageArch = arch
+                         , _aptImageReleaseName = ReleaseName . sliceName . sliceListName $ sources
+                         , _aptImageSliceList = sliceList sources
+                         , _aptImageSourcePackages = []
+                         , _aptImageBinaryPackages = [] }
        os' <- updateCacheSources sourcesChangedAction os >>= updateAptEnv
        getApt >>= putApt . modL aptImageMap (Map.insert (sliceListName sources) os')
        return os'
@@ -107,8 +108,8 @@ updateAptEnv os =
     do liftIO $ aptGetUpdate os
        sourcePackages <- getSourcePackages os >>= return . sortBy cmp
        binaryPackages <- getBinaryPackages os
-       return $ os { aptImageSourcePackages = sourcePackages
-                   , aptImageBinaryPackages = binaryPackages }
+       return $ os { _aptImageSourcePackages = sourcePackages
+                   , _aptImageBinaryPackages = binaryPackages }
     where
       -- Flip args to get newest version first
       cmp = flip (compare `on` (packageVersion . sourcePackageID))
@@ -128,13 +129,13 @@ updateAptEnv os =
 getSourcePackages :: MonadApt m => AptImage -> m [SourcePackage]
 getSourcePackages os =
     do qPutStrLn "AptImage.getSourcePackages"
-       indexes <- mapM (sliceIndexes os) (slices . sourceSlices . aptImageSliceList $ os) >>= return . concat
+       indexes <- mapM (sliceIndexes os) (slices . sourceSlices . getL aptImageSliceList $ os) >>= return . concat
        mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' os repo rel index) indexes >>= return . concat
 
 getBinaryPackages :: MonadApt m => AptImage -> m [BinaryPackage]
 getBinaryPackages os =
     do qPutStrLn "AptImage.getBinaryPackages"
-       indexes <- mapM (sliceIndexes os) (slices . binarySlices . aptImageSliceList $ os) >>= return . concat
+       indexes <- mapM (sliceIndexes os) (slices . binarySlices . getL aptImageSliceList $ os) >>= return . concat
        mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' os repo rel index) indexes >>= return . concat
 
 getSourcePackages' :: MonadApt m => OSImage -> m [SourcePackage]
@@ -244,15 +245,15 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
        copy <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) repo
        ePutStrLn ("Preparing clean " ++ sliceName (sliceListName distro) ++ " build environment at " ++ rootPath root ++ ", osLocalRepoMaster: " ++ show repo)
        arch <- liftIO buildArchOfRoot
-       let os = OS { osGlobalCacheDir = top
-                   , osRoot = root
-                   , osBaseDistro = sliceList distro
-                   , osReleaseName = ReleaseName . sliceName . sliceListName $ distro
-                   , osArch = arch
-                   , osLocalMaster = repo
-                   , osLocalCopy = copy
-                   , osSourcePackages = []
-                   , osBinaryPackages = [] }
+       let os = OS { _osGlobalCacheDir = top
+                   , _osRoot = root
+                   , _osBaseDistro = sliceList distro
+                   , _osReleaseName = ReleaseName . sliceName . sliceListName $ distro
+                   , _osArch = arch
+                   , _osLocalMaster = repo
+                   , _osLocalCopy = copy
+                   , _osSourcePackages = []
+                   , _osBinaryPackages = [] }
        -- update os >>= recreate arch os >>= doInclude >>= doLocales >>= syncLocalPool
        os' <- update os
        os'' <- recreate arch os os'
@@ -277,8 +278,8 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
                          -- ePutStrLn ("createDirectoryIfMissing True " ++ show (distDir os))
                          createDirectoryIfMissing True (distDir os)
                          -- ePutStrLn ("writeFile " ++ show (sourcesPath os) ++ " " ++ show (show . osBaseDistro $ os))
-                         replaceFile (sourcesPath os) (show . pretty . osBaseDistro $ os)
-             os' <- buildEnv root distro arch (osLocalMaster os) (osLocalCopy os) include exclude components
+                         replaceFile (sourcesPath os) (show . pretty . getL osBaseDistro $ os)
+             os' <- buildEnv root distro arch (getL osLocalMaster os) (getL osLocalCopy os) include exclude components
              liftIO $ do doLocales os'
                          neuterEnv os'
              syncLocalPool os'
@@ -332,15 +333,15 @@ _pbuilderBuild cacheDir root distro arch repo copy _extraEssential _omitEssentia
        ePutStrLn ("# " ++ cmd)
        liftIO (runProcess (shell cmd) L.empty) >>= liftIO . doOutput >>= foldOutputsL codefn outfn errfn exnfn (return ())
        ePutStrLn "done."
-       let os = OS { osGlobalCacheDir = cacheDir
-                   , osRoot = root
-                   , osBaseDistro = sliceList distro
-                   , osReleaseName = ReleaseName . sliceName . sliceListName $ distro
-                   , osArch = arch
-                   , osLocalMaster = repo
-                   , osLocalCopy = copy
-                   , osSourcePackages = []
-                   , osBinaryPackages = [] }
+       let os = OS { _osGlobalCacheDir = cacheDir
+                   , _osRoot = root
+                   , _osBaseDistro = sliceList distro
+                   , _osReleaseName = ReleaseName . sliceName . sliceListName $ distro
+                   , _osArch = arch
+                   , _osLocalMaster = repo
+                   , _osLocalCopy = copy
+                   , _osSourcePackages = []
+                   , _osBinaryPackages = [] }
        let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
        -- Rewrite the sources.list with the local pool added.
        liftIO $ replaceFile sourcesPath' (show . pretty . aptSliceList $ os)
@@ -419,15 +420,15 @@ buildEnv root distro arch repo copy include exclude components =
       -- then add them back in.
       runProcess (shell cmd) L.empty >>= foldOutputsL codefn outfn errfn exnfn (return ())
       ePutStrLn "done."
-      let os = OS { osGlobalCacheDir = top
-                  , osRoot = root
-                  , osBaseDistro = sliceList distro
-                  , osReleaseName = ReleaseName . sliceName . sliceListName $ distro
-                  , osArch = arch
-                  , osLocalMaster = repo
-                  , osLocalCopy = copy
-                  , osSourcePackages = []
-                  , osBinaryPackages = [] }
+      let os = OS { _osGlobalCacheDir = top
+                  , _osRoot = root
+                  , _osBaseDistro = sliceList distro
+                  , _osReleaseName = ReleaseName . sliceName . sliceListName $ distro
+                  , _osArch = arch
+                  , _osLocalMaster = repo
+                  , _osLocalCopy = copy
+                  , _osSourcePackages = []
+                  , _osBinaryPackages = [] }
       let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
       -- Rewrite the sources.list with the local pool added.
       liftIO $ replaceFile sourcesPath' (show . pretty . aptSliceList $ os)
@@ -474,7 +475,7 @@ updateOSEnv os =
                 _ <- liftIO $ sshCopy (rootPath root)
                 source' <- getSourcePackages' os'
                 binary <- getBinaryPackages' os'
-                return . Right $ os' {osSourcePackages = source', osBinaryPackages = binary}
+                return . Right $ setL osSourcePackages source' $ setL osBinaryPackages binary $ os'
     where
       verifySources :: MonadApt m => m (Either UpdateError OSImage)
       verifySources =
@@ -486,12 +487,12 @@ updateOSEnv os =
                    Left (_ :: SomeException) -> return Nothing
                    Right s -> verifySourcesList (Just root) (parseSourcesList s) >>= return . Just . remoteOnly
              case installed of
-               Nothing -> return $ Left $ Missing (osReleaseName os) sourcesPath'
+               Nothing -> return $ Left $ Missing (getL osReleaseName os) sourcesPath'
                Just installed'
                    | installed' /= computed ->
-                       return $ Left $ Changed (osReleaseName os) sourcesPath' computed installed'
+                       return $ Left $ Changed (getL osReleaseName os) sourcesPath' computed installed'
                _ -> return $ Right os
-      root = osRoot os
+      root = getL osRoot os
       remoteOnly :: SliceList -> SliceList
       remoteOnly x = x {slices = filter r (slices x)} where r y = (uriScheme . sourceUri . sliceSource $ y) /= "file:"
 
@@ -500,8 +501,8 @@ updateOSEnv os =
 -- where apt can see and install the packages.
 syncLocalPool :: {- MonadRepoCache k r -} MonadApt m => OSImage -> m OSImage
 syncLocalPool os =
-    do repo' <- copyLocalRepo (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) (osLocalMaster os)
-       return (os {osLocalCopy = repo'})
+    do repo' <- copyLocalRepo (EnvPath {envRoot = getL osRoot os, envPath = "/work/localpool"}) (getL osLocalMaster os)
+       return $ setL osLocalCopy repo' os
 {-
     where
       rsync' repo =

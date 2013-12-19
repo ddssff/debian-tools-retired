@@ -1,8 +1,10 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, StandaloneDeriving, TypeSynonymInstances #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.AptImage
-    ( AptCache(..)
-    , AptImage(..)
+    ( AptImage(..)
+    , aptImageSliceList
+
+    , AptCache(..)
     , cacheRootDir
     , distDir
     , aptDir
@@ -16,8 +18,16 @@ module Debian.Repo.AptImage
     , aptGetSource
     , aptGetUpdate
 
-    , OSCache(..)
     , OSImage(..)
+    , osBaseDistro
+    , osLocalMaster
+    , osLocalCopy
+    , osSourcePackages
+    , osBinaryPackages
+    , osReleaseName
+    , osRoot
+
+    , OSCache(..)
     , chrootEnv
     , syncEnv
     , localeGen
@@ -34,6 +44,8 @@ import Control.DeepSeq (force, NFData)
 import Control.Exception (bracket, evaluate, SomeException, try)
 import qualified Data.ByteString.Lazy as L (ByteString, empty)
 import Data.Data (Data)
+import Data.Lens.Lazy
+import Data.Lens.Template (makeLenses)
 import Data.List (intercalate, sortBy)
 import Data.Time (NominalDiffTime)
 import Data.Typeable (Typeable)
@@ -67,6 +79,41 @@ import Debian.Relation (PkgName(..))
 import System.Process (CreateProcess(cwd))
 import Debian.Version (DebianVersion, prettyDebianVersion)
 
+-- | The AptImage object is an instance of AptCache.
+data AptImage =
+    AptImage { _aptGlobalCacheDir :: FilePath
+             , _aptImageRoot :: EnvRoot
+             , _aptImageArch :: Arch
+             , _aptImageSliceList :: SliceList
+             , _aptImageReleaseName :: ReleaseName
+             , _aptImageSourcePackages :: [SourcePackage]
+             , _aptImageBinaryPackages :: [BinaryPackage]
+             }
+
+-- |This type represents an OS image located at osRoot built from a
+-- particular osBaseDistro using a particular osArch.  If an
+-- osLocalRepo argument is given, that repository will be copied into
+-- the environment and kept in sync, and lines will be added to
+-- sources.list to point to it.
+data OSImage
+    = OS { _osGlobalCacheDir :: FilePath
+         , _osRoot :: EnvRoot
+         , _osBaseDistro :: SliceList
+         , _osReleaseName :: ReleaseName
+         , _osArch :: Arch
+	 -- | The associated local repository, where packages we
+         -- build inside this image are first uploaded to.
+         , _osLocalMaster :: LocalRepository
+	 -- | A copy of osLocalMaster located inside the os root
+	 -- environment.
+         , _osLocalCopy :: LocalRepository
+         -- | A copy of osLocalMaster which is inside the changeroot
+         , _osSourcePackages :: [SourcePackage]
+         , _osBinaryPackages :: [BinaryPackage]
+         }
+
+$(makeLenses [''AptImage, ''OSImage])
+
 instance NFData ExitCode
 
 -- | The AptCache class abstracts the basic properties of an apt-get
@@ -89,31 +136,20 @@ class (Ord t, Eq t, Show t) => AptCache t where
     -- | Name of release
     aptReleaseName :: t -> ReleaseName
 
--- | The AptImage object is an instance of AptCache.
-data AptImage =
-    AptImage { aptGlobalCacheDir :: FilePath
-             , aptImageRoot :: EnvRoot
-             , aptImageArch :: Arch
-             , aptImageSliceList :: SliceList
-             , aptImageReleaseName :: ReleaseName
-             , aptImageSourcePackages :: [SourcePackage]
-             , aptImageBinaryPackages :: [BinaryPackage]
-             }
-
 instance Show AptImage where
-    show apt = "AptImage " ++ relName (aptImageReleaseName apt)
+    show apt = "AptImage " ++ relName (getL aptImageReleaseName apt)
 
 instance AptCache AptImage where
-    globalCacheDir = aptGlobalCacheDir
-    rootDir = aptImageRoot
-    aptArch = aptImageArch
-    aptBaseSliceList = aptImageSliceList
-    aptSourcePackages = aptImageSourcePackages
-    aptBinaryPackages = aptImageBinaryPackages
-    aptReleaseName = aptImageReleaseName
+    globalCacheDir = getL aptGlobalCacheDir
+    rootDir = getL aptImageRoot
+    aptArch = getL aptImageArch
+    aptBaseSliceList = getL aptImageSliceList
+    aptSourcePackages = getL aptImageSourcePackages
+    aptBinaryPackages = getL aptImageBinaryPackages
+    aptReleaseName = getL aptImageReleaseName
 
 instance Ord AptImage where
-    compare a b = compare (aptImageReleaseName a) (aptImageReleaseName b)
+    compare a b = compare (getL aptImageReleaseName a) (getL aptImageReleaseName b)
 
 instance Eq AptImage where
     a == b = compare a b == EQ
@@ -244,39 +280,17 @@ class AptCache t => OSCache t where
     -- | The sources.list
     aptSliceList :: t -> SliceList
 
--- |This type represents an OS image located at osRoot built from a
--- particular osBaseDistro using a particular osArch.  If an
--- osLocalRepo argument is given, that repository will be copied into
--- the environment and kept in sync, and lines will be added to
--- sources.list to point to it.
-data OSImage
-    = OS { osGlobalCacheDir :: FilePath
-         , osRoot :: EnvRoot
-         , osBaseDistro :: SliceList
-         , osReleaseName :: ReleaseName
-         , osArch :: Arch
-	 -- | The associated local repository, where packages we
-         -- build inside this image are first uploaded to.
-         , osLocalMaster :: LocalRepository
-	 -- | A copy of osLocalMaster located inside the os root
-	 -- environment.
-         , osLocalCopy :: LocalRepository
-         -- | A copy of osLocalMaster which is inside the changeroot
-         , osSourcePackages :: [SourcePackage]
-         , osBinaryPackages :: [BinaryPackage]
-         }
-
 instance Show OSImage where
     show os = intercalate " " ["OS {",
-                               rootPath (osRoot os),
-                               relName (osReleaseName os),
-                               show (osArch os),
-                               show (osLocalCopy os)]
+                               rootPath (getL osRoot os),
+                               relName (getL osReleaseName os),
+                               show (getL osArch os),
+                               show (getL osLocalCopy os)]
 
 instance Ord OSImage where
-    compare a b = case compare (osRoot a) (osRoot b) of
-                    EQ -> case compare (osBaseDistro a) (osBaseDistro b) of
-                            EQ -> compare (osArch a) (osArch b)
+    compare a b = case compare (getL osRoot a) (getL osRoot b) of
+                    EQ -> case compare (getL osBaseDistro a) (getL osBaseDistro b) of
+                            EQ -> compare (getL osArch a) (getL osArch b)
                             x -> x
                     x -> x
 
@@ -284,14 +298,14 @@ instance Eq OSImage where
     a == b = compare a b == EQ
 
 instance AptCache OSImage where
-    globalCacheDir = osGlobalCacheDir
-    rootDir = osRoot
-    aptArch = osArch
-    -- aptSliceList = osFullDistro
-    aptBaseSliceList = osBaseDistro
-    aptSourcePackages = osSourcePackages
-    aptBinaryPackages = osBinaryPackages
-    aptReleaseName = osReleaseName
+    globalCacheDir = getL osGlobalCacheDir
+    rootDir = getL osRoot
+    aptArch = getL osArch
+    -- aptSliceList = getL osFullDistro
+    aptBaseSliceList = getL osBaseDistro
+    aptSourcePackages = getL osSourcePackages
+    aptBinaryPackages = getL osBinaryPackages
+    aptReleaseName = getL osReleaseName
 
 instance OSCache OSImage where
     aptSliceList = osFullDistro
@@ -300,15 +314,15 @@ instance OSCache OSImage where
 -- the local sources where we deposit newly built packages.
 osFullDistro :: OSImage -> SliceList
 osFullDistro os =
-    SliceList { slices = slices (osBaseDistro os) ++ slices localSources }
+    SliceList { slices = slices (getL osBaseDistro os) ++ slices localSources }
     where
       localSources :: SliceList
       localSources = SliceList {slices = [Slice {sliceRepoKey = repoKey repo', sliceSource = src},
                                           Slice {sliceRepoKey = repoKey repo', sliceSource = bin}]}
       src = DebSource Deb (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
       bin = DebSource DebSrc (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
-      name = relName (osReleaseName os)
-      repo' = osLocalCopy os
+      name = relName (getL osReleaseName os)
+      repo' = getL osLocalCopy os
       -- repo' = repoCD (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) repo
 
 data UpdateError
@@ -324,7 +338,7 @@ instance Show UpdateError where
 -- | Set the location of the OSImage's root directory - where you
 -- would cd to before running chroot.
 chrootEnv :: OSImage -> EnvRoot -> OSImage
-chrootEnv os dst = os {osRoot=dst}
+chrootEnv os dst = setL osRoot dst os
 
 -- Sync the environment from the clean copy.  All this does besides
 -- performing the proper rsync command is to make sure the destination
@@ -332,13 +346,13 @@ chrootEnv os dst = os {osRoot=dst}
 -- subdir is appended.  There must have been a reason at one point.
 syncEnv :: OSImage -> OSImage -> IO OSImage
 syncEnv src dst =
-    mkdir >> umount >> rsync ["--exclude=/work/build/*"] (rootPath (osRoot src)) (rootPath (osRoot dst)) >> return dst
+    mkdir >> umount >> rsync ["--exclude=/work/build/*"] (rootPath (getL osRoot src)) (rootPath (getL osRoot dst)) >> return dst
     where
-      mkdir = createDirectoryIfMissing True (rootPath (osRoot dst) ++ "/work")
+      mkdir = createDirectoryIfMissing True (rootPath (getL osRoot dst) ++ "/work")
       umount =
           do qPutStrLn "syncEnv: umount"
-             srcResult <- umountBelow False (rootPath (osRoot src))
-             dstResult <- umountBelow False (rootPath (osRoot dst))
+             srcResult <- umountBelow False (rootPath (getL osRoot src))
+             dstResult <- umountBelow False (rootPath (getL osRoot dst))
              case filter (\ (_, (code, _, _)) -> code /= ExitSuccess) (srcResult ++ dstResult) of
                [] -> return ()
                failed -> fail $ "umount failure(s): " ++ show failed
@@ -353,7 +367,7 @@ localeGen locale os =
              (\ _ -> qPutStr ("done"))
              result
     where
-      root = osRoot os
+      root = getL osRoot os
       cmd = "locale-gen " ++ locale
 
 
@@ -370,7 +384,7 @@ neuterEnv os =
               (\ _ -> qPutStrLn "done.")
               result
     where
-      root = rootPath (osRoot os)
+      root = rootPath (getL osRoot os)
 
 neuterFiles :: [(FilePath, Bool)]
 neuterFiles = [("/sbin/start-stop-daemon", True),
@@ -415,7 +429,7 @@ neuterFile os (file, mustExist) =
 
       fullPath = EnvPath root file
       binTrue = EnvPath root "/bin/true"
-      root = osRoot os
+      root = getL osRoot os
 
 -- |Reverse the neuterEnv operation.
 restoreEnv :: OSImage -> IO OSImage
@@ -426,7 +440,7 @@ restoreEnv os =
       either (\ (e :: SomeException) -> error $ "damaged environment " ++ rootPath root ++ ": " ++ show e ++ "\n  please remove it.")
                  (\ _ -> return os) result
     where
-      root = osRoot os
+      root = getL osRoot os
 
 -- check_and_restore from build-env.ml
 restoreFile :: OSImage -> (FilePath, Bool) -> IO ()
@@ -453,7 +467,7 @@ restoreFile os (file, mustExist) =
 
       fullPath = EnvPath root file
       binTrue = EnvPath root "/bin/true"
-      root = osRoot os
+      root = getL osRoot os
 
 -- | Build the dependency relations for the build essential packages.
 -- For this to work the @build-essential@ package must be installed in
@@ -479,7 +493,7 @@ buildEssential os =
       let buildEssential' = either (\ l -> error ("parse error in /usr/share/build-essential/list:\n" ++ show l)) id buildEssential''
       return (essential ++ buildEssential')
     where
-      root = osRoot os
+      root = getL osRoot os
 
 -- |Remove an image.  The removeRecursiveSafely function is used to
 -- ensure that any file systems mounted inside the image are unmounted
@@ -491,7 +505,7 @@ removeEnv os =
       removeRecursiveSafely (rootPath root)
       ePutStrLn "done."
     where
-      root = osRoot os
+      root = getL osRoot os
 
 prefixes :: Maybe (L.ByteString, L.ByteString)
 prefixes = Just (" 1> ", " 2> ")
@@ -511,7 +525,7 @@ updateLists os =
       (_, elapsed) <- timeTask (useEnv root forceList (runProcessF prefixes upgrade L.empty))
       return elapsed
     where
-       root = rootPath (osRoot os)
+       root = rootPath (getL osRoot os)
        update = proc "apt-get" ["update"]
        configure = proc "dpkg" ["--configure", "-a"]
        upgrade = proc "apt-get" ["-y", "--force-yes", "dist-upgrade"]

@@ -15,6 +15,7 @@ import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
 import Control.Monad.State(MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
+import Data.Lens.Lazy (getL)
 import Data.List as List (intercalate, null)
 import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
@@ -34,7 +35,7 @@ import Debian.Sources (SliceName(..))
 import Debian.Repo.Apt (MonadApt, runAptT, foldRepository, MonadDeb)
 import Debian.Repo.Apt.AptImage (prepareAptEnv)
 import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
-import Debian.Repo.AptImage (OSImage(osLocalMaster, osLocalCopy), buildEssential)
+import Debian.Repo.AptImage (OSImage, osLocalMaster, osLocalCopy, buildEssential)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
@@ -145,9 +146,9 @@ runParameterSet init cache =
       globalBuildDeps <- liftIO $ buildEssential dependOS
       -- Get a list of all sources for the local repository.
       localSources <- (\ x -> qPutStrLn "Getting local sources" >> quieter 1 x) $
-          case parseURI ("file://" ++ envPath (repoRoot (osLocalCopy dependOS))) of
-            Nothing -> error $ "Invalid local repo root: " ++ show (repoRoot (osLocalCopy dependOS))
-            Just uri -> repoSources (Just . envRoot . repoRoot . osLocalCopy $ dependOS) uri
+          case parseURI ("file://" ++ envPath (repoRoot (getL osLocalCopy dependOS))) of
+            Nothing -> error $ "Invalid local repo root: " ++ show (repoRoot (getL osLocalCopy dependOS))
+            Just uri -> repoSources (Just . envRoot . repoRoot . getL osLocalCopy $ dependOS) uri
       -- Compute a list of sources for all the releases in the repository we will upload to,
       -- used to avoid creating package versions that already exist.  Also include the sources
       -- for the local repository to avoid collisions there as well.
@@ -157,7 +158,7 @@ runParameterSet init cache =
       pool <-prepareAptEnv top (P.ifSourcesChanged params) poolSources
       (failures, targets) <- retrieveTargetList init cache dependOS >>= return . partitionEithers
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
-      buildResult <- buildTargets cache dependOS globalBuildDeps (osLocalMaster dependOS) pool targets
+      buildResult <- buildTargets cache dependOS globalBuildDeps (getL osLocalMaster dependOS) pool targets
       -- If all targets succeed they may be uploaded to a remote repo
       result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))
       return result
