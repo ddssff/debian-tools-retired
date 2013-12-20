@@ -11,9 +11,9 @@ import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag(AptPin), Pa
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(flushSource, ifSourcesChanged))
 import Debian.Relation (SrcPkgName)
 import Debian.Release (ReleaseName(ReleaseName, relName))
-import Debian.Repo.Apt (MonadDeb)
 import Debian.Repo.Apt.AptImage (prepareAptEnv)
 import Debian.Repo.AptImage (aptDir)
+import Debian.Repo.Repos (MonadReposCached)
 import Debian.Repo.Slice (NamedSliceList(sliceListName))
 import Debian.Repo.SourceTree (topdir, prepareSource)
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
@@ -23,7 +23,7 @@ documentation = [ "apt:<distribution>:<packagename> - a target of this form look
                 , "the sources.list named <distribution> and retrieves the package with"
                 , "the given name from that distribution." ]
 
-prepare :: MonadDeb m => P.CacheRec -> P.Packages -> String -> SrcPkgName -> m Download
+prepare :: MonadReposCached m => P.CacheRec -> P.Packages -> String -> SrcPkgName -> m Download
 prepare cache target dist package =
     do os <- prepareAptEnv (P.ifSourcesChanged (P.params cache)) distro
        apt <- aptDir os package

@@ -7,9 +7,13 @@
 module Debian.Repo.Prelude
     ( countTasks
     , nub'
+    , access
+    , (~=)
+    , (%=)
     ) where
 
-import Control.Monad.State (MonadIO)
+import Control.Monad.State (MonadState, MonadIO, modify, get)
+import Data.Lens.Lazy (Lens, getL, modL)
 import Data.List as List (group, map, sort)
 import System.Process.Progress (ePutStrLn)
 import Text.Printf (printf)
@@ -26,3 +30,13 @@ countTasks tasks =
 -- | This nub doesn't preserve order
 nub' :: (Ord a) => [a] -> [a]
 nub' = List.map head . group . sort
+
+access :: MonadState a m => Lens a b -> m b
+access l = get >>= return . getL l
+
+(~=) :: MonadState a m => Lens a b -> b -> m ()
+l ~= x = l %= const x
+
+-- | Modify a value.  (This is a version of Data.Lens.Lazy.%= that returns () instead of a.)
+(%=) :: MonadState a m => Lens a b -> (b -> b) -> m ()
+l %= f = modify (modL l f)

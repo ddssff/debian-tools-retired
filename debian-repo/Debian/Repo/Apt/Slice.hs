@@ -19,11 +19,11 @@ import Data.Text as T (pack, Text, unpack)
 import Debian.Control (Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph')
 import Debian.Control.Text (decodeParagraph)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
-import Debian.Repo.Apt (MonadApt, prepareRemoteRepository)
 import Debian.Repo.AptCache (AptCache(aptBaseSources), distDir, SourcesChangedAction(..), sourcesPath)
 import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..))
 import Debian.Repo.LocalRepository (prepareLocalRepository)
 import Debian.Repo.Repo (repoKey)
+import Debian.Repo.Repos (MonadRepos, prepareRemoteRepository)
 import Debian.Repo.Slice (Slice(..), SliceList(..), NamedSliceList(sliceList), sliceListName)
 import Debian.Repo.SourcesList (parseSourcesList)
 import Debian.Repo.Top (MonadTop)
@@ -43,7 +43,7 @@ import Text.Regex (mkRegex, splitRegex)
 -- set of sources that includes all of its releases.  This is used to
 -- ensure that a package we want to upload doesn't already exist in
 -- the repository.
-repoSources :: MonadApt m => Maybe EnvRoot -> URI -> m SliceList
+repoSources :: MonadRepos m => Maybe EnvRoot -> URI -> m SliceList
 repoSources chroot uri =
     do dirs <- liftIO (uriSubdirs chroot (uri {uriPath = uriPath uri ++ "/dists/"}))
        releaseFiles <- mapM (liftIO . readRelease uri) dirs >>= return . catMaybes
@@ -84,12 +84,12 @@ readRelease uri name =
 
 -- | Make sure all the required local and remote repository objects
 -- used by a sources.list file are in our cache.
-verifySourcesList :: MonadApt m => Maybe EnvRoot -> [DebSource] -> m SliceList
+verifySourcesList :: MonadRepos m => Maybe EnvRoot -> [DebSource] -> m SliceList
 verifySourcesList chroot list =
     mapM (verifyDebSource chroot) list >>=
     (\ xs -> return $ SliceList { slices = xs })
 
-verifyDebSource :: MonadApt m => Maybe EnvRoot -> DebSource -> m Slice
+verifyDebSource :: MonadRepos m => Maybe EnvRoot -> DebSource -> m Slice
 verifyDebSource chroot line =
     case uriScheme (sourceUri line) of
       "file:" -> prepareLocalRepository (EnvPath chroot' (uriPath (sourceUri line))) Nothing >>= \ repo' -> return $ Slice {sliceRepoKey = repoKey repo', sliceSource = line}
@@ -99,7 +99,7 @@ verifyDebSource chroot line =
 
 -- |Change the sources.list of an AptCache object, subject to the
 -- value of sourcesChangedAction.
-updateCacheSources :: (AptCache c, MonadApt m, MonadTop m) => SourcesChangedAction -> c -> m c
+updateCacheSources :: (AptCache c, MonadRepos m, MonadTop m) => SourcesChangedAction -> c -> m c
 updateCacheSources sourcesChangedAction distro =
     -- (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
     qPutStrLn "Updating cache sources" >>

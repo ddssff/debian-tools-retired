@@ -34,7 +34,6 @@ import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(p
 import Debian.Relation (BinPkgName, PkgName)
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (parseSection', ReleaseName, releaseName', Section(..), sectionName, sectionName', SubSection(section))
-import Debian.Repo.Apt (MonadApt)
 import Debian.Repo.Apt.Release (findReleases, prepareRelease, signRelease)
 import Debian.Repo.Changes (changeName, changePath, findChangesFiles)
 import Debian.Repo.EnvPath (EnvPath, outsidePath)
@@ -44,6 +43,7 @@ import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageI
 import Debian.Repo.PackageIndex (binaryIndexList, BinaryPackage(packageID, packageInfo), BinaryPackage(BinaryPackage, pConflicts, pDepends, pPreDepends, pProvides, pReplaces), PackageIndex(..), packageIndexList, packageIndexPath, prettyBinaryPackage, SourceControl(..), SourceFileSpec(SourceFileSpec, sourceFileName), sourceIndexList, SourcePackage(sourcePackageID), SourcePackage(SourcePackage, sourceControl, sourceDirectory, sourcePackageFiles, sourceParagraph))
 import Debian.Repo.Prelude (nub')
 import qualified Debian.Repo.Pretty as F (Pretty(..))
+import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
 import Debian.Repo.Repo (Repo, repoArchList, repoKey, RepoKey, repoKeyURI)
 import Debian.URI (fileFromURIStrict)
@@ -65,7 +65,7 @@ import Text.Regex (matchRegex, mkRegex, splitRegex)
 
 -- | Find the .changes files in the incoming directory and try to 
 -- process each.
-scanIncoming :: MonadApt m => Bool -> Maybe PGPKey -> LocalRepository -> m ([ChangesFile], [(ChangesFile, InstallResult)])
+scanIncoming :: MonadRepos m => Bool -> Maybe PGPKey -> LocalRepository -> m ([ChangesFile], [(ChangesFile, InstallResult)])
 scanIncoming createSections keyname repo =
     (\ x -> qPutStrLn ("Uploading packages to " ++ outsidePath (repoRoot repo) ++ "/incoming") >> {-quieter 2-} x) $
     do changes <- liftIO (findChangesFiles (outsidePath (repoRoot repo) </> "incoming"))
@@ -95,7 +95,7 @@ scanIncoming createSections keyname repo =
 -- 4. updating the Packages and Sources files, and
 -- 5. moving the files from the incoming directory to the proper
 --    place in the package pool.
-installPackages :: MonadApt m =>
+installPackages :: MonadRepos m =>
                    Bool				-- ^ ok to create new releases and sections
                 -> Maybe PGPKey		-- ^ key to sign repository with
                 -> LocalRepository		-- ^ destination repository
@@ -119,7 +119,7 @@ installPackages createSections keyname repo changeFileList =
       -- Hard link the files of each package into the repository pool,
       -- but don't unlink the files in incoming in case of subsequent
       -- failure.
-      installFiles :: MonadApt m => EnvPath -> (Set.Set Text, [Release], [InstallResult]) -> ChangesFile -> m (Set.Set Text, [Release], [InstallResult])
+      installFiles :: MonadRepos m => EnvPath -> (Set.Set Text, [Release], [InstallResult]) -> ChangesFile -> m (Set.Set Text, [Release], [InstallResult])
       installFiles root (live, releases, results) changes =
           findOrCreateRelease releases (changeRelease changes) >>=
           maybe (return (live, releases, Failed [NoSuchRelease (changeRelease changes)] : results)) installFiles'
@@ -279,7 +279,7 @@ installPackages createSections keyname repo changeFileList =
           where dst = case layout of
                         Flat -> outsidePath root </> changeName changes
                         Pool -> outsidePath root ++ "/installed/" ++ changeName changes
-      findOrCreateRelease :: MonadApt m => [Release] -> ReleaseName -> m (Maybe Release)
+      findOrCreateRelease :: MonadRepos m => [Release] -> ReleaseName -> m (Maybe Release)
       findOrCreateRelease releases name =
           case createSections of
             False -> return (findRelease releases name)
@@ -404,7 +404,7 @@ addPackagesToIndexes pairs =
 
 -- | Return a list of all the files in a release which are
 -- 'live', in the sense that they appear in some index files.
-findLive :: MonadApt m => LocalRepository -> m (Set Text)
+findLive :: MonadRepos m => LocalRepository -> m (Set Text)
 findLive repo = {-(LocalRepository _ Nothing _)-}
     case repoLayout repo of
       Nothing -> return Set.empty	-- Repository is empty
@@ -588,7 +588,7 @@ merge packages =
 -- them to the removed directory.  The .changes files are treated
 -- specially: they don't appear in any index files, but the package
 -- they belong to can be constructed from their name.
-deleteGarbage :: MonadApt m => LocalRepository -> m ()
+deleteGarbage :: MonadRepos m => LocalRepository -> m ()
 deleteGarbage repo =
     case repoLayout repo of
       Just layout ->

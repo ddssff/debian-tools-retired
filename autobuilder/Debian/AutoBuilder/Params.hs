@@ -16,8 +16,8 @@ import qualified Debian.AutoBuilder.LocalRepo as Local (subDir)
 import Debian.AutoBuilder.Types.CacheRec (CacheRec(..))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
-import Debian.Repo.Apt (MonadDeb)
 import Debian.Repo.Apt.Slice (repoSources, verifySourcesList)
+import Debian.Repo.Repos (MonadReposCached)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(..))
 import Debian.Repo.Top (MonadTop(askTop), sub)
 import System.Directory (createDirectoryIfMissing, getPermissions, writable)
@@ -25,7 +25,7 @@ import System.Environment (getEnv)
 import System.Process.Progress (qPutStrLn)
 
 -- |Create a Cache object from a parameter set.
-buildCache :: MonadDeb m => ParamRec -> m CacheRec
+buildCache :: MonadReposCached m => ParamRec -> m CacheRec
 buildCache params =
     do top <- askTop
        qPutStrLn ("Preparing autobuilder cache in " ++ top ++ "...")

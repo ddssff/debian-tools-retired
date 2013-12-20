@@ -2,8 +2,7 @@
 -- IO.hs, which keeps track of the contents of all the Apt
 -- repositories which are queried in the course of execution.
 module Debian.Repo
-    ( module Debian.Repo.Apt
-    , module Debian.Repo.Apt.AptImage
+    ( module Debian.Repo.Apt.AptImage
     , module Debian.Repo.Apt.Package
     , module Debian.Repo.Apt.Release
     , module Debian.Repo.AptCache
@@ -13,6 +12,7 @@ module Debian.Repo
     , module Debian.Repo.OSImage
     , module Debian.Repo.Package
     , module Debian.Repo.PackageIndex
+    , module Debian.Repo.Repos
     , module Debian.Repo.Slice
     , module Debian.Repo.SourcesList
     , module Debian.Repo.SourceTree
@@ -20,7 +20,6 @@ module Debian.Repo
     , module Debian.Repo.Top
     ) where
 
-import Debian.Repo.Apt
 import Debian.Repo.Apt.AptImage
 import Debian.Repo.Apt.Package
 import Debian.Repo.Apt.Release
@@ -31,6 +30,7 @@ import Debian.Repo.Dependencies
 import Debian.Repo.OSImage
 import Debian.Repo.Package
 import Debian.Repo.PackageIndex
+import Debian.Repo.Repos
 import Debian.Repo.Slice
 import Debian.Repo.SourcesList
 import Debian.Repo.SourceTree

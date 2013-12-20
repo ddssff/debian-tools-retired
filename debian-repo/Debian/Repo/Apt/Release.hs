@@ -25,12 +25,12 @@ import Data.Time (getCurrentTime)
 import Debian.Arch (Arch(..), prettyArch)
 import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(parseControlFromFile), Field'(Field), fieldValue, Paragraph'(..))
 import Debian.Release (ReleaseName, releaseName', Section, sectionName')
-import Debian.Repo.Apt (MonadApt(getApt, putApt), releaseMap)
 import Debian.Repo.EnvPath (outsidePath)
 import Debian.Repo.LocalRepository (LocalRepository, prepareLocalRepository, repoLayout, repoReleaseInfoLocal, repoRoot)
 import Debian.Repo.PackageIndex (PackageIndex(packageIndexArch, packageIndexComponent), packageIndexDir, packageIndexList, packageIndexName, releaseDir)
 import Debian.Repo.Release (parseArchitectures, parseComponents, Release(..))
 import Debian.Repo.Repo (Repo(repoKey))
+import Debian.Repo.Repos (MonadRepos(getApt, putApt), releaseMap)
 import qualified Extra.Files as EF (maybeWriteFile, prepareSymbolicLink, writeAndZipFile)
 import qualified Extra.GPGSign as EG (cd, PGPKey, pgpSignFiles)
 import qualified Extra.Time as ET (formatDebianDate)
@@ -44,7 +44,7 @@ import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | Remove all the packages from the repository and then re-create
 -- the empty releases.
-flushLocalRepository :: MonadApt m => LocalRepository -> m LocalRepository
+flushLocalRepository :: MonadRepos m => LocalRepository -> m LocalRepository
 flushLocalRepository r =
     do liftIO $ removeRecursiveSafely (outsidePath (repoRoot r))
        r' <- prepareLocalRepository root (repoLayout r)
@@ -56,16 +56,16 @@ flushLocalRepository r =
 
 -- The return value might not be the same as the input due to cached
 -- values in the monad.
-prepareRelease' :: MonadApt m => LocalRepository -> Release -> m Release
+prepareRelease' :: MonadRepos m => LocalRepository -> Release -> m Release
 prepareRelease' repo rel = prepareRelease repo (releaseName rel) (releaseAliases rel) (releaseComponents rel) (releaseArchitectures rel)
 
 -- | Find or create a (local) release.
-prepareRelease :: MonadApt m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> m Release
+prepareRelease :: MonadRepos m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> m Release
 prepareRelease repo dist aliases sections archList =
     -- vPutStrLn 0 ("prepareRelease " ++ name ++ ": " ++ show repo ++ " sections " ++ show sections) >>
     lookupRelease repo dist >>= maybe prepare (const prepare) -- return -- JAS - otherwise --create-section does not do anything
     where
-      prepare :: MonadApt m => m Release
+      prepare :: MonadRepos m => m Release
       prepare =
           do -- FIXME: errors get discarded in the mapM calls here
 	     let release = Release { releaseName = dist
@@ -186,14 +186,14 @@ mergeReleases _repo releases =
       architectures = map head . group . sort . concat . map releaseArchitectures $ releases
 
 -- | Find all the releases in a repository.
-findReleases :: MonadApt m => LocalRepository -> m [Release]
+findReleases :: MonadRepos m => LocalRepository -> m [Release]
 findReleases repo = mapM (findLocalRelease repo) (repoReleaseInfoLocal repo)
 
-findLocalRelease :: MonadApt m => LocalRepository -> Release -> m Release
+findLocalRelease :: MonadRepos m => LocalRepository -> Release -> m Release
 findLocalRelease repo releaseInfo =
     lookupRelease repo dist >>= maybe readRelease return
     where
-      readRelease :: MonadApt m => m Release
+      readRelease :: MonadRepos m => m Release
       readRelease =
           do let path = (outsidePath (repoRoot repo) <> "/dists/" <> releaseName' dist <> "/Release")
              info <- liftIO $ S.parseControlFromFile path
@@ -273,8 +273,8 @@ It is this top level Release file that is signed with gpg.
 
 -}
 
-lookupRelease :: (Repo r, MonadApt m) => r -> ReleaseName -> m (Maybe Release)
+lookupRelease :: (Repo r, MonadRepos m) => r -> ReleaseName -> m (Maybe Release)
 lookupRelease repo dist = (Map.lookup (repoKey repo, dist) . getL releaseMap) <$> getApt
 
-insertRelease :: (Repo r, MonadApt m) => r -> Release -> m ()
+insertRelease :: (Repo r, MonadRepos m) => r -> Release -> m ()
 insertRelease repo release = getApt >>= putApt . modL releaseMap (Map.insert (repoKey repo, releaseName release) release)

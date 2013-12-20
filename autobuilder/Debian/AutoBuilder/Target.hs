@@ -44,7 +44,6 @@ import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, r
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
-import Debian.Repo.Apt (MonadApt, MonadDeb)
 import Debian.Repo.Apt.AptImage (updateOSEnv)
 import Debian.Repo.Apt.Package (scanIncoming)
 import Debian.Repo.AptCache (AptCache(rootDir, aptBinaryPackages), aptSourcePackagesSorted, binaryPackages, buildArchOfEnv, sourcePackages)
@@ -57,6 +56,7 @@ import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID))
+import Debian.Repo.Repos (MonadRepos, MonadReposCached)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..))
 import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
@@ -108,7 +108,7 @@ _formatVersions buildDeps =
     "\n"
     where prefix = "\n    "
 
-prepareTargets :: MonadApt m => P.CacheRec -> OSImage -> Relations -> [Buildable] -> m [Target]
+prepareTargets :: MonadRepos m => P.CacheRec -> OSImage -> Relations -> [Buildable] -> m [Target]
 prepareTargets cache cleanOS globalBuildDeps targetSpecs =
     do results <- liftIO $ mapM (prepare (length targetSpecs)) (zip [1..] targetSpecs)
        let (failures, targets) = partitionEithers results
@@ -141,7 +141,7 @@ partitionFailing xs =
 -- | Build a set of targets.  When a target build is successful it
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
-buildTargets :: (MonadDeb m, AptCache t) => P.CacheRec -> OSImage -> Relations -> LocalRepository -> t -> [Buildable] -> m (LocalRepository, [Target])
+buildTargets :: (MonadReposCached m, AptCache t) => P.CacheRec -> OSImage -> Relations -> LocalRepository -> t -> [Buildable] -> m (LocalRepository, [Target])
 buildTargets _ _ _ localRepo _ [] = return (localRepo, [])
 buildTargets cache dependOS globalBuildDeps localRepo pool !targetSpecs =
     do
@@ -156,12 +156,12 @@ buildTargets cache dependOS globalBuildDeps localRepo pool !targetSpecs =
 
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
-buildLoop :: (MonadDeb m, AptCache t) => P.CacheRec -> Relations -> LocalRepository -> t -> OSImage -> [Target] -> m [Target]
+buildLoop :: (MonadReposCached m, AptCache t) => P.CacheRec -> Relations -> LocalRepository -> t -> OSImage -> [Target] -> m [Target]
 buildLoop cache globalBuildDeps localRepo pool dependOS !targets =
     Set.toList <$> loop dependOS (Set.fromList targets) Set.empty
     where
       -- This loop computes the ready targets and builds one.
-      loop :: MonadDeb m => OSImage -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
+      loop :: MonadReposCached m => OSImage -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
       loop _ unbuilt failed | Set.null unbuilt = return failed
       loop dependOS unbuilt failed =
           ePutStrLn "Computing ready targets..." >>
@@ -170,7 +170,7 @@ buildLoop cache globalBuildDeps localRepo pool dependOS !targets =
             triples -> do noisier 1 $ qPutStrLn (makeTable triples)
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
                           loop2 dependOS (Set.difference unbuilt ready) failed triples
-      loop2 :: MonadDeb m =>
+      loop2 :: MonadReposCached m =>
                OSImage
             -> Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
             -> Set.Set Target -- failed: Targets which either failed to build or were blocked by a target that failed to build
@@ -325,7 +325,7 @@ qError message = qPutStrLn message >> error message
 
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
-    (MonadDeb m, AptCache t) =>
+    (MonadReposCached m, AptCache t) =>
     P.CacheRec ->			-- configuration info
     OSImage ->				-- cleanOS
     Relations ->			-- The build-essential relations
@@ -372,7 +372,7 @@ buildTarget cache dependOS globalBuildDeps repo poolOS !target =
                              return . Just
 
 -- | Build a package and upload it to the local repository.
-buildPackage :: MonadDeb m =>
+buildPackage :: MonadReposCached m =>
                 P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
 buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target status repo =
     checkDryRun >>
@@ -391,7 +391,7 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
           case P.noClean (P.params cache) of
             False -> liftIO (maybeAddLogEntry buildTree newVersion) >> return buildTree
             True -> return buildTree
-      build :: OSImage -> MonadApt m => DebianBuildTree -> m (DebianBuildTree, NominalDiffTime)
+      build :: OSImage -> MonadRepos m => DebianBuildTree -> m (DebianBuildTree, NominalDiffTime)
       build buildOS buildTree =
           do -- The --commit flag does not appear until dpkg-dev-1.16.1,
              -- so we need to check this version number.  We also
@@ -448,7 +448,7 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
                   , changeRelease = name }
           where setDist name (Field ("Distribution", _)) = Field ("Distribution", " " <> T.pack (releaseName' name))
                 setDist _ other = other
-      doLocalUpload :: MonadApt m => (ChangesFile, NominalDiffTime) -> m LocalRepository
+      doLocalUpload :: MonadRepos m => (ChangesFile, NominalDiffTime) -> m LocalRepository
       doLocalUpload (changesFile, elapsed) =
           do
             (changesFile' :: ChangesFile) <-

@@ -14,7 +14,6 @@ import Debian.NewDist.Options (Params(..), homeParams, optSpecs)
 import Debian.NewDist.Version (myVersion)
 import Debian.Relation (BinPkgName)
 import Debian.Release (ReleaseName, releaseName', parseReleaseName, Section, parseSection')
-import Debian.Repo.Apt (MonadApt, runAptT)
 import Debian.Repo.Apt.Package (scanIncoming, deleteSourcePackages, deleteTrumped, deleteBinaryOrphans, deleteGarbage)
 import Debian.Repo.Apt.Release (findReleases, prepareRelease, signReleases, mergeReleases)
 import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath, envPath)
@@ -23,6 +22,7 @@ import Debian.Repo.LocalRepository (LocalRepository, Layout, repoRoot, prepareLo
 import Debian.Repo.PackageID (PackageID, makeBinaryPackageID)
 import Debian.Repo.PackageIndex (PackageIndex(PackageIndex))
 import Debian.Repo.Release (Release, parseArchitectures, releaseName, releaseAliases, releaseComponents, releaseArchitectures)
+import Debian.Repo.Repos (MonadRepos, runReposT)
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
 import Extra.Email (sendEmails)
 import Extra.GPGSign (PGPKey(Default, Key))
@@ -48,13 +48,13 @@ main =
        let lockPath = outsidePath (root flags) ++ "/newdist.lock"
        liftIO $ createDirectoryIfMissing True (outsidePath (root flags))
        case printVersion flags of
-         False -> withLock lockPath (runAptT (runFlags flags))
+         False -> withLock lockPath (runReposT (runFlags flags))
          True -> IO.putStrLn myVersion >> exitWith ExitSuccess
 
 -- dry :: Params -> IO () -> IO ()
 -- dry params action = if dryRun params then return () else action
 
-runFlags :: MonadApt m => Params -> m ()
+runFlags :: MonadRepos m => Params -> m ()
 runFlags flags =
     do createReleases flags
        repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
@@ -101,7 +101,7 @@ runFlags flags =
 
 -- | Make sure the debian releases which are referenced by the command
 -- line flags exist.
-createReleases :: MonadApt m => Params -> m ()
+createReleases :: MonadRepos m => Params -> m ()
 createReleases flags =
     do repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
        rels <- findReleases repo
@@ -118,7 +118,7 @@ createReleases flags =
                   _ -> error "Internal error 1"
             _ ->
                 error $ "Invalid argument to --create-section: " ++ arg
-      createSection :: MonadApt m => LocalRepository -> Release -> Section -> m Release
+      createSection :: MonadRepos m => LocalRepository -> Release -> Section -> m Release
       createSection repo release section' =
           case filter ((==) section') (releaseComponents release) of
             [] -> prepareRelease repo (releaseName release) (releaseAliases release)
@@ -134,7 +134,7 @@ archList flags = maybe defaultArchitectures (parseArchitectures . pack) $ archit
 defaultArchitectures :: [Arch]
 defaultArchitectures = [Binary (ArchOS "linux") (ArchCPU "i386"), Binary (ArchOS "linux") (ArchCPU "amd64")]
 
-createRelease :: MonadApt m => LocalRepository -> [Arch] -> ReleaseName -> m Release
+createRelease :: MonadRepos m => LocalRepository -> [Arch] -> ReleaseName -> m Release
 createRelease repo archList' name =
     do rels <- findReleases repo
        case filter (\ release -> elem name (releaseName release : releaseAliases release)) rels of
@@ -142,7 +142,7 @@ createRelease repo archList' name =
          [release] -> return release
          _ -> error "Internal error 2"
 
-createAlias :: MonadApt m => LocalRepository -> String -> m Release
+createAlias :: MonadRepos m => LocalRepository -> String -> m Release
 createAlias repo arg =
     case break (== '=') arg of
       (rel, ('=' : alias)) ->
@@ -167,7 +167,7 @@ exitOnError errors =
 -- |Return the list of releases in the repository at root, creating
 -- the ones in the dists list with the given components and
 -- architectures.
-getReleases :: MonadApt m => EnvPath -> Maybe Layout -> [ReleaseName] -> [Section] -> [Arch] -> m Release
+getReleases :: MonadRepos m => EnvPath -> Maybe Layout -> [ReleaseName] -> [Section] -> [Arch] -> m Release
 getReleases root' layout' dists section' archList' =
     do repo <- prepareLocalRepository root' layout'
        existingReleases <- findReleases repo

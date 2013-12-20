@@ -10,8 +10,8 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Control.String as S
+import Debian.Repo.Repos (MonadRepos)
 import qualified Debian.Version as V
-import Debian.Repo.Apt (MonadApt)
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.Process (shell)
@@ -26,7 +26,7 @@ documentation = [ "sourcedeb:<target> - A target of this form unpacks the source
 
 -- |Given the BuildTarget for the base target, prepare a SourceDeb BuildTarget
 -- by unpacking the source deb.
-prepare :: MonadApt m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
+prepare :: MonadRepos m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
 prepare _cache package base =
     do dscFiles <- liftIO (getDirectoryContents top) >>= return . filter (isSuffixOf ".dsc")
        dscInfo <- mapM (\ name -> liftIO (readFile (top ++ "/" ++ name) >>= return . S.parseControl name)) dscFiles

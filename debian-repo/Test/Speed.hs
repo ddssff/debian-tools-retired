@@ -17,7 +17,7 @@ import Debian.Arch (Arch(..))
 import Debian.Control (ControlFunctions(stripWS), formatParagraph)
 import qualified Debian.Control.Text as B (Control'(Control), ControlFunctions(lookupP), Field, Field'(Field), fieldValue, Paragraph)
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
-import Debian.Repo (findReleases, runAptT)
+import Debian.Repo (findReleases, runReposT)
 import Debian.Repo.EnvPath (EnvPath, rootEnvPath)
 import Debian.Repo.LocalRepository (Layout(Pool), prepareLocalRepository)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
@@ -44,7 +44,7 @@ root = rootEnvPath "/srv/deb/ubuntu"
 
 -- | How long does it take to parse the files in a repository?
 main :: IO ()
-main = runAptT $ quieter (- 3) $
+main = runReposT $ quieter (- 3) $
     do repo <- prepareLocalRepository root (Just Pool)
        releases <- findReleases repo
        sources <- mapM (liftIO . releaseSourcePackages . (repo,)) releases >>= return . Set.unions

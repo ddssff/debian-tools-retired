@@ -11,7 +11,7 @@ import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5 (md5)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Repo (OSImage, findSourceTree, copySourceTree, SourceTree(dir'), DebianSourceTree, findDebianSourceTrees, sub, MonadDeb)
+import Debian.Repo (OSImage, findSourceTree, copySourceTree, SourceTree(dir'), DebianSourceTree, findDebianSourceTrees, sub, MonadReposCached)
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
@@ -41,7 +41,7 @@ instance Show Patch where
 documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
-prepare :: MonadDeb m => P.Packages -> OSImage -> B.ByteString -> T.Download -> m T.Download
+prepare :: MonadReposCached m => P.Packages -> OSImage -> B.ByteString -> T.Download -> m T.Download
 prepare package _buildOS patch base =
     do copyDir <- sub ("quilt" </> show (md5 (L.pack (show (P.spec package)))))
        baseTree <- liftIO $ findSourceTree (T.getTop base)

@@ -32,9 +32,9 @@ import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (DebT)
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Sources (SliceName(..))
-import Debian.Repo.Apt (MonadApt, runAptT, foldRepository, MonadDeb)
 import Debian.Repo.Apt.AptImage (prepareAptEnv)
 import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
+import Debian.Repo.Repos (MonadRepos, runReposT, foldRepository, MonadReposCached)
 import Debian.Repo.OSImage (OSImage, osLocalMaster, osLocalCopy, buildEssential)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Release (Release(releaseName))
@@ -72,7 +72,7 @@ main init myParams =
          True -> IO.hPutStr IO.stderr (P.usage "Usage: ")
          False ->
              do let paramSets = map (\ params -> params {P.buildPackages = P.buildTargets params (P.knownPackages params)}) recs
-                results <- runAptT (foldM (doParameterSet init) [] paramSets) `catch` handle
+                results <- runReposT (foldM (doParameterSet init) [] paramSets) `catch` handle
                 IO.hFlush IO.stdout
                 IO.hFlush IO.stderr
                 -- The result of processing a set of parameters is either an
@@ -95,7 +95,7 @@ main init myParams =
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: MonadApt m => DebT IO () -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
+doParameterSet :: MonadRepos m => DebT IO () -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
 doParameterSet init results params =
     case () of
       _ | not (Set.null badForceBuild) ->
@@ -126,7 +126,7 @@ doParameterSet init results params =
       allTargetNames :: Set P.TargetName
       allTargetNames = P.foldPackages (\ name _ _ result -> insert name result) (P.buildPackages params) empty
 
-runParameterSet :: MonadDeb m => DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
+runParameterSet :: MonadReposCached m => DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet init cache =
     do
       top <- askTop
@@ -201,7 +201,7 @@ runParameterSet init cache =
                True -> return ()
                False -> do qPutStr "You must be superuser to run the autobuilder (to use chroot environments.)"
                            liftIO $ exitWith (ExitFailure 1)
-      upload :: MonadApt m => (LocalRepository, [Target]) -> m [Failing ([Output L.ByteString], NominalDiffTime)]
+      upload :: MonadRepos m => (LocalRepository, [Target]) -> m [Failing ([Output L.ByteString], NominalDiffTime)]
       upload (repo, [])
           | P.doUpload params =
               case P.uploadURI params of
@@ -239,7 +239,7 @@ runParameterSet init cache =
 -- | Make sure the build release ("P.buildRelease params") - the
 -- release and repository to which we intend to upload the packages
 -- that we build - exists on the upload server ("P.uploadURI params").
-doVerifyBuildRepo :: MonadApt m => C.CacheRec -> m ()
+doVerifyBuildRepo :: MonadRepos m => C.CacheRec -> m ()
 doVerifyBuildRepo cache =
     do repoNames <- mapM (foldRepository f g) (map sliceRepoKey . slices . C.buildRepoSources $ cache) >>= return . map releaseName . concat
        when (not (any (== (P.buildRelease params)) repoNames))
@@ -259,13 +259,13 @@ doVerifyBuildRepo cache =
       g = return . repoReleaseInfo
       params = C.params cache
 
-retrieveTargetList :: MonadDeb m => DebT IO () -> C.CacheRec -> OSImage -> m [Either String Buildable]
+retrieveTargetList :: MonadReposCached m => DebT IO () -> C.CacheRec -> OSImage -> m [Either String Buildable]
 retrieveTargetList init cache dependOS =
           retrieveTargetList' dependOS >>=
           mapM (either (return . Left) (\ download -> liftIO (try (asBuildable download)) >>= return. either (\ (e :: SomeException) -> Left (show e)) Right))
     where
       params = C.params cache
-      -- retrieveTargetList' :: MonadDeb m => OSImage -> m [Either String Download]
+      -- retrieveTargetList' :: MonadReposCached m => OSImage -> m [Either String Download]
       retrieveTargetList' dependOS =
           do qPutStr ("\n" ++ showTargets allTargets ++ "\n")
              buildOS <- prepareBuildOS (P.buildRelease (C.params cache)) dependOS
@@ -276,7 +276,7 @@ retrieveTargetList init cache dependOS =
                               (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
           where
             allTargets = P.buildPackages (C.params cache)
-            handleRetrieveException :: MonadDeb m => P.Packages -> SomeException -> m (Either String Download)
+            handleRetrieveException :: MonadReposCached m => P.Packages -> SomeException -> m (Either String Download)
             handleRetrieveException target e =
                 case (fromException (toException e) :: Maybe AsyncException) of
                   Just UserInterrupt ->

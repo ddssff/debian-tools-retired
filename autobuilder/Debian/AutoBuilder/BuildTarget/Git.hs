@@ -40,7 +40,7 @@ darcsRev tree m =
 showCmd (RawCommand cmd args) = showCommandForUser cmd args
 showCmd (ShellCommand cmd) = cmd
 
-prepare :: MonadDeb m => P.CacheRec -> P.Packages -> String -> m T.Download
+prepare :: MonadReposCached m => P.CacheRec -> P.Packages -> String -> m T.Download
 prepare cache package theUri =
     sub "git" >>= \ base ->
     sub ("git" </> sum) >>= \ dir -> liftIO $

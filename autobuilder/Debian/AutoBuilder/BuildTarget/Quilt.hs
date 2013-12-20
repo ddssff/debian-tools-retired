@@ -20,7 +20,7 @@ import Debian.AutoBuilder.Target (decode)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (ChangeLogEntry(..), parseEntries, parseEntry)
-import Debian.Repo (DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub, MonadDeb)
+import Debian.Repo (DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub, MonadReposCached)
 import Debian.Version
 import Extra.Files (replaceFile)
 import "Extra" Extra.List ()
@@ -48,7 +48,7 @@ getEntry (Patch x) = x
 
 quiltPatchesDir = "quilt-patches"
 
-makeQuiltTree :: MonadDeb m => P.RetrieveMethod -> T.Download -> T.Download -> m (SourceTree, FilePath)
+makeQuiltTree :: MonadReposCached m => P.RetrieveMethod -> T.Download -> T.Download -> m (SourceTree, FilePath)
 makeQuiltTree m base patch =
     do qPutStrLn $ "Quilt base: " ++ T.getTop base
        qPutStrLn $ "Quilt patch: " ++ T.getTop patch
@@ -80,7 +80,7 @@ makeQuiltTree m base patch =
 failing f _ (Failure x) = f x
 failing _ s (Success x) = s x
 
-prepare :: MonadDeb m => P.Packages -> T.Download -> T.Download -> m T.Download
+prepare :: MonadReposCached m => P.Packages -> T.Download -> T.Download -> m T.Download
 prepare package base patch =
     (\ x -> qPutStrLn "Preparing quilt target" >> quieter 1 x) $
     makeQuiltTree (P.spec package) base patch >>= liftIO . withUpstreamQuiltHidden make

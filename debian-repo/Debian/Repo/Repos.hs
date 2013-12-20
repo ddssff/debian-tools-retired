@@ -4,13 +4,11 @@
 -- |AptIO is an instance of the RWS monad used to manage the global
 -- state and output style parameters of clients of the Apt library,
 -- such as the autobuilder.
-module Debian.Repo.Apt
-    ( MonadApt(..)
-    , AptT
-    , runAptT
+module Debian.Repo.Repos
+    ( MonadRepos(..)
+    , ReposT
+    , runReposT
 
-    , AptState
-    -- , repoMap
     , releaseMap
     , aptImageMap
     , sourcePackageMap
@@ -19,8 +17,8 @@ module Debian.Repo.Apt
     , prepareRemoteRepository
     , foldRepository
 
-    , MonadDeb
-    , runDebT
+    , MonadReposCached
+    , runReposCachedT
     ) where
 
 import Control.Applicative.Error (maybeRead)
@@ -57,18 +55,18 @@ instance Ord FileStatus where
 instance Eq FileStatus where
     a == b = compare a b == EQ
 
-type AptT = StateT AptState
+type ReposT = StateT ReposState
 
 -- | A monad to support the IO requirements of the autobuilder.
-class (MonadIO m, Functor m, MonadCatchIO m) => MonadApt m where
-    getApt :: m AptState
-    putApt :: AptState -> m ()
+class (MonadIO m, Functor m, MonadCatchIO m) => MonadRepos m where
+    getApt :: m ReposState
+    putApt :: ReposState -> m ()
     getRepoCache :: m (Map URI' RemoteRepository)
     putRepoCache :: Map URI' RemoteRepository -> m ()
 
 -- | This represents the state of the IO system.
-data AptState
-    = AptState
+data ReposState
+    = ReposState
       { _repoMap :: Map.Map URI' RemoteRepository		-- ^ Map to look up known (remote) Repository objects
       , _releaseMap :: Map.Map (RepoKey, ReleaseName) Release -- ^ Map to look up known Release objects
       , _aptImageMap :: Map.Map SliceName AptImage	-- ^ Map to look up prepared AptImage objects
@@ -76,15 +74,15 @@ data AptState
       , _binaryPackageMap :: Map.Map FilePath (FileStatus, [BinaryPackage])
       }
 
-$(makeLenses [''AptState])
+$(makeLenses [''ReposState])
 
-runAptT :: Monad m => AptT m a -> m a
-runAptT action = (runStateT action) initState >>= return . fst
+runReposT :: Monad m => ReposT m a -> m a
+runReposT action = (runStateT action) initState >>= return . fst
 
 -- |The initial output state - at the beginning of the line, no special handle
 -- state information, no repositories in the repository map.
-initState :: AptState
-initState = AptState
+initState :: ReposState
+initState = ReposState
             { _repoMap = Map.empty
             , _releaseMap = Map.empty
             , _aptImageMap = Map.empty
@@ -92,37 +90,37 @@ initState = AptState
             , _binaryPackageMap = Map.empty
             }
 
-instance (MonadIO m, Functor m, MonadCatchIO m) => MonadApt (AptT m) where
+instance (MonadIO m, Functor m, MonadCatchIO m) => MonadRepos (ReposT m) where
     getApt = get
     putApt = put
     getRepoCache = access repoMap
     putRepoCache mp = void $ repoMap ~= mp
 
-instance MonadApt m => MonadApt (ReaderT s m) where
+instance MonadRepos m => MonadRepos (ReaderT s m) where
     getApt = lift getApt
     putApt = lift . putApt
     getRepoCache = lift getRepoCache
     putRepoCache = lift . putRepoCache
 
-modifyRepoCache :: MonadApt m => (Map URI' RemoteRepository -> Map URI' RemoteRepository) -> m ()
+modifyRepoCache :: MonadRepos m => (Map URI' RemoteRepository -> Map URI' RemoteRepository) -> m ()
 modifyRepoCache f = do
     s <- getRepoCache
     putRepoCache (f s)
 
-prepareRemoteRepository :: MonadApt m => URI -> m RemoteRepository
+prepareRemoteRepository :: MonadRepos m => URI -> m RemoteRepository
 prepareRemoteRepository uri =
     getRepoCache >>= maybe (loadRemoteRepository (toURI' uri)) return . Map.lookup (toURI' uri)
 
 -- |To create a RemoteRepo we must query it to find out the
 -- names, sections, and supported architectures of its releases.
-loadRemoteRepository :: MonadApt m => URI' -> m RemoteRepository
+loadRemoteRepository :: MonadRepos m => URI' -> m RemoteRepository
 loadRemoteRepository uri =
     do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . fromURI' $ uri
        let repo = RemoteRepository uri releaseInfo
        modifyRepoCache (Map.insert uri repo)
        return repo
 
--- foldRepository :: forall m r a. MonadApt m => (r -> m a) -> RepoKey -> m a
+-- foldRepository :: forall m r a. MonadRepos m => (r -> m a) -> RepoKey -> m a
 -- foldRepository f key =
 --     case key of
 --       Local path -> prepareLocalRepository path Nothing >>= f
@@ -132,7 +130,7 @@ loadRemoteRepository uri =
 --             "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= f
 --             _ -> prepareRemoteRepository uri >>= f
 
-foldRepository :: forall m a. MonadApt m => (LocalRepository -> m a) -> (RemoteRepository -> m a) -> RepoKey -> m a
+foldRepository :: forall m a. MonadRepos m => (LocalRepository -> m a) -> (RemoteRepository -> m a) -> RepoKey -> m a
 foldRepository f g key =
     case key of
       Local path -> prepareLocalRepository path Nothing >>= f
@@ -166,24 +164,24 @@ foldRepository f g key =
 --      writeCache :: [(URI, [ReleaseInfo])] -> IO ()
 --      writeCache pairs = writeFile (show pairs) cachePath
 
--- | Like @MonadApt@, but is also an instance of MonadTop and tries to
+-- | Like @MonadRepos@, but is also an instance of MonadTop and tries to
 -- load and save a list of cached repositories from @top/repoCache@.
-class (MonadApt m, MonadTop m) => MonadDeb m
+class (MonadRepos m, MonadTop m) => MonadReposCached m
 
-instance MonadApt m => MonadDeb (TopT m)
+instance MonadRepos m => MonadReposCached (TopT m)
 
-type DebT m = TopT (AptT m)
+type ReposCachedT m = TopT (ReposT m)
 
 -- | To run a DebT we bracket an action with commands to load and save
 -- the repository list.
-runDebT :: (MonadCatchIO m, Functor m) => FilePath -> DebT m a -> m a
-runDebT top action = runAptT $ runTopT top $ bracket loadRepoCache (\ r -> saveRepoCache >> return r) (\ () -> action)
+runReposCachedT :: (MonadCatchIO m, Functor m) => FilePath -> ReposCachedT m a -> m a
+runReposCachedT top action = runReposT $ runTopT top $ bracket loadRepoCache (\ r -> saveRepoCache >> return r) (\ () -> action)
 
 -- | Load the value of the repo cache map from a file as a substitute for
 -- downloading information from the remote repositories.  These values may
 -- go out of date, as when a new release is added to a repository.  When this
 -- happens some ugly errors will occur and the cache will have to be flushed.
-loadRepoCache :: MonadDeb m => m ()
+loadRepoCache :: MonadReposCached m => m ()
 loadRepoCache =
     do dir <- sub "repoCache"
        liftIO (loadRepoCache' dir `catch` (\ (e :: SomeException) -> qPutStrLn (show e) >> return Map.empty)) >>= putRepoCache
@@ -200,7 +198,7 @@ loadRepoCache =
                    return (fromList pairs)
 
 -- | Write the repo cache map into a file.
-saveRepoCache :: MonadDeb m => m ()
+saveRepoCache :: MonadReposCached m => m ()
 saveRepoCache =
           do path <- sub "repoCache"
              live <- getRepoCache

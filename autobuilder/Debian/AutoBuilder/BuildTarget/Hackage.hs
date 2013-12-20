@@ -38,7 +38,7 @@ documentation = [ "debianize:<name> or debianize:<name>=<version> - a target of 
                 , "(currently) retrieves source code from http://hackage.haskell.org and runs"
                 , "cabal-debian to create the debianization." ]
 
-prepare :: (MonadDeb m) => P.CacheRec -> P.Packages -> String -> m T.Download
+prepare :: (MonadReposCached m) => P.CacheRec -> P.Packages -> String -> m T.Download
 prepare cache package name =
     do (version' :: Version) <- liftIO $ maybe (getVersion (P.hackageServer (P.params cache)) name) (return . readVersion) versionString
        tar <- tarball name version'
@@ -64,7 +64,7 @@ prepare cache package name =
 -- | Download and unpack the given package version to the autobuilder
 -- hackage temporary directory.  After the download it tries to untar
 -- the file, and then it saves the compressed tarball.
-download :: (MonadDeb m) => P.CacheRec -> String -> Version -> m ()
+download :: (MonadReposCached m) => P.CacheRec -> String -> Version -> m ()
 download cache name version =
     (unpacked name version) >>=
     liftIO . removeRecursiveSafely >>
@@ -132,7 +132,7 @@ trimInfix i s = take (length (takeWhile (not . isPrefixOf i) (tails s))) s
 -- |Download and unpack the given package version to the autobuilder's
 -- hackage temporary directory.  After the download it validates the
 -- tarball text and saves the compressed tarball.
-downloadCached :: MonadDeb m => String -> String -> Version -> m B.ByteString
+downloadCached :: MonadReposCached m => String -> String -> Version -> m B.ByteString
 downloadCached server name version =
     do path <- tarball name version
        exists <- liftIO $ doesFileExist path
@@ -165,7 +165,7 @@ getVersion server name =
       url = packageURL server name
 
 -- |Unpack and save the files of a tarball.
-unpack :: MonadDeb m => B.ByteString -> m ()
+unpack :: MonadReposCached m => B.ByteString -> m ()
 unpack text = tmpDir >>= \ tmp -> liftIO $ Tar.unpack tmp (Tar.read (Z.decompress text))
 
 -- |Validate the text of a tarball file.
@@ -202,7 +202,7 @@ findVersion package (Document _ _ (Elem _name _attrs content) _) =
           else error $ "findVersion - not a tarball: " ++ show s
 
 -- |Download and save the tarball, return its contents.
-download' :: MonadDeb m => String -> String -> Version -> m B.ByteString
+download' :: MonadReposCached m => String -> String -> Version -> m B.ByteString
 download' server name version =
     do (res, out, err, _) <- liftIO (runProcessQ (shell (downloadCommand server name version)) B.empty) >>= return . collectOutputs
        tmp <- tmpDir

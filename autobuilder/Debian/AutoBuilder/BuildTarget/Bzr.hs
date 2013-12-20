@@ -23,7 +23,7 @@ import System.Directory
 documentation = [ "bzr:<revision> - A target of this form retrieves the a Bazaar archive with the"
                 , "given revision name." ]
 
-prepare :: MonadDeb m => P.CacheRec -> P.Packages -> String -> m Download
+prepare :: MonadReposCached m => P.CacheRec -> P.Packages -> String -> m Download
 prepare cache package version =
   do
     dir <- askTop >>= \ top -> return $ top </> "bzr" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri) ++ (uriPath uri))))

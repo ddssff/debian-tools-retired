@@ -12,8 +12,8 @@ import Debian.Arch (Arch)
 import Debian.Release (ReleaseName, releaseName', parseSection')
 import Debian.Repo.EnvPath (rootEnvPath)
 import Debian.Repo.LocalRepository (LocalRepository, prepareLocalRepository)
-import Debian.Repo.Apt (MonadDeb)
 import Debian.Repo.Apt.Release (prepareRelease)
+import Debian.Repo.Repos (MonadReposCached)
 import Debian.Repo.Top (MonadTop(askTop))
 import System.FilePath ((</>))
 import System.Unix.Directory(removeRecursiveSafely)
@@ -25,7 +25,7 @@ subDir = "localpools"
 poolDir :: MonadTop m => ReleaseName -> m FilePath
 poolDir rel = askTop >>= \ top -> return $ top </> subDir </> releaseName' rel
 
-prepare :: MonadDeb m => Bool -> ReleaseName -> [Arch] -> m LocalRepository
+prepare :: MonadReposCached m => Bool -> ReleaseName -> [Arch] -> m LocalRepository
 prepare flush rel archlist =
     do localRepo <- poolDir rel
        when flush (liftIO (removeRecursiveSafely localRepo))

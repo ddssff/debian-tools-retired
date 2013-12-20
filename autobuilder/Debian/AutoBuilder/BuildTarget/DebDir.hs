@@ -20,7 +20,7 @@ documentation = [ "deb-dir:(<target>):(<target>) - A target of this form combine
                 , "where one points to an un-debianized source tree and the other contains"
                 , "a debian subdirectory." ]
 
-prepare :: MonadDeb m => P.Packages -> T.Download -> T.Download -> m T.Download
+prepare :: MonadReposCached m => P.Packages -> T.Download -> T.Download -> m T.Download
 prepare package upstream debian =
     sub "deb-dir" >>= \ dir ->
     sub ("deb-dir" </> show (md5 (pack (show (P.spec package))))) >>= \ dest ->
