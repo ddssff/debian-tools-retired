@@ -49,6 +49,7 @@ import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage(sourceP
 import Debian.Repo.Repo (repoKey, repoURI)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(Slice, sliceRepoKey, sliceSource), SliceList, SliceList(..))
 import Debian.Repo.Sync (rsync)
+import Debian.Repo.Top (MonadTop, askTop)
 import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SourceType(..), SourceType(..))
 import Debian.URI (uriToString')
 import Debian.Version (DebianVersion, prettyDebianVersion)
@@ -74,8 +75,7 @@ import Text.Regex (matchRegex, mkRegex)
 -- the environment and kept in sync, and lines will be added to
 -- sources.list to point to it.
 data OSImage
-    = OS { _osGlobalCacheDir :: FilePath
-         , _osRoot :: EnvRoot
+    = OS { _osRoot :: EnvRoot
          , _osBaseDistro :: NamedSliceList
          , _osArch :: Arch
 	 -- | The associated local repository, where packages we
@@ -400,18 +400,16 @@ forceList :: [a] -> IO [a]
 forceList output = evaluate (length output) >> return output
 
 -- |Create or update an OS image in which packages can be built.
-prepareOSEnv' :: MonadIO m =>
-              FilePath
-           -> EnvRoot			-- ^ The location where image is to be built
+prepareOSEnv' :: (MonadIO m, MonadTop m) =>
+              EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list of the base distribution
            -> LocalRepository           -- ^ The location of the local upload repository
            -> m OSImage
-prepareOSEnv' top root distro repo =
+prepareOSEnv' root distro repo =
     do copy <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) repo
        ePutStrLn ("Preparing clean " ++ relName (sliceListName distro) ++ " build environment at " ++ rootPath root ++ ", osLocalRepoMaster: " ++ show repo)
        arch <- liftIO buildArchOfRoot
-       let os = OS { _osGlobalCacheDir = top
-                   , _osRoot = root
+       let os = OS { _osRoot = root
                    , _osBaseDistro = distro
                    , _osArch = arch
                    , _osLocalMaster = repo
@@ -457,9 +455,8 @@ prepareOSEnv' top root distro repo =
              liftIO $ localeGen (either (const "en_US.UTF-8") id localeName) os
 -}
 
-_pbuilderBuild' :: MonadIO m =>
-            FilePath
-         -> EnvRoot
+_pbuilderBuild' :: (MonadIO m, MonadTop m) =>
+            EnvRoot
          -> NamedSliceList
          -> Arch
          -> LocalRepository
@@ -468,17 +465,19 @@ _pbuilderBuild' :: MonadIO m =>
          -> [String]
          -> [String]
          -> m OSImage
-_pbuilderBuild' cacheDir root distro arch repo copy _extraEssential _omitEssential _extra =
+_pbuilderBuild' root distro arch repo copy _extraEssential _omitEssential _extra =
       -- We can't create the environment if the sources.list has any
       -- file:// URIs because they can't yet be visible inside the
       -- environment.  So we grep them out, create the environment, and
       -- then add them back in.
-    do ePutStrLn ("Creating clean build environment (" ++ relName (sliceListName distro) ++ ")")
-       ePutStrLn ("# " ++ cmd)
-       liftIO (runProcess (shell cmd) L.empty) >>= liftIO . doOutput >>= foldOutputsL codefn outfn errfn exnfn (return ())
+    do top <- askTop
+       ePutStrLn ("Creating clean build environment (" ++ relName (sliceListName distro) ++ ")")
+       ePutStrLn ("# " ++ cmd top)
+       let codefn _ ExitSuccess = return ()
+           codefn _ failure = error ("Could not create build environment:\n " ++ cmd top ++ " -> " ++ show failure)
+       liftIO (runProcess (shell (cmd top)) L.empty) >>= liftIO . doOutput >>= foldOutputsL codefn outfn errfn exnfn (return ())
        ePutStrLn "done."
-       let os = OS { _osGlobalCacheDir = cacheDir
-                   , _osRoot = root
+       let os = OS { _osRoot = root
                    , _osBaseDistro = distro
                    , _osArch = arch
                    , _osLocalMaster = repo
@@ -490,24 +489,22 @@ _pbuilderBuild' cacheDir root distro arch repo copy _extraEssential _omitEssenti
        liftIO $ replaceFile sourcesPath' (show . pretty . osFullDistro $ os)
        return os
     where
-      codefn _ ExitSuccess = return ()
-      codefn _ failure = error ("Could not create build environment:\n " ++ cmd ++ " -> " ++ show failure)
       outfn _ _ = return ()
       errfn _ _ = return ()
       exnfn _ _ = return ()
-      cmd = intercalate " " $ [ "pbuilder"
-                              , "--create"
-                              , "--distribution", (relName . sliceListName $ distro)
-                              , "--basetgz", cacheDir </> "pbuilderBase"
-                              , "--buildplace", rootPath root
-                              , "--preserve-buildplace"
-                              ]
+      cmd top =
+          intercalate " " $ [ "pbuilder"
+                            , "--create"
+                            , "--distribution", (relName . sliceListName $ distro)
+                            , "--basetgz", top </> "pbuilderBase"
+                            , "--buildplace", rootPath root
+                            , "--preserve-buildplace"
+                            ]
 
 -- Create a new clean build environment in root.clean
 -- FIXME: create an ".incomplete" flag and remove it when build-env succeeds
-buildEnv' :: MonadIO m =>
-            FilePath
-         -> EnvRoot
+buildEnv' :: (MonadIO m, MonadTop m) =>
+            EnvRoot
          -> NamedSliceList
          -> Arch
          -> LocalRepository
@@ -516,7 +513,7 @@ buildEnv' :: MonadIO m =>
          -> [String]
          -> [String]
          -> m OSImage
-buildEnv' top root distro arch repo copy include exclude components =
+buildEnv' root distro arch repo copy include exclude components =
     quieter (-1) $
     do
       ePutStr (unlines [ "Creating clean build environment (" ++ relName (sliceListName distro) ++ ")"
@@ -529,8 +526,7 @@ buildEnv' top root distro arch repo copy include exclude components =
       -- then add them back in.
       runProcess (shell cmd) L.empty >>= foldOutputsL codefn outfn errfn exnfn (return ())
       ePutStrLn "done."
-      let os = OS { _osGlobalCacheDir = top
-                  , _osRoot = root
+      let os = OS { _osRoot = root
                   , _osBaseDistro = distro
                   , _osArch = arch
                   , _osLocalMaster = repo

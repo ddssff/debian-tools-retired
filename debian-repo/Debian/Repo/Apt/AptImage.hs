@@ -38,7 +38,7 @@ import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
 import Debian.Repo.SSH (sshCopy)
 import Debian.Repo.Slice (binarySlices, NamedSliceList(sliceListName, sliceList), Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices)
 import Debian.Repo.SourcesList (parseSourcesList)
-import Debian.Repo.Top (MonadTop(askTop))
+import Debian.Repo.Top (MonadTop)
 import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SourceType(..))
 import Debian.URI (URI(uriScheme), uriToString')
 import Debian.Version (parseDebianVersion)
@@ -176,8 +176,7 @@ prepareOSEnv :: MonadDeb m =>
            -> [String]			-- ^ Components of the base repository
            -> m OSImage
 prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude components =
-    do top <- askTop
-       os <- prepareOSEnv' top root distro repo
+    do os <- prepareOSEnv' root distro repo
        os' <- update os
        arch <- liftIO buildArchOfRoot -- This should be stored in os, but it is a Maybe - why?
        os'' <- recreate arch os os'
@@ -216,9 +215,8 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
           do localeName <- liftIO (try (getEnv "LANG") :: IO (Either SomeException String))
              liftIO $ localeGen (either (const "en_US.UTF-8") id localeName) os
 
-_pbuilderBuild :: MonadApt m =>
-            FilePath
-         -> EnvRoot
+_pbuilderBuild :: (MonadApt m, MonadTop m) =>
+            EnvRoot
          -> NamedSliceList
          -> Arch
          -> LocalRepository
@@ -227,8 +225,8 @@ _pbuilderBuild :: MonadApt m =>
          -> [String]
          -> [String]
          -> m OSImage
-_pbuilderBuild cacheDir root distro arch repo copy _extraEssential _omitEssential _extra =
-    do os <- _pbuilderBuild' cacheDir root distro arch repo copy _extraEssential _omitEssential _extra
+_pbuilderBuild root distro arch repo copy _extraEssential _omitEssential _extra =
+    do os <- _pbuilderBuild' root distro arch repo copy _extraEssential _omitEssential _extra
        updateOSEnv os >>= either (error . show) return
 
 -- Create a new clean build environment in root.clean
@@ -245,8 +243,7 @@ buildEnv :: MonadDeb m =>
          -> m OSImage
 buildEnv root distro arch repo copy include exclude components =
     quieter (-1) $
-    do top <- askTop
-       os <- buildEnv' top root distro arch repo copy include exclude components
+    do os <- buildEnv' root distro arch repo copy include exclude components
        updateOSEnv os >>= either (error . show) return
 
 -- |Try to update an existing build environment: run apt-get update

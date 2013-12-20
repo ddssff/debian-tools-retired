@@ -115,6 +115,13 @@ data SourcesChangedAction =
 prepareAptEnv'' :: (MonadTop m, MonadIO m) => NamedSliceList -> m AptImage
 prepareAptEnv'' sources =
     do root <- cacheRootDir (sliceListName sources)
+       arch <- liftIO buildArchOfRoot
+       let os = AptImage { _aptImageRoot = root
+                         , _aptImageArch = arch
+                         , _aptImageSources = sources
+                         , _aptImageSourcePackages = []
+                         , _aptImageBinaryPackages = [] }
+
        --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
        liftIO $ createDirectoryIfMissing True (rootPath root ++ "/var/lib/apt/lists/partial")
        liftIO $ createDirectoryIfMissing True (rootPath root ++ "/var/lib/apt/lists/partial")
@@ -128,14 +135,6 @@ prepareAptEnv'' sources =
        let sourceListText = show (pretty (sliceList sources))
        -- ePut ("writeFile " ++ (root ++ "/etc/apt/sources.list") ++ "\n" ++ sourceListText)
        liftIO $ replaceFile (rootPath root ++ "/etc/apt/sources.list") sourceListText
-       arch <- liftIO buildArchOfRoot
-       let os = AptImage { _aptImageRoot = root
-                         , _aptImageArch = arch
-                         , _aptImageSources = sources
-                         -- , _aptImageReleaseName = ReleaseName . sliceName . sliceListName $ sources
-                         -- , _aptImageSliceList = sliceList sources
-                         , _aptImageSourcePackages = []
-                         , _aptImageBinaryPackages = [] }
        return os
 
 cacheRootDir :: MonadTop m => ReleaseName -> m EnvRoot
