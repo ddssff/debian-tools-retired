@@ -58,19 +58,18 @@ import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- |Create a skeletal enviroment sufficient to run apt-get.
-prepareAptEnv :: MonadApt m =>
-                 FilePath		-- Put environment in a subdirectory of this
-              -> SourcesChangedAction	-- What to do if environment already exists and sources.list is different
+prepareAptEnv :: (MonadTop m, MonadApt m) =>
+                 SourcesChangedAction	-- What to do if environment already exists and sources.list is different
               -> NamedSliceList		-- The sources.list
               -> m AptImage		-- The resulting environment
-prepareAptEnv cacheDir sourcesChangedAction sources =
+prepareAptEnv sourcesChangedAction sources =
     (\ x -> qPutStrLn ("Preparing apt-get environment for " ++ show (relName (sliceListName sources))) >> quieter 2 x) $
     getApt >>= return . Map.lookup (sliceListName sources) . getL aptImageMap >>=
-    maybe (prepareAptEnv' cacheDir sourcesChangedAction sources) return
+    maybe (prepareAptEnv' sourcesChangedAction sources) return
 
-prepareAptEnv' :: MonadApt m => FilePath -> SourcesChangedAction -> NamedSliceList -> m AptImage
-prepareAptEnv' cacheDir sourcesChangedAction sources =
-    do os <- prepareAptEnv'' cacheDir sources
+prepareAptEnv' :: (MonadTop m, MonadApt m) => SourcesChangedAction -> NamedSliceList -> m AptImage
+prepareAptEnv' sourcesChangedAction sources =
+    do os <- prepareAptEnv'' sources
        os' <- updateCacheSources sourcesChangedAction os >>= updateAptEnv
        getApt >>= putApt . modL aptImageMap (Map.insert (sliceListName sources) os')
        return os'
@@ -197,13 +196,15 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
                        show (pretty computed) ++ "\ninstalled:\n" ++
                        show (pretty installed)
       recreate arch os (Left reason) =
-          do liftIO $ do ePutStrLn $ "Removing and recreating build environment at " ++ rootPath root ++ ": " ++ show reason
+          do dist <- distDir os
+             sources <- sourcesPath os
+             liftIO $ do ePutStrLn $ "Removing and recreating build environment at " ++ rootPath root ++ ": " ++ show reason
                          -- ePutStrLn ("removeRecursiveSafely " ++ rootPath root)
                          removeRecursiveSafely (rootPath root)
-                         -- ePutStrLn ("createDirectoryIfMissing True " ++ show (distDir os))
-                         createDirectoryIfMissing True (distDir os)
-                         -- ePutStrLn ("writeFile " ++ show (sourcesPath os) ++ " " ++ show (show . osBaseDistro $ os))
-                         replaceFile (sourcesPath os) (show . pretty . getL osBaseDistro $ os)
+                         -- ePutStrLn ("createDirectoryIfMissing True " ++ show dist)
+                         createDirectoryIfMissing True dist
+                         -- ePutStrLn ("writeFile " ++ show sources ++ " " ++ show (show . osBaseDistro $ os))
+                         replaceFile sources (show . pretty . getL osBaseDistro $ os)
              os' <- buildEnv root distro arch (getL osLocalMaster os) (getL osLocalCopy os) include exclude components
              liftIO $ do doLocales os'
                          neuterEnv os'

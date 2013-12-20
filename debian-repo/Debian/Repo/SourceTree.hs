@@ -40,6 +40,7 @@ import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.PackageID (PackageID(packageName, packageVersion))
 import Debian.Repo.PackageIndex (SourcePackage(sourcePackageID))
 import Debian.Repo.Sync (rsync)
+import Debian.Repo.Top (MonadTop)
 import Debian.Version (DebianVersion)
 import qualified Debian.Version as V (version)
 import "Extra" Extra.Files (getSubDirectories, replaceFile)
@@ -299,14 +300,15 @@ instance DebianBuildTreeC DebianBuildTree where
     findBuildTree path d = findSourceTree (path </> d) >>= return . DebianBuildTree path d
 
 -- |Retrieve a source package via apt-get.
-prepareSource :: AptImage			-- Where to apt-get from
-             -> SrcPkgName			-- The name of the package
-             -> Maybe DebianVersion		-- The desired version, if Nothing get newest
-             -> IO DebianBuildTree		-- The resulting source tree
+prepareSource :: (MonadTop m, MonadIO m) =>
+                 AptImage			-- Where to apt-get from
+              -> SrcPkgName			-- The name of the package
+              -> Maybe DebianVersion		-- The desired version, if Nothing get newest
+              -> m DebianBuildTree		-- The resulting source tree
 prepareSource apt package version =
-    do let dir = aptDir apt package
+    do dir <- aptDir apt package
        liftIO $ createDirectoryIfMissing True dir
-       ready <- findDebianBuildTrees dir
+       ready <- liftIO $ findDebianBuildTrees dir
        let newest = listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . packageName . sourcePackageID) . aptSourcePackages $ apt
        let version' = maybe newest Just version
        case (version', ready) of
@@ -316,8 +318,8 @@ prepareSource apt package version =
              | requested == (logVersion . entry $ tree) ->
                  return tree
          (Just requested, []) ->
-             do aptGetSource apt dir [(package, Just requested)]
-                trees <- findDebianBuildTrees dir
+             do liftIO $ aptGetSource apt dir [(package, Just requested)]
+                trees <- liftIO $ findDebianBuildTrees dir
                 case trees of
                   [tree] -> return tree
                   _ -> fail $ "apt-get source failed in " ++ dir ++ " (1): trees=" ++ show (map (dir' . tree' . debTree') trees)
@@ -325,8 +327,8 @@ prepareSource apt package version =
              do -- One or more incorrect versions are available, remove them
                 liftIO $ removeRecursiveSafely dir
                 qPutStr $ "Retrieving APT source for " ++ unSrcPkgName package
-                aptGetSource apt dir [(package, Just requested)]
-                trees <- findDebianBuildTrees dir
+                liftIO $ aptGetSource apt dir [(package, Just requested)]
+                trees <- liftIO $ findDebianBuildTrees dir
                 case trees of
                   [tree] -> return tree
                   _ -> fail $ "apt-get source failed (2): trees=" ++ show (map (dir' . tree' . debTree') trees)

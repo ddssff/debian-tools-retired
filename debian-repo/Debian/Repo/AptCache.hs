@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.AptCache
-    ( AptCache(globalCacheDir, rootDir, aptBaseSources, aptArch, aptSourcePackages, aptBinaryPackages), aptReleaseName
+    ( AptCache(rootDir, aptBaseSources, aptArch, aptSourcePackages, aptBinaryPackages), aptReleaseName
     , distDir
     , sourcesPath
     , aptSourcePackagesSorted
@@ -34,6 +34,7 @@ import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage(sourceP
 import Debian.Repo.Repo (repoKey, repoURI)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(Slice, sliceRepoKey, sliceSource), SliceList, SliceList(..))
 import Debian.Repo.Sync (rsync)
+import Debian.Repo.Top (MonadTop, askTop)
 import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SourceType(..), SourceType(..))
 import Debian.URI (uriToString')
 import Debian.Version (DebianVersion, prettyDebianVersion)
@@ -61,7 +62,6 @@ instance NFData ExitCode
 -- thus obtain repository info and download source code packages from
 -- a remote repository.
 class (Ord t, Eq t, Show t) => AptCache t where
-    globalCacheDir :: t -> FilePath
     -- | The directory you might chroot to.
     rootDir :: t -> EnvRoot
     -- | The sources.list excluding lines for the local repository
@@ -82,13 +82,17 @@ aptReleaseName c = error "aptReleaseName" -- aptBaseNamedSources c
 -- an AptCache instance.
 
 -- | The directory in a repository where the package index files for a
--- particular dist or release is stored.
-distDir :: AptCache c => c -> FilePath
-distDir cache = globalCacheDir cache </> "dists" </> relName (aptReleaseName cache)
+-- particular dist or release is stored.  (Wait, that's not right.)
+distDir :: (MonadTop m, AptCache c) => c -> m FilePath
+distDir cache =
+    do top <- askTop
+       return $ top </> "dists" </> relName (aptReleaseName cache)
 
 -- | The path of the text file containing the sources.list (aka SliceList)
-sourcesPath :: AptCache c => c -> FilePath
-sourcesPath cache = distDir cache </> "sources"
+sourcesPath :: (MonadTop m, AptCache c) => c -> m FilePath
+sourcesPath cache =
+    do dir <- distDir cache
+       return $ dir </> "sources"
 
 -- |Return all the named source packages sorted by version
 aptSourcePackagesSorted :: AptCache t => t -> [SrcPkgName] -> [SourcePackage]

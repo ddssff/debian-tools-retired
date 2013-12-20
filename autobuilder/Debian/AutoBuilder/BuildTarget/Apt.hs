@@ -16,7 +16,6 @@ import Debian.Repo.Apt.AptImage (prepareAptEnv)
 import Debian.Repo.AptImage (aptDir)
 import Debian.Repo.Slice (NamedSliceList(sliceListName))
 import Debian.Repo.SourceTree (topdir, prepareSource)
-import Debian.Repo.Top (askTop)
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
 import System.Unix.Directory (removeRecursiveSafely)
 
@@ -26,10 +25,10 @@ documentation = [ "apt:<distribution>:<packagename> - a target of this form look
 
 prepare :: MonadDeb m => P.CacheRec -> P.Packages -> String -> SrcPkgName -> m Download
 prepare cache target dist package =
-    do top <- askTop
-       os <- prepareAptEnv top (P.ifSourcesChanged (P.params cache)) distro
-       when (P.flushSource (P.params cache)) (liftIO . removeRecursiveSafely $ aptDir os package)
-       tree <- liftIO $ prepareSource os package version'
+    do os <- prepareAptEnv (P.ifSourcesChanged (P.params cache)) distro
+       apt <- aptDir os package
+       when (P.flushSource (P.params cache)) (liftIO . removeRecursiveSafely $ apt)
+       tree <- prepareSource os package version'
        return $ Download {
                     package = target
                   , getTop = topdir tree

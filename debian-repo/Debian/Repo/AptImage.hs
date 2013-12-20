@@ -32,6 +32,7 @@ import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage(sourceP
 import Debian.Repo.Repo (repoKey, repoURI)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(Slice, sliceRepoKey, sliceSource), SliceList, SliceList(..))
 import Debian.Repo.Sync (rsync)
+import Debian.Repo.Top (MonadTop, askTop)
 import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SourceType(..), SourceType(..))
 import Debian.URI (uriToString')
 import Debian.Version (DebianVersion, prettyDebianVersion)
@@ -54,8 +55,7 @@ import Text.Regex (matchRegex, mkRegex)
 
 -- | The AptImage object is an instance of AptCache.
 data AptImage =
-    AptImage { _aptGlobalCacheDir :: FilePath
-             , _aptImageRoot :: EnvRoot
+    AptImage { _aptImageRoot :: EnvRoot
              , _aptImageArch :: Arch
              , _aptImageSources :: NamedSliceList
              , _aptImageSourcePackages :: [SourcePackage]
@@ -68,7 +68,6 @@ instance Show AptImage where
     show apt = "AptImage " ++ relName (sliceListName (getL aptImageSources apt))
 
 instance AptCache AptImage where
-    globalCacheDir = getL aptGlobalCacheDir
     rootDir = getL aptImageRoot
     aptArch = getL aptImageArch
     aptBaseSources = getL aptImageSources
@@ -83,21 +82,15 @@ instance Eq AptImage where
 
 -- | The location of the top directory of a source packages's files in
 -- an AptImage (but not an OSImage.)
-aptDir :: AptImage -> SrcPkgName -> FilePath
-aptDir cache package = distDir cache </> "apt" </> unSrcPkgName package
+aptDir :: MonadTop m => AptImage -> SrcPkgName -> m FilePath
+aptDir cache package =
+    do dir <- distDir cache
+       return $ dir </> "apt" </> unSrcPkgName package
 
 -- The following are path functions which can be used while
 -- constructing instances of AptCache.  Each is followed by a
 -- corresponding function that gives the same result when applied to
 -- an AptCache instance.
-
--- | A directory which will hold all the cached files for this
--- NamedSliceList.
-cacheDistDir :: FilePath -> ReleaseName -> FilePath
-cacheDistDir cacheDir release = cacheDir ++ "/dists/" ++ relName release
-
-cacheRootDir :: FilePath -> ReleaseName -> EnvRoot
-cacheRootDir cacheDir release = EnvRoot (cacheDistDir cacheDir release ++ "/aptEnv")
 
 buildArchOfRoot :: IO Arch
 buildArchOfRoot =
@@ -119,25 +112,24 @@ data SourcesChangedAction =
     RemoveRelease
     deriving (Eq, Show, Data, Typeable)
 
-prepareAptEnv'' :: MonadIO m => FilePath -> NamedSliceList -> m AptImage
-prepareAptEnv'' cacheDir sources =
-    do let root = rootPath (cacheRootDir cacheDir (sliceListName sources))
+prepareAptEnv'' :: (MonadTop m, MonadIO m) => NamedSliceList -> m AptImage
+prepareAptEnv'' sources =
+    do root <- cacheRootDir (sliceListName sources)
        --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
-       liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
-       liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
-       liftIO $ createDirectoryIfMissing True (root ++ "/var/cache/apt/archives/partial")
-       liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/dpkg")
-       liftIO $ createDirectoryIfMissing True (root ++ "/etc/apt")
-       liftIO $ writeFileIfMissing True (root ++ "/var/lib/dpkg/status") ""
-       liftIO $ writeFileIfMissing True (root ++ "/var/lib/dpkg/diversions") ""
+       liftIO $ createDirectoryIfMissing True (rootPath root ++ "/var/lib/apt/lists/partial")
+       liftIO $ createDirectoryIfMissing True (rootPath root ++ "/var/lib/apt/lists/partial")
+       liftIO $ createDirectoryIfMissing True (rootPath root ++ "/var/cache/apt/archives/partial")
+       liftIO $ createDirectoryIfMissing True (rootPath root ++ "/var/lib/dpkg")
+       liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc/apt")
+       liftIO $ writeFileIfMissing True (rootPath root ++ "/var/lib/dpkg/status") ""
+       liftIO $ writeFileIfMissing True (rootPath root ++ "/var/lib/dpkg/diversions") ""
        -- We need to create the local pool before updating so the
        -- sources.list will be valid.
        let sourceListText = show (pretty (sliceList sources))
        -- ePut ("writeFile " ++ (root ++ "/etc/apt/sources.list") ++ "\n" ++ sourceListText)
-       liftIO $ replaceFile (root ++ "/etc/apt/sources.list") sourceListText
+       liftIO $ replaceFile (rootPath root ++ "/etc/apt/sources.list") sourceListText
        arch <- liftIO buildArchOfRoot
-       let os = AptImage { _aptGlobalCacheDir = cacheDir
-                         , _aptImageRoot = EnvRoot root
+       let os = AptImage { _aptImageRoot = root
                          , _aptImageArch = arch
                          , _aptImageSources = sources
                          -- , _aptImageReleaseName = ReleaseName . sliceName . sliceListName $ sources
@@ -145,3 +137,8 @@ prepareAptEnv'' cacheDir sources =
                          , _aptImageSourcePackages = []
                          , _aptImageBinaryPackages = [] }
        return os
+
+cacheRootDir :: MonadTop m => ReleaseName -> m EnvRoot
+cacheRootDir release =
+    do top <- askTop
+       return $ EnvRoot (top </> "dists" </> relName release </> "aptEnv")

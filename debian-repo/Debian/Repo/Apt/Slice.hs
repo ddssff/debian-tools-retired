@@ -26,6 +26,7 @@ import Debian.Repo.LocalRepository (prepareLocalRepository)
 import Debian.Repo.Repo (repoKey)
 import Debian.Repo.Slice (Slice(..), SliceList(..), NamedSliceList(sliceList), sliceListName)
 import Debian.Repo.SourcesList (parseSourcesList)
+import Debian.Repo.Top (MonadTop)
 import Debian.Sources (DebSource(..), SourceType(Deb, DebSrc))
 import Debian.URI (dirFromURI, fileFromURI)
 import Extra.Files (replaceFile)
@@ -98,26 +99,27 @@ verifyDebSource chroot line =
 
 -- |Change the sources.list of an AptCache object, subject to the
 -- value of sourcesChangedAction.
-updateCacheSources :: (AptCache c, MonadApt m) => SourcesChangedAction -> c -> m c
+updateCacheSources :: (AptCache c, MonadApt m, MonadTop m) => SourcesChangedAction -> c -> m c
 updateCacheSources sourcesChangedAction distro =
     -- (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
     qPutStrLn "Updating cache sources" >>
     do
       let baseSources = aptBaseSources distro
       --let distro@(ReleaseCache _ dist _) = releaseFromConfig' top text
-      let dir = distDir distro
-      distExists <- liftIO $ doesFileExist (sourcesPath distro)
+      dir <- distDir distro
+      sources <- sourcesPath distro
+      distExists <- liftIO $ doesFileExist sources
       case distExists of
         True ->
             do
-	      fileSources <- liftIO (readFile (sourcesPath distro)) >>= verifySourcesList Nothing . parseSourcesList
+	      fileSources <- liftIO (readFile sources) >>= verifySourcesList Nothing . parseSourcesList
 	      case (fileSources == sliceList baseSources, sourcesChangedAction) of
 	        (True, _) -> return ()
 	        (False, SourcesChangedError) ->
                     do
                       ePutStrLn ("The sources.list in the existing '" ++ (relName . sliceListName $ baseSources) ++
                                  "' build environment doesn't match the parameters passed to the autobuilder" ++
-			         ":\n\n" ++ sourcesPath distro ++ ":\n\n" ++
+			         ":\n\n" ++ sources ++ ":\n\n" ++
                                  show (pretty fileSources) ++
 			         "\nRun-time parameters:\n\n" ++
                                  show (pretty baseSources) ++ "\n" ++
@@ -130,7 +132,7 @@ updateCacheSources sourcesChangedAction distro =
                             do
                               liftIO $ removeRecursiveSafely dir
                               liftIO $ createDirectoryIfMissing True dir
-                              liftIO $ replaceFile (sourcesPath distro) (show (pretty baseSources))
+                              liftIO $ replaceFile sources (show (pretty baseSources))
                         _ ->
                             error ("Please remove " ++ dir ++ " and restart.")
                 (False, RemoveRelease) ->
@@ -138,16 +140,16 @@ updateCacheSources sourcesChangedAction distro =
                       ePutStrLn $ "Removing suspect environment: " ++ dir
                       liftIO $ removeRecursiveSafely dir
                       liftIO $ createDirectoryIfMissing True dir
-                      liftIO $ replaceFile (sourcesPath distro) (show (pretty baseSources))
+                      liftIO $ replaceFile sources (show (pretty baseSources))
                 (False, UpdateSources) ->
                     do
                       -- The sources.list has changed, but it should be
                       -- safe to update it.
                       ePutStrLn $ "Updating environment with new sources.list: " ++ dir
-                      liftIO $ removeFile (sourcesPath distro)
-                      liftIO $ replaceFile (sourcesPath distro) (show (pretty baseSources))
+                      liftIO $ removeFile sources
+                      liftIO $ replaceFile sources (show (pretty baseSources))
         False ->
 	    do
               liftIO $ createDirectoryIfMissing True dir
-	      liftIO $ replaceFile (sourcesPath distro) (show (pretty baseSources))
+	      liftIO $ replaceFile sources (show (pretty baseSources))
       return distro

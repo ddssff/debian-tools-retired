@@ -142,7 +142,6 @@ instance Eq OSImage where
     a == b = compare a b == EQ
 
 instance AptCache OSImage where
-    globalCacheDir = getL osGlobalCacheDir
     rootDir = getL osRoot
     aptArch = getL osArch
     -- aptSliceList = getL osFullDistro

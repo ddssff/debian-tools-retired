@@ -155,7 +155,7 @@ runParameterSet init cache =
       let poolSources = NamedSliceList { sliceListName = ReleaseName (relName (sliceListName buildRelease) ++ "-all")
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
       -- Build an apt-get environment which we can use to retrieve all the package lists
-      pool <-prepareAptEnv top (P.ifSourcesChanged params) poolSources
+      pool <-prepareAptEnv (P.ifSourcesChanged params) poolSources
       (failures, targets) <- retrieveTargetList init cache dependOS >>= return . partitionEithers
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
       buildResult <- buildTargets cache dependOS globalBuildDeps (getL osLocalMaster dependOS) pool targets
