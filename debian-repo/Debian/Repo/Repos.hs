@@ -6,7 +6,6 @@
 -- such as the autobuilder.
 module Debian.Repo.Repos
     ( MonadRepos(..)
-    , ReposT
     , runReposT
 
     , releaseMap
@@ -56,8 +55,6 @@ instance Ord FileStatus where
 instance Eq FileStatus where
     a == b = compare a b == EQ
 
-type ReposT = StateT ReposState
-
 -- | A monad to support the IO requirements of the autobuilder.
 class (MonadIO m, Functor m, MonadCatchIO m) => MonadRepos m where
     getApt :: m ReposState
@@ -75,7 +72,7 @@ data ReposState
 
 $(makeLenses [''ReposState])
 
-runReposT :: Monad m => ReposT m a -> m a
+runReposT :: Monad m => StateT ReposState m a -> m a
 runReposT action = (runStateT action) initState >>= return . fst
 
 -- |The initial output state - at the beginning of the line, no special handle
@@ -89,7 +86,7 @@ initState = ReposState
             , _binaryPackageMap = Map.empty
             }
 
-instance (MonadIO m, Functor m, MonadCatchIO m) => MonadRepos (ReposT m) where
+instance (MonadIO m, Functor m, MonadCatchIO m) => MonadRepos (StateT ReposState m) where
     getApt = get
     putApt = put
 
@@ -161,7 +158,7 @@ class (MonadRepos m, MonadTop m) => MonadReposCached m
 
 instance MonadRepos m => MonadReposCached (TopT m)
 
-type ReposCachedT m = TopT (ReposT m)
+type ReposCachedT m = TopT (StateT ReposState m)
 
 -- | To run a DebT we bracket an action with commands to load and save
 -- the repository list.
