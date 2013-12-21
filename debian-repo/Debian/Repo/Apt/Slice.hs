@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports, TupleSections #-}
+{-# LANGUAGE FlexibleContexts, PackageImports, TupleSections #-}
 -- |Types that represent a "slice" of a repository, as defined by a
 -- list of DebSource.  This is called a slice because some sections
 -- may be omitted, and because different repositories may be combined

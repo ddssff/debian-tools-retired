@@ -16,7 +16,7 @@ import Control.Monad.State(MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import Data.Lens.Lazy (getL)
-import Data.List as List (intercalate, null)
+import Data.List as List (intercalate, null, nub)
 import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
@@ -34,7 +34,7 @@ import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Sources (SliceName(..))
 import Debian.Repo.Apt.AptImage (prepareAptEnv)
 import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
-import Debian.Repo.Repos (MonadRepos, runReposT, foldRepository, MonadReposCached)
+import Debian.Repo.Repos (MonadRepos, foldRepository, runReposCachedT, MonadReposCached)
 import Debian.Repo.OSImage (OSImage, osLocalMaster, osLocalCopy, buildEssential)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Release (Release(releaseName))
@@ -52,6 +52,7 @@ import Prelude hiding (null)
 import System.Environment (getArgs, getEnv)
 import System.Directory(createDirectoryIfMissing)
 import System.Exit(ExitCode(..), exitWith)
+import System.FilePath ((</>))
 import qualified System.IO as IO
 import System.Process (proc)
 import System.Process.Progress (Output, timeTask, defaultVerbosity, runProcessF, withModifiedVerbosity, quieter, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
@@ -68,11 +69,12 @@ main init myParams =
        -- argument, using myParams to create each default ParamRec
        -- value.
        let recs = P.getParams args (myParams home)
-       case any P.doHelp recs of
-         True -> IO.hPutStr IO.stderr (P.usage "Usage: ")
-         False ->
-             do let paramSets = map (\ params -> params {P.buildPackages = P.buildTargets params (P.knownPackages params)}) recs
-                results <- runReposT (foldM (doParameterSet init) [] paramSets) `catch` handle
+       tops <- nub <$> mapM P.computeTopDir recs
+       case (any P.doHelp recs, tops) of
+         (False, [top]) ->
+             do
+                let paramSets = map (\ params -> params {P.buildPackages = P.buildTargets params (P.knownPackages params)}) recs
+                results <- runReposCachedT top (foldM (doParameterSet init) [] paramSets) `catch` handle
                 IO.hFlush IO.stdout
                 IO.hFlush IO.stderr
                 -- The result of processing a set of parameters is either an
@@ -84,6 +86,8 @@ main init myParams =
                   _ ->
                       ePutStrLn (intercalate "\n  " (map (\ (num, result) -> "Parameter set " ++ show num ++ ": " ++ showResult result) (zip [(1 :: Int)..] results))) >>
                       exitWith (ExitFailure 1)
+         (True, _) -> IO.hPutStr IO.stderr (P.usage "Usage: ")
+         (_, tops) -> IO.hPutStr IO.stderr ("Parameter sets have different top directories: " ++ show tops)
     where showResult (Failure ss) = intercalate "\n  " ("Failure:" : ss)
           showResult (Success _) = "Ok"
           partitionFailing :: [Failing a] -> ([[String]], [a])
@@ -95,7 +99,7 @@ main init myParams =
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: MonadRepos m => DebT IO () -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
+doParameterSet :: MonadReposCached m => DebT IO () -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
 doParameterSet init results params =
     case () of
       _ | not (Set.null badForceBuild) ->
@@ -110,8 +114,8 @@ doParameterSet init results params =
             return results
       _ ->
           noisier (P.verbosity params)
-            (do top <- liftIO $ P.computeTopDir params
-                withLock (top ++ "/lockfile") (runTopT top (quieter 2 (P.buildCache params) >>= runParameterSet init)))
+            (do top <- askTop
+                withLock (top </> "lockfile") (runTopT top (quieter 2 (P.buildCache params) >>= runParameterSet init)))
             `IO.catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
           (\ result -> return (result : results))
     where

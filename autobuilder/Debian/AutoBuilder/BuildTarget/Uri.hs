@@ -20,8 +20,8 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.Repo as R
-import Debian.Repo.Repos (MonadReposCached)
-import Debian.Repo.Top (sub)
+import Debian.Repo.Repos (MonadRepos)
+import Debian.Repo.Top (MonadTop, sub)
 import Debian.URI
 import Magic
 import System.FilePath (splitFileName, (</>))
@@ -38,7 +38,7 @@ documentation = [ "uri:<string>:<md5sum> - A target of this form retrieves the f
 -- | A URI that returns a tarball, with an optional md5sum which must
 -- match if given.  The purpose of the md5sum is to be able to block
 -- changes to the tarball on the remote host.
-prepare :: MonadReposCached m => P.CacheRec -> P.Packages -> String -> String -> m T.Download
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> String -> m T.Download
 prepare c package u s =
     do (uri, sum, tree) <- checkTarget >>= downloadTarget >> validateTarget >>= unpackTarget
        tar <- tarball (uriToString' uri) sum
@@ -50,7 +50,7 @@ prepare c package u s =
                            , T.cleanTarget = \ _ -> return ([], 0)
                            , T.buildWrapper = id }
     where
-      checkTarget :: MonadReposCached m => m Bool
+      checkTarget :: (MonadRepos m, MonadTop m) => m Bool
       checkTarget =
           do tar <- tarball u s
              exists <- liftIO (doesFileExist tar)
@@ -63,7 +63,7 @@ prepare c package u s =
 
       -- See if the file is already available in the checksum directory
       -- Download the target into the tmp directory, compute its checksum, and see if it matches.
-      downloadTarget :: MonadReposCached m => Bool -> m ()
+      downloadTarget :: (MonadRepos m, MonadTop m) => Bool -> m ()
       downloadTarget True = return ()
       downloadTarget False =
           do sum <- sumDir s
@@ -78,13 +78,13 @@ prepare c package u s =
              -- We should do something with the output
              return ()
       -- Make sure what we just downloaded has the correct checksum
-      validateTarget :: MonadReposCached m => m String
+      validateTarget :: (MonadRepos m, MonadTop m) => m String
       validateTarget =
           (tarball u s) >>= \ tar ->
           (liftIO (B.readFile tar >>= return . show . md5) >>= \ realSum ->
            if realSum == s then return realSum else error ("Checksum mismatch for " ++ tar ++ ": expected " ++ s ++ ", saw " ++ realSum ++ "."))
             `IO.catch` (\ (e :: SomeException) -> error ("Checksum failure for " ++ tar ++ ": " ++ show e))
-      unpackTarget :: MonadReposCached m => String -> m (URI, FilePath, R.SourceTree)
+      unpackTarget :: (MonadRepos m, MonadTop m) => String -> m (URI, FilePath, R.SourceTree)
       unpackTarget realSum =
           rmdir >> mkdir >> untar >>= read >>= search >>= verify
           where
@@ -110,7 +110,7 @@ prepare c package u s =
             read (_output, _elapsed) = sourceDir s >>= \ src -> liftIO (getDir src)
             getDir dir = getDirectoryContents dir >>= return . filter (not . flip elem [".", ".."])
             search files = checkContents (filter (not . flip elem [".", ".."]) files)
-            checkContents :: MonadReposCached m => [FilePath] -> m R.SourceTree
+            checkContents :: (MonadRepos m, MonadTop m) => [FilePath] -> m R.SourceTree
             checkContents [] = error ("Empty tarball? " ++ show (mustParseURI u))
             checkContents [subdir] =
                 sourceDir s >>= \ src ->

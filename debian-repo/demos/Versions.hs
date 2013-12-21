@@ -21,7 +21,7 @@ main' =
       f repo =
           do releases <- mapM (insertRelease repo) (repoReleaseInfo repo)
              liftIO (putStrLn ("\n" ++ show releases))
-      g repo = 
+      g repo =
           do releases <- mapM (insertRelease repo) (repoReleaseInfo repo)
              liftIO (putStrLn ("\n" ++ show releases))
 {-

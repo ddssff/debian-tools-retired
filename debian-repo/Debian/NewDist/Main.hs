@@ -16,7 +16,7 @@ import Debian.Relation (BinPkgName)
 import Debian.Release (ReleaseName, releaseName', parseReleaseName, Section, parseSection')
 import Debian.Repo.Apt.Package (scanIncoming, deleteSourcePackages, deleteTrumped, deleteBinaryOrphans, deleteGarbage)
 import Debian.Repo.Apt.Release (findReleases, prepareRelease, signReleases, mergeReleases)
-import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath, envPath)
+import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), envPath)
 import Debian.Repo.InstallResult (InstallResult, explainError, resultToProblems, showErrors)
 import Debian.Repo.LocalRepository (LocalRepository, Layout, repoRoot, prepareLocalRepository, setRepositoryCompatibility)
 import Debian.Repo.PackageID (PackageID, makeBinaryPackageID)
@@ -32,6 +32,7 @@ import System.Console.GetOpt (ArgOrder(Permute), getOpt, usageInfo)
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (getArgs)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
+import System.FilePath ((</>))
 import System.IO as IO (putStrLn, hFlush, stderr)
 import System.Process.Progress (quieter, qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -45,8 +46,8 @@ main =
                   (o, _n, []) -> return $ foldl (flip id) params o
                   (_, _, errs) -> error (concat errs ++ usageInfo "Usage:" (map option optSpecs))
        quieter 1 (qPutStrLn ("Flags:\n  " ++ (show flags)))
-       let lockPath = outsidePath (root flags) ++ "/newdist.lock"
-       liftIO $ createDirectoryIfMissing True (outsidePath (root flags))
+       let lockPath = rootParam flags </> "newdist.lock"
+       liftIO $ createDirectoryIfMissing True (rootParam flags)
        case printVersion flags of
          False -> withLock lockPath (runReposT (runFlags flags))
          True -> IO.putStrLn myVersion >> exitWith ExitSuccess

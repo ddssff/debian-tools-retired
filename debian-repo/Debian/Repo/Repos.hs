@@ -1,11 +1,11 @@
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses,
+{-# LANGUAGE ConstraintKinds, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses,
              PackageImports, ScopedTypeVariables, TemplateHaskell, TypeSynonymInstances, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |AptIO is an instance of the RWS monad used to manage the global
 -- state and output style parameters of clients of the Apt library,
 -- such as the autobuilder.
 module Debian.Repo.Repos
-    ( MonadRepos(..)
+    ( MonadRepos
     , runReposT
 
     , releaseMap
@@ -27,7 +27,7 @@ import Control.Monad (unless)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatchIO)
 import Control.Monad.Reader (ReaderT)
-import Control.Monad.State (get, MonadIO(..), MonadTrans(..), put, StateT(runStateT))
+import Control.Monad.State (MonadIO(..), MonadTrans(..), StateT(runStateT), MonadState(get, put))
 import Data.Lens.Lazy (getL, setL, modL)
 import Data.Lens.Template (makeLenses)
 import Data.Map as Map (empty, fromList, insert, lookup, Map, toList, union)
@@ -56,9 +56,9 @@ instance Eq FileStatus where
     a == b = compare a b == EQ
 
 -- | A monad to support the IO requirements of the autobuilder.
-class (MonadIO m, Functor m, MonadCatchIO m) => MonadRepos m where
-    getApt :: m ReposState
-    putApt :: ReposState -> m ()
+class (MonadState ReposState m, MonadCatchIO m, Functor m) => MonadRepos m
+
+instance (MonadState ReposState m, MonadCatchIO m, Functor m) => MonadRepos m
 
 -- | This represents the state of the IO system.
 data ReposState
@@ -86,17 +86,9 @@ initState = ReposState
             , _binaryPackageMap = Map.empty
             }
 
-instance (MonadIO m, Functor m, MonadCatchIO m) => MonadRepos (StateT ReposState m) where
-    getApt = get
-    putApt = put
-
-instance MonadRepos m => MonadRepos (ReaderT s m) where
-    getApt = lift getApt
-    putApt = lift . putApt
-
 prepareRemoteRepository :: MonadRepos m => URI -> m RemoteRepository
 prepareRemoteRepository uri =
-    do mp <- getL repoMap <$> getApt
+    do mp <- getL repoMap <$> get
        maybe (loadRemoteRepository (toURI' uri)) return $ Map.lookup (toURI' uri) mp
 
 -- |To create a RemoteRepo we must query it to find out the
@@ -105,10 +97,10 @@ loadRemoteRepository :: MonadRepos m => URI' -> m RemoteRepository
 loadRemoteRepository uri =
     do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . fromURI' $ uri
        let repo = RemoteRepository uri releaseInfo
-       getApt >>= putApt . modL repoMap (Map.insert uri repo)
+       get >>= put . modL repoMap (Map.insert uri repo)
        return repo
 
--- foldRepository :: forall m r a. MonadRepos m => (r -> m a) -> RepoKey -> m a
+-- foldRepository :: forall m r a. MonadState ReposState m => (r -> m a) -> RepoKey -> m a
 -- foldRepository f key =
 --     case key of
 --       Local path -> prepareLocalRepository path Nothing >>= f
@@ -118,7 +110,7 @@ loadRemoteRepository uri =
 --             "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= f
 --             _ -> prepareRemoteRepository uri >>= f
 
-foldRepository :: forall m a. MonadRepos m => (LocalRepository -> m a) -> (RemoteRepository -> m a) -> RepoKey -> m a
+foldRepository :: MonadRepos m => (LocalRepository -> m a) -> (RemoteRepository -> m a) -> RepoKey -> m a
 foldRepository f g key =
     case key of
       Local path -> prepareLocalRepository path Nothing >>= f
@@ -154,9 +146,16 @@ foldRepository f g key =
 
 -- | Like @MonadRepos@, but is also an instance of MonadTop and tries to
 -- load and save a list of cached repositories from @top/repoCache@.
-class (MonadRepos m, MonadTop m) => MonadReposCached m
+class (MonadRepos m, MonadTop m, MonadCatchIO m, Functor m) => MonadReposCached m
 
-instance MonadRepos m => MonadReposCached (TopT m)
+-- instance (MonadState ReposState m, MonadIO m, Functor m) => MonadReposCached (TopT m)
+
+instance (MonadRepos m, MonadTop m, MonadCatchIO m, Functor m) => MonadReposCached m
+
+-- instance (MonadTop m, MonadIO m, Functor m) => MonadReposCached (StateT ReposState m)
+
+-- instance (MonadState ReposState m, MonadCatchIO m, Functor m) => MonadRepos m
+-- instance MonadReposCached m => MonadRepos m
 
 type ReposCachedT m = TopT (StateT ReposState m)
 
@@ -173,7 +172,7 @@ loadRepoCache :: MonadReposCached m => m ()
 loadRepoCache =
     do dir <- sub "repoCache"
        mp <- liftIO (loadRepoCache' dir `catch` (\ (e :: SomeException) -> qPutStrLn (show e) >> return Map.empty))
-       getApt >>= putApt . setL repoMap mp
+       get >>= put . setL repoMap mp
     where
       loadRepoCache' :: FilePath -> IO (Map URI' RemoteRepository)
       loadRepoCache' repoCache =
@@ -190,7 +189,7 @@ loadRepoCache =
 saveRepoCache :: MonadReposCached m => m ()
 saveRepoCache =
           do path <- sub "repoCache"
-             live <- getL repoMap <$> getApt
+             live <- getL repoMap <$> get
              repoCache <- liftIO $ loadCache path
              let merged = Map.union live repoCache
              liftIO (F.removeLink path `IO.catch` (\e -> unless (isDoesNotExistError e) (ioError e)) >>

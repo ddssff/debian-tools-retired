@@ -18,7 +18,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Relation (prettyRelations)
-import Debian.Repo (sub, MonadReposCached)
+import Debian.Repo (sub, MonadRepos, MonadTop)
 import Debian.Repo.Sync (rsync)
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..))
@@ -34,7 +34,7 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: MonadReposCached m => DebT IO () -> P.CacheRec -> P.Packages -> T.Download -> m T.Download
+prepare :: (MonadRepos m, MonadTop m) => DebT IO () -> P.CacheRec -> P.Packages -> T.Download -> m T.Download
 prepare defaultAtoms cache package' target =
     do dir <- sub ("debianize" </> takeFileName (T.getTop target))
        liftIO $ createDirectoryIfMissing True dir

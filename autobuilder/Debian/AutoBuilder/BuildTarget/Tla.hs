@@ -19,7 +19,7 @@ import System.Directory
 documentation = [ "tla:<revision> - A target of this form retrieves the a TLA archive with the"
                 , "given revision name." ]
 
-prepare :: MonadReposCached m => P.CacheRec -> P.Packages -> String -> m T.Download
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> m T.Download
 prepare cache package version =
     do
       dir <- sub ("tla" </> version)

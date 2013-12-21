@@ -39,7 +39,7 @@ darcsRev tree m =
       path = topdir tree
 -}
 
-prepare :: MonadReposCached m => P.CacheRec -> P.Packages -> String -> m T.Download
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> m T.Download
 prepare cache package theUri =
     do
       base <- sub "darcs"

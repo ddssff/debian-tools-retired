@@ -15,7 +15,7 @@ import Debian.Repo.Apt.AptImage (prepareOSEnv)
 import Debian.Repo.Apt.Package (deleteGarbage)
 import Debian.Repo.EnvPath (EnvRoot(rootPath), EnvRoot(EnvRoot))
 import Debian.Repo.OSImage (OSImage, chrootEnv)
-import Debian.Repo.Repos (MonadReposCached)
+import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.Slice (NamedSliceList)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Top (MonadTop, sub)
@@ -44,7 +44,7 @@ dependEnv distro = dependEnvOfRelease distro
 cleanEnv :: (MonadIO m, MonadTop m) => ReleaseName -> m EnvRoot
 cleanEnv distro = cleanEnvOfRelease distro
 
-prepareDependOS :: MonadReposCached m => P.ParamRec -> NamedSliceList -> m OSImage
+prepareDependOS :: (MonadRepos m, MonadTop m) => P.ParamRec -> NamedSliceList -> m OSImage
 prepareDependOS params buildRelease =
     do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archList params)
        -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
@@ -74,5 +74,5 @@ prepareDependOS params buildRelease =
                   (P.excludePackages params)
                   (P.components params)
 
-prepareBuildOS :: MonadReposCached m => ReleaseName -> OSImage -> m OSImage
+prepareBuildOS :: (MonadRepos m, MonadTop m) => ReleaseName -> OSImage -> m OSImage
 prepareBuildOS buildRel dependOS = chrootEnv dependOS <$> buildEnv buildRel

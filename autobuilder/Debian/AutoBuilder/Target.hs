@@ -56,8 +56,9 @@ import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID))
-import Debian.Repo.Repos (MonadRepos, MonadReposCached)
+import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..))
+import Debian.Repo.Top (MonadTop)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.VersionPolicy (parseTag, setTag)
@@ -141,7 +142,7 @@ partitionFailing xs =
 -- | Build a set of targets.  When a target build is successful it
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
-buildTargets :: (MonadReposCached m, AptCache t) => P.CacheRec -> OSImage -> Relations -> LocalRepository -> t -> [Buildable] -> m (LocalRepository, [Target])
+buildTargets :: (MonadRepos m, MonadTop m, AptCache t) => P.CacheRec -> OSImage -> Relations -> LocalRepository -> t -> [Buildable] -> m (LocalRepository, [Target])
 buildTargets _ _ _ localRepo _ [] = return (localRepo, [])
 buildTargets cache dependOS globalBuildDeps localRepo pool !targetSpecs =
     do
@@ -156,12 +157,12 @@ buildTargets cache dependOS globalBuildDeps localRepo pool !targetSpecs =
 
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
-buildLoop :: (MonadReposCached m, AptCache t) => P.CacheRec -> Relations -> LocalRepository -> t -> OSImage -> [Target] -> m [Target]
+buildLoop :: (MonadRepos m, MonadTop m, AptCache t) => P.CacheRec -> Relations -> LocalRepository -> t -> OSImage -> [Target] -> m [Target]
 buildLoop cache globalBuildDeps localRepo pool dependOS !targets =
     Set.toList <$> loop dependOS (Set.fromList targets) Set.empty
     where
       -- This loop computes the ready targets and builds one.
-      loop :: MonadReposCached m => OSImage -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
+      loop :: (MonadRepos m, MonadTop m) => OSImage -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
       loop _ unbuilt failed | Set.null unbuilt = return failed
       loop dependOS unbuilt failed =
           ePutStrLn "Computing ready targets..." >>
@@ -170,7 +171,7 @@ buildLoop cache globalBuildDeps localRepo pool dependOS !targets =
             triples -> do noisier 1 $ qPutStrLn (makeTable triples)
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
                           loop2 dependOS (Set.difference unbuilt ready) failed triples
-      loop2 :: MonadReposCached m =>
+      loop2 :: (MonadRepos m, MonadTop m) =>
                OSImage
             -> Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
             -> Set.Set Target -- failed: Targets which either failed to build or were blocked by a target that failed to build
@@ -325,7 +326,7 @@ qError message = qPutStrLn message >> error message
 
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
-    (MonadReposCached m, AptCache t) =>
+    (MonadRepos m, MonadTop m, AptCache t) =>
     P.CacheRec ->			-- configuration info
     OSImage ->				-- cleanOS
     Relations ->			-- The build-essential relations
@@ -372,7 +373,7 @@ buildTarget cache dependOS globalBuildDeps repo poolOS !target =
                              return . Just
 
 -- | Build a package and upload it to the local repository.
-buildPackage :: MonadReposCached m =>
+buildPackage :: (MonadRepos m, MonadTop m) =>
                 P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
 buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target status repo =
     checkDryRun >>
@@ -448,7 +449,7 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
                   , changeRelease = name }
           where setDist name (Field ("Distribution", _)) = Field ("Distribution", " " <> T.pack (releaseName' name))
                 setDist _ other = other
-      doLocalUpload :: MonadRepos m => (ChangesFile, NominalDiffTime) -> m LocalRepository
+      doLocalUpload :: (MonadRepos m, MonadTop m) => (ChangesFile, NominalDiffTime) -> m LocalRepository
       doLocalUpload (changesFile, elapsed) =
           do
             (changesFile' :: ChangesFile) <-

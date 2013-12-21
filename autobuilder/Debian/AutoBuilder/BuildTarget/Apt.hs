@@ -13,9 +13,10 @@ import Debian.Relation (SrcPkgName)
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo.Apt.AptImage (prepareAptEnv)
 import Debian.Repo.AptImage (aptDir)
-import Debian.Repo.Repos (MonadReposCached)
+import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.Slice (NamedSliceList(sliceListName))
 import Debian.Repo.SourceTree (topdir, prepareSource)
+import Debian.Repo.Top (MonadTop)
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
 import System.Unix.Directory (removeRecursiveSafely)
 
@@ -23,7 +24,7 @@ documentation = [ "apt:<distribution>:<packagename> - a target of this form look
                 , "the sources.list named <distribution> and retrieves the package with"
                 , "the given name from that distribution." ]
 
-prepare :: MonadReposCached m => P.CacheRec -> P.Packages -> String -> SrcPkgName -> m Download
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> SrcPkgName -> m Download
 prepare cache target dist package =
     do os <- prepareAptEnv (P.ifSourcesChanged (P.params cache)) distro
        apt <- aptDir os package

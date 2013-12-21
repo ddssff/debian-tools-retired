@@ -43,9 +43,9 @@ import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageI
 import Debian.Repo.PackageIndex (binaryIndexList, BinaryPackage(packageID, packageInfo), BinaryPackage(BinaryPackage, pConflicts, pDepends, pPreDepends, pProvides, pReplaces), PackageIndex(..), packageIndexList, packageIndexPath, prettyBinaryPackage, SourceControl(..), SourceFileSpec(SourceFileSpec, sourceFileName), sourceIndexList, SourcePackage(sourcePackageID), SourcePackage(SourcePackage, sourceControl, sourceDirectory, sourcePackageFiles, sourceParagraph))
 import Debian.Repo.Prelude (nub')
 import qualified Debian.Repo.Pretty as F (Pretty(..))
+import Debian.Repo.Repo (Repo, repoArchList, repoKey, RepoKey, repoKeyURI)
 import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
-import Debian.Repo.Repo (Repo, repoArchList, repoKey, RepoKey, repoKeyURI)
 import Debian.URI (fileFromURIStrict)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.Version.Text ()
@@ -63,7 +63,7 @@ import System.Process.Progress (ePutStrLn, qPutStr, qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (cat, pretty, Pretty(..), text)
 import Text.Regex (matchRegex, mkRegex, splitRegex)
 
--- | Find the .changes files in the incoming directory and try to 
+-- | Find the .changes files in the incoming directory and try to
 -- process each.
 scanIncoming :: MonadRepos m => Bool -> Maybe PGPKey -> LocalRepository -> m ([ChangesFile], [(ChangesFile, InstallResult)])
 scanIncoming createSections keyname repo =

@@ -34,15 +34,16 @@ import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.AptCache (rootDir)
 import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.EnvPath (rootPath)
-import Debian.Repo.Repos (MonadReposCached)
+import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
+import Debian.Repo.Top (MonadTop)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
 import System.Process (proc)
 import System.Process.Progress (runProcessF, qPutStrLn, quieter)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
-retrieve :: MonadReposCached m => DebT IO () -> OSImage -> C.CacheRec -> P.Packages -> m Download
+retrieve :: (MonadRepos m, MonadTop m) => DebT IO () -> OSImage -> C.CacheRec -> P.Packages -> m Download
 retrieve defaultAtoms buildOS cache target =
     (\ x -> qPutStrLn (" " ++ show (P.spec target)) >> x) $
      case P.spec target of
