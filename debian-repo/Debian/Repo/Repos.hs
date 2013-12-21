@@ -21,14 +21,15 @@ module Debian.Repo.Repos
     , runReposCachedT
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Applicative.Error (maybeRead)
 import Control.Exception (SomeException)
-import Control.Monad (unless, void)
+import Control.Monad (unless)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatchIO)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.State (get, MonadIO(..), MonadTrans(..), put, StateT(runStateT))
-import Data.Lens.Lazy (access, (~=))
+import Data.Lens.Lazy (getL, setL, modL)
 import Data.Lens.Template (makeLenses)
 import Data.Map as Map (empty, fromList, insert, lookup, Map, toList, union)
 import Data.Maybe (fromMaybe)
@@ -61,8 +62,6 @@ type ReposT = StateT ReposState
 class (MonadIO m, Functor m, MonadCatchIO m) => MonadRepos m where
     getApt :: m ReposState
     putApt :: ReposState -> m ()
-    getRepoCache :: m (Map URI' RemoteRepository)
-    putRepoCache :: Map URI' RemoteRepository -> m ()
 
 -- | This represents the state of the IO system.
 data ReposState
@@ -93,23 +92,15 @@ initState = ReposState
 instance (MonadIO m, Functor m, MonadCatchIO m) => MonadRepos (ReposT m) where
     getApt = get
     putApt = put
-    getRepoCache = access repoMap
-    putRepoCache mp = void $ repoMap ~= mp
 
 instance MonadRepos m => MonadRepos (ReaderT s m) where
     getApt = lift getApt
     putApt = lift . putApt
-    getRepoCache = lift getRepoCache
-    putRepoCache = lift . putRepoCache
-
-modifyRepoCache :: MonadRepos m => (Map URI' RemoteRepository -> Map URI' RemoteRepository) -> m ()
-modifyRepoCache f = do
-    s <- getRepoCache
-    putRepoCache (f s)
 
 prepareRemoteRepository :: MonadRepos m => URI -> m RemoteRepository
 prepareRemoteRepository uri =
-    getRepoCache >>= maybe (loadRemoteRepository (toURI' uri)) return . Map.lookup (toURI' uri)
+    do mp <- getL repoMap <$> getApt
+       maybe (loadRemoteRepository (toURI' uri)) return $ Map.lookup (toURI' uri) mp
 
 -- |To create a RemoteRepo we must query it to find out the
 -- names, sections, and supported architectures of its releases.
@@ -117,7 +108,7 @@ loadRemoteRepository :: MonadRepos m => URI' -> m RemoteRepository
 loadRemoteRepository uri =
     do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . fromURI' $ uri
        let repo = RemoteRepository uri releaseInfo
-       modifyRepoCache (Map.insert uri repo)
+       getApt >>= putApt . modL repoMap (Map.insert uri repo)
        return repo
 
 -- foldRepository :: forall m r a. MonadRepos m => (r -> m a) -> RepoKey -> m a
@@ -184,7 +175,8 @@ runReposCachedT top action = runReposT $ runTopT top $ bracket loadRepoCache (\ 
 loadRepoCache :: MonadReposCached m => m ()
 loadRepoCache =
     do dir <- sub "repoCache"
-       liftIO (loadRepoCache' dir `catch` (\ (e :: SomeException) -> qPutStrLn (show e) >> return Map.empty)) >>= putRepoCache
+       mp <- liftIO (loadRepoCache' dir `catch` (\ (e :: SomeException) -> qPutStrLn (show e) >> return Map.empty))
+       getApt >>= putApt . setL repoMap mp
     where
       loadRepoCache' :: FilePath -> IO (Map URI' RemoteRepository)
       loadRepoCache' repoCache =
@@ -201,10 +193,11 @@ loadRepoCache =
 saveRepoCache :: MonadReposCached m => m ()
 saveRepoCache =
           do path <- sub "repoCache"
-             live <- getRepoCache
+             live <- getL repoMap <$> getApt
              repoCache <- liftIO $ loadCache path
-             let merged = show . Map.toList $ Map.union live repoCache
-             liftIO (F.removeLink path `IO.catch` (\e -> unless (isDoesNotExistError e) (ioError e))) >> liftIO (writeFile path merged)
+             let merged = Map.union live repoCache
+             liftIO (F.removeLink path `IO.catch` (\e -> unless (isDoesNotExistError e) (ioError e)) >>
+                     writeFile path (show . Map.toList $ merged))
              return ()
           where
             -- isRemote uri = uriScheme uri /= "file:"
