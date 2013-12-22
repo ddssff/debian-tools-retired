@@ -12,7 +12,7 @@ import Control.Applicative.Error (Failing(..))
 import Control.Exception(SomeException, try, AsyncException(UserInterrupt), fromException, toException)
 import Control.Monad(foldM, when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
-import Control.Monad.State(MonadIO(liftIO))
+import Control.Monad.State (MonadIO(liftIO), evalStateT)
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import Data.Lens.Lazy (getL)
@@ -115,7 +115,7 @@ doParameterSet init results params =
       _ ->
           noisier (P.verbosity params)
             (do top <- askTop
-                withLock (top </> "lockfile") (runTopT top (quieter 2 (P.buildCache params) >>= runParameterSet init)))
+                withLock (top </> "lockfile") (quieter 2 (P.buildCache params) >>= runParameterSet init))
             `IO.catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
           (\ result -> return (result : results))
     where
@@ -144,7 +144,7 @@ runParameterSet init cache =
       -- localRepo <- prepareLocalRepo cache			-- Prepare the local repository for initial uploads
       -- qPutStrLn $ "runParameterSet localRepo: " ++ show localRepo
       dependOS <- prepareDependOS params buildRelease
-      _ <- updateCacheSources (P.ifSourcesChanged params) dependOS
+      _ <- evalStateT (updateCacheSources (P.ifSourcesChanged params)) dependOS
       -- Compute the essential and build essential packages, they will all
       -- be implicit build dependencies.
       globalBuildDeps <- liftIO $ buildEssential dependOS
@@ -162,7 +162,7 @@ runParameterSet init cache =
       pool <-prepareAptEnv (P.ifSourcesChanged params) poolSources
       (failures, targets) <- retrieveTargetList init cache dependOS >>= return . partitionEithers
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
-      buildResult <- buildTargets cache dependOS globalBuildDeps (getL osLocalMaster dependOS) pool targets
+      buildResult <- evalStateT (buildTargets cache dependOS globalBuildDeps (getL osLocalMaster dependOS) targets) pool
       -- If all targets succeed they may be uploaded to a remote repo
       result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))
       return result
@@ -276,7 +276,7 @@ retrieveTargetList init cache dependOS =
              when (P.report params) (ePutStrLn . doReport $ allTargets)
              qPutStrLn "Retrieving all source code:\n"
              countTasks' (map (\ (target :: P.Packages) ->
-                                   (show (P.spec target), (Right <$> retrieve init buildOS cache target) `IO.catch` handleRetrieveException target))
+                                   (show (P.spec target), (Right <$> evalStateT (retrieve init cache target) buildOS) `IO.catch` handleRetrieveException target))
                               (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
           where
             allTargets = P.buildPackages (C.params cache)

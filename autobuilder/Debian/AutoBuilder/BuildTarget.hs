@@ -1,10 +1,12 @@
-{-# LANGUAGE OverloadedStrings, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget
     ( retrieve
     , targetDocumentation
     ) where
 
 import Control.Exception (SomeException, try, throw)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatchIO)
+import Control.Monad.State (evalStateT)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy as L
 import Data.List (intersperse)
@@ -32,7 +34,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (DebT)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.AptCache (rootDir)
-import Debian.Repo.OSImage (OSImage)
+import Debian.Repo.OSImage (MonadOS, OSImage, withProc)
 import Debian.Repo.EnvPath (rootPath)
 import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
@@ -43,15 +45,16 @@ import System.Process (proc)
 import System.Process.Progress (runProcessF, qPutStrLn, quieter)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
-retrieve :: (MonadRepos m, MonadTop m) => DebT IO () -> OSImage -> C.CacheRec -> P.Packages -> m Download
-retrieve defaultAtoms buildOS cache target =
+retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatchIO m) =>
+            DebT IO () -> C.CacheRec -> P.Packages -> m Download
+retrieve defaultAtoms cache target =
     (\ x -> qPutStrLn (" " ++ show (P.spec target)) >> x) $
      case P.spec target of
       P.Apt dist package -> Apt.prepare cache target dist (SrcPkgName package)
       P.Bzr string -> Bzr.prepare cache target string
 
       P.Cd dir spec' ->
-          retrieve defaultAtoms buildOS cache (target {P.spec = spec'}) >>= \ target' ->
+          retrieve defaultAtoms cache (target {P.spec = spec'}) >>= \ target' ->
           return $ Download { T.package = target
                             , T.getTop = getTop target' </> dir
                             , T.logText = logText target' ++ " (in subdirectory " ++ dir ++ ")"
@@ -64,19 +67,19 @@ retrieve defaultAtoms buildOS cache target =
       P.Darcs uri -> Darcs.prepare cache target uri
 
       P.DataFiles base files loc ->
-          do base' <- retrieve defaultAtoms buildOS cache (target {P.spec = base})
-             files' <- retrieve defaultAtoms buildOS cache (target {P.spec = files})
+          do base' <- retrieve defaultAtoms cache (target {P.spec = base})
+             files' <- retrieve defaultAtoms cache (target {P.spec = files})
              baseTree <- liftIO (findSourceTree (T.getTop base') :: IO SourceTree)
              filesTree <- liftIO (findSourceTree (T.getTop files') :: IO SourceTree)
              _ <- liftIO $ copySourceTree filesTree (dir' baseTree </> loc)
              return base'
 
       P.DebDir upstream debian ->
-          do upstream' <- retrieve defaultAtoms buildOS cache (target {P.spec = upstream})
-             debian' <- retrieve defaultAtoms buildOS cache (target {P.spec = debian})
+          do upstream' <- retrieve defaultAtoms cache (target {P.spec = upstream})
+             debian' <- retrieve defaultAtoms cache (target {P.spec = debian})
              DebDir.prepare target upstream' debian'
       P.Debianize package ->
-          retrieve defaultAtoms buildOS cache (target {P.spec = package}) >>=
+          retrieve defaultAtoms cache (target {P.spec = package}) >>=
           Debianize.prepare defaultAtoms cache target
 
       -- Dir is a simple instance of BuildTarget representing building the
@@ -99,11 +102,11 @@ retrieve defaultAtoms buildOS cache target =
       P.Hackage package -> Hackage.prepare cache target package
       P.Hg string -> Hg.prepare cache target string
       P.Patch base patch ->
-          retrieve defaultAtoms buildOS cache (target {P.spec = base}) >>=
-          Patch.prepare target buildOS patch
+          retrieve defaultAtoms cache (target {P.spec = base}) >>=
+          Patch.prepare target patch
 
       P.Proc spec' ->
-          retrieve defaultAtoms buildOS cache (target {P.spec = spec'}) >>= \ base ->
+          retrieve defaultAtoms cache (target {P.spec = spec'}) >>= \ base ->
           return $ T.Download {
                        T.package = target
                      , T.getTop = T.getTop base
@@ -111,31 +114,37 @@ retrieve defaultAtoms buildOS cache target =
                      , T.mVersion = Nothing
                      , T.origTarball = Nothing
                      , T.cleanTarget = T.cleanTarget base
-                     , T.buildWrapper = withProc buildOS
+                     , T.buildWrapper = withProc'
                      }
+          where
+            -- withProc' :: forall m a. (MonadOS m, MonadCatchIO m) => m a -> m a
+            -- withProc' task = withProc task
+            withProc' task = undefined
       P.Quilt base patches ->
-          do base' <- retrieve defaultAtoms buildOS cache (target {P.spec = base})
-             patches' <- retrieve defaultAtoms buildOS cache (target {P.spec = patches})
+          do base' <- retrieve defaultAtoms cache (target {P.spec = base})
+             patches' <- retrieve defaultAtoms cache (target {P.spec = patches})
              Quilt.prepare target base' patches'
       P.SourceDeb spec' ->
-          retrieve defaultAtoms buildOS cache (target {P.spec = spec'}) >>=
+          retrieve defaultAtoms cache (target {P.spec = spec'}) >>=
           SourceDeb.prepare cache target
       P.Svn uri -> Svn.prepare cache target uri
       P.Tla string -> Tla.prepare cache target string
-      P.Twice base -> retrieve defaultAtoms buildOS cache (target {P.spec = base}) >>=
+      P.Twice base -> retrieve defaultAtoms cache (target {P.spec = base}) >>=
                       Twice.prepare target
       P.Uri uri sum -> Uri.prepare cache target uri sum
 
+{-
 -- | Perform an IO operation with /proc mounted
-withProc :: forall a. OSImage -> IO a -> IO a
-withProc buildOS task =
-    do createDirectoryIfMissing True dir
-       _ <- quieter 1 $ runProcessF (Just (" 1> ", " 2> ")) (proc "mount" ["--bind", "/proc", dir]) L.empty
-       result <- try task :: IO (Either SomeException a)
-       _ <- quieter 1 $ runProcessF (Just (" 1> ", " 2> ")) (proc "umount" [dir]) L.empty
-       either throw return result
-    where
-      dir = rootPath (rootDir buildOS) ++ "/proc"
+withProc :: forall m a. (MonadOS m, MonadIO m) => m a -> m a
+withProc task =
+    rootPath <$> rootDir >>= \ root -> do liftIO $
+      let dir = root </> "proc" in
+      createDirectoryIfMissing True dir
+      _ <- quieter 1 $ runProcessF (Just (" 1> ", " 2> ")) (proc "mount" ["--bind", "/proc", dir]) L.empty
+      result <- try task :: IO (Either SomeException a)
+      _ <- quieter 1 $ runProcessF (Just (" 1> ", " 2> ")) (proc "umount" [dir]) L.empty
+      either throw return result
+-}
 
 targetDocumentation :: String
 targetDocumentation =

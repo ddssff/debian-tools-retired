@@ -8,8 +8,9 @@ module Debian.Repo.Apt.AptImage
 
 import Control.Applicative ((<$>))
 import Control.Exception (SomeException, try)
-import Control.Exception as E (catch)
-import Control.Monad.State (get, modify)
+-- import Control.Exception as E (catch)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatchIO)
+import Control.Monad.State (get, put, modify, execStateT, evalStateT)
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
 import Data.Function (on)
@@ -26,16 +27,17 @@ import Debian.Relation (BinPkgName(BinPkgName))
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.Apt.Slice (updateCacheSources, verifySourcesList)
-import Debian.Repo.AptCache (AptCache(aptArch, rootDir), aptGetUpdate, buildArchOfRoot, distDir, SourcesChangedAction(SourcesChangedError), sourcesPath)
-import Debian.Repo.AptImage (AptImage, aptImageBinaryPackages, aptImageSources, aptImageSourcePackages, prepareAptEnv'')
+import Debian.Repo.AptCache (MonadCache(aptArch, rootDir), aptGetUpdate, buildArchOfRoot, distDir, SourcesChangedAction(SourcesChangedError), sourcesPath)
+import Debian.Repo.AptImage (MonadApt, AptImage, aptImageBinaryPackages, aptImageSources, aptImageSourcePackages, prepareAptEnv'')
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
-import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildEnv', localeGen, neuterEnv, osBaseDistro, osBinaryPackages, OSImage, osFullDistro, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, prepareOSEnv', syncLocalPool, updateLists)
+import Debian.Repo.OSImage (MonadOS, _pbuilderBuild', aptGetInstall, buildEnv', localeGen, neuterEnv, osBaseDistro, osBinaryPackages, OSImage, osFullDistro, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, prepareOSEnv', syncLocalPool, updateLists)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
+import Debian.Repo.Prelude ((~=), access)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
-import Debian.Repo.Repos (aptImageMap, binaryPackageMap, foldRepository, MonadRepos, sourcePackageMap)
+import Debian.Repo.Repos (aptImageMap, binaryPackageMap, foldRepository, MonadRepos, getRepos, sourcePackageMap, modifyRepos)
 import Debian.Repo.SSH (sshCopy)
 import Debian.Repo.Slice (binarySlices, NamedSliceList(sliceListName, sliceList), Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices)
 import Debian.Repo.SourcesList (parseSourcesList)
@@ -65,26 +67,26 @@ prepareAptEnv :: (MonadTop m, MonadRepos m) =>
               -> m AptImage		-- The resulting environment
 prepareAptEnv sourcesChangedAction sources =
     (\ x -> qPutStrLn ("Preparing apt-get environment for " ++ show (relName (sliceListName sources))) >> quieter 2 x) $
-    get >>= return . Map.lookup (sliceListName sources) . getL aptImageMap >>=
+    getRepos >>= return . Map.lookup (sliceListName sources) . getL aptImageMap >>=
     maybe (prepareAptEnv' sourcesChangedAction sources) return
 
 prepareAptEnv' :: (MonadTop m, MonadRepos m) => SourcesChangedAction -> NamedSliceList -> m AptImage
 prepareAptEnv' sourcesChangedAction sources =
     do os <- prepareAptEnv'' sources
-       os' <- updateCacheSources sourcesChangedAction os >>= updateAptEnv
-       modify $ modL aptImageMap (Map.insert (sliceListName sources) os')
+       os' <- execStateT (updateCacheSources sourcesChangedAction >> updateAptEnv) os
+       modifyRepos $ modL aptImageMap (Map.insert (sliceListName sources) os')
        return os'
 
 -- |Run apt-get update and then retrieve all the packages referenced
 -- by the sources.list.  The source packages are sorted so that
 -- packages with the same name are together with the newest first.
-{-# NOINLINE updateAptEnv #-}
-updateAptEnv :: MonadRepos m => AptImage -> m AptImage
-updateAptEnv os =
-    do liftIO $ aptGetUpdate os
-       sourcePackages <- getSourcePackages os >>= return . sortBy cmp
-       binaryPackages <- getBinaryPackages os
-       return $ setL aptImageSourcePackages sourcePackages $ setL aptImageBinaryPackages binaryPackages $ os
+updateAptEnv :: (MonadRepos m, MonadApt m, MonadCache m) => m ()
+updateAptEnv =
+    do aptGetUpdate
+       sourcePackages <- getSourcePackages >>= return . sortBy cmp
+       binaryPackages <- getBinaryPackages
+       aptImageSourcePackages ~= sourcePackages
+       aptImageBinaryPackages ~= binaryPackages
     where
       -- Flip args to get newest version first
       cmp = flip (compare `on` (packageVersion . sourcePackageID))
@@ -101,46 +103,46 @@ updateAptEnv os =
       ExitFailure n -> error $ cmd ++ " -> ExitFailure " ++ show n
 -}
 
-getSourcePackages :: MonadRepos m => AptImage -> m [SourcePackage]
-getSourcePackages os =
+getSourcePackages :: (MonadRepos m, MonadApt m, MonadCache m) => m [SourcePackage]
+getSourcePackages =
     do qPutStrLn "AptImage.getSourcePackages"
-       indexes <- mapM (sliceIndexes os) (slices . sourceSlices . sliceList . getL aptImageSources $ os) >>= return . concat
-       mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' os repo rel index) indexes >>= return . concat
+       indexes <- (slices . sourceSlices . sliceList <$> access aptImageSources) >>= mapM sliceIndexes >>= return . concat
+       mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' repo rel index) indexes >>= return . concat
 
-getBinaryPackages :: MonadRepos m => AptImage -> m [BinaryPackage]
-getBinaryPackages os =
+getBinaryPackages :: (MonadRepos m, MonadApt m, MonadCache m) => m [BinaryPackage]
+getBinaryPackages =
     do qPutStrLn "AptImage.getBinaryPackages"
-       indexes <- mapM (sliceIndexes os) (slices . binarySlices . sliceList . getL aptImageSources $ os) >>= return . concat
-       mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' os repo rel index) indexes >>= return . concat
+       indexes <- (slices . binarySlices . sliceList <$> access aptImageSources) >>= mapM sliceIndexes >>= return . concat
+       mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' repo rel index) indexes >>= return . concat
 
-getSourcePackages' :: MonadRepos m => OSImage -> m [SourcePackage]
-getSourcePackages' os =
-    do indexes <- mapM (sliceIndexes os) (slices . sourceSlices . osFullDistro $ os) >>= return . concat
-       mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' os repo rel index) indexes >>= return . concat
+getSourcePackages' :: (MonadRepos m, MonadOS m, MonadCache m) => m [SourcePackage]
+getSourcePackages' =
+    do indexes <- (slices . sourceSlices <$> osFullDistro) >>= mapM sliceIndexes >>= return . concat
+       mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' repo rel index) indexes >>= return . concat
 
-getBinaryPackages' :: MonadRepos m => OSImage -> m [BinaryPackage]
-getBinaryPackages' os =
-    do indexes <- mapM (sliceIndexes os) (slices . binarySlices . osFullDistro $ os) >>= return . concat
-       mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' os repo rel index) indexes >>= return . concat
+getBinaryPackages' :: (MonadRepos m, MonadOS m, MonadCache m) => m [BinaryPackage]
+getBinaryPackages' =
+    do indexes <- (slices . binarySlices <$> osFullDistro) >>= mapM sliceIndexes >>= return . concat
+       mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' repo rel index) indexes >>= return . concat
 
 -- |Return a list of the index files that contain the packages of a
 -- slice.
-sliceIndexes :: forall m a. (MonadRepos m, AptCache a) => a -> Slice -> m [(RepoKey, Release, PackageIndex)]
-sliceIndexes cache slice =
+sliceIndexes :: forall m a. (MonadRepos m, MonadCache m) => Slice -> m [(RepoKey, Release, PackageIndex)]
+sliceIndexes slice =
     foldRepository f f (sliceRepoKey slice)
     where
       f :: Repo r => r -> m [(RepoKey, Release, PackageIndex)]
       f repo =
           case (sourceDist (sliceSource slice)) of
             Left exact -> error $ "Can't handle exact path in sources.list: " ++ exact
-            Right (release, sections) -> return $ map (makeIndex repo release) sections
-      makeIndex repo release section =
+            Right (release, sections) -> aptArch >>= \ arch -> return $ map (makeIndex arch repo release) sections
+      makeIndex arch repo release section =
           (repoKey repo,
            findReleaseInfo repo release,
            PackageIndex { packageIndexComponent = section
                         , packageIndexArch = case (sourceType (sliceSource slice)) of
                                                DebSrc -> Source
-                                               Deb -> aptArch cache })
+                                               Deb -> arch })
       findReleaseInfo repo release =
           case filter ((==) release . releaseName) (repoReleaseInfo repo) of
             [x] -> x
@@ -180,41 +182,43 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
     do os <- prepareOSEnv' root distro repo
        os' <- update os
        arch <- liftIO buildArchOfRoot -- This should be stored in os, but it is a Maybe - why?
-       os'' <- recreate arch os os'
-       doInclude os''
-       doLocales os''
-       syncLocalPool os''
+       execStateT (recreate arch os' >> doInclude >> doLocales >> syncLocalPool) os
     where
       update _ | flush = return (Left Flushed)
       update os = updateOSEnv os
-      recreate :: (MonadRepos m, MonadTop m) => Arch -> OSImage -> Either UpdateError OSImage -> m OSImage
-      recreate _ _ (Right os) = return os
-      recreate _arch _os (Left (Changed name path computed installed))
+      recreate :: (MonadOS m, MonadCache m, MonadRepos m, MonadTop m) => Arch -> Either UpdateError OSImage -> m ()
+      recreate _ (Right os) = put os
+      recreate _arch (Left (Changed name path computed installed))
           | ifSourcesChanged == SourcesChangedError =
               error $ "FATAL: Sources for " ++ relName name ++ " in " ++ path ++
                        " don't match computed configuration.\n\ncomputed:\n" ++
                        show (pretty computed) ++ "\ninstalled:\n" ++
                        show (pretty installed)
-      recreate arch os (Left reason) =
-          do dist <- distDir os
-             sources <- sourcesPath os
+      recreate arch (Left reason) =
+          do dist <- distDir
+             sources <- sourcesPath
+             base <- access osBaseDistro
              liftIO $ do ePutStrLn $ "Removing and recreating build environment at " ++ rootPath root ++ ": " ++ show reason
                          -- ePutStrLn ("removeRecursiveSafely " ++ rootPath root)
                          removeRecursiveSafely (rootPath root)
                          -- ePutStrLn ("createDirectoryIfMissing True " ++ show dist)
                          createDirectoryIfMissing True dist
                          -- ePutStrLn ("writeFile " ++ show sources ++ " " ++ show (show . osBaseDistro $ os))
-                         replaceFile sources (show . pretty . getL osBaseDistro $ os)
-             os' <- buildEnv root distro arch (getL osLocalMaster os) (getL osLocalCopy os) include exclude components
-             liftIO $ do doLocales os'
-                         neuterEnv os'
-             syncLocalPool os'
-      doInclude os = liftIO $
-          do aptGetInstall os (map (\ s -> (BinPkgName s, Nothing)) include)
-             aptGetInstall os (map (\ s -> (BinPkgName s, Nothing)) optional) `catchIOError` (\ e -> ePutStrLn ("Ignoring exception on optional package install: " ++ show e))
-      doLocales os =
-          do localeName <- liftIO (try (getEnv "LANG") :: IO (Either SomeException String))
-             liftIO $ localeGen (either (const "en_US.UTF-8") id localeName) os
+                         replaceFile sources (show . pretty $ base)
+             master <- access osLocalMaster
+             copy <- access osLocalCopy
+             os' <- buildEnv root distro arch master copy include exclude components
+             put os'
+             doLocales
+             liftIO $ neuterEnv os'
+             syncLocalPool
+      doInclude =
+          do aptGetInstall (map (\ s -> (BinPkgName s, Nothing)) include)
+             aptGetInstall (map (\ s -> (BinPkgName s, Nothing)) optional) `catch` (\ (e :: IOError) -> ePutStrLn ("Ignoring exception on optional package install: " ++ show e))
+      doLocales :: (MonadOS m, MonadIO m) => m ()
+      doLocales =
+          do localeName <- liftIO $ try (getEnv "LANG")
+             localeGen (either (\ (_ :: IOError) -> "en_US.UTF-8") id localeName)
 
 _pbuilderBuild :: (MonadRepos m, MonadTop m) =>
             EnvRoot
@@ -258,17 +262,16 @@ updateOSEnv os =
          Left x -> return $ Left x
          Right _ ->
              do liftIO $ prepareDevs (rootPath root)
-                os' <- syncLocalPool os
-                _ <- liftIO $ updateLists os'
+                os' <- execStateT (syncLocalPool >> updateLists) os
                 _ <- liftIO $ sshCopy (rootPath root)
-                source' <- getSourcePackages' os'
-                binary <- getBinaryPackages' os'
+                source' <- evalStateT getSourcePackages' os'
+                binary <- evalStateT getBinaryPackages' os'
                 return . Right $ setL osSourcePackages source' $ setL osBinaryPackages binary $ os'
     where
       verifySources :: MonadRepos m => m (Either UpdateError OSImage)
       verifySources =
-          do let computed = remoteOnly (osFullDistro os)
-                 sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
+          do computed <- remoteOnly <$> evalStateT osFullDistro os
+             let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
              text <- liftIO (try $ readFile sourcesPath')
              installed <-
                  case text of
@@ -308,21 +311,22 @@ prepareDevs root = do
                        True -> return ExitSuccess
 
 -- FIXME: assuming the index is part of the cache
-sourcePackagesOfIndex' :: (AptCache a, MonadRepos m) => a -> RepoKey -> Release -> PackageIndex -> m [SourcePackage]
-sourcePackagesOfIndex' cache repo release index =
+sourcePackagesOfIndex' :: (MonadCache m, MonadRepos m) => RepoKey -> Release -> PackageIndex -> m [SourcePackage]
+sourcePackagesOfIndex' repo release index =
     do -- state <- getApt
        -- let cached = lookupSourcePackages path state <$> getApt
-       cached <- (Map.lookup path . getL sourcePackageMap) <$> get
-       status <- liftIO $ getFileStatus path `E.catch` (\ (_ :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory (rootPath (rootDir cache)) ++ " and try again - sorry about that.")
+       root <- rootPath <$> rootDir
+       suff <- indexCacheFile repo release index
+       let path = root ++ suff
+       cached <- (Map.lookup path . getL sourcePackageMap) <$> getRepos
+       status <- liftIO $ getFileStatus path `catch` (\ (_ :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory root ++ " and try again - sorry about that.")
        case cached of
          Just (status', packages) | status == status' -> return packages
          _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
                  let packages = List.map (toSourcePackage index) paragraphs
-                 modify $ modL sourcePackageMap (Map.insert path (status, packages))
+                 modifyRepos $ modL sourcePackageMap (Map.insert path (status, packages))
                  -- sourcePackageMap %= Map.insert path (status, packages)
                  return packages
-    where
-      path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
 
 toSourcePackage :: PackageIndex -> B.Paragraph -> SourcePackage
 toSourcePackage index package =
@@ -378,18 +382,19 @@ parseSourceParagraph p =
       _x -> Left ["parseSourceParagraph - One or more required fields (Package, Maintainer, Standards-Version) missing: " ++ show p]
 
 -- FIXME: assuming the index is part of the cache 
-binaryPackagesOfIndex' :: (MonadRepos m, AptCache a) => a -> RepoKey -> Release -> PackageIndex -> m [BinaryPackage]
-binaryPackagesOfIndex' cache repo release index =
-    do cached <- (Map.lookup path . getL binaryPackageMap) <$> get
+binaryPackagesOfIndex' :: (MonadRepos m, MonadCache m) => RepoKey -> Release -> PackageIndex -> m [BinaryPackage]
+binaryPackagesOfIndex' repo release index =
+    do root <- rootPath <$> rootDir
+       suff <- indexCacheFile repo release index
+       let path = root ++ suff
+       cached <- (Map.lookup path . getL binaryPackageMap) <$> getRepos
        status <- liftIO $ getFileStatus path
        case cached of
          Just (status', packages) | status == status' -> return packages
          _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
                  let packages = List.map (toBinaryPackage release index) paragraphs
-                 modify $ modL binaryPackageMap (Map.insert path (status, packages))
+                 modifyRepos $ modL binaryPackageMap (Map.insert path (status, packages))
                  return packages
-    where
-      path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
 
 toBinaryPackage :: Release -> PackageIndex -> B.Paragraph -> BinaryPackage
 toBinaryPackage release index p =
@@ -420,12 +425,13 @@ readParagraphs path =
        --IO.hPutStrLn IO.stderr ("OSImage.paragraphsFromFile " ++ path ++ " done.")	-- Debugging output
        return paragraphs
 
-indexCacheFile :: (AptCache a) => a -> RepoKey -> Release -> PackageIndex -> FilePath
-indexCacheFile apt repo release index =
-    case (aptArch apt, packageIndexArch index) of
-      (Binary _ _, Source) -> indexPrefix repo release index ++ "_source_Sources"
-      (Binary _ _, arch@(Binary _ _)) -> indexPrefix repo release index ++ "_binary-" ++ show (prettyArch arch) ++ "_Packages"
-      (x, _) -> error "Invalid build architecture: " ++ show x
+indexCacheFile :: (MonadCache m) => RepoKey -> Release -> PackageIndex -> m FilePath
+indexCacheFile repo release index =
+    do arch <- aptArch
+       case (arch, packageIndexArch index) of
+         (Binary _ _, Source) -> return $ indexPrefix repo release index ++ "_source_Sources"
+         (Binary _ _, arch@(Binary _ _)) -> return $ indexPrefix repo release index ++ "_binary-" ++ show (prettyArch arch) ++ "_Packages"
+         (x, _) -> error $ "Invalid build architecture: " ++ show x
 
 indexPrefix :: RepoKey -> Release -> PackageIndex -> FilePath
 indexPrefix repo release index =

@@ -12,7 +12,7 @@ module Debian.Repo.Apt.Release
     ) where
 
 import Control.Applicative ((<$>))
-import Control.Monad.State (filterM, liftM, MonadIO(..), modify, get)
+import Control.Monad.State (filterM, liftM, MonadIO(..))
 import qualified Data.ByteString.Lazy.Char8 as L (empty, readFile)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Lens.Lazy (getL, modL)
@@ -30,7 +30,7 @@ import Debian.Repo.LocalRepository (LocalRepository, prepareLocalRepository, rep
 import Debian.Repo.PackageIndex (PackageIndex(packageIndexArch, packageIndexComponent), packageIndexDir, packageIndexList, packageIndexName, releaseDir)
 import Debian.Repo.Release (parseArchitectures, parseComponents, Release(..))
 import Debian.Repo.Repo (Repo(repoKey))
-import Debian.Repo.Repos (MonadRepos, releaseMap)
+import Debian.Repo.Repos (MonadRepos(getRepos), modifyRepos, releaseMap)
 import qualified Extra.Files as EF (maybeWriteFile, prepareSymbolicLink, writeAndZipFile)
 import qualified Extra.GPGSign as EG (cd, PGPKey, pgpSignFiles)
 import qualified Extra.Time as ET (formatDebianDate)
@@ -274,7 +274,7 @@ It is this top level Release file that is signed with gpg.
 -}
 
 lookupRelease :: (Repo r, MonadRepos m) => r -> ReleaseName -> m (Maybe Release)
-lookupRelease repo dist = (Map.lookup (repoKey repo, dist) . getL releaseMap) <$> get
+lookupRelease repo dist = (Map.lookup (repoKey repo, dist) . getL releaseMap) <$> getRepos
 
 insertRelease :: (Repo r, MonadRepos m) => r -> Release -> m ()
-insertRelease repo release = modify $ modL releaseMap (Map.insert (repoKey repo, releaseName release) release)
+insertRelease repo release = modifyRepos $ modL releaseMap (Map.insert (repoKey repo, releaseName release) release)

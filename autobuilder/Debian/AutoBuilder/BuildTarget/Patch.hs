@@ -41,8 +41,8 @@ instance Show Patch where
 documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
-prepare :: (MonadRepos m, MonadTop m) => P.Packages -> OSImage -> B.ByteString -> T.Download -> m T.Download
-prepare package _buildOS patch base =
+prepare :: (MonadRepos m, MonadTop m) => P.Packages -> B.ByteString -> T.Download -> m T.Download
+prepare package patch base =
     do copyDir <- sub ("quilt" </> show (md5 (L.pack (show (P.spec package)))))
        baseTree <- liftIO $ findSourceTree (T.getTop base)
        liftIO $ createDirectoryIfMissing True copyDir

@@ -4,6 +4,7 @@
 module Main where
 
 import Control.Monad (when)
+import Control.Monad.State (StateT)
 import Control.Monad.Trans (liftIO)
 import Data.Maybe (catMaybes)
 import Data.Text (pack)
@@ -22,7 +23,7 @@ import Debian.Repo.LocalRepository (LocalRepository, Layout, repoRoot, prepareLo
 import Debian.Repo.PackageID (PackageID, makeBinaryPackageID)
 import Debian.Repo.PackageIndex (PackageIndex(PackageIndex))
 import Debian.Repo.Release (Release, parseArchitectures, releaseName, releaseAliases, releaseComponents, releaseArchitectures)
-import Debian.Repo.Repos (MonadRepos, runReposT)
+import Debian.Repo.Repos (MonadRepos, runReposT, ReposState)
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
 import Extra.Email (sendEmails)
 import Extra.GPGSign (PGPKey(Default, Key))

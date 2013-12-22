@@ -19,7 +19,8 @@ import Data.Text as T (pack, Text, unpack)
 import Debian.Control (Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph')
 import Debian.Control.Text (decodeParagraph)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
-import Debian.Repo.AptCache (AptCache(aptBaseSources), distDir, SourcesChangedAction(..), sourcesPath)
+import Debian.Repo.AptCache (MonadCache(aptBaseSources), distDir, SourcesChangedAction(..), sourcesPath)
+import Debian.Repo.AptImage (MonadApt)
 import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..))
 import Debian.Repo.LocalRepository (prepareLocalRepository)
 import Debian.Repo.Repo (repoKey)
@@ -98,16 +99,16 @@ verifyDebSource chroot line =
       chroot' = fromMaybe (EnvRoot "") chroot
 
 -- |Change the sources.list of an AptCache object, subject to the
--- value of sourcesChangedAction.
-updateCacheSources :: (AptCache c, MonadRepos m, MonadTop m) => SourcesChangedAction -> c -> m c
-updateCacheSources sourcesChangedAction distro =
+-- value of sourcesChangedAction.  (FIXME: Does this really work for MonadOS?)
+updateCacheSources :: ({-MonadApt m,-} MonadCache m, MonadRepos m, MonadTop m) => SourcesChangedAction -> m ()
+updateCacheSources sourcesChangedAction =
     -- (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
     qPutStrLn "Updating cache sources" >>
     do
-      let baseSources = aptBaseSources distro
+      baseSources <- aptBaseSources
       --let distro@(ReleaseCache _ dist _) = releaseFromConfig' top text
-      dir <- distDir distro
-      sources <- sourcesPath distro
+      dir <- distDir
+      sources <- sourcesPath
       distExists <- liftIO $ doesFileExist sources
       case distExists of
         True ->
@@ -152,4 +153,4 @@ updateCacheSources sourcesChangedAction distro =
 	    do
               liftIO $ createDirectoryIfMissing True dir
 	      liftIO $ replaceFile sources (show (pretty baseSources))
-      return distro
+      return ()

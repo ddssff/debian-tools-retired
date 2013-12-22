@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE PackageImports, RankNTypes #-}
 {-# OPTIONS -fwarn-unused-imports #-}
 module Debian.AutoBuilder.Types.Download
     ( Download(..)
@@ -7,6 +7,8 @@ module Debian.AutoBuilder.Types.Download
     , flags
     ) where
 
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatchIO)
+import Control.Monad.Trans (MonadIO)
 import Data.Time (NominalDiffTime)
 import qualified Data.ByteString.Lazy as L
 import Data.Version (Version)
@@ -30,7 +32,7 @@ data Download
       , cleanTarget :: FilePath -> IO ([Output L.ByteString], NominalDiffTime)
       -- ^ Clean version control info out of a target after it has
       -- been moved to the given location.
-      , buildWrapper :: forall a. IO a -> IO a
+      , buildWrapper :: forall m a. MonadCatchIO m => m a -> m a
       -- ^ Modify the build process in some way - currently only the
       -- proc target modifies this by mounting and then unmounting /proc.
       }

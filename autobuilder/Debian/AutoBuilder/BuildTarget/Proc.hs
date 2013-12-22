@@ -2,6 +2,9 @@
 -- |Modify a target so that \/proc is mounted while it builds.
 module Debian.AutoBuilder.BuildTarget.Proc where
 
+import Control.Monad.CatchIO (MonadCatchIO)
+import Control.Monad.State (evalStateT)
+import Control.Monad.Trans (MonadIO)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -13,7 +16,8 @@ documentation = [ "proc:<target> - A target of this form modifies another target
                 , "machine which might be different from the machine on which the package"
                 , "is ultimately installed." ]
 
-prepare :: MonadRepos m => P.CacheRec -> P.Packages -> OSImage -> T.Download -> m T.Download
+{-
+prepare :: forall m. (MonadRepos m, MonadCatchIO m) => P.CacheRec -> P.Packages -> OSImage -> T.Download -> m T.Download
 prepare _cache package buildOS base =
     return $ T.Download {
                  T.package = package
@@ -22,5 +26,6 @@ prepare _cache package buildOS base =
                , T.mVersion = Nothing
                , T.origTarball = Nothing
                , T.cleanTarget = T.cleanTarget base
-               , T.buildWrapper = withProc buildOS
+               , T.buildWrapper = withProc -- \ (task :: MonadRepos m, MonadOS m, MonadCatchIO m => m a) -> evalStateT (withProc task) buildOS
                }
+-}

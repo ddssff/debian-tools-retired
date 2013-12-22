@@ -1,7 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.AptCache
-    ( AptCache(rootDir, aptBaseSources, aptArch, aptSourcePackages, aptBinaryPackages), aptReleaseName
+    ( MonadCache(rootDir, aptBaseSources, aptArch, aptSourcePackages, aptBinaryPackages)
+    , aptReleaseName
     , distDir
     , sourcesPath
     , aptSourcePackagesSorted
@@ -14,6 +15,7 @@ module Debian.Repo.AptCache
     , aptGetUpdate
     ) where
 
+import Control.Applicative ((<$>))
 import Control.DeepSeq (force, NFData)
 import Control.Exception (bracket, evaluate, SomeException, try)
 import Control.Monad.Trans (liftIO, MonadIO)
@@ -61,20 +63,20 @@ instance NFData ExitCode
 -- a complete build environment.  It is enough to run apt-get, and
 -- thus obtain repository info and download source code packages from
 -- a remote repository.
-class (Ord t, Eq t, Show t) => AptCache t where
-    -- | The directory you might chroot to.
-    rootDir :: t -> EnvRoot
-    -- | The sources.list excluding lines for the local repository
-    aptBaseSources :: t -> NamedSliceList
-    -- | The build architecture
-    aptArch :: t -> Arch
-    -- | Return the all source packages in this AptCache.
-    aptSourcePackages :: t -> [SourcePackage]
-    -- | Return the all binary packages for the architecture of this AptCache.
-    aptBinaryPackages :: t -> [BinaryPackage]
+class (Monad m, Functor m) => MonadCache m where
+    rootDir :: m EnvRoot
+    -- ^ The directory you might chroot to.
+    aptBaseSources :: m NamedSliceList
+    -- ^ The sources.list excluding lines for the local repository
+    aptArch :: m Arch
+    -- ^ The build architecture
+    aptSourcePackages :: m [SourcePackage]
+    -- ^ Return the all source packages in this AptCache.
+    aptBinaryPackages :: m [BinaryPackage]
+    -- ^ Return the all binary packages for the architecture of this AptCache.
 
-aptReleaseName :: AptCache c => c -> ReleaseName
-aptReleaseName c = error "aptReleaseName" -- aptBaseNamedSources c
+aptReleaseName :: MonadCache m => m ReleaseName
+aptReleaseName = sliceListName <$> aptBaseSources
 
 -- The following are path functions which can be used while
 -- constructing instances of AptCache.  Each is followed by a
@@ -83,21 +85,22 @@ aptReleaseName c = error "aptReleaseName" -- aptBaseNamedSources c
 
 -- | The directory in a repository where the package index files for a
 -- particular dist or release is stored.  (Wait, that's not right.)
-distDir :: (MonadTop m, AptCache c) => c -> m FilePath
-distDir cache =
+distDir :: (MonadTop m, MonadCache m) => m FilePath
+distDir =
     do top <- askTop
-       return $ top </> "dists" </> relName (aptReleaseName cache)
+       rel <- relName <$> aptReleaseName
+       return $ top </> "dists" </> rel
 
 -- | The path of the text file containing the sources.list (aka SliceList)
-sourcesPath :: (MonadTop m, AptCache c) => c -> m FilePath
-sourcesPath cache =
-    do dir <- distDir cache
+sourcesPath :: (MonadTop m, MonadCache m) => m FilePath
+sourcesPath =
+    do dir <- distDir
        return $ dir </> "sources"
 
 -- |Return all the named source packages sorted by version
-aptSourcePackagesSorted :: AptCache t => t -> [SrcPkgName] -> [SourcePackage]
-aptSourcePackagesSorted os names =
-    sortBy cmp . filterNames names . aptSourcePackages $ os
+aptSourcePackagesSorted :: MonadCache m => [SrcPkgName] -> m [SourcePackage]
+aptSourcePackagesSorted names =
+    (sortBy cmp . filterNames names) <$> aptSourcePackages
     where
       filterNames names' packages =
           filter (flip elem names' . packageName . sourcePackageID) packages
@@ -138,9 +141,9 @@ data SourcesChangedAction =
     deriving (Eq, Show, Data, Typeable)
 
 -- | Return a sorted list of available source packages, newest version first.
-sourcePackages :: AptCache a => a -> [SrcPkgName] -> [SourcePackage]
-sourcePackages os names =
-    sortBy cmp . filterNames . aptSourcePackages $ os
+sourcePackages :: MonadCache m => [SrcPkgName] -> m [SourcePackage]
+sourcePackages names =
+    (sortBy cmp . filterNames) <$> aptSourcePackages
     where
       filterNames :: [SourcePackage] -> [SourcePackage]
       filterNames packages =
@@ -151,9 +154,9 @@ sourcePackages os names =
             v1 = packageVersion . sourcePackageID $ p1
             v2 = packageVersion . sourcePackageID $ p2
 
-binaryPackages :: AptCache a => a -> [BinPkgName] -> [BinaryPackage]
-binaryPackages os names =
-    sortBy cmp . filterNames . aptBinaryPackages $ os
+binaryPackages :: MonadCache m => [BinPkgName] -> m [BinaryPackage]
+binaryPackages names =
+    (sortBy cmp . filterNames) <$> aptBinaryPackages
     where
       filterNames :: [BinaryPackage] -> [BinaryPackage]
       filterNames packages =
@@ -167,28 +170,29 @@ binaryPackages os names =
 -- | Run an apt-get command in a particular directory with a
 -- particular list of packages.  Note that apt-get source works for
 -- binary or source package names.
-aptGetSource :: (PkgName n, AptCache t) => t -> FilePath -> [(n, Maybe DebianVersion)] -> IO ()
-aptGetSource os dir packages =
-    createDirectoryIfMissing True dir >> runProcessF (Just (" 1> ", " 2> ")) p L.empty >> return ()
+aptGetSource :: (PkgName n, MonadIO m, MonadCache m) => FilePath -> [(n, Maybe DebianVersion)] -> m ()
+aptGetSource dir packages =
+    do args <- aptOpts
+       let p = (proc "apt-get" (args ++ ["source"] ++ map formatPackage packages)) {cwd = Just dir}
+       liftIO $ createDirectoryIfMissing True dir >> runProcessF (Just (" 1> ", " 2> ")) p L.empty >> return ()
     where
-      p = (proc "apt-get" args') {cwd = Just dir}
-      args' = aptOpts os ++ ["source"] ++ map formatPackage packages
       formatPackage (name, Nothing) = show (pretty name)
       formatPackage (name, Just version) = show (pretty name) ++ "=" ++ show (prettyDebianVersion version)
 
-aptGetUpdate :: AptCache t => t -> IO ()
-aptGetUpdate os =
-    do _ <- runProcessF (Just (" 1> ", " 2> ")) (proc "apt-get" (aptOpts os ++ ["update"])) L.empty
+aptGetUpdate :: (MonadCache m, MonadIO m) => m ()
+aptGetUpdate =
+    do args <- aptOpts
+       _ <- liftIO $ runProcessF (Just (" 1> ", " 2> ")) (proc "apt-get" (args ++ ["update"])) L.empty
        return ()
 
-aptOpts :: AptCache t => t -> [String]
-aptOpts os =
-    [ "-o=Dir::State::status=" ++ root ++ "/var/lib/dpkg/status"
-    , "-o=Dir::State::Lists=" ++ root ++ "/var/lib/apt/lists"
-    , "-o=Dir::Cache::Archives=" ++ root ++ "/var/cache/apt/archives"
-    , "-o=Dir::Etc::SourceList=" ++ root ++ "/etc/apt/sources.list"
-    , "-o=Dir::Etc::SourceParts=" ++ root ++ "/etc/apt/sources.list.d" ]
-    where root = rootPath . rootDir $ os
+aptOpts :: MonadCache m => m [String]
+aptOpts =
+    do root <- rootPath <$> rootDir
+       return $ [ "-o=Dir::State::status=" ++ root ++ "/var/lib/dpkg/status"
+                , "-o=Dir::State::Lists=" ++ root ++ "/var/lib/apt/lists"
+                , "-o=Dir::Cache::Archives=" ++ root ++ "/var/cache/apt/archives"
+                , "-o=Dir::Etc::SourceList=" ++ root ++ "/etc/apt/sources.list"
+                , "-o=Dir::Etc::SourceParts=" ++ root ++ "/etc/apt/sources.list.d" ]
 
 data UpdateError
     = Changed ReleaseName FilePath SliceList SliceList

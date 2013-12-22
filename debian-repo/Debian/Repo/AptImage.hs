@@ -1,17 +1,21 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeSynonymInstances #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.AptImage
     ( AptImage
+    , MonadApt
     , aptDir
+    , aptImageRoot
     , aptImageSources
     , aptImageSourcePackages
     , aptImageBinaryPackages
     , prepareAptEnv''
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Category ((.))
 import Control.DeepSeq (force, NFData)
 import Control.Exception (bracket, evaluate, SomeException, try)
+import Control.Monad.State (MonadState, StateT, get)
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString, empty)
 import Data.Data (Data)
@@ -24,7 +28,7 @@ import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (BinPkgName, ParseRelations(..), PkgName(..), Relations, SrcPkgName(..))
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(ReleaseName, relName))
-import Debian.Repo.AptCache (AptCache(..), distDir)
+import Debian.Repo.AptCache (MonadCache(..), distDir)
 import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot(rootPath), EnvRoot(EnvRoot), outsidePath)
 import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
 import Debian.Repo.PackageID (PackageID(packageVersion, packageName))
@@ -53,7 +57,6 @@ import System.Unix.Mount (umountBelow)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Regex (matchRegex, mkRegex)
 
--- | The AptImage object is an instance of AptCache.
 data AptImage =
     AptImage { _aptImageRoot :: EnvRoot
              , _aptImageArch :: Arch
@@ -64,15 +67,19 @@ data AptImage =
 
 $(makeLenses [''AptImage])
 
+class (MonadState AptImage m, Monad m, Functor m) => MonadApt m
+
+instance (Monad m, Functor m) => MonadApt (StateT AptImage m)
+
 instance Show AptImage where
     show apt = "AptImage " ++ relName (sliceListName (getL aptImageSources apt))
 
-instance AptCache AptImage where
-    rootDir = getL aptImageRoot
-    aptArch = getL aptImageArch
-    aptBaseSources = getL aptImageSources
-    aptSourcePackages = getL aptImageSourcePackages
-    aptBinaryPackages = getL aptImageBinaryPackages
+instance (Monad m, Functor m) => MonadCache (StateT AptImage m) where
+    rootDir = _aptImageRoot <$> get
+    aptArch = _aptImageArch <$> get
+    aptBaseSources = _aptImageSources <$> get
+    aptSourcePackages = _aptImageSourcePackages <$> get
+    aptBinaryPackages = _aptImageBinaryPackages <$> get
 
 instance Ord AptImage where
     compare a b = compare (sliceListName . getL aptImageSources $ a) (sliceListName . getL aptImageSources $ b)
@@ -82,9 +89,9 @@ instance Eq AptImage where
 
 -- | The location of the top directory of a source packages's files in
 -- an AptImage (but not an OSImage.)
-aptDir :: MonadTop m => AptImage -> SrcPkgName -> m FilePath
-aptDir cache package =
-    do dir <- distDir cache
+aptDir :: (MonadTop m, MonadCache m) => SrcPkgName -> m FilePath
+aptDir package =
+    do dir <- distDir
        return $ dir </> "apt" </> unSrcPkgName package
 
 -- The following are path functions which can be used while

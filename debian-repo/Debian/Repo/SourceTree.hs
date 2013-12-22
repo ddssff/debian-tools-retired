@@ -32,13 +32,14 @@ import Data.Time (NominalDiffTime)
 import Debian.Changes (ChangeLogEntry(..), ChangesFile(..), parseEntries)
 import Debian.Control.Text (Control, Control'(Control), ControlFunctions(parseControl), Field'(Comment), Paragraph'(..))
 import Debian.Relation (BinPkgName, SrcPkgName(unSrcPkgName))
-import Debian.Repo.AptCache (AptCache(rootDir), aptGetSource, aptSourcePackages)
-import Debian.Repo.AptImage (AptImage, aptDir)
+import Debian.Repo.AptCache (MonadCache(rootDir), aptGetSource, aptSourcePackages)
+import Debian.Repo.AptImage (MonadApt, AptImage, aptDir, aptImageRoot)
 import Debian.Repo.Changes (findChangesFiles)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
-import Debian.Repo.OSImage (OSImage)
+import Debian.Repo.OSImage (MonadOS, OSImage, osRoot)
 import Debian.Repo.PackageID (PackageID(packageName, packageVersion))
 import Debian.Repo.PackageIndex (SourcePackage(sourcePackageID))
+import Debian.Repo.Prelude (access)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Top (MonadTop)
 import Debian.Version (DebianVersion)
@@ -105,28 +106,28 @@ explainSourcePackageStatus (Indep missing) = "Some or all architecture-dependent
 explainSourcePackageStatus None = "This version of the package is not present."
 
 -- | Run dpkg-buildpackage in a build tree.
-buildDebs :: (DebianBuildTreeC t) => Bool -> Bool -> [(String, Maybe String)] -> OSImage -> t -> SourcePackageStatus -> IO NominalDiffTime
-buildDebs noClean _twice setEnv buildOS buildTree status =
+buildDebs :: (DebianBuildTreeC t, MonadOS m, MonadCache m, MonadIO m) => Bool -> Bool -> [(String, Maybe String)] -> t -> SourcePackageStatus -> m NominalDiffTime
+buildDebs noClean _twice setEnv buildTree status =
     do
-      noSecretKey <- getEnv "HOME" >>= return . (++ "/.gnupg") >>= doesDirectoryExist >>= return . not
-      env0 <- getEnvironment
+      root <- rootPath <$> rootDir
+      noSecretKey <- liftIO $ getEnv "HOME" >>= return . (++ "/.gnupg") >>= doesDirectoryExist >>= return . not
+      env0 <- liftIO getEnvironment
       -- Set LOGNAME so dpkg-buildpackage doesn't die when it fails to
       -- get the original user's login information
       let run cmd = timeTask . useEnv root forceList . noisier 3 $ runProcessF (Just (" 1> ", " 2> "))
                                                                                (cmd {env = Just (modEnv (("LOGNAME", Just "root") : setEnv) env0),
                                                                                      cwd = dropPrefix root path}) L.empty
-      _ <- run (proc "chmod" ["ugo+x", "debian/rules"])
+      _ <- liftIO $ run (proc "chmod" ["ugo+x", "debian/rules"])
       let buildCmd = proc "dpkg-buildpackage" (concat [["-sa"],
                                                        case status of Indep _ -> ["-B"]; _ -> [],
                                                        if noSecretKey then ["-us", "-uc"] else [],
                                                        if noClean then ["-nc"] else []])
-      (result, elapsed) <- run buildCmd
+      (result, elapsed) <- liftIO $ run buildCmd
       case keepResult result of
         (ExitFailure n : _) -> fail $ "*** FAILURE: " ++ showCmd (cmdspec buildCmd) ++ " -> " ++ show n
         _ -> return elapsed
     where
       path = debdir buildTree
-      root = rootPath (rootDir buildOS)
       showCmd (RawCommand cmd args) = showCommandForUser cmd args
       showCmd (ShellCommand cmd) = cmd
 
@@ -300,25 +301,26 @@ instance DebianBuildTreeC DebianBuildTree where
     findBuildTree path d = findSourceTree (path </> d) >>= return . DebianBuildTree path d
 
 -- |Retrieve a source package via apt-get.
-prepareSource :: (MonadTop m, MonadIO m) =>
-                 AptImage			-- Where to apt-get from
-              -> SrcPkgName			-- The name of the package
+prepareSource :: (MonadApt m, MonadCache m, MonadTop m, MonadIO m) =>
+                 SrcPkgName			-- The name of the package
               -> Maybe DebianVersion		-- The desired version, if Nothing get newest
               -> m DebianBuildTree		-- The resulting source tree
-prepareSource apt package version =
-    do dir <- aptDir apt package
+prepareSource package version =
+    do root <- rootPath <$> rootDir
+       dir <- aptDir package
        liftIO $ createDirectoryIfMissing True dir
        ready <- liftIO $ findDebianBuildTrees dir
-       let newest = listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . packageName . sourcePackageID) . aptSourcePackages $ apt
+       pkgs <- aptSourcePackages
+       let newest = (listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . packageName . sourcePackageID)) $ pkgs
        let version' = maybe newest Just version
        case (version', ready) of
          (Nothing, _) ->
-             fail $ "No available versions of " ++ unSrcPkgName package ++ " in " ++ rootPath (rootDir apt)
+             fail $ "No available versions of " ++ unSrcPkgName package ++ " in " ++ root
          (Just requested, [tree])
              | requested == (logVersion . entry $ tree) ->
                  return tree
          (Just requested, []) ->
-             do liftIO $ aptGetSource apt dir [(package, Just requested)]
+             do aptGetSource dir [(package, Just requested)]
                 trees <- liftIO $ findDebianBuildTrees dir
                 case trees of
                   [tree] -> return tree
@@ -327,7 +329,7 @@ prepareSource apt package version =
              do -- One or more incorrect versions are available, remove them
                 liftIO $ removeRecursiveSafely dir
                 qPutStr $ "Retrieving APT source for " ++ unSrcPkgName package
-                liftIO $ aptGetSource apt dir [(package, Just requested)]
+                aptGetSource dir [(package, Just requested)]
                 trees <- liftIO $ findDebianBuildTrees dir
                 case trees of
                   [tree] -> return tree

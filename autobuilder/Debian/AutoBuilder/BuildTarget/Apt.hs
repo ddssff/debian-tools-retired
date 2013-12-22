@@ -2,6 +2,7 @@
 module Debian.AutoBuilder.BuildTarget.Apt where
 
 import Control.Monad (when)
+import Control.Monad.State (evalStateT)
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.List (nub, sort)
 import Data.Maybe (catMaybes)
@@ -27,9 +28,9 @@ documentation = [ "apt:<distribution>:<packagename> - a target of this form look
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> SrcPkgName -> m Download
 prepare cache target dist package =
     do os <- prepareAptEnv (P.ifSourcesChanged (P.params cache)) distro
-       apt <- aptDir os package
+       apt <- evalStateT (aptDir package) os
        when (P.flushSource (P.params cache)) (liftIO . removeRecursiveSafely $ apt)
-       tree <- prepareSource os package version'
+       tree <- evalStateT (prepareSource package version') os
        return $ Download {
                     package = target
                   , getTop = topdir tree
