@@ -7,16 +7,13 @@ module Debian.AutoBuilder.Types.Download
     , flags
     ) where
 
-import Control.Monad.State (StateT)
+import Control.Monad.CatchIO (MonadCatchIO)
 import qualified Data.ByteString.Lazy as L (ByteString)
 import Data.Time (NominalDiffTime)
 import Data.Version (Version)
 import Debian.AutoBuilder.Types.Packages (PackageFlag, Packages, RetrieveMethod(..), TargetName)
 import qualified Debian.AutoBuilder.Types.Packages as P (Packages(flags, name, spec))
-import Debian.Repo.AptImage (AptImage)
-import Debian.Repo.OSImage (OSImage)
-import Debian.Repo.Repos (ReposState)
-import Debian.Repo.Top (TopT)
+import Debian.Repo.OSImage (MonadOS)
 import System.Process.Read.Chunks (Output)
 
 data Download
@@ -35,7 +32,7 @@ data Download
       , cleanTarget :: FilePath -> IO ([Output L.ByteString], NominalDiffTime)
       -- ^ Clean version control info out of a target after it has
       -- been moved to the given location.
-      , buildWrapper :: (m ~ StateT OSImage (StateT AptImage (TopT (StateT ReposState IO)))) => m NominalDiffTime -> m NominalDiffTime
+      , buildWrapper :: forall m. (MonadOS m, MonadCatchIO m) => m NominalDiffTime -> m NominalDiffTime
       -- ^ Modify the build process in some way - currently only the
       -- proc target modifies this by mounting and then unmounting /proc.
       }

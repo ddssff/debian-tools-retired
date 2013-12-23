@@ -17,7 +17,7 @@ import Control.Arrow (second)
 import Control.Exception (AsyncException(UserInterrupt), evaluate, fromException, SomeException, throw, toException)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO, catch, try)
 import Control.Monad.RWS (liftIO, MonadIO, when)
-import Control.Monad.State (StateT, evalStateT, evalState, execStateT)
+import Control.Monad.State (evalStateT, evalState, execStateT)
 import qualified Data.ByteString.Char8 as B (concat)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, concat, empty, toChunks, unpack)
 import qualified Data.ByteString.UTF8 as UTF8 (toString)
@@ -48,7 +48,6 @@ import Debian.Release (ReleaseName(relName), releaseName')
 import Debian.Repo.Apt.AptImage (updateOSEnv)
 import Debian.Repo.Apt.Package (scanIncoming)
 import Debian.Repo.AptCache (MonadCache(rootDir, aptBinaryPackages), aptSourcePackagesSorted, binaryPackages, buildArchOfEnv, sourcePackages)
-import Debian.Repo.AptImage (AptImage)
 import Debian.Repo.OSImage (OSImage, syncEnv, syncLocalPool, updateLists, withProc, withTmp)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
@@ -59,9 +58,9 @@ import Debian.Repo.OSImage (MonadOS)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID))
-import Debian.Repo.Repos (MonadRepos, ReposState)
+import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..))
-import Debian.Repo.Top (MonadTop, TopT)
+import Debian.Repo.Top (MonadTop)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.VersionPolicy (parseTag, setTag)
@@ -145,7 +144,7 @@ partitionFailing xs =
 -- | Build a set of targets.  When a target build is successful it
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
-buildTargets :: (MonadRepos m, MonadTop m, MonadCache m, m ~ StateT AptImage (TopT (StateT ReposState IO))) =>
+buildTargets :: (MonadRepos m, MonadTop m, MonadCache m) =>
                 P.CacheRec -> OSImage -> Relations -> LocalRepository -> [Buildable] -> m (LocalRepository, [Target])
 buildTargets _ _ _ localRepo [] = return (localRepo, [])
 buildTargets cache dependOS globalBuildDeps localRepo !targetSpecs =
@@ -161,13 +160,13 @@ buildTargets cache dependOS globalBuildDeps localRepo !targetSpecs =
 
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
-buildLoop :: (MonadRepos m, MonadTop m, MonadCache m, m ~ StateT AptImage (TopT (StateT ReposState IO))) =>
+buildLoop :: (MonadRepos m, MonadTop m, MonadCache m) =>
              P.CacheRec -> Relations -> LocalRepository -> OSImage -> [Target] -> m [Target]
 buildLoop cache globalBuildDeps localRepo dependOS !targets =
     Set.toList <$> loop dependOS (Set.fromList targets) Set.empty
     where
       -- This loop computes the ready targets and builds one.
-      loop :: (MonadRepos m, MonadCache m, MonadTop m, m ~ StateT AptImage (TopT (StateT ReposState IO))) =>
+      loop :: (MonadRepos m, MonadCache m, MonadTop m) =>
               OSImage -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
       loop _ unbuilt failed | Set.null unbuilt = return failed
       loop dependOS unbuilt failed =
@@ -177,7 +176,7 @@ buildLoop cache globalBuildDeps localRepo dependOS !targets =
             triples -> do noisier 1 $ qPutStrLn (makeTable triples)
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
                           loop2 dependOS (Set.difference unbuilt ready) failed triples
-      loop2 :: (MonadRepos m, MonadCache m, MonadTop m, m ~ StateT AptImage (TopT (StateT ReposState IO))) =>
+      loop2 :: (MonadRepos m, MonadCache m, MonadTop m) =>
                OSImage
             -> Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
             -> Set.Set Target -- failed: Targets which either failed to build or were blocked by a target that failed to build
@@ -332,7 +331,7 @@ qError message = qPutStrLn message >> error message
 
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
-    (MonadRepos m, MonadTop m, MonadCache m, m ~ StateT AptImage (TopT (StateT ReposState IO))) =>
+    (MonadRepos m, MonadTop m, MonadCache m) =>
     P.CacheRec ->			-- configuration info
     OSImage ->				-- cleanOS
     Relations ->			-- The build-essential relations
@@ -379,7 +378,7 @@ buildTarget cache dependOS globalBuildDeps repo !target =
                              return . Just
 
 -- | Build a package and upload it to the local repository.
-buildPackage :: (MonadRepos m, MonadTop m, m ~ StateT AptImage (TopT (StateT ReposState IO))) =>
+buildPackage :: (MonadRepos m, MonadTop m) =>
                 P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
 buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target status repo =
     checkDryRun >>
@@ -398,7 +397,7 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
           case P.noClean (P.params cache) of
             False -> liftIO (maybeAddLogEntry buildTree newVersion) >> return buildTree
             True -> return buildTree
-      build :: forall m. (MonadOS m, MonadCache m, MonadRepos m, MonadCatchIO m, m ~ StateT OSImage (StateT AptImage (TopT (StateT ReposState IO)))) =>
+      build :: forall m. (MonadOS m, MonadCache m, MonadRepos m, MonadCatchIO m) =>
                DebianBuildTree -> m (DebianBuildTree, NominalDiffTime)
       build buildTree =
           do -- The --commit flag does not appear until dpkg-dev-1.16.1,
@@ -432,15 +431,8 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
              let ver = maybe [] (\ v -> [("CABALDEBIAN", Just (show ["--deb-version", show (prettyDebianVersion v)]))]) newVersion
              let env = ver ++ P.setEnv (P.params cache)
              let action = buildDebs (P.noClean (P.params cache)) False env buildTree status
-             elapsed <- runWrapper (T.buildWrapper (download (tgt target))) action
+             elapsed <- T.buildWrapper (download (tgt target)) action
              return (buildTree, elapsed)
-
-          where
-            -- All this does is specify the type of m - getting the
-            -- signature of buildWrapper was becoming tricky.
-            runWrapper :: (m ~ StateT OSImage (StateT AptImage (TopT (StateT ReposState IO)))) =>
-                          (m NominalDiffTime -> m NominalDiffTime) -> m NominalDiffTime -> m NominalDiffTime
-            runWrapper wrapper action = wrapper action
 
       find (buildTree, elapsed) = liftIO (findChanges buildTree) >>= \ changesFile -> return (changesFile, elapsed)
       -- Depending on the strictness, build dependencies either

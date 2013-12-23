@@ -12,7 +12,7 @@ import Control.Applicative.Error (Failing(..))
 import Control.Exception(SomeException, try, AsyncException(UserInterrupt), fromException, toException)
 import Control.Monad(foldM, when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
-import Control.Monad.State (StateT, MonadIO(liftIO), evalStateT)
+import Control.Monad.State (MonadIO(liftIO), evalStateT)
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import Data.Lens.Lazy (getL)
@@ -33,14 +33,14 @@ import Debian.Debianize (DebT)
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.Apt.AptImage (prepareAptEnv)
 import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
-import Debian.Repo.Repos (MonadRepos, ReposState, foldRepository, runReposCachedT, MonadReposCached)
+import Debian.Repo.Repos (MonadRepos, foldRepository, runReposCachedT, MonadReposCached)
 import Debian.Repo.OSImage (OSImage, osLocalMaster, osLocalCopy, buildEssential)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
                           appendSliceLists, inexactPathSlices, releaseSlices)
-import Debian.Repo.Top (MonadTop(askTop), TopT)
+import Debian.Repo.Top (MonadTop(askTop))
 import Debian.Repo.EnvPath (EnvPath(..))
 import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
@@ -98,8 +98,7 @@ main init myParams =
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: (MonadReposCached m, m ~ TopT (StateT ReposState IO)) =>
-                  DebT IO () -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
+doParameterSet :: MonadReposCached m => DebT IO () -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
 doParameterSet init results params =
     case () of
       _ | not (Set.null badForceBuild) ->
@@ -130,8 +129,7 @@ doParameterSet init results params =
       allTargetNames :: Set P.TargetName
       allTargetNames = P.foldPackages (\ name _ _ result -> insert name result) (P.buildPackages params) empty
 
-runParameterSet :: (MonadReposCached m, m ~ TopT (StateT ReposState IO)) =>
-                   DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
+runParameterSet :: MonadReposCached m => DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet init cache =
     do
       top <- askTop
