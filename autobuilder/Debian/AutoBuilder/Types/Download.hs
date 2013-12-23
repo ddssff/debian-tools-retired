@@ -7,14 +7,12 @@ module Debian.AutoBuilder.Types.Download
     , flags
     ) where
 
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatchIO)
 import Control.Monad.State (StateT)
-import Control.Monad.Trans (MonadIO)
+import qualified Data.ByteString.Lazy as L (ByteString)
 import Data.Time (NominalDiffTime)
-import qualified Data.ByteString.Lazy as L
 import Data.Version (Version)
-import Debian.AutoBuilder.Types.Packages (Packages, PackageFlag, RetrieveMethod(..), TargetName)
-import qualified Debian.AutoBuilder.Types.Packages as P
+import Debian.AutoBuilder.Types.Packages (PackageFlag, Packages, RetrieveMethod(..), TargetName)
+import qualified Debian.AutoBuilder.Types.Packages as P (Packages(flags, name, spec))
 import Debian.Repo.AptImage (AptImage)
 import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.Repos (ReposState)

@@ -4,13 +4,8 @@ module Debian.AutoBuilder.BuildTarget
     , targetDocumentation
     ) where
 
-import Control.Applicative ((<$>))
-import Control.Exception (SomeException, try, throw)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatchIO)
-import Control.Monad.State (evalStateT, get)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO)
 import Control.Monad.Trans (MonadIO, liftIO)
-import qualified Data.ByteString.Lazy as L
-import Data.Lens.Lazy (getL)
 import Data.List (intersperse)
 import qualified Debian.AutoBuilder.BuildTarget.Apt as Apt
 import qualified Debian.AutoBuilder.BuildTarget.Cd as Cd
@@ -35,17 +30,12 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (DebT)
 import Debian.Relation (SrcPkgName(..))
-import Debian.Repo.AptCache (rootDir)
-import Debian.Repo.OSImage (MonadOS, OSImage, withProc, osRoot)
-import Debian.Repo.EnvPath (rootPath)
-import Debian.Repo.Prelude (access)
+import Debian.Repo.OSImage (MonadOS, withProc)
 import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
 import Debian.Repo.Top (MonadTop)
-import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
-import System.Process (proc, readProcess)
-import System.Process.Progress (runProcessF, qPutStrLn, quieter)
+import System.Process.Progress (qPutStrLn)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
 retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatchIO m) =>
@@ -110,7 +100,6 @@ retrieve defaultAtoms cache target =
 
       P.Proc spec' ->
           retrieve defaultAtoms cache (target {P.spec = spec'}) >>= \ base ->
-          get >>= \ os ->
           return $ T.Download {
                        T.package = target
                      , T.getTop = T.getTop base

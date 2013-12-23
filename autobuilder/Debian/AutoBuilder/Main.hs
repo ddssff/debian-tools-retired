@@ -31,7 +31,6 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (DebT)
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
-import Debian.Sources (SliceName(..))
 import Debian.Repo.Apt.AptImage (prepareAptEnv)
 import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
 import Debian.Repo.Repos (MonadRepos, ReposState, foldRepository, runReposCachedT, MonadReposCached)
@@ -41,7 +40,7 @@ import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
                           appendSliceLists, inexactPathSlices, releaseSlices)
-import Debian.Repo.Top (MonadTop(askTop), TopT, runTopT)
+import Debian.Repo.Top (MonadTop(askTop), TopT)
 import Debian.Repo.EnvPath (EnvPath(..))
 import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
