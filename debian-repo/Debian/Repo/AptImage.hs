@@ -98,29 +98,30 @@ data SourcesChangedAction =
     deriving (Eq, Show, Data, Typeable)
 
 prepareAptEnv'' :: (MonadTop m, MonadIO m) => NamedSliceList -> m AptImage
-prepareAptEnv'' sources =
-    do root <- cacheRootDir (sliceListName sources)
-       arch <- liftIO buildArchOfRoot
-       let os = AptImage { _aptImageRoot = root
-                         , _aptImageArch = arch
-                         , _aptImageSources = sources
-                         , _aptImageSourcePackages = []
-                         , _aptImageBinaryPackages = [] }
+prepareAptEnv'' sources = do
+  root <- cacheRootDir (sliceListName sources)
+  liftIO $ do
+    arch <- buildArchOfRoot
+    let os = AptImage { _aptImageRoot = root
+                      , _aptImageArch = arch
+                      , _aptImageSources = sources
+                      , _aptImageSourcePackages = []
+                      , _aptImageBinaryPackages = [] }
 
-       --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
-       liftIO $ createDirectoryIfMissing True (rootPath root ++ "/var/lib/apt/lists/partial")
-       liftIO $ createDirectoryIfMissing True (rootPath root ++ "/var/lib/apt/lists/partial")
-       liftIO $ createDirectoryIfMissing True (rootPath root ++ "/var/cache/apt/archives/partial")
-       liftIO $ createDirectoryIfMissing True (rootPath root ++ "/var/lib/dpkg")
-       liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc/apt")
-       liftIO $ writeFileIfMissing True (rootPath root ++ "/var/lib/dpkg/status") ""
-       liftIO $ writeFileIfMissing True (rootPath root ++ "/var/lib/dpkg/diversions") ""
-       -- We need to create the local pool before updating so the
-       -- sources.list will be valid.
-       let sourceListText = show (pretty (sliceList sources))
-       -- ePut ("writeFile " ++ (root ++ "/etc/apt/sources.list") ++ "\n" ++ sourceListText)
-       liftIO $ replaceFile (rootPath root ++ "/etc/apt/sources.list") sourceListText
-       return os
+    --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
+    createDirectoryIfMissing True (rootPath root ++ "/var/lib/apt/lists/partial")
+    createDirectoryIfMissing True (rootPath root ++ "/var/lib/apt/lists/partial")
+    createDirectoryIfMissing True (rootPath root ++ "/var/cache/apt/archives/partial")
+    createDirectoryIfMissing True (rootPath root ++ "/var/lib/dpkg")
+    createDirectoryIfMissing True (rootPath root ++ "/etc/apt")
+    writeFileIfMissing True (rootPath root ++ "/var/lib/dpkg/status") ""
+    writeFileIfMissing True (rootPath root ++ "/var/lib/dpkg/diversions") ""
+    -- We need to create the local pool before updating so the
+    -- sources.list will be valid.
+    let sourceListText = show (pretty (sliceList sources))
+    -- ePut ("writeFile " ++ (root ++ "/etc/apt/sources.list") ++ "\n" ++ sourceListText)
+    replaceFile (rootPath root ++ "/etc/apt/sources.list") sourceListText
+    return os
 
 cacheRootDir :: MonadTop m => ReleaseName -> m EnvRoot
 cacheRootDir release =

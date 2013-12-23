@@ -45,7 +45,7 @@ import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, r
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
-import Debian.Repo.Apt.AptImage (updateOSEnv)
+import Debian.Repo.Apt.OSImage (updateOSEnv)
 import Debian.Repo.Apt.Package (scanIncoming)
 import Debian.Repo.AptCache (MonadCache(rootDir, aptBinaryPackages), aptSourcePackagesSorted, binaryPackages, buildArchOfEnv, sourcePackages)
 import Debian.Repo.OSImage (OSImage, syncEnv, syncLocalPool, updateLists, withProc, withTmp)

@@ -42,6 +42,7 @@ Library
   Exposed-modules:
         Debian.Repo,
         Debian.Repo.Apt.AptImage,
+        Debian.Repo.Apt.OSImage,
         Debian.Repo.Apt.Package,
         Debian.Repo.Apt.Release,
         Debian.Repo.Apt.Slice,
