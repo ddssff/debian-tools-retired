@@ -9,7 +9,7 @@ module Debian.AutoBuilder.Main
 import Control.Arrow (first)
 import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
-import Control.Exception(SomeException, try, AsyncException(UserInterrupt), fromException, toException)
+import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException, try)
 import Control.Monad(foldM, when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
 import Control.Monad.State (MonadIO(liftIO), evalStateT)
@@ -31,7 +31,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (DebT)
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
-import Debian.Repo.Apt.AptImage (prepareAptEnv)
+import Debian.Repo.Apt.AptImage (withAptImage)
 import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
 import Debian.Repo.Repos (MonadRepos, foldRepository, runReposCachedT, MonadReposCached)
 import Debian.Repo.OSImage (OSImage, osLocalMaster, osLocalCopy, buildEssential)
@@ -152,19 +152,20 @@ runParameterSet init cache =
           case parseURI ("file://" ++ envPath (repoRoot (getL osLocalCopy dependOS))) of
             Nothing -> error $ "Invalid local repo root: " ++ show (repoRoot (getL osLocalCopy dependOS))
             Just uri -> repoSources (Just . envRoot . repoRoot . getL osLocalCopy $ dependOS) uri
+      (failures, targets) <- retrieveTargetList init cache dependOS >>= return . partitionEithers
+      when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
+
       -- Compute a list of sources for all the releases in the repository we will upload to,
       -- used to avoid creating package versions that already exist.  Also include the sources
       -- for the local repository to avoid collisions there as well.
       let poolSources = NamedSliceList { sliceListName = ReleaseName (relName (sliceListName buildRelease) ++ "-all")
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
-      -- Build an apt-get environment which we can use to retrieve all the package lists
-      pool <-prepareAptEnv (P.ifSourcesChanged params) poolSources
-      (failures, targets) <- retrieveTargetList init cache dependOS >>= return . partitionEithers
-      when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
-      buildResult <- evalStateT (buildTargets cache dependOS globalBuildDeps (getL osLocalMaster dependOS) targets) pool
-      -- If all targets succeed they may be uploaded to a remote repo
-      result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))
-      return result
+      withAptImage (P.ifSourcesChanged params) poolSources
+                       (buildTargets cache dependOS globalBuildDeps (getL osLocalMaster dependOS) targets >>=
+                        upload >>=
+                        liftIO . newDist)
+      -- result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))
+      -- return result
     where
       params = C.params cache
       baseRelease =  either (error . show) id (P.findSlice cache (P.baseRelease params))
@@ -247,6 +248,7 @@ doVerifyBuildRepo cache =
     do repoNames <- mapM (foldRepository f g) (map sliceRepoKey . slices . C.buildRepoSources $ cache) >>= return . map releaseName . concat
        when (not (any (== (P.buildRelease params)) repoNames))
             (case P.uploadURI params of
+               Nothing -> error "No uploadURI?"
                Just uri ->
                    let ssh = case uriAuthority uri of
                                Just auth -> uriUserInfo auth ++ uriRegName auth ++ uriPort auth

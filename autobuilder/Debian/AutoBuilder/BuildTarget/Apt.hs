@@ -12,7 +12,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag(AptPin), Pa
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(flushSource, ifSourcesChanged))
 import Debian.Relation (SrcPkgName)
 import Debian.Release (ReleaseName(ReleaseName, relName))
-import Debian.Repo.Apt.AptImage (prepareAptEnv)
+import Debian.Repo.Apt.AptImage (withAptImage)
 import Debian.Repo.AptImage (aptDir)
 import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.Slice (NamedSliceList(sliceListName))
@@ -27,18 +27,18 @@ documentation = [ "apt:<distribution>:<packagename> - a target of this form look
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> SrcPkgName -> m Download
 prepare cache target dist package =
-    do os <- prepareAptEnv (P.ifSourcesChanged (P.params cache)) distro
-       apt <- evalStateT (aptDir package) os
-       when (P.flushSource (P.params cache)) (liftIO . removeRecursiveSafely $ apt)
-       tree <- evalStateT (prepareSource package version') os
-       return $ Download {
-                    package = target
-                  , getTop = topdir tree
-                  , logText = "Built from " ++ relName (sliceListName distro) ++ " apt pool, apt-revision: " ++ show (P.spec target)
-                  , mVersion = Nothing
-                  , origTarball = Nothing
-                  , cleanTarget = \ _ -> return ([], 0)
-                  , buildWrapper = id }
+    withAptImage (P.ifSourcesChanged (P.params cache)) distro $ do
+      apt <- aptDir package
+      when (P.flushSource (P.params cache)) (liftIO . removeRecursiveSafely $ apt)
+      tree <- prepareSource package version'
+      return $ Download
+                 { package = target
+                 , getTop = topdir tree
+                 , logText = "Built from " ++ relName (sliceListName distro) ++ " apt pool, apt-revision: " ++ show (P.spec target)
+                 , mVersion = Nothing
+                 , origTarball = Nothing
+                 , cleanTarget = \ _ -> return ([], 0)
+                 , buildWrapper = id }
     where
       distro = maybe (error $ "Invalid dist: " ++ relName dist') id (findRelease (P.allSources cache) dist')
       dist' = ReleaseName dist

@@ -1,16 +1,18 @@
-{-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS -fno-warn-orphans #-}
 module Debian.Repo.Apt.OSImage
     ( prepareOSEnv
     , updateOSEnv
+    , updateOSEnv'
     ) where
 
 import Control.Applicative ((<$>))
-import Control.Exception (SomeException, try)
+import Control.Exception (Exception, SomeException, try, throw)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO(catch))
-import Control.Monad.State (evalStateT, execStateT, MonadState(put))
+import Control.Monad.State (evalStateT, execStateT, MonadState(put, get))
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
+import Data.Typeable
 import Data.Lens.Lazy (getL, modL, setL)
 import Data.List (intercalate)
 import Data.List as List (map, partition)
@@ -98,6 +100,9 @@ data UpdateError
     = Changed ReleaseName FilePath SliceList SliceList
     | Missing ReleaseName FilePath
     | Flushed
+    deriving Typeable
+
+instance Exception UpdateError
 
 instance Show UpdateError where
     show (Changed r p l1 l2) = unwords ["Changed", show r, show p, show (pretty l1), show (pretty l2)]
@@ -190,6 +195,9 @@ buildEnv root distro arch repo copy include exclude components =
     quieter (-1) $
     do os <- buildEnv' root distro arch repo copy include exclude components
        updateOSEnv os >>= either (error . show) return
+
+updateOSEnv' :: (MonadOS m, MonadRepos m) => m ()
+updateOSEnv' = get >>= updateOSEnv >>= either throw put
 
 -- |Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.

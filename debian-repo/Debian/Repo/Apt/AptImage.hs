@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS -fno-warn-orphans #-}
 module Debian.Repo.Apt.AptImage
-    ( prepareAptEnv
+    ( withAptImage
     ) where
 
 import Control.Applicative ((<$>))
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO(catch))
-import Control.Monad.State (execStateT)
+import Control.Monad.State (StateT, execStateT, evalStateT)
 import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Function (on)
 import Data.Lens.Lazy (getL, modL)
@@ -22,7 +22,7 @@ import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.Apt.Slice (updateCacheSources)
 import Debian.Repo.AptCache (aptGetUpdate, MonadCache(aptArch, rootDir), SourcesChangedAction)
-import Debian.Repo.AptImage (AptImage, aptImageBinaryPackages, aptImageSourcePackages, aptImageSources, MonadApt, prepareAptEnv'')
+import Debian.Repo.AptImage (AptImage, aptImageBinaryPackages, aptImageSourcePackages, aptImageSources, MonadApt, createAptImage)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
@@ -43,22 +43,35 @@ import System.Posix (getFileStatus)
 import System.Process.Progress (qPutStrLn, quieter)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
+withAptImage :: (MonadRepos m, MonadTop m) => SourcesChangedAction -> NamedSliceList -> StateT AptImage m a -> m a
+withAptImage sourcesChangedAction sources action = prepareAptImage sourcesChangedAction sources >>= evalStateT action
+
 -- |Create a skeletal enviroment sufficient to run apt-get.
-prepareAptEnv :: (MonadTop m, MonadRepos m) =>
+prepareAptImage :: (MonadTop m, MonadRepos m) =>
                  SourcesChangedAction	-- What to do if environment already exists and sources.list is different
               -> NamedSliceList		-- The sources.list
               -> m AptImage		-- The resulting environment
-prepareAptEnv sourcesChangedAction sources =
+prepareAptImage sourcesChangedAction sources =
     (\ x -> qPutStrLn ("Preparing apt-get environment for " ++ show (relName (sliceListName sources))) >> quieter 2 x) $
     getRepos >>= return . Map.lookup (sliceListName sources) . getL aptImageMap >>=
-    maybe (prepareAptEnv' sourcesChangedAction sources) return
+    maybe (prepareAptImage' sourcesChangedAction sources) return
 
-prepareAptEnv' :: (MonadTop m, MonadRepos m) => SourcesChangedAction -> NamedSliceList -> m AptImage
-prepareAptEnv' sourcesChangedAction sources =
-    do os <- prepareAptEnv'' sources
-       os' <- execStateT (updateCacheSources sourcesChangedAction >> updateAptEnv) os
-       modifyRepos $ modL aptImageMap (Map.insert (sliceListName sources) os')
-       return os'
+prepareAptImage' :: (MonadTop m, MonadRepos m) => SourcesChangedAction -> NamedSliceList -> m AptImage
+prepareAptImage' sourcesChangedAction sources = do
+  getRepos >>= maybe create return . Map.lookup (sliceListName sources) . getL aptImageMap
+    where
+      create = do
+        apt <- createAptImage sources
+        apt' <- execStateT (updateCacheSources sourcesChangedAction >> updateAptEnv) apt
+        modifyRepos $ modL aptImageMap (Map.insert (sliceListName sources) apt')
+        return apt'
+
+{-
+    do apt <- createAptImage sources
+       apt' <- execStateT (updateCacheSources sourcesChangedAction >> updateAptEnv) apt
+       modifyRepos $ modL aptImageMap (Map.insert (sliceListName sources) apt')
+       return apt'
+-}
 
 -- |Run apt-get update and then retrieve all the packages referenced
 -- by the sources.list.  The source packages are sorted so that
@@ -257,7 +270,7 @@ indexCacheFile repo release index =
     do arch <- aptArch
        case (arch, packageIndexArch index) of
          (Binary _ _, Source) -> return $ indexPrefix repo release index ++ "_source_Sources"
-         (Binary _ _, arch@(Binary _ _)) -> return $ indexPrefix repo release index ++ "_binary-" ++ show (prettyArch arch) ++ "_Packages"
+         (Binary _ _, indexArch@(Binary _ _)) -> return $ indexPrefix repo release index ++ "_binary-" ++ show (prettyArch indexArch) ++ "_Packages"
          (x, _) -> error $ "Invalid build architecture: " ++ show x
 
 indexPrefix :: RepoKey -> Release -> PackageIndex -> FilePath

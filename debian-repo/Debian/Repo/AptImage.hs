@@ -8,7 +8,7 @@ module Debian.Repo.AptImage
     , aptImageSources
     , aptImageSourcePackages
     , aptImageBinaryPackages
-    , prepareAptEnv''
+    , createAptImage
     ) where
 
 import Control.Applicative ((<$>))
@@ -97,8 +97,8 @@ data SourcesChangedAction =
     RemoveRelease
     deriving (Eq, Show, Data, Typeable)
 
-prepareAptEnv'' :: (MonadTop m, MonadIO m) => NamedSliceList -> m AptImage
-prepareAptEnv'' sources = do
+createAptImage :: (MonadTop m, MonadIO m) => NamedSliceList -> m AptImage
+createAptImage sources = do
   root <- cacheRootDir (sliceListName sources)
   liftIO $ do
     arch <- buildArchOfRoot
