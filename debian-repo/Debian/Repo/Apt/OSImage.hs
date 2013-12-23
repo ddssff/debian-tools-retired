@@ -126,21 +126,21 @@ prepareOSEnv :: (MonadRepos m, MonadTop m) =>
 prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude components =
     do os <- createOSImage root distro repo
        os' <- update os
-       arch <- liftIO buildArchOfRoot -- This should be stored in os, but it is a Maybe - why?
-       execStateT (recreate arch os' >> doInclude >> doLocales >> syncLocalPool) os
+       execStateT (recreate os' >> doInclude >> doLocales >> syncLocalPool) os
     where
       update _ | flush = return (Left Flushed)
       update os = updateOSEnv os
-      recreate :: (MonadOS m, MonadCache m, MonadRepos m, MonadTop m) => Arch -> Either UpdateError OSImage -> m ()
-      recreate _ (Right os) = put os
-      recreate _arch (Left (Changed name path computed installed))
+      recreate :: (MonadOS m, MonadCache m, MonadRepos m, MonadTop m) => Either UpdateError OSImage -> m ()
+      recreate (Right os) = put os
+      recreate (Left (Changed name path computed installed))
           | ifSourcesChanged == SourcesChangedError =
               error $ "FATAL: Sources for " ++ relName name ++ " in " ++ path ++
                        " don't match computed configuration.\n\ncomputed:\n" ++
                        show (pretty computed) ++ "\ninstalled:\n" ++
                        show (pretty installed)
-      recreate arch (Left reason) =
-          do dist <- distDir
+      recreate (Left reason) =
+          do arch <- liftIO buildArchOfRoot -- This should be stored in os, but it is a Maybe - why?
+             dist <- distDir
              sources <- sourcesPath
              base <- access osBaseDistro
              liftIO $ do ePutStrLn $ "Removing and recreating build environment at " ++ rootPath root ++ ": " ++ show reason
@@ -165,6 +165,7 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
           do localeName <- liftIO $ try (getEnv "LANG")
              localeGen (either (\ (_ :: IOError) -> "en_US.UTF-8") id localeName)
 
+-- | Not used, but could be a substitute for buildEnv.
 _pbuilderBuild :: (MonadRepos m, MonadTop m) =>
             EnvRoot
          -> NamedSliceList
@@ -179,8 +180,8 @@ _pbuilderBuild root distro arch repo copy _extraEssential _omitEssential _extra 
     do os <- _pbuilderBuild' root distro arch repo copy _extraEssential _omitEssential _extra
        updateOSEnv os >>= either (error . show) return
 
--- Create a new clean build environment in root.clean
--- FIXME: create an ".incomplete" flag and remove it when build-env succeeds
+-- | Create a new clean build environment in root.clean FIXME: create
+-- an ".incomplete" flag and remove it when build-env succeeds
 buildEnv :: (MonadRepos m, MonadTop m) =>
             EnvRoot
          -> NamedSliceList

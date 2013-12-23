@@ -82,6 +82,7 @@ data ReposState
       { _repoMap :: Map.Map URI' RemoteRepository		-- ^ Map to look up known (remote) Repository objects
       , _releaseMap :: Map.Map (RepoKey, ReleaseName) Release -- ^ Map to look up known Release objects
       , _aptImageMap :: Map.Map SliceName AptImage	-- ^ Map to look up prepared AptImage objects
+      , _osImageMap :: Map.Map SliceName OSImage	-- ^ Map to look up prepared OSImage objects
       , _sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
       , _binaryPackageMap :: Map.Map FilePath (FileStatus, [BinaryPackage])
       }
