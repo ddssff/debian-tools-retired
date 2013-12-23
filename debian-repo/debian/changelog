@@ -1,3 +1,10 @@
+haskell-debian-repo (5.50) unstable; urgency=low
+
+  * Use the State monad to manage the repository state, the OSImage state,
+    the AptImage state, and the Top state.
+
+ -- David Fox <dsf@seereason.com>  Mon, 23 Dec 2013 05:40:03 -0800
+
 haskell-debian-repo (5.49) unstable; urgency=low
 
   * Re-create empty releases after removing them in flushLocalRepository.
