@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports, RankNTypes #-}
+{-# LANGUAGE PackageImports, RankNTypes, TypeFamilies #-}
 {-# OPTIONS -fwarn-unused-imports #-}
 module Debian.AutoBuilder.Types.Download
     ( Download(..)
@@ -8,12 +8,17 @@ module Debian.AutoBuilder.Types.Download
     ) where
 
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatchIO)
+import Control.Monad.State (StateT)
 import Control.Monad.Trans (MonadIO)
 import Data.Time (NominalDiffTime)
 import qualified Data.ByteString.Lazy as L
 import Data.Version (Version)
 import Debian.AutoBuilder.Types.Packages (Packages, PackageFlag, RetrieveMethod(..), TargetName)
 import qualified Debian.AutoBuilder.Types.Packages as P
+import Debian.Repo.AptImage (AptImage)
+import Debian.Repo.OSImage (OSImage)
+import Debian.Repo.Repos (ReposState)
+import Debian.Repo.Top (TopT)
 import System.Process.Read.Chunks (Output)
 
 data Download
@@ -32,7 +37,7 @@ data Download
       , cleanTarget :: FilePath -> IO ([Output L.ByteString], NominalDiffTime)
       -- ^ Clean version control info out of a target after it has
       -- been moved to the given location.
-      , buildWrapper :: forall m a. MonadCatchIO m => m a -> m a
+      , buildWrapper :: (m ~ StateT OSImage (StateT AptImage (TopT (StateT ReposState IO)))) => m NominalDiffTime -> m NominalDiffTime
       -- ^ Modify the build process in some way - currently only the
       -- proc target modifies this by mounting and then unmounting /proc.
       }

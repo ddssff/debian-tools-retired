@@ -4,11 +4,13 @@ module Debian.AutoBuilder.BuildTarget
     , targetDocumentation
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Exception (SomeException, try, throw)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatchIO)
-import Control.Monad.State (evalStateT)
-import Control.Monad.Trans (liftIO)
+import Control.Monad.State (evalStateT, get)
+import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy as L
+import Data.Lens.Lazy (getL)
 import Data.List (intersperse)
 import qualified Debian.AutoBuilder.BuildTarget.Apt as Apt
 import qualified Debian.AutoBuilder.BuildTarget.Cd as Cd
@@ -34,14 +36,15 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (DebT)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.AptCache (rootDir)
-import Debian.Repo.OSImage (MonadOS, OSImage, withProc)
+import Debian.Repo.OSImage (MonadOS, OSImage, withProc, osRoot)
 import Debian.Repo.EnvPath (rootPath)
+import Debian.Repo.Prelude (access)
 import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
 import Debian.Repo.Top (MonadTop)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
-import System.Process (proc)
+import System.Process (proc, readProcess)
 import System.Process.Progress (runProcessF, qPutStrLn, quieter)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
@@ -107,6 +110,7 @@ retrieve defaultAtoms cache target =
 
       P.Proc spec' ->
           retrieve defaultAtoms cache (target {P.spec = spec'}) >>= \ base ->
+          get >>= \ os ->
           return $ T.Download {
                        T.package = target
                      , T.getTop = T.getTop base
@@ -114,12 +118,8 @@ retrieve defaultAtoms cache target =
                      , T.mVersion = Nothing
                      , T.origTarball = Nothing
                      , T.cleanTarget = T.cleanTarget base
-                     , T.buildWrapper = withProc'
+                     , T.buildWrapper = withProc
                      }
-          where
-            -- withProc' :: forall m a. (MonadOS m, MonadCatchIO m) => m a -> m a
-            -- withProc' task = withProc task
-            withProc' task = undefined
       P.Quilt base patches ->
           do base' <- retrieve defaultAtoms cache (target {P.spec = base})
              patches' <- retrieve defaultAtoms cache (target {P.spec = patches})
