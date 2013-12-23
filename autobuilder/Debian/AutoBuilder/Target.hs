@@ -47,7 +47,8 @@ import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
 import Debian.Repo.Apt.OSImage (updateOSEnv, execMonadOS)
 import Debian.Repo.Apt.Package (scanIncoming)
-import Debian.Repo.AptCache (MonadCache(rootDir, aptBinaryPackages), aptSourcePackagesSorted, binaryPackages, buildArchOfEnv, sourcePackages)
+import Debian.Repo.AptCache (MonadCache(rootDir, aptBinaryPackages), binaryPackages, buildArchOfEnv, sourcePackages)
+import Debian.Repo.AptImage (MonadApt, aptSourcePackagesSorted)
 import Debian.Repo.OSImage (OSImage, syncEnv, syncLocalPool, updateLists, withProc, withTmp)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
@@ -144,7 +145,7 @@ partitionFailing xs =
 -- | Build a set of targets.  When a target build is successful it
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
-buildTargets :: (MonadRepos m, MonadTop m, MonadCache m) =>
+buildTargets :: (MonadRepos m, MonadTop m, MonadApt m) =>
                 P.CacheRec -> OSImage -> Relations -> LocalRepository -> [Buildable] -> m (LocalRepository, [Target])
 buildTargets _ _ _ localRepo [] = return (localRepo, [])
 buildTargets cache dependOS globalBuildDeps localRepo !targetSpecs =
@@ -160,13 +161,13 @@ buildTargets cache dependOS globalBuildDeps localRepo !targetSpecs =
 
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
-buildLoop :: (MonadRepos m, MonadTop m, MonadCache m) =>
+buildLoop :: (MonadRepos m, MonadTop m, MonadApt m) =>
              P.CacheRec -> Relations -> LocalRepository -> OSImage -> [Target] -> m [Target]
 buildLoop cache globalBuildDeps localRepo dependOS !targets =
     Set.toList <$> loop dependOS (Set.fromList targets) Set.empty
     where
       -- This loop computes the ready targets and builds one.
-      loop :: (MonadRepos m, MonadCache m, MonadTop m) =>
+      loop :: (MonadRepos m, MonadApt m, MonadTop m) =>
               OSImage -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
       loop _ unbuilt failed | Set.null unbuilt = return failed
       loop dependOS unbuilt failed =
@@ -176,7 +177,7 @@ buildLoop cache globalBuildDeps localRepo dependOS !targets =
             triples -> do noisier 1 $ qPutStrLn (makeTable triples)
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
                           loop2 dependOS (Set.difference unbuilt ready) failed triples
-      loop2 :: (MonadRepos m, MonadCache m, MonadTop m) =>
+      loop2 :: (MonadRepos m, MonadApt m, MonadTop m) =>
                OSImage
             -> Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
             -> Set.Set Target -- failed: Targets which either failed to build or were blocked by a target that failed to build
@@ -331,7 +332,7 @@ qError message = qPutStrLn message >> error message
 
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
-    (MonadRepos m, MonadTop m, MonadCache m) =>
+    (MonadRepos m, MonadTop m, MonadApt m) =>
     P.CacheRec ->			-- configuration info
     OSImage ->				-- cleanOS
     Relations ->			-- The build-essential relations
@@ -607,7 +608,7 @@ data Status = Complete | Missing [BinPkgName]
 -- |Compute a new version number for a package by adding a vendor tag
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
-computeNewVersion :: MonadCache m => P.CacheRec -> OSImage -> Target -> m (Failing DebianVersion)
+computeNewVersion :: MonadApt m => P.CacheRec -> OSImage -> Target -> m (Failing DebianVersion)
 computeNewVersion cache dependOS target =
     case P.doNotChangeVersion (P.params cache) of
       True -> return (Success sourceVersion)

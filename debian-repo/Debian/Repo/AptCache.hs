@@ -5,7 +5,6 @@ module Debian.Repo.AptCache
     , aptReleaseName
     , distDir
     , sourcesPath
-    , aptSourcePackagesSorted
     , buildArchOfEnv
     , buildArchOfRoot
     , SourcesChangedAction(..)
@@ -80,19 +79,6 @@ sourcesPath :: (MonadTop m, MonadCache m) => m FilePath
 sourcesPath =
     do dir <- distDir
        return $ dir </> "sources"
-
--- |Return all the named source packages sorted by version
-aptSourcePackagesSorted :: MonadCache m => [SrcPkgName] -> m [SourcePackage]
-aptSourcePackagesSorted names =
-    (sortBy cmp . filterNames names) <$> aptSourcePackages
-    where
-      filterNames names' packages =
-          filter (flip elem names' . packageName . sourcePackageID) packages
-      cmp p1 p2 =
-          compare v2 v1		-- Flip args to get newest first
-          where
-            v1 = packageVersion . sourcePackageID $ p1
-            v2 = packageVersion . sourcePackageID $ p2
 
 buildArchOfEnv :: EnvRoot -> IO Arch
 buildArchOfEnv (EnvRoot root)  =

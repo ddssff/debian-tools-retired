@@ -8,6 +8,7 @@ module Debian.Repo.AptImage
     , aptImageSources
     , aptImageSourcePackages
     , aptImageBinaryPackages
+    , aptSourcePackagesSorted
     , createAptImage
     , cacheRootDir
     ) where
@@ -19,13 +20,16 @@ import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Data (Data)
 import Data.Lens.Lazy (getL)
 import Data.Lens.Template (makeLenses)
+import Data.List (sortBy)
 import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(relName))
 import Debian.Repo.AptCache (distDir, MonadCache(..))
 import Debian.Repo.EnvPath (EnvRoot(..))
-import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
+import Debian.Repo.PackageID (PackageID(packageVersion, packageName))
+import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage(sourcePackageID))
+import Debian.Repo.Prelude (access)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName))
 import Debian.Repo.Top (askTop, MonadTop)
 import Extra.Files (replaceFile, writeFileIfMissing)
@@ -128,3 +132,16 @@ cacheRootDir :: MonadTop m => ReleaseName -> m EnvRoot
 cacheRootDir release =
     do top <- askTop
        return $ EnvRoot (top </> "dists" </> relName release </> "aptEnv")
+
+-- |Return all the named source packages sorted by version
+aptSourcePackagesSorted :: MonadApt m => [SrcPkgName] -> m [SourcePackage]
+aptSourcePackagesSorted names =
+    (sortBy cmp . filterNames names) <$> access aptImageSourcePackages
+    where
+      filterNames names' packages =
+          filter (flip elem names' . packageName . sourcePackageID) packages
+      cmp p1 p2 =
+          compare v2 v1		-- Flip args to get newest first
+          where
+            v1 = packageVersion . sourcePackageID $ p1
+            v2 = packageVersion . sourcePackageID $ p2
