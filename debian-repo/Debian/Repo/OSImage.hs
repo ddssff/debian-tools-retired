@@ -24,7 +24,7 @@ module Debian.Repo.OSImage
     , withTmp
     , aptGetInstall
 
-    , prepareOSEnv'
+    , createOSImage
     , _pbuilderBuild'
     , buildEnv'
     , syncLocalPool
@@ -423,14 +423,15 @@ forceList :: [a] -> IO [a]
 forceList output = evaluate (length output) >> return output
 
 -- |Create or update an OS image in which packages can be built.
-prepareOSEnv' :: (MonadIO m, MonadTop m) =>
+createOSImage :: (MonadIO m, MonadTop m) =>
               EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list of the base distribution
            -> LocalRepository           -- ^ The location of the local upload repository
            -> m OSImage
-prepareOSEnv' root distro repo =
-    do copy <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) repo
-       ePutStrLn ("Preparing clean " ++ relName (sliceListName distro) ++ " build environment at " ++ rootPath root ++ ", osLocalRepoMaster: " ++ show repo)
+createOSImage root distro repo =
+    do ePutStrLn ("Preparing clean " ++ relName (sliceListName distro) ++ " build environment at " ++
+                  rootPath root ++ ", osLocalRepoMaster: " ++ show repo)
+       copy <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) repo
        arch <- liftIO buildArchOfRoot
        let os = OS { _osRoot = root
                    , _osBaseDistro = distro
@@ -440,43 +441,6 @@ prepareOSEnv' root distro repo =
                    , _osSourcePackages = []
                    , _osBinaryPackages = [] }
        return os
-{-
-       -- update os >>= recreate arch os >>= doInclude >>= doLocales >>= syncLocalPool
-       os' <- update os
-       os'' <- recreate arch os os'
-       doInclude os''
-       doLocales os''
-       syncLocalPool os''
-    where
-      update _ | flush = return (Left Flushed)
-      update os = updateOSEnv os
-      recreate :: MonadDeb m => Arch -> OSImage -> Either UpdateError OSImage -> m OSImage
-      recreate _ _ (Right os) = return os
-      recreate _arch _os (Left (Changed name path computed installed))
-          | ifSourcesChanged == SourcesChangedError =
-              error $ "FATAL: Sources for " ++ relName name ++ " in " ++ path ++
-                       " don't match computed configuration.\n\ncomputed:\n" ++
-                       show (pretty computed) ++ "\ninstalled:\n" ++
-                       show (pretty installed)
-      recreate arch os (Left reason) =
-          do liftIO $ do ePutStrLn $ "Removing and recreating build environment at " ++ rootPath root ++ ": " ++ show reason
-                         -- ePutStrLn ("removeRecursiveSafely " ++ rootPath root)
-                         removeRecursiveSafely (rootPath root)
-                         -- ePutStrLn ("createDirectoryIfMissing True " ++ show (distDir os))
-                         createDirectoryIfMissing True (distDir os)
-                         -- ePutStrLn ("writeFile " ++ show (sourcesPath os) ++ " " ++ show (show . osBaseDistro $ os))
-                         replaceFile (sourcesPath os) (show . pretty . getL osBaseDistro $ os)
-             os' <- buildEnv root distro arch (getL osLocalMaster os) (getL osLocalCopy os) include exclude components
-             liftIO $ do doLocales os'
-                         neuterEnv os'
-             syncLocalPool os'
-      doInclude os = liftIO $
-          do aptGetInstall os (map (\ s -> (BinPkgName s, Nothing)) include)
-             aptGetInstall os (map (\ s -> (BinPkgName s, Nothing)) optional) `catchIOError` (\ e -> ePutStrLn ("Ignoring exception on optional package install: " ++ show e))
-      doLocales os =
-          do localeName <- liftIO (try (getEnv "LANG") :: IO (Either SomeException String))
-             liftIO $ localeGen (either (const "en_US.UTF-8") id localeName) os
--}
 
 _pbuilderBuild' :: (MonadIO m, MonadTop m, Functor m) =>
             EnvRoot

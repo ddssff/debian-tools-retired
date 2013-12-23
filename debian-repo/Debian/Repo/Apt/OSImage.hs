@@ -29,7 +29,7 @@ import Debian.Repo.Apt.Slice (verifySourcesList)
 import Debian.Repo.AptCache (buildArchOfRoot, distDir, MonadCache(aptArch, rootDir), SourcesChangedAction(SourcesChangedError), sourcesPath)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
-import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildEnv', localeGen, MonadOS, neuterEnv, osBaseDistro, osBinaryPackages, osFullDistro, OSImage, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, prepareOSEnv', syncLocalPool, updateLists)
+import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildEnv', localeGen, MonadOS, neuterEnv, osBaseDistro, osBinaryPackages, osFullDistro, OSImage, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, createOSImage, syncLocalPool, updateLists)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
 import Debian.Repo.Prelude (access)
@@ -124,7 +124,7 @@ prepareOSEnv :: (MonadRepos m, MonadTop m) =>
            -> [String]			-- ^ Components of the base repository
            -> m OSImage
 prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude components =
-    do os <- prepareOSEnv' root distro repo
+    do os <- createOSImage root distro repo
        os' <- update os
        arch <- liftIO buildArchOfRoot -- This should be stored in os, but it is a Maybe - why?
        execStateT (recreate arch os' >> doInclude >> doLocales >> syncLocalPool) os
