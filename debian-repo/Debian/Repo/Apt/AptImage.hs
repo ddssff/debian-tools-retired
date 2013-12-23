@@ -1,12 +1,15 @@
 {-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS -fno-warn-orphans #-}
 module Debian.Repo.Apt.AptImage
-    ( withAptImage
+    ( evalMonadApt
+    , execMonadApt
+    , runMonadApt
+    , withAptImage
     ) where
 
 import Control.Applicative ((<$>))
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO(catch))
-import Control.Monad.State (StateT, execStateT, evalStateT)
+import Control.Monad.State (StateT, runStateT)
 import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Function (on)
 import Data.Lens.Lazy (getL, modL)
@@ -22,14 +25,14 @@ import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.Apt.Slice (updateCacheSources)
 import Debian.Repo.AptCache (aptGetUpdate, MonadCache(aptArch, rootDir), SourcesChangedAction)
-import Debian.Repo.AptImage (AptImage, aptImageBinaryPackages, aptImageSourcePackages, aptImageSources, MonadApt, createAptImage)
+import Debian.Repo.AptImage (AptImage, aptImageBinaryPackages, aptImageSourcePackages, aptImageSources, MonadApt, createAptImage, aptImageRoot, cacheRootDir)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
 import Debian.Repo.Prelude (access, (~=))
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
-import Debian.Repo.Repos (aptImageMap, binaryPackageMap, foldRepository, getRepos, modifyRepos, MonadRepos, sourcePackageMap)
+import Debian.Repo.Repos (aptImageMap, binaryPackageMap, foldRepository, getRepos, modifyRepos, MonadRepos, sourcePackageMap, findAptImage)
 import Debian.Repo.Slice (binarySlices, NamedSliceList(sliceListName, sliceList), Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices)
 import Debian.Repo.Top (MonadTop)
 import Debian.Sources (DebSource(sourceDist, sourceType), SourceType(Deb, DebSrc))
@@ -43,8 +46,23 @@ import System.Posix (getFileStatus)
 import System.Process.Progress (qPutStrLn, quieter)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
+-- | Run MonadOS and update the osImageMap with the modified value
+evalMonadApt :: (MonadRepos m, Functor m) => StateT AptImage m a -> AptImage -> m a
+evalMonadApt task apt = fst <$> runMonadApt task apt
+
+-- | Run MonadOS and update the osImageMap with the modified value
+execMonadApt :: (MonadRepos m, Functor m) => StateT AptImage m a -> AptImage -> m AptImage
+execMonadApt task apt = snd <$> runMonadApt task apt
+
+-- | Run MonadOS and update the osImageMap with the modified value
+runMonadApt :: (MonadRepos m, Functor m) => StateT AptImage m a -> AptImage -> m (a, AptImage)
+runMonadApt task apt = do
+  (a, apt') <- runStateT task apt
+  modifyRepos (modL aptImageMap (Map.insert (getL aptImageRoot apt') apt'))
+  return (a, apt')
+
 withAptImage :: (MonadRepos m, MonadTop m) => SourcesChangedAction -> NamedSliceList -> StateT AptImage m a -> m a
-withAptImage sourcesChangedAction sources action = prepareAptImage sourcesChangedAction sources >>= evalStateT action
+withAptImage sourcesChangedAction sources action = prepareAptImage sourcesChangedAction sources >>= evalMonadApt action
 
 -- |Create a skeletal enviroment sufficient to run apt-get.
 prepareAptImage :: (MonadTop m, MonadRepos m) =>
@@ -53,25 +71,15 @@ prepareAptImage :: (MonadTop m, MonadRepos m) =>
               -> m AptImage		-- The resulting environment
 prepareAptImage sourcesChangedAction sources =
     (\ x -> qPutStrLn ("Preparing apt-get environment for " ++ show (relName (sliceListName sources))) >> quieter 2 x) $
-    getRepos >>= return . Map.lookup (sliceListName sources) . getL aptImageMap >>=
+    cacheRootDir (sliceListName sources) >>= \ root ->
+    getRepos >>= return . Map.lookup root . getL aptImageMap >>=
     maybe (prepareAptImage' sourcesChangedAction sources) return
 
 prepareAptImage' :: (MonadTop m, MonadRepos m) => SourcesChangedAction -> NamedSliceList -> m AptImage
-prepareAptImage' sourcesChangedAction sources = do
-  getRepos >>= maybe create return . Map.lookup (sliceListName sources) . getL aptImageMap
-    where
-      create = do
-        apt <- createAptImage sources
-        apt' <- execStateT (updateCacheSources sourcesChangedAction >> updateAptEnv) apt
-        modifyRepos $ modL aptImageMap (Map.insert (sliceListName sources) apt')
-        return apt'
-
-{-
-    do apt <- createAptImage sources
-       apt' <- execStateT (updateCacheSources sourcesChangedAction >> updateAptEnv) apt
-       modifyRepos $ modL aptImageMap (Map.insert (sliceListName sources) apt')
-       return apt'
--}
+prepareAptImage' sourcesChangedAction sources =
+    cacheRootDir (sliceListName sources) >>= \ root ->
+    findAptImage root >>=
+    maybe (createAptImage sources >>= execMonadApt (updateCacheSources sourcesChangedAction >> updateAptEnv)) return
 
 -- |Run apt-get update and then retrieve all the packages referenced
 -- by the sources.list.  The source packages are sorted so that

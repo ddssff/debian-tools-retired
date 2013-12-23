@@ -45,7 +45,7 @@ import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, r
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
-import Debian.Repo.Apt.OSImage (updateOSEnv)
+import Debian.Repo.Apt.OSImage (updateOSEnv, execMonadOS)
 import Debian.Repo.Apt.Package (scanIncoming)
 import Debian.Repo.AptCache (MonadCache(rootDir, aptBinaryPackages), aptSourcePackagesSorted, binaryPackages, buildArchOfEnv, sourcePackages)
 import Debian.Repo.OSImage (OSImage, syncEnv, syncLocalPool, updateLists, withProc, withTmp)
@@ -207,8 +207,8 @@ buildLoop cache globalBuildDeps localRepo dependOS !targets =
                      -- dependencies are added to unbuilt.
                      (\ mRepo ->
                           do dependOS' <- maybe (return dependOS)
-                                               (\ _ -> updateOSEnv dependOS >>= either (\ e -> error ("Failed to update clean OS:\n " ++ show e)) return)
-                                               mRepo
+                                                (\ _ -> try (execMonadOS updateOSEnv dependOS) >>= either (\ (e :: SomeException) -> error ("Failed to update clean OS:\n " ++ show e)) return)
+                                                mRepo
                              -- Add to unbuilt any blocked packages that weren't already failed by
                              -- some other build
                              let unbuilt' = Set.union unbuilt (Set.difference (Set.fromList blocked) failed)

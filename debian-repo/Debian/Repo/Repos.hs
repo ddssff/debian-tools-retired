@@ -12,9 +12,14 @@ module Debian.Repo.Repos
 
     , releaseMap
     , aptImageMap
+    , osImageMap
     , sourcePackageMap
     , binaryPackageMap
 
+    , findOSImage
+    , findAptImage
+    , putOSImage
+    , putAptImage
     , prepareRemoteRepository
     , foldRepository
 
@@ -33,14 +38,15 @@ import Data.Lens.Template (makeLenses)
 import Data.Map as Map (empty, fromList, insert, lookup, Map, toList, union)
 import Data.Maybe (fromMaybe)
 import Debian.Release (ReleaseName)
-import Debian.Repo.AptImage (AptImage)
+import Debian.Repo.AptImage (AptImage, aptImageSources, aptImageRoot)
 import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot))
 import Debian.Repo.LocalRepository (LocalRepository, prepareLocalRepository)
-import Debian.Repo.OSImage (OSImage)
+import Debian.Repo.OSImage (OSImage, osBaseDistro, osRoot)
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Release (getReleaseInfoRemote, Release)
 import Debian.Repo.RemoteRepository (RemoteRepository, RemoteRepository(RemoteRepository))
 import Debian.Repo.Repo (RepoKey(..))
+import Debian.Repo.Slice (NamedSliceList(sliceListName))
 import Debian.Repo.Top (MonadTop, runTopT, sub, TopT)
 import Debian.Sources (SliceName)
 import Debian.URI (fromURI', toURI', URI(uriPath, uriScheme), URI')
@@ -81,8 +87,8 @@ data ReposState
     = ReposState
       { _repoMap :: Map.Map URI' RemoteRepository		-- ^ Map to look up known (remote) Repository objects
       , _releaseMap :: Map.Map (RepoKey, ReleaseName) Release -- ^ Map to look up known Release objects
-      , _aptImageMap :: Map.Map SliceName AptImage	-- ^ Map to look up prepared AptImage objects
-      , _osImageMap :: Map.Map SliceName OSImage	-- ^ Map to look up prepared OSImage objects
+      , _aptImageMap :: Map.Map EnvRoot AptImage	-- ^ Map to look up prepared AptImage objects
+      , _osImageMap :: Map.Map EnvRoot OSImage	-- ^ Map to look up prepared OSImage objects
       , _sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
       , _binaryPackageMap :: Map.Map FilePath (FileStatus, [BinaryPackage])
       }
@@ -99,9 +105,22 @@ initState = ReposState
             { _repoMap = Map.empty
             , _releaseMap = Map.empty
             , _aptImageMap = Map.empty
+            , _osImageMap = Map.empty
             , _sourcePackageMap = Map.empty
             , _binaryPackageMap = Map.empty
             }
+
+findOSImage :: MonadRepos m => EnvRoot -> m (Maybe OSImage)
+findOSImage key = (Map.lookup key . getL osImageMap) <$> getRepos
+
+findAptImage :: MonadRepos m => EnvRoot -> m (Maybe AptImage)
+findAptImage key = (Map.lookup key . getL aptImageMap) <$> getRepos
+
+putOSImage :: MonadRepos m => OSImage -> m ()
+putOSImage repo = modifyRepos (modL osImageMap (Map.insert (getL osRoot repo) repo))
+
+putAptImage :: MonadRepos m => AptImage -> m ()
+putAptImage repo = modifyRepos (modL aptImageMap (Map.insert (getL aptImageRoot repo) repo))
 
 prepareRemoteRepository :: MonadRepos m => URI -> m RemoteRepository
 prepareRemoteRepository uri =

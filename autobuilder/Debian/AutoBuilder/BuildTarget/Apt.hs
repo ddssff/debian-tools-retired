@@ -2,7 +2,6 @@
 module Debian.AutoBuilder.BuildTarget.Apt where
 
 import Control.Monad (when)
-import Control.Monad.State (evalStateT)
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.List (nub, sort)
 import Data.Maybe (catMaybes)

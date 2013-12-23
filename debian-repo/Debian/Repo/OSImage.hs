@@ -47,7 +47,7 @@ import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (ParseRelations(parseRelations), PkgName, Relations)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
 import Debian.Repo.AptCache (MonadCache(..))
-import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot(rootPath), EnvRoot(EnvRoot), outsidePath)
+import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot(rootPath), EnvRoot, outsidePath)
 import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Prelude (access, (~=))
@@ -103,14 +103,6 @@ instance (Monad m, Functor m) => MonadOS (StateT OSImage m)
 -- constructing instances of AptCache.  Each is followed by a
 -- corresponding function that gives the same result when applied to
 -- an AptCache instance.
-
--- | A directory which will hold all the cached files for this
--- NamedSliceList.
-cacheDistDir :: FilePath -> ReleaseName -> FilePath
-cacheDistDir cacheDir release = cacheDir ++ "/dists/" ++ relName release
-
-cacheRootDir :: FilePath -> ReleaseName -> EnvRoot
-cacheRootDir cacheDir release = EnvRoot (cacheDistDir cacheDir release ++ "/aptEnv")
 
 buildArchOfRoot :: IO Arch
 buildArchOfRoot =
@@ -385,9 +377,9 @@ withProc task =
            pre :: m String
            pre = liftIO (createDirectoryIfMissing True dir >> readProcess "mount" ["--bind", "/proc", dir] "")
            post :: String -> m String
-           post s = liftIO $ readProcess "umount" [dir] ""
+           post _s = liftIO $ readProcess "umount" [dir] ""
            task' :: String -> m c
-           task' s = task
+           task' _s = task
        bracket pre post task'
 
 -- | Do an IO task in the build environment with /proc mounted.

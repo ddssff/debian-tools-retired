@@ -9,6 +9,7 @@ module Debian.Repo.AptImage
     , aptImageSourcePackages
     , aptImageBinaryPackages
     , createAptImage
+    , cacheRootDir
     ) where
 
 import Control.Applicative ((<$>))
