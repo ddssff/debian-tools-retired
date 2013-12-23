@@ -61,6 +61,7 @@ Library
       , bzlib
       , Cabal
       , containers
+      , data-lens
       , directory
       , Extra
       , file-embed

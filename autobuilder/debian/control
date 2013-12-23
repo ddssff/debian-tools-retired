@@ -9,6 +9,8 @@ Build-Depends: debhelper (>= 7.0)
                , ghc-prof
                , libghc-cabal-dev | ghc
                , libghc-cabal-prof | ghc-prof
+               , libghc-data-lens-dev
+               , libghc-data-lens-prof
                , libghc-extra-dev
                , libghc-extra-prof
                , libghc-hunit-dev
@@ -93,6 +95,7 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-zlib-prof
 Build-Depends-Indep: ghc-doc
                      , libghc-cabal-doc | ghc-doc
+                     , libghc-data-lens-doc
                      , libghc-extra-doc
                      , libghc-hunit-doc
                      , libghc-haxml-doc (>= 1:1.22.5)
