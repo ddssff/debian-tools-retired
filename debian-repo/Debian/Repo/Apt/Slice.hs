@@ -39,7 +39,7 @@ import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Regex (mkRegex, splitRegex)
 
--- |Examine the repository whose root is at the given URI and return a
+-- | Examine the repository whose root is at the given URI and return a
 -- set of sources that includes all of its releases.  This is used to
 -- ensure that a package we want to upload doesn't already exist in
 -- the repository.

@@ -308,10 +308,11 @@ restoreFile os (file, mustExist) =
 -- | Build the dependency relations for the build essential packages.
 -- For this to work the @build-essential@ package must be installed in
 -- the OSImage.
-buildEssential :: OSImage -> IO Relations
-buildEssential os =
-    (\ x -> qPutStrLn "Computing build essentials" >> quieter 2 x) $
-    do
+buildEssential :: (MonadOS m, MonadIO m) => m Relations
+buildEssential =
+    qPutStrLn "Computing build essentials" >>
+    access osRoot >>= \ root ->
+    liftIO $ quieter 2 $ do
       essential <-
           readFile (rootPath root ++ "/usr/share/build-essential/essential-packages-list") >>=
           return . lines >>= return . dropWhile (/= "") >>= return . tail >>= return . filter (/= "sysvinit") >>=
@@ -328,8 +329,6 @@ buildEssential os =
       let buildEssential'' = parseRelations (intercalate ", " relationText)
       let buildEssential' = either (\ l -> error ("parse error in /usr/share/build-essential/list:\n" ++ show l)) id buildEssential''
       return (essential ++ buildEssential')
-    where
-      root = getL osRoot os
 
 -- |Remove an image.  The removeRecursiveSafely function is used to
 -- ensure that any file systems mounted inside the image are unmounted

@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies #-}
+{-# LANGUAGE BangPatterns, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeFamilies #-}
 {-# OPTIONS -Wall -fwarn-unused-imports -fno-warn-name-shadowing -fno-warn-orphans #-}
 -- |A Target represents a particular set of source code and the
 -- methods to retrieve and update it.
@@ -17,7 +17,7 @@ import Control.Arrow (second)
 import Control.Exception (AsyncException(UserInterrupt), evaluate, fromException, SomeException, throw, toException)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO, catch, try)
 import Control.Monad.RWS (liftIO, MonadIO, when)
-import Control.Monad.State (evalStateT, evalState, execStateT)
+import Control.Monad.State (evalStateT, evalState, execStateT, get)
 import qualified Data.ByteString.Char8 as B (concat)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, concat, empty, toChunks, unpack)
 import qualified Data.ByteString.UTF8 as UTF8 (toString)
@@ -45,11 +45,11 @@ import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, r
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
-import Debian.Repo.Apt.OSImage (updateOSEnv, execMonadOS)
+import Debian.Repo.Apt.OSImage (updateOSEnv, execMonadOS, evalMonadOS)
 import Debian.Repo.Apt.Package (scanIncoming)
 import Debian.Repo.AptCache (MonadCache(rootDir, aptBinaryPackages), binaryPackages, buildArchOfEnv, sourcePackages)
 import Debian.Repo.AptImage (MonadApt, aptSourcePackagesSorted)
-import Debian.Repo.OSImage (OSImage, syncEnv, syncLocalPool, updateLists, withProc, withTmp)
+import Debian.Repo.OSImage (OSImage, syncEnv, syncLocalPool, updateLists, withProc, withTmp, osRoot, buildEssential)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
@@ -59,6 +59,7 @@ import Debian.Repo.OSImage (MonadOS)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID))
+import Debian.Repo.Prelude (symbol)
 import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..))
 import Debian.Repo.Top (MonadTop)
@@ -146,24 +147,21 @@ partitionFailing xs =
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
 buildTargets :: (MonadRepos m, MonadTop m, MonadApt m) =>
-                P.CacheRec -> OSImage -> Relations -> LocalRepository -> [Buildable] -> m (LocalRepository, [Target])
-buildTargets _ _ _ localRepo [] = return (localRepo, [])
-buildTargets cache dependOS globalBuildDeps localRepo !targetSpecs =
-    do
-      qPutStrLn "\nAssembling source trees:\n"
-      targets <- evalStateT (prepareTargets cache globalBuildDeps targetSpecs) dependOS
-      qPutStrLn "\nBuilding all targets:"
-      failed <- buildLoop cache globalBuildDeps localRepo dependOS targets
-      return (localRepo, failed)
-    where
-      -- targetList <- liftIO $ countAndPrepareTargets cache globalBuildDeps cleanOS targetSpecs
-      --buildAll cleanOS targetList globalBuildDeps
-
+                P.CacheRec -> OSImage -> LocalRepository -> [Buildable] -> m (LocalRepository, [Target])
+buildTargets _ _ localRepo [] = return (localRepo, [])
+buildTargets cache dependOS localRepo !targetSpecs =
+    do globalBuildDeps <- evalMonadOS buildEssential dependOS
+       qPutStrLn ("\n" ++ $(symbol 'buildTargets) ++ "\nAssembling source trees:\n")
+       targets <- evalStateT (prepareTargets cache globalBuildDeps targetSpecs) dependOS
+       qPutStrLn "\nBuilding all targets:"
+       failed <- buildLoop cache localRepo dependOS targets
+       return (localRepo, failed)
+ 
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
 buildLoop :: (MonadRepos m, MonadTop m, MonadApt m) =>
-             P.CacheRec -> Relations -> LocalRepository -> OSImage -> [Target] -> m [Target]
-buildLoop cache globalBuildDeps localRepo dependOS !targets =
+             P.CacheRec -> LocalRepository -> OSImage -> [Target] -> m [Target]
+buildLoop cache localRepo dependOS !targets =
     Set.toList <$> loop dependOS (Set.fromList targets) Set.empty
     where
       -- This loop computes the ready targets and builds one.
@@ -192,7 +190,7 @@ buildLoop cache globalBuildDeps localRepo dependOS !targets =
              -- Build one target.
              result <- if Set.member (targetName target) (P.discard (P.params cache))
                        then return (Failure ["--discard option set"])
-                       else (Success <$> buildTarget cache dependOS globalBuildDeps localRepo target) `IO.catch` handleBuildException
+                       else (Success <$> buildTarget cache dependOS localRepo target) `IO.catch` handleBuildException
              failing -- On failure the target and its dependencies get
                      -- added to failed.
                      (\ errs ->
@@ -335,20 +333,20 @@ buildTarget ::
     (MonadRepos m, MonadTop m, MonadApt m) =>
     P.CacheRec ->			-- configuration info
     OSImage ->				-- cleanOS
-    Relations ->			-- The build-essential relations
     LocalRepository ->			-- The local repository the packages will be uploaded to
     Target ->
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
-buildTarget cache dependOS globalBuildDeps repo !target =
-    do
-      dependOS' <- quieter 2 $ execStateT syncLocalPool dependOS
-      -- Get the control file from the clean source and compute the
-      -- build dependencies
-      let debianControl = targetControl target
-      root <- evalStateT rootDir dependOS'
-      arch <- liftIO $ buildArchOfEnv root
-      let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) dependOS globalBuildDeps debianControl
-      case solns of
+buildTarget cache dependOS repo !target = do
+  dependOS' <- quieter 2 $ execStateT syncLocalPool dependOS
+  -- Get the control file from the clean source and compute the
+  -- build dependencies
+  let debianControl = targetControl target
+  root <- evalStateT rootDir dependOS'
+  arch <- liftIO $ buildArchOfEnv root
+  globalBuildDeps <- evalMonadOS buildEssential dependOS
+  solns <- evalMonadOS (buildDepSolutions arch (map BinPkgName (P.preferred (P.params cache))) debianControl) dependOS
+  -- let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) dependOS globalBuildDeps debianControl
+  case solns of
         Failure excuses -> qError $ intercalate "\n  " ("Couldn't satisfy build dependencies" : excuses)
         Success [] -> qError "Internal error 4"
         Success ((_count, sourceDependencies) : _) ->
@@ -662,53 +660,32 @@ computeNewVersion cache dependOS target =
       (releaseControlInfo, _releaseStatus, _message) = getReleaseControlInfo dependOS target
 
 -- FIXME: Most of this code should move into Debian.Repo.Dependencies
-buildDepSolutions' :: Arch -> [BinPkgName] -> OSImage -> Relations -> Control' T.Text -> Failing [(Int, [BinaryPackage])]
-buildDepSolutions' arch preferred os globalBuildDeps debianControl =
-    -- q12 "Searching for build dependency solution" $
-    -- We don't discard any dependencies here even if they are
-    -- mentioned in Relax-Depends, that only applies to deciding
-    -- whether to build, once we are building we need to install all
-    -- the dependencies.  Hence this empty list.
-    case G.buildDependencies debianControl of
-      Left s -> Failure [s]
-      Right info ->
-          let relations' = G.relations info ++ globalBuildDeps
-              relations'' = simplifyRelations packages relations' preferred arch in
-          -- Do not stare directly into the solutions!  Your head will
-          -- explode (because there may be a lot of them.)  Also, this
-          -- will be slow if solutions is not compiled.
-          case Debian.Repo.Dependencies.solutions packages (filter (not . alwaysSatisfied) relations'') 100000 of
-            Left error -> Failure [error, message relations' relations'']
-            Right solutions -> {- quieter (+ 1) $ qPutStrLn (message relations' relations'') >> return -} Success solutions
+buildDepSolutions :: (MonadOS m, MonadIO m, MonadCache m) => Arch -> [BinPkgName] -> Control' T.Text -> m (Failing [(Int, [BinaryPackage])])
+buildDepSolutions arch preferred debianControl =
+    do globalBuildDeps <- buildEssential
+       packages <- aptBinaryPackages
+       case G.buildDependencies debianControl of
+         Left s -> return $ Failure [s]
+         Right info ->
+             -- q12 "Searching for build dependency solution" $
+             -- We don't discard any dependencies here even if they are
+             -- mentioned in Relax-Depends, that only applies to deciding
+             -- whether to build, once we are building we need to install all
+             -- the dependencies.  Hence this empty list.
+             let relations' = G.relations info ++ globalBuildDeps
+                 relations'' = simplifyRelations packages relations' preferred arch in
+             -- Do not stare directly into the solutions!  Your head will
+             -- explode (because there may be a lot of them.)  Also, this
+             -- will be slow if solutions is not compiled.
+             case Debian.Repo.Dependencies.solutions packages (filter (not . alwaysSatisfied) relations'') 100000 of
+               Left error -> return $ Failure [error, message relations' relations'']
+               Right solutions -> return $ Success solutions
     where
       alwaysSatisfied xs = any isNothing xs && all isNothing xs
-      packages = evalState aptBinaryPackages os
       message relations' relations'' =
           "Build dependency relations:\n " ++
           concat (intersperse "\n " (map (\ (a, b) -> show (map pretty a) ++ " -> " ++ show (map prettySimpleRelation b))
                                               (zip relations' relations'')))
-      -- Group and merge the relations by package.  This can only be done
-      -- to AND relations that include a single OR element, but these are
-      -- extremely common.  (Not yet implemented.)
-{-
-      mergeRelations :: Relations -> Relations
-      mergeRelations relations = relations
-          let pairs = zip (map namesOf relations) relations in
-          let pairs' = sortBy ((==) . fst) pairs in
-          let pairs'' = groupBy (\ a b -> fst a == fst b) pairs' in
-          map concat (map merge pairs'')
-          where
-            merge ([name], rels) = ([name], [rel])
-            mergeAnds ([name], (Rel _ (Just v1) a) : (Rel _ Nothing _) : more) = merge ([name], (Rel _ (Just v1) a) : more)
-            mergeAnds ([name], (Rel _ Nothing a) : (Rel _ Nothing _) : more) = merge ([name], (Rel _ Nothing a) : more)
-          let (simple, compound) = partition ((== 1) . length . fst) pairs in
-          
-          let (simple, compound) = partition ((== 1) . length . nub . map nameOf) relations in
-          undefined
-          where
-            namesOf relation = nub (map nameOf)
-            nameOf (Rel name _ _) = name
--}
 
 -- In ghc610, using readFile on pseudo files in /proc hangs.  Use this instead.
 --rf path = lazyCommand ("cat '" ++ path ++ "'") L.empty >>= return . (\ (o, _, _) -> o) . collectOutputUnpacked

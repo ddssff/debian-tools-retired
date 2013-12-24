@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell, TypeFamilies #-}
 -- |AutoBuilder - application to build Debian packages in a clean
 -- environment.  In the following list, each module's dependencies
 -- appear above it:
@@ -32,10 +32,12 @@ import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (DebT)
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.Apt.AptImage (withAptImage)
+import Debian.Repo.Apt.OSImage (evalMonadOS, execMonadOS)
 import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
 import Debian.Repo.Repos (MonadRepos, foldRepository, runReposCachedT, MonadReposCached)
-import Debian.Repo.OSImage (OSImage, osLocalMaster, osLocalCopy, buildEssential)
+import Debian.Repo.OSImage (MonadOS, OSImage, osLocalMaster, osLocalCopy)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
+import Debian.Repo.Prelude (access, symbol)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
@@ -129,6 +131,18 @@ doParameterSet init results params =
       allTargetNames :: Set P.TargetName
       allTargetNames = P.foldPackages (\ name _ _ result -> insert name result) (P.buildPackages params) empty
 
+-- | Get the sources.list for the local upload repository associated
+-- with the OSImage.  The resulting paths are for running inside the
+-- build environment.
+getLocalSources :: (MonadRepos m, MonadOS m, MonadIO m) => m SliceList
+getLocalSources = do
+  qPutStrLn $(symbol 'getLocalSources)
+  quieter 1 $ do
+    root <- repoRoot <$> access osLocalCopy
+    case parseURI ("file://" ++ envPath root) of
+      Nothing -> error $ "Invalid local repo root: " ++ show root
+      Just uri -> repoSources (Just (envRoot root)) uri
+
 runParameterSet :: MonadReposCached m => DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet init cache =
     do
@@ -140,28 +154,30 @@ runParameterSet init cache =
       when (P.flushAll params) (liftIO $ doFlush top)
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
-      -- localRepo <- prepareLocalRepo cache			-- Prepare the local repository for initial uploads
-      -- qPutStrLn $ "runParameterSet localRepo: " ++ show localRepo
-      dependOS <- prepareDependOS params buildRelease
-      _ <- evalStateT (updateCacheSources (P.ifSourcesChanged params)) dependOS
-      -- Compute the essential and build essential packages, they will all
-      -- be implicit build dependencies.
-      globalBuildDeps <- liftIO $ buildEssential dependOS
-      -- Get a list of all sources for the local repository.
-      localSources <- (\ x -> qPutStrLn "Getting local sources" >> quieter 1 x) $
-          case parseURI ("file://" ++ envPath (repoRoot (getL osLocalCopy dependOS))) of
-            Nothing -> error $ "Invalid local repo root: " ++ show (repoRoot (getL osLocalCopy dependOS))
-            Just uri -> repoSources (Just . envRoot . repoRoot . getL osLocalCopy $ dependOS) uri
-      (failures, targets) <- retrieveTargetList init cache dependOS >>= return . partitionEithers
+      dependOS' <- prepareDependOS params buildRelease
+      dependOS <- execMonadOS (updateCacheSources (P.ifSourcesChanged params)) dependOS'
+      let allTargets = P.buildPackages (C.params cache)
+      qPutStr ("\n" ++ showTargets allTargets ++ "\n")
+      buildOS <- prepareBuildOS (P.buildRelease (C.params cache)) dependOS
+      when (P.report params) (ePutStrLn . doReport $ allTargets)
+      qPutStrLn "Retrieving all source code:\n"
+      retrieved <-
+          countTasks' (map (\ (target :: P.Packages) ->
+                                (show (P.spec target), (Right <$> evalStateT (retrieve init cache target) buildOS) `IO.catch` handleRetrieveException target))
+                           (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
+      (failures, targets) <- mapM (either (return . Left) (\ download -> liftIO (try (asBuildable download)) >>= return. either (\ (e :: SomeException) -> Left (show e)) Right)) retrieved >>= return . partitionEithers
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
 
       -- Compute a list of sources for all the releases in the repository we will upload to,
       -- used to avoid creating package versions that already exist.  Also include the sources
       -- for the local repository to avoid collisions there as well.
+      localSources <- evalMonadOS getLocalSources buildOS
       let poolSources = NamedSliceList { sliceListName = ReleaseName (relName (sliceListName buildRelease) ++ "-all")
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
+      -- Compute the essential and build essential packages, they will all
+      -- be implicit build dependencies.
       withAptImage (P.ifSourcesChanged params) poolSources
-                       (buildTargets cache dependOS globalBuildDeps (getL osLocalMaster dependOS) targets >>=
+                       (buildTargets cache dependOS (getL osLocalMaster dependOS) targets >>=
                         upload >>=
                         liftIO . newDist)
       -- result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))
@@ -264,30 +280,13 @@ doVerifyBuildRepo cache =
       g = return . repoReleaseInfo
       params = C.params cache
 
-retrieveTargetList :: MonadReposCached m => DebT IO () -> C.CacheRec -> OSImage -> m [Either String Buildable]
-retrieveTargetList init cache dependOS =
-          retrieveTargetList' dependOS >>=
-          mapM (either (return . Left) (\ download -> liftIO (try (asBuildable download)) >>= return. either (\ (e :: SomeException) -> Left (show e)) Right))
-    where
-      params = C.params cache
-      -- retrieveTargetList' :: MonadReposCached m => OSImage -> m [Either String Download]
-      retrieveTargetList' dependOS =
-          do qPutStr ("\n" ++ showTargets allTargets ++ "\n")
-             buildOS <- prepareBuildOS (P.buildRelease (C.params cache)) dependOS
-             when (P.report params) (ePutStrLn . doReport $ allTargets)
-             qPutStrLn "Retrieving all source code:\n"
-             countTasks' (map (\ (target :: P.Packages) ->
-                                   (show (P.spec target), (Right <$> evalStateT (retrieve init cache target) buildOS) `IO.catch` handleRetrieveException target))
-                              (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
-          where
-            allTargets = P.buildPackages (C.params cache)
-            handleRetrieveException :: MonadReposCached m => P.Packages -> SomeException -> m (Either String Download)
-            handleRetrieveException target e =
-                case (fromException (toException e) :: Maybe AsyncException) of
-                  Just UserInterrupt ->
-                      throw e -- break out of loop
-                  _ -> let message = ("Failure retrieving " ++ show (P.spec target) ++ ":\n  " ++ show e) in
-                       liftIO (IO.hPutStrLn IO.stderr message) >> return (Left message)
+handleRetrieveException :: MonadReposCached m => P.Packages -> SomeException -> m (Either String Download)
+handleRetrieveException target e =
+          case (fromException (toException e) :: Maybe AsyncException) of
+            Just UserInterrupt ->
+                throw e -- break out of loop
+            _ -> let message = ("Failure retrieving " ++ show (P.spec target) ++ ":\n  " ++ show e) in
+                 liftIO (IO.hPutStrLn IO.stderr message) >> return (Left message)
 
 -- | Perform a list of tasks with log messages.
 countTasks' :: MonadIO m => [(String, m a)] -> m [a]
