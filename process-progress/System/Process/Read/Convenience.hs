@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 module System.Process.Read.Convenience
     ( -- * Predicates
@@ -50,7 +50,7 @@ module System.Process.Read.Convenience
     , doAll
 
     , dots
-    -- , prefixed
+    , prefixed
     ) where
 
 import Control.Exception (throw)
@@ -211,37 +211,35 @@ dots charsPerDot nDots outputs =
              xs' <- dots' rem' xs
              return (x : xs')
 
-{-
 -- | Output the stream with a prefix added at the beginning of each
 -- line of stdout and stderr.
-prefixed :: forall a c. (ListLikePlus a c, UTF8.UTF8Bytes a (LengthType a)) => a -> a -> [Output a] -> IO [Output a]
+prefixed :: forall a c. (Enum c, ListLikePlus a c) => a -> a -> [Output a] -> IO [Output a]
 prefixed opre epre output =
     mapM (\ (old, new) -> doOutput [new] >> return old) (prefixes opre epre output)
 
 -- | Return the original stream of outputs zipped with one that has
 -- had prefixes for stdout and stderr inserted.  For the prefixed
 -- stream only, apply @map snd@.
-prefixes :: forall a c. (ListLikePlus a c, UTF8.UTF8Bytes a (LengthType a)) => a -> a -> [Output a] -> [(Output a, Output a)]
+prefixes :: forall a c. (Enum c, ListLikePlus a c) => a -> a -> [Output a] -> [(Output a, Output a)]
 prefixes opre epre output =
     loop True output
     where
-      loop :: Bool -> [Output a] -> [(Output a, Output a)]
+      loop :: (Enum c, ListLike a c) => Bool -> [Output a] -> [(Output a, Output a)]
       loop _ [] = []
       loop bol (x@(Stdout s) : xs) = let (s', bol') = step bol opre s in (x, Stdout s') : loop bol' xs
       loop bol (x@(Stderr s) : xs) = let (s', bol') = step bol epre s in (x, Stderr s') : loop bol' xs
       loop bol (x : xs) = (x, Stdout empty) : loop bol xs
 
-      step :: Bool -> a -> a -> (a, Bool)
+      step :: (Enum c, ListLike a c) => Bool -> a -> a -> (a, Bool)
       step bol pre s =
-          let (a, b) = Data.ListLike.span (/= '\n') s in
+          let (a, b) = Data.ListLike.span (\ c -> fromEnum c /= fromEnum '\n') s in
           if null a
           then if null b
                then (empty, bol)
                else let x = (if bol then pre else empty)
                         (s', bol') = step True pre (tail b) in
-                    (concat [x, singleton '\n', s'], bol')
+                    (concat [x, singleton (toEnum . fromEnum $ '\n'), s'], bol')
           -- There is some text before a possible newline
           else let x = (if bol then append pre a else a)
                    (s', bol') = step False pre b in
                (append x s', bol')
--}

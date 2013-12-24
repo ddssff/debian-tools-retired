@@ -1,3 +1,10 @@
+haskell-process-progress (0.7) unstable; urgency=low
+
+  * Fix the prefix feature, which prepends different prefixes to the
+    lines of stdout and stderr.
+
+ -- David Fox <dsf@seereason.com>  Mon, 23 Dec 2013 21:46:47 -0800
+
 haskell-process-progress (0.6) unstable; urgency=low
 
   * Add option to echo output with prefixes on exception

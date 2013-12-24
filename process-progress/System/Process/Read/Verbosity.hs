@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, TypeFamilies #-}
 module System.Process.Read.Verbosity
     ( quieter
     , noisier
@@ -47,7 +47,7 @@ verbosity :: MonadIO m => m Int
 verbosity = liftIO $ getEnv "VERBOSITY" >>= return . maybe 1 read
 
 -- | Select from the runProcess* functions in Monad based on a verbosity level.
-runProcess :: (NonBlocking s c, MonadIO m) => CreateProcess -> s -> m [Output s]
+runProcess :: (NonBlocking s c, Enum c, MonadIO m) => CreateProcess -> s -> m [Output s]
 runProcess p input = liftIO $
     verbosity >>= \ v ->
     case v of
@@ -57,7 +57,7 @@ runProcess p input = liftIO $
       _ -> runProcessV p input
 
 -- | A version of 'runProcess' that throws an exception on failure.
-runProcessF :: (NonBlocking s c, MonadIO m) => Maybe (s, s) -> CreateProcess -> s -> m [Output s]
+runProcessF :: (NonBlocking s c, Enum c, MonadIO m) => Maybe (s, s) -> CreateProcess -> s -> m [Output s]
 runProcessF prefixes p input = liftIO $
     verbosity >>= \ v ->
     case v of

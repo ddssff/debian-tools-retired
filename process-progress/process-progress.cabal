@@ -1,5 +1,5 @@
 Name:               process-progress
-Version:            0.6
+Version:            0.7
 Synopsis:           Run a process and do reportsing on its progress.
 Description:        Function to run a process and wrappers to provide different
                     types of feedback while it executes.
