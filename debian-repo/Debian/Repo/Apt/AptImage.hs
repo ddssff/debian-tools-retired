@@ -12,7 +12,7 @@ import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO(catch))
 import Control.Monad.State (StateT, runStateT)
 import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Function (on)
-import Data.Lens.Lazy (getL, modL)
+import Data.Lens.Lazy (getL, modL, setL)
 import Data.List (intercalate, sortBy)
 import Data.List as List (map, partition)
 import Data.Map as Map (insert, lookup)
@@ -25,7 +25,7 @@ import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.Apt.Slice (updateCacheSources)
 import Debian.Repo.AptCache (aptGetUpdate, MonadCache(aptArch, rootDir), SourcesChangedAction)
-import Debian.Repo.AptImage (AptImage, aptImageBinaryPackages, aptImageSourcePackages, aptImageSources, MonadApt, createAptImage, aptImageRoot, cacheRootDir)
+import Debian.Repo.AptImage (AptImage, getApt, modifyApt, aptImageBinaryPackages, aptImageSourcePackages, aptImageSources, MonadApt, createAptImage, aptImageRoot, cacheRootDir)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
@@ -89,8 +89,8 @@ updateAptEnv =
     do aptGetUpdate
        sourcePackages <- getSourcePackages >>= return . sortBy cmp
        binaryPackages <- getBinaryPackages
-       aptImageSourcePackages ~= sourcePackages
-       aptImageBinaryPackages ~= binaryPackages
+       modifyApt (setL aptImageSourcePackages sourcePackages)
+       modifyApt (setL aptImageBinaryPackages binaryPackages)
     where
       -- Flip args to get newest version first
       cmp = flip (compare `on` (packageVersion . sourcePackageID))
@@ -110,13 +110,13 @@ updateAptEnv =
 getSourcePackages :: (MonadRepos m, MonadApt m, MonadCache m) => m [SourcePackage]
 getSourcePackages =
     do qPutStrLn "AptImage.getSourcePackages"
-       indexes <- (slices . sourceSlices . sliceList <$> access aptImageSources) >>= mapM sliceIndexes >>= return . concat
+       indexes <- (slices . sourceSlices . sliceList . getL aptImageSources <$> getApt) >>= mapM sliceIndexes >>= return . concat
        mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' repo rel index) indexes >>= return . concat
 
 getBinaryPackages :: (MonadRepos m, MonadApt m, MonadCache m) => m [BinaryPackage]
 getBinaryPackages =
     do qPutStrLn "AptImage.getBinaryPackages"
-       indexes <- (slices . binarySlices . sliceList <$> access aptImageSources) >>= mapM sliceIndexes >>= return . concat
+       indexes <- (slices . binarySlices . sliceList . getL aptImageSources <$> getApt) >>= mapM sliceIndexes >>= return . concat
        mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' repo rel index) indexes >>= return . concat
 
 -- |Return a list of the index files that contain the packages of a

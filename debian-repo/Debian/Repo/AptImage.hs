@@ -1,8 +1,10 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeSynonymInstances #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings,
+             PackageImports, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.AptImage
     ( AptImage
-    , MonadApt
+    , MonadApt(getApt, putApt)
+    , modifyApt
     , aptDir
     , aptImageRoot
     , aptImageSources
@@ -15,7 +17,7 @@ module Debian.Repo.AptImage
 
 import Control.Applicative ((<$>))
 import Control.Category ((.))
-import Control.Monad.State (get, MonadState, StateT)
+import Control.Monad.State (MonadState(get, put), StateT)
 import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Data (Data)
 import Data.Lens.Lazy (getL)
@@ -50,7 +52,12 @@ data AptImage =
 
 $(makeLenses [''AptImage])
 
-class (MonadState AptImage m, Monad m, Functor m) => MonadApt m
+class (Monad m, Functor m) => MonadApt m where
+    getApt :: m AptImage
+    putApt :: AptImage -> m ()
+
+modifyApt :: MonadApt m => (AptImage -> AptImage) -> m ()
+modifyApt f = getApt >>= putApt . f
 
 instance (Monad m, Functor m) => MonadApt (StateT AptImage m)
 
@@ -58,11 +65,11 @@ instance Show AptImage where
     show apt = "AptImage " ++ relName (sliceListName (getL aptImageSources apt))
 
 instance (Monad m, Functor m) => MonadCache (StateT AptImage m) where
-    rootDir = _aptImageRoot <$> get
-    aptArch = _aptImageArch <$> get
-    aptBaseSources = _aptImageSources <$> get
-    aptSourcePackages = _aptImageSourcePackages <$> get
-    aptBinaryPackages = _aptImageBinaryPackages <$> get
+    rootDir = _aptImageRoot <$> getApt
+    aptArch = _aptImageArch <$> getApt
+    aptBaseSources = _aptImageSources <$> getApt
+    aptSourcePackages = _aptImageSourcePackages <$> getApt
+    aptBinaryPackages = _aptImageBinaryPackages <$> getApt
 
 instance Ord AptImage where
     compare a b = compare (sliceListName . getL aptImageSources $ a) (sliceListName . getL aptImageSources $ b)
@@ -136,7 +143,7 @@ cacheRootDir release =
 -- |Return all the named source packages sorted by version
 aptSourcePackagesSorted :: MonadApt m => [SrcPkgName] -> m [SourcePackage]
 aptSourcePackagesSorted names =
-    (sortBy cmp . filterNames names) <$> access aptImageSourcePackages
+    (sortBy cmp . filterNames names . getL aptImageSourcePackages) <$> getApt
     where
       filterNames names' packages =
           filter (flip elem names' . packageName . sourcePackageID) packages
