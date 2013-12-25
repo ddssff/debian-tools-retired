@@ -352,12 +352,12 @@ buildTarget cache dependOS repo !target = do
         Success ((_count, sourceDependencies) : _) ->
             do -- Get the newest available version of a source package,
                -- along with its status, either Indep or All
-               let (releaseControlInfo, releaseStatus, _message) = getReleaseControlInfo dependOS target
+               (releaseControlInfo, releaseStatus, _message) <- evalMonadOS (getReleaseControlInfo target) dependOS
                let repoVersion = fmap (packageVersion . sourcePackageID) releaseControlInfo
                    oldFingerprint = packageFingerprint releaseControlInfo
                -- Get the changelog entry from the clean source
                let newFingerprint = targetFingerprint target sourceDependencies
-               newVersion <- computeNewVersion cache dependOS target
+               newVersion <- evalMonadOS (computeNewVersion cache target) dependOS
                let decision = buildDecision cache target oldFingerprint newFingerprint releaseStatus
                ePutStrLn ("Build decision: " ++ show decision)
                -- quieter (const 0) $ qPutStrLn ("newVersion: " ++ show (fmap prettyDebianVersion newVersion))
@@ -381,8 +381,8 @@ buildPackage :: (MonadRepos m, MonadTop m) =>
                 P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
 buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target status repo =
     checkDryRun >>
-    prepareBuildOS (P.buildRelease (P.params cache)) dependOS >>= \ buildOS ->
-    liftIO (prepareBuildImage cache dependOS newFingerprint buildOS target) >>=
+    evalMonadOS (prepareBuildOS (P.buildRelease (P.params cache))) dependOS >>= \ buildOS ->
+    prepareBuildImage cache dependOS newFingerprint buildOS target >>=
     logEntry >>= \ tree ->
     noisier 1 (evalStateT (build tree) buildOS) >>=
     find >>=
@@ -479,65 +479,50 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
 -- these operations take place in a different order from other types
 -- of builds.  For lax: dependencies, then image copy, then source
 -- copy.  For other: image copy, then source copy, then dependencies.
-prepareBuildImage :: P.CacheRec -> OSImage -> Fingerprint -> OSImage -> Target -> IO DebianBuildTree
-prepareBuildImage cache dependOS sourceFingerprint buildOS target | P.strictness (P.params cache) == P.Lax =
-    -- Install dependencies directly into the clean environment
-    installDependencies dependOS (cleanSource target) buildDepends sourceFingerprint >>=
-    prepareTree noClean
+prepareBuildImage :: MonadRepos m => P.CacheRec -> OSImage -> Fingerprint -> OSImage -> Target -> m DebianBuildTree
+prepareBuildImage cache dependOS sourceFingerprint buildOS target =
+    case P.strictness (P.params cache) == P.Lax of
+      True -> do
+        -- Install dependencies directly into the clean environment
+        dependOS' <- execMonadOS (installDependencies (cleanSource target) buildDepends sourceFingerprint) dependOS
+        buildOS' <- case noClean of
+                      True -> return buildOS
+                      False -> liftIO (syncEnv dependOS buildOS)
+        buildTree <- case noClean of
+                       True ->
+                           liftIO (findOneDebianBuildTree newPath) >>=
+                           maybe (error ("No build tree at " ++ show newPath)) return
+                       False ->
+                           liftIO (copySourceTree (cleanSource target) newPath)
+        return buildTree
+      False -> do
+        -- Install dependencies directly into the build environment
+        buildTree <- case noClean of
+                       True ->
+                           liftIO (findOneDebianBuildTree newPath) >>=
+                           maybe (error ("No build tree at " ++ show newPath)) return
+                       False ->
+                           liftIO $ copySourceTree (cleanSource target) newPath
+        dependOS' <- execMonadOS (withTmp (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS
+        buildOS' <- case noClean of
+                      True -> return buildOS
+                      False -> liftIO (syncEnv dependOS' buildOS)
+        buildOS'' <- execMonadOS (installDependencies buildTree buildDepends sourceFingerprint) buildOS'
+        return buildTree
     where
-      prepareTree True _ =
-          (\ x -> qPutStrLn "Finding build tree" >> quieter 1 x) $
-          findOneDebianBuildTree newPath >>=
-          maybe (error ("No build tree at " ++ show newPath)) return
-      prepareTree False _ =
-          (\ x -> qPutStrLn "Copying build tree..." >> quieter 1 x) $
-          syncEnv dependOS buildOS >>
-          copySourceTree (cleanSource target) newPath
-      buildDepends = (P.buildDepends (P.params cache))
-      noClean = P.noClean (P.params cache)
       newPath = evalState (rootPath <$> rootDir) buildOS ++ fromJust (dropPrefix (evalState (rootPath <$> rootDir) dependOS) oldPath)
       oldPath = topdir . cleanSource $ target
-prepareBuildImage cache dependOS sourceFingerprint buildOS target =
-    -- Install dependencies directly into the build environment
-    findTree noClean >>=
-    downloadDeps >>=
-    syncEnv' noClean >>=
-    installDeps
-    where
-      -- findTree :: Bool -> IO (Failing DebianBuildTree)
-      findTree False =
-          (\ x -> qPutStrLn "Finding build tree" >> quieter 1 x) $
-              copySourceTree (cleanSource target) newPath
-      findTree True =
-          findOneDebianBuildTree newPath >>=
-          maybe (error ("prepareBuildImage: could not find build tree in " ++ newPath)) return
-
-      downloadDeps buildTree = evalStateT (withTmp (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS >>
-                               return buildTree
-
-      syncEnv' False buildTree =
-          (\ x -> qPutStrLn "Syncing buildOS" >> quieter 1 x) $
-              syncEnv dependOS buildOS >>= (\ os -> return (os, buildTree))
-      syncEnv' True buildTree =
-          return (buildOS, buildTree)
-
-      installDeps (buildOS, buildTree) =
-          installDependencies buildOS buildTree buildDepends sourceFingerprint >> return buildTree
-      buildDepends = P.buildDepends (P.params cache)
       noClean = P.noClean (P.params cache)
-      newPath = evalState (rootPath <$> rootDir) buildOS ++ fromJust (dropPrefix (evalState (rootPath <$> rootDir) dependOS) (topdir (cleanSource target)))
+      buildDepends = P.buildDepends (P.params cache)
 
 -- | Get the control info for the newest version of a source package
 -- available in a release.  Make sure that the files for this build
 -- architecture are available.
-getReleaseControlInfo :: OSImage -> Target -> (Maybe SourcePackage, SourcePackageStatus, String)
-getReleaseControlInfo dependOS target =
-    case zip sourcePackages' (map (isComplete binaryPackages') sourcePackagesWithBinaryNames) of
-      (info, status@Complete) : _ -> (Just info, All, message status)
-      (info, status@(Missing missing)) : _ -> (Just info, Indep missing, message status)
-      _ -> (Nothing, None, message Complete)
-    where
-      packageName = G.sourceName (targetDepends target)
+getReleaseControlInfo :: (MonadOS m, MonadCache m) => Target -> m (Maybe SourcePackage, SourcePackageStatus, String)
+getReleaseControlInfo target = do
+  sourcePackages' <- sortBy compareVersion <$> sourcePackages [packageName]
+  binaryPackages' <- binaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages')
+  let sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
       message status =
           intercalate "\n"
                   (["  Source Package Versions: " ++ show (map (second prettyDebianVersion . sourcePackageVersion) sourcePackages'),
@@ -547,11 +532,15 @@ getReleaseControlInfo dependOS target =
                    ["  Binary Package Versions: " ++ show (map (second prettyDebianVersion . binaryPackageVersion) binaryPackages'),
                     "  Available Binary Packages of Source Package:"] ++
                    map (("   " ++) . show) (zip (map (second prettyDebianVersion . sourcePackageVersion) sourcePackages') (map (availableDebNames binaryPackages') sourcePackages')))
+  return $ case zip sourcePackages' (map (isComplete binaryPackages') sourcePackagesWithBinaryNames) of
+    (info, status@Complete) : _ -> (Just info, All, message status)
+    (info, status@(Missing missing)) : _ -> (Just info, Indep missing, message status)
+    _ -> (Nothing, None, message Complete)
+    where
+      packageName = G.sourceName (targetDepends target)
       missingMessage Complete = []
       missingMessage (Missing missing) = ["  Missing Binary Package Names: "] ++ map (\ p -> "   " ++ unBinPkgName p) missing
-      sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
-      binaryPackages' = evalState (binaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages')) dependOS
-      sourcePackages' = sortBy compareVersion $ evalState (sourcePackages [packageName]) dependOS
+
       sourcePackageVersion package =
           case ((fieldValue "Package" . sourceParagraph $ package), (fieldValue "Version" . sourceParagraph $ package)) of
             (Just name, Just version) -> (T.unpack name, parseDebianVersion (T.unpack version))
@@ -606,9 +595,19 @@ data Status = Complete | Missing [BinPkgName]
 -- |Compute a new version number for a package by adding a vendor tag
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
-computeNewVersion :: MonadApt m => P.CacheRec -> OSImage -> Target -> m (Failing DebianVersion)
-computeNewVersion cache dependOS target =
-    case P.doNotChangeVersion (P.params cache) of
+computeNewVersion :: (MonadApt m, MonadRepos m, MonadCache m, MonadOS m) => P.CacheRec -> Target -> m (Failing DebianVersion)
+computeNewVersion cache target = do
+  (releaseControlInfo, _releaseStatus, _message) <- getReleaseControlInfo target
+  let current = if buildTrumped then Nothing else releaseControlInfo
+      currentVersion = maybe Nothing (Just . parseDebianVersion . T.unpack) (maybe Nothing (fieldValue "Version" . sourceParagraph) current)
+      checkVersion :: DebianVersion -> Failing DebianVersion
+      checkVersion result =
+          maybe (Success result)
+                (\ v -> if result <= v
+                        then Failure ["Autobuilder bug: new version number " ++ show (prettyDebianVersion result) ++ " is not newer than current version number " ++ show (prettyDebianVersion v)]
+                        else Success result)
+                currentVersion
+  case P.doNotChangeVersion (P.params cache) of
       True -> return (Success sourceVersion)
       False ->
           let vendor = P.vendorTag (P.params cache)
@@ -643,21 +642,10 @@ computeNewVersion cache dependOS target =
       sourceLog = entry . cleanSource $ target
       getVersion paragraph =
           maybe Nothing (Just . parseDebianVersion . T.unpack) (fieldValue "Version" . sourceParagraph $ paragraph)
-      currentVersion =
-          maybe Nothing (Just . parseDebianVersion . T.unpack) (maybe Nothing (fieldValue "Version" . sourceParagraph) current)
-      checkVersion :: DebianVersion -> Failing DebianVersion
-      checkVersion result =
-          maybe (Success result)
-                (\ v -> if result <= v
-                        then Failure ["Autobuilder bug: new version number " ++ show (prettyDebianVersion result) ++ " is not newer than current version number " ++ show (prettyDebianVersion v)]
-                        else Success result)
-                currentVersion
       -- The control file paragraph for the currently uploaded
       -- version in this dist.  The new version must be newer
       -- than this.
-      current = if buildTrumped then Nothing else releaseControlInfo
       buildTrumped = elem (targetName target) (P.buildTrumped (P.params cache))
-      (releaseControlInfo, _releaseStatus, _message) = getReleaseControlInfo dependOS target
 
 -- FIXME: Most of this code should move into Debian.Repo.Dependencies
 buildDepSolutions :: (MonadOS m, MonadIO m, MonadCache m) => Arch -> [BinPkgName] -> Control' T.Text -> m (Failing [(Int, [BinaryPackage])])
@@ -771,23 +759,20 @@ pathBelow root path =
     where message = "Expected a path below " ++ root ++ ", saw " ++ path
 
 -- |Install the package's build dependencies.
-installDependencies :: OSImage -> DebianBuildTree -> [String] -> Fingerprint -> IO L.ByteString
-installDependencies os source extra sourceFingerprint =
-    do qPutStrLn $ "Installing build dependencies into " ++ root
-       (code, out, _, _) <- evalStateT (withProc (liftIO $ useEnv' root forceList $ runProcess (shell command) L.empty)) os >>=
+installDependencies :: (MonadOS m, MonadCache m, MonadCatchIO m) => DebianBuildTree -> [String] -> Fingerprint -> m L.ByteString
+installDependencies source extra sourceFingerprint =
+    do root <- rootPath <$> rootDir
+       let path = pathBelow root (topdir source)
+           pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
+           aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
+           command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
+       qPutStrLn $ "Installing build dependencies into " ++ root
+       (code, out, _, _) <- withProc (liftIO $ useEnv' root forceList $ runProcess (shell command) L.empty) >>=
                             return . collectOutputs . mergeToStdout
        case code of
          [ExitSuccess] -> return out
          code -> ePutStrLn ("FAILURE: " ++ command ++ " -> " ++ show code ++ "\n" ++ decode out) >>
                  error ("FAILURE: " ++ command ++ " -> " ++ show code)
-    where
-      command = ("export DEBIAN_FRONTEND=noninteractive; " ++
-                 (if True then aptGetCommand else pbuilderCommand))
-      pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
-      aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
-      --aptGetCommand = "apt-get --yes build-dep -o APT::Install-Recommends=False " ++ sourcpackagename
-      path = pathBelow root (topdir source)
-      root = evalState (rootPath <$> rootDir) os
 
 -- | This should probably be what the real useEnv does.
 useEnv' :: FilePath -> (a -> IO a) -> IO a -> IO a

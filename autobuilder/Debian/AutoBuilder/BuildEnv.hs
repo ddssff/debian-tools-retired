@@ -5,9 +5,9 @@ module Debian.AutoBuilder.BuildEnv
     , prepareBuildOS
     ) where
 
-import Control.Applicative ((<$>))
+import Control.Applicative (Applicative, (<$>), (<*>))
 import Control.Monad (when)
-import Control.Monad.State (MonadIO(liftIO))
+import Control.Monad.State (MonadIO(liftIO), get)
 import Data.Lens.Lazy (getL)
 import qualified Debian.AutoBuilder.LocalRepo as Local (prepare)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(archList, buildRelease, cleanUp, components, excludePackages, flushDepends, flushPool, flushRoot, ifSourcesChanged, includePackages, optionalIncludePackages))
@@ -15,7 +15,7 @@ import Debian.Release (ReleaseName, releaseName')
 import Debian.Repo.Apt.OSImage (prepareOSEnv)
 import Debian.Repo.Apt.Package (deleteGarbage)
 import Debian.Repo.EnvPath (EnvRoot(rootPath), EnvRoot(EnvRoot))
-import Debian.Repo.OSImage (OSImage, chrootEnv, osRoot)
+import Debian.Repo.OSImage (MonadOS, OSImage, chrootEnv, osRoot)
 import Debian.Repo.LocalRepository (LocalRepository)
 import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.Slice (NamedSliceList)
@@ -80,5 +80,5 @@ prepareDependOS params rel =
                   (P.excludePackages params)
                   (P.components params)
 
-prepareBuildOS :: (MonadRepos m, MonadTop m) => ReleaseName -> OSImage -> m OSImage
-prepareBuildOS buildRel dependOS = chrootEnv dependOS <$> buildEnv buildRel
+prepareBuildOS :: (MonadRepos m, MonadTop m, MonadOS m, Applicative m) => ReleaseName -> m OSImage
+prepareBuildOS buildRel = chrootEnv <$> get <*> buildEnv buildRel

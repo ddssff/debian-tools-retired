@@ -18,7 +18,7 @@ module Debian.Repo.AptImage
 import Control.Applicative ((<$>))
 import Control.Category ((.))
 import Control.Monad.State (MonadState(get, put), StateT)
-import Control.Monad.Trans (liftIO, MonadIO)
+import Control.Monad.Trans (liftIO, MonadIO, lift)
 import Data.Data (Data)
 import Data.Lens.Lazy (getL)
 import Data.Lens.Template (makeLenses)

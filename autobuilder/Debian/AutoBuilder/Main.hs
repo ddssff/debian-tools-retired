@@ -158,7 +158,7 @@ runParameterSet init cache =
       dependOS <- execMonadOS (updateCacheSources (P.ifSourcesChanged params)) dependOS'
       let allTargets = P.buildPackages (C.params cache)
       qPutStr ("\n" ++ showTargets allTargets ++ "\n")
-      buildOS <- prepareBuildOS (P.buildRelease (C.params cache)) dependOS
+      buildOS <- evalMonadOS (prepareBuildOS (P.buildRelease (C.params cache))) dependOS
       when (P.report params) (ePutStrLn . doReport $ allTargets)
       qPutStrLn "Retrieving all source code:\n"
       retrieved <-

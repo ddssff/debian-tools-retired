@@ -6,6 +6,7 @@ module Debian.Repo.Apt.OSImage
     , evalMonadOS
     , prepareOSEnv
     , updateOSEnv
+    , syncOS
     ) where
 
 import Control.Applicative ((<$>))
@@ -31,7 +32,7 @@ import Debian.Repo.Apt.Slice (verifySourcesList)
 import Debian.Repo.AptCache (buildArchOfRoot, distDir, MonadCache(aptArch, rootDir), SourcesChangedAction(SourcesChangedError), sourcesPath)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
-import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildEnv', localeGen, MonadOS, neuterEnv, osBaseDistro, osBinaryPackages, osFullDistro, OSImage, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, createOSImage, syncLocalPool, updateLists)
+import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildEnv', localeGen, MonadOS, neuterEnv, osBaseDistro, osBinaryPackages, osFullDistro, OSImage, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, createOSImage, syncLocalPool, updateLists, syncEnv)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
 import Debian.Repo.Prelude (access)
@@ -447,3 +448,6 @@ indexPrefix repo release index =
     case last a of
       '_' -> (init a) +?+ b
       _ -> a ++ "_" ++ b
+
+syncOS :: (MonadOS m, MonadIO m) => OSImage -> m ()
+syncOS src = get >>= liftIO . syncEnv src >>= put

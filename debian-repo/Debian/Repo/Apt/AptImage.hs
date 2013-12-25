@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS -fno-warn-orphans #-}
 module Debian.Repo.Apt.AptImage
     ( evalMonadApt
@@ -10,7 +10,7 @@ module Debian.Repo.Apt.AptImage
 import Control.Applicative ((<$>))
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO(catch))
 import Control.Monad.State (StateT, runStateT)
-import Control.Monad.Trans (liftIO, MonadIO)
+import Control.Monad.Trans (liftIO, MonadIO, lift)
 import Data.Function (on)
 import Data.Lens.Lazy (getL, modL, setL)
 import Data.List (intercalate, sortBy)
@@ -25,8 +25,9 @@ import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.Apt.Slice (updateCacheSources)
 import Debian.Repo.AptCache (aptGetUpdate, MonadCache(aptArch, rootDir), SourcesChangedAction)
-import Debian.Repo.AptImage (AptImage, getApt, modifyApt, aptImageBinaryPackages, aptImageSourcePackages, aptImageSources, MonadApt, createAptImage, aptImageRoot, cacheRootDir)
+import Debian.Repo.AptImage (AptImage, getApt, modifyApt, aptImageBinaryPackages, aptImageSourcePackages, aptImageSources, MonadApt(putApt, getApt), createAptImage, aptImageRoot, cacheRootDir)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
+import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
 import Debian.Repo.Prelude (access, (~=))
@@ -45,6 +46,10 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix (getFileStatus)
 import System.Process.Progress (qPutStrLn, quieter)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
+
+instance MonadApt m => MonadApt (StateT OSImage m) where
+    getApt = lift getApt
+    putApt = lift . putApt
 
 -- | Run MonadOS and update the osImageMap with the modified value
 evalMonadApt :: (MonadRepos m, Functor m) => StateT AptImage m a -> AptImage -> m a
