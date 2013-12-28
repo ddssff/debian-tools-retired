@@ -10,12 +10,11 @@ module Debian.Repo.Apt.OSImage
     ) where
 
 import Control.Applicative ((<$>))
-import Control.Exception (Exception, SomeException, throw)
+import Control.Exception (SomeException, throw)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO(catch), try)
 import Control.Monad.State (MonadState(put, get), StateT, runStateT)
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
-import Data.Typeable
 import Data.Lens.Lazy (getL, modL, setL)
 import Data.List (intercalate)
 import Data.List as List (map, partition)
@@ -29,7 +28,7 @@ import Debian.Relation (BinPkgName(BinPkgName))
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.Apt.Slice (verifySourcesList)
-import Debian.Repo.AptCache (buildArchOfRoot, distDir, MonadCache(aptArch, rootDir), SourcesChangedAction(SourcesChangedError), sourcesPath)
+import Debian.Repo.AptCache (buildArchOfRoot, distDir, MonadCache(aptArch, rootDir), sourcesPath)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
 import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildEnv', localeGen, MonadOS, neuterEnv, osBaseDistro, osBinaryPackages, osFullDistro, OSImage, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, createOSImage, syncLocalPool, updateLists, syncEnv)
@@ -40,7 +39,7 @@ import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
 import Debian.Repo.Repos (binaryPackageMap, foldRepository, modifyRepos, MonadRepos(getRepos), sourcePackageMap, findOSImage, osImageMap)
 import Debian.Repo.SSH (sshCopy)
-import Debian.Repo.Slice (binarySlices, NamedSliceList(sliceListName), Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices)
+import Debian.Repo.Slice (binarySlices, NamedSliceList(sliceListName), Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices, UpdateError(..), SourcesChangedAction(..))
 import Debian.Repo.SourcesList (parseSourcesList)
 import Debian.Repo.Top (MonadTop)
 import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SourceType(..))
@@ -114,20 +113,7 @@ sliceIndexes slice =
                            "\n slice: " ++ show slice
             xs -> error $ "Internal error 5 - multiple releases named " ++ releaseName' release ++ "\n" ++ show xs
 
-data UpdateError
-    = Changed ReleaseName FilePath SliceList SliceList
-    | Missing ReleaseName FilePath
-    | Flushed
-    deriving Typeable
-
-instance Exception UpdateError
-
-instance Show UpdateError where
-    show (Changed r p l1 l2) = unwords ["Changed", show r, show p, show (pretty l1), show (pretty l2)]
-    show (Missing r p) = unwords ["Missing", show r, show p]
-    show Flushed = "Flushed"
-
--- |Create or update an OS image in which packages can be built.
+-- |Find or create and update an OS image.
 prepareOSEnv :: (MonadRepos m, MonadTop m) =>
               EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list of the base distribution

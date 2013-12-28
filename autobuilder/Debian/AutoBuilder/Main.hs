@@ -23,7 +23,7 @@ import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
 import Debian.AutoBuilder.BuildTarget (retrieve)
 import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Target(buildTargets, showTargets)
-import Debian.AutoBuilder.Types.Buildable (Target, targetName, Buildable, asBuildable)
+import Debian.AutoBuilder.Types.Buildable (Target, targetName, asBuildable)
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import Debian.AutoBuilder.Types.Download (Download)
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -35,7 +35,7 @@ import Debian.Repo.Apt.AptImage (withAptImage)
 import Debian.Repo.Apt.OSImage (evalMonadOS, execMonadOS)
 import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
 import Debian.Repo.Repos (MonadRepos, foldRepository, runReposCachedT, MonadReposCached)
-import Debian.Repo.OSImage (MonadOS, OSImage, osLocalMaster, osLocalCopy)
+import Debian.Repo.OSImage (MonadOS, osLocalMaster, osLocalCopy)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Prelude (access, symbol)
 import Debian.Repo.Release (Release(releaseName))

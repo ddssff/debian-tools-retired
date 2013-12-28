@@ -10,6 +10,7 @@ module Debian.Repo.Apt.Slice
     ) where
 
 import Control.Exception (throw)
+import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Char8 as B (concat)
 import qualified Data.ByteString.Lazy.Char8 as L (toChunks)
@@ -18,24 +19,22 @@ import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text as T (pack, Text, unpack)
 import Debian.Control (Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph')
 import Debian.Control.Text (decodeParagraph)
-import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
-import Debian.Repo.AptCache (distDir, MonadCache(aptBaseSources), SourcesChangedAction(..), sourcesPath)
+import Debian.Release (parseReleaseName, parseSection')
+import Debian.Repo.AptCache (distDir, MonadCache(aptBaseSources), sourcesPath)
 import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..))
 import Debian.Repo.LocalRepository (prepareLocalRepository)
 import Debian.Repo.Repo (repoKey)
 import Debian.Repo.Repos (MonadRepos, prepareRemoteRepository)
-import Debian.Repo.Slice (NamedSliceList(sliceList), Slice(..), SliceList(..), sliceListName)
+import Debian.Repo.Slice (NamedSliceList(sliceList), Slice(..), SliceList(..), SourcesChangedAction, doSourcesChangedAction)
 import Debian.Repo.SourcesList (parseSourcesList)
 import Debian.Repo.Top (MonadTop)
 import Debian.Sources (DebSource(..), SourceType(Deb, DebSrc))
 import Debian.URI (dirFromURI, fileFromURI)
 import Extra.Files (replaceFile)
 import Network.URI (URI(uriScheme, uriPath))
-import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
+import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.FilePath ((</>))
-import System.IO (hGetLine, stdin)
-import System.Process.Progress (ePutStr, ePutStrLn, qPutStrLn)
-import System.Unix.Directory (removeRecursiveSafely)
+import System.Process.Progress (qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Regex (mkRegex, splitRegex)
 
@@ -113,41 +112,8 @@ updateCacheSources sourcesChangedAction =
         True ->
             do
 	      fileSources <- liftIO (readFile sources) >>= verifySourcesList Nothing . parseSourcesList
-	      case (fileSources == sliceList baseSources, sourcesChangedAction) of
-	        (True, _) -> return ()
-	        (False, SourcesChangedError) ->
-                    do
-                      ePutStrLn ("The sources.list in the existing '" ++ (relName . sliceListName $ baseSources) ++
-                                 "' build environment doesn't match the parameters passed to the autobuilder" ++
-			         ":\n\n" ++ sources ++ ":\n\n" ++
-                                 show (pretty fileSources) ++
-			         "\nRun-time parameters:\n\n" ++
-                                 show (pretty baseSources) ++ "\n" ++
-			         "It is likely that the build environment in\n" ++
-                                 dir ++ " is invalid and should be rebuilt.")
-                      ePutStr $ "Remove it and continue (or exit)?  [y/n]: "
-                      result <- liftIO $ hGetLine stdin
-                      case result of
-                        ('y' : _) ->
-                            do
-                              liftIO $ removeRecursiveSafely dir
-                              liftIO $ createDirectoryIfMissing True dir
-                              liftIO $ replaceFile sources (show (pretty baseSources))
-                        _ ->
-                            error ("Please remove " ++ dir ++ " and restart.")
-                (False, RemoveRelease) ->
-                    do
-                      ePutStrLn $ "Removing suspect environment: " ++ dir
-                      liftIO $ removeRecursiveSafely dir
-                      liftIO $ createDirectoryIfMissing True dir
-                      liftIO $ replaceFile sources (show (pretty baseSources))
-                (False, UpdateSources) ->
-                    do
-                      -- The sources.list has changed, but it should be
-                      -- safe to update it.
-                      ePutStrLn $ "Updating environment with new sources.list: " ++ dir
-                      liftIO $ removeFile sources
-                      liftIO $ replaceFile sources (show (pretty baseSources))
+              when (fileSources /= sliceList baseSources)
+                   (liftIO $ doSourcesChangedAction dir sources baseSources fileSources sourcesChangedAction)
         False ->
 	    do
               liftIO $ createDirectoryIfMissing True dir

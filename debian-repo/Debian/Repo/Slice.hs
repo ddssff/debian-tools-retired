@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports, StandaloneDeriving, TupleSections #-}
+{-# LANGUAGE DeriveDataTypeable, PackageImports, StandaloneDeriving, TupleSections #-}
 -- |Types that represent a "slice" of a repository, as defined by a
 -- list of DebSource.  This is called a slice because some sections
 -- may be omitted, and because different repositories may be combined
@@ -12,11 +12,22 @@ module Debian.Repo.Slice
     , inexactPathSlices
     , releaseSlices
     , appendSliceLists
+    , UpdateError(..)
+    , SourcesChangedAction(..)
+    , doSourcesChangedAction
     ) where
 
-import Debian.Release (ReleaseName)
+import Control.Exception (Exception)
+import Data.Data (Data)
+import Data.Typeable (Typeable)
+import Debian.Release (ReleaseName(relName))
 import Debian.Repo.Repo (RepoKey)
 import Debian.Sources (DebSource(..), SliceName, SourceType(..))
+import Extra.Files (replaceFile)
+import System.Directory (createDirectoryIfMissing, removeFile)
+import System.IO (hGetLine, stdin)
+import System.Process.Progress (ePutStr, ePutStrLn)
+import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat)
 
 data Slice = Slice {sliceRepoKey :: RepoKey, sliceSource :: DebSource} deriving (Eq, Ord, Show)
@@ -80,3 +91,54 @@ readRelease uri name =
     where
       uri' = uri {uriPath = uriPath uri </> "dists" </> unpack name </> "Release"}
 -}
+
+data UpdateError
+    = Changed ReleaseName FilePath SliceList SliceList
+    | Missing ReleaseName FilePath
+    | Flushed
+    deriving Typeable
+
+instance Exception UpdateError
+
+instance Show UpdateError where
+    show (Changed r p l1 l2) = unwords ["Changed", show r, show p, show (pretty l1), show (pretty l2)]
+    show (Missing r p) = unwords ["Missing", show r, show p]
+    show Flushed = "Flushed"
+
+data SourcesChangedAction =
+    SourcesChangedError |
+    UpdateSources |
+    RemoveRelease
+    deriving (Eq, Show, Data, Typeable)
+
+doSourcesChangedAction :: FilePath -> FilePath -> NamedSliceList -> SliceList -> SourcesChangedAction -> IO ()
+doSourcesChangedAction dir sources baseSources fileSources SourcesChangedError = do
+  ePutStrLn ("The sources.list in the existing '" ++ (relName . sliceListName $ baseSources) ++ "' in " ++ dir ++
+             " apt-get environment doesn't match the parameters passed to the autobuilder" ++ ":\n\n" ++
+             sources ++ ":\n\n" ++
+             show (pretty fileSources) ++
+	     "\nRun-time parameters:\n\n" ++
+             show (pretty baseSources) ++ "\n" ++
+	     "It is likely that the build environment in\n" ++
+             dir ++ " is invalid and should be rebuilt.")
+  ePutStr $ "Remove it and continue (or exit)?  [y/n]: "
+  result <- hGetLine stdin
+  case result of
+    ('y' : _) ->
+        do removeRecursiveSafely dir
+           createDirectoryIfMissing True dir
+           replaceFile sources (show (pretty baseSources))
+    _ -> error ("Please remove " ++ dir ++ " and restart.")
+
+doSourcesChangedAction dir sources baseSources _fileSources RemoveRelease = do
+  ePutStrLn $ "Removing suspect environment: " ++ dir
+  removeRecursiveSafely dir
+  createDirectoryIfMissing True dir
+  replaceFile sources (show (pretty baseSources))
+
+doSourcesChangedAction dir sources baseSources _fileSources UpdateSources = do
+  -- The sources.list has changed, but it should be
+  -- safe to update it.
+  ePutStrLn $ "Updating environment with new sources.list: " ++ dir
+  removeFile sources
+  replaceFile sources (show (pretty baseSources))

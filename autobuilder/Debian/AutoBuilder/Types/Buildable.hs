@@ -36,7 +36,7 @@ import qualified Debian.GenBuildDeps as G
 import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
 import Debian.Repo.AptCache (MonadCache, rootDir)
-import Debian.Repo.OSImage (MonadOS, OSImage)
+import Debian.Repo.OSImage (MonadOS)
 import Debian.Repo.SourceTree (DebianBuildTree(..), control, entry, subdir, debdir, findDebianBuildTrees, findBuildTree, copySourceTree,
                                DebianSourceTree(..), findSourceTree {-, SourceTree(dir')-})
 import Debian.Repo.EnvPath (EnvRoot(rootPath))

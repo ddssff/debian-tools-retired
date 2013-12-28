@@ -7,7 +7,6 @@ module Debian.Repo.AptCache
     , sourcesPath
     , buildArchOfEnv
     , buildArchOfRoot
-    , SourcesChangedAction(..)
     , sourcePackages
     , binaryPackages
     , aptGetSource
@@ -18,9 +17,7 @@ import Control.Applicative ((<$>))
 import Control.DeepSeq (force, NFData)
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
-import Data.Data (Data)
 import Data.List (sortBy)
-import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (BinPkgName, PkgName, SrcPkgName)
 import Debian.Release (ReleaseName(relName))
@@ -103,12 +100,6 @@ buildArchOfRoot =
       parseArchOS x = ArchOS x
       parseArchCPU "any" = ArchCPUAny
       parseArchCPU x = ArchCPU x
-
-data SourcesChangedAction =
-    SourcesChangedError |
-    UpdateSources |
-    RemoveRelease
-    deriving (Eq, Show, Data, Typeable)
 
 -- | Return a sorted list of available source packages, newest version first.
 sourcePackages :: MonadCache m => [SrcPkgName] -> m [SourcePackage]

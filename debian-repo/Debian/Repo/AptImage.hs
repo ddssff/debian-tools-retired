@@ -17,8 +17,8 @@ module Debian.Repo.AptImage
 
 import Control.Applicative ((<$>))
 import Control.Category ((.))
-import Control.Monad.State (MonadState(get, put), StateT)
-import Control.Monad.Trans (liftIO, MonadIO, lift)
+import Control.Monad.State (StateT, MonadState(get, put))
+import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Data (Data)
 import Data.Lens.Lazy (getL)
 import Data.Lens.Template (makeLenses)
@@ -30,8 +30,7 @@ import Debian.Release (ReleaseName(relName))
 import Debian.Repo.AptCache (distDir, MonadCache(..))
 import Debian.Repo.EnvPath (EnvRoot(..))
 import Debian.Repo.PackageID (PackageID(packageVersion, packageName))
-import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage(sourcePackageID))
-import Debian.Repo.Prelude (access)
+import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage(sourcePackageID))
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName))
 import Debian.Repo.Top (askTop, MonadTop)
 import Extra.Files (replaceFile, writeFileIfMissing)
@@ -59,7 +58,9 @@ class (Monad m, Functor m) => MonadApt m where
 modifyApt :: MonadApt m => (AptImage -> AptImage) -> m ()
 modifyApt f = getApt >>= putApt . f
 
-instance (Monad m, Functor m) => MonadApt (StateT AptImage m)
+instance (Monad m, Functor m) => MonadApt (StateT AptImage m) where
+    getApt = get
+    putApt = put
 
 instance Show AptImage where
     show apt = "AptImage " ++ relName (sliceListName (getL aptImageSources apt))

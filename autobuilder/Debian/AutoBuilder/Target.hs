@@ -17,7 +17,7 @@ import Control.Arrow (second)
 import Control.Exception (AsyncException(UserInterrupt), evaluate, fromException, SomeException, throw, toException)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO, catch, try)
 import Control.Monad.RWS (liftIO, MonadIO, when)
-import Control.Monad.State (evalStateT, evalState, execStateT, get)
+import Control.Monad.State (evalStateT, evalState, execStateT)
 import qualified Data.ByteString.Char8 as B (concat)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, concat, empty, toChunks, unpack)
 import qualified Data.ByteString.UTF8 as UTF8 (toString)
@@ -49,7 +49,7 @@ import Debian.Repo.Apt.OSImage (updateOSEnv, execMonadOS, evalMonadOS)
 import Debian.Repo.Apt.Package (scanIncoming)
 import Debian.Repo.AptCache (MonadCache(rootDir, aptBinaryPackages), binaryPackages, buildArchOfEnv, sourcePackages)
 import Debian.Repo.AptImage (MonadApt, aptSourcePackagesSorted)
-import Debian.Repo.OSImage (OSImage, syncEnv, syncLocalPool, updateLists, withProc, withTmp, osRoot, buildEssential)
+import Debian.Repo.OSImage (OSImage, syncEnv, syncLocalPool, updateLists, withProc, withTmp, buildEssential)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
@@ -343,7 +343,6 @@ buildTarget cache dependOS repo !target = do
   let debianControl = targetControl target
   root <- evalStateT rootDir dependOS'
   arch <- liftIO $ buildArchOfEnv root
-  globalBuildDeps <- evalMonadOS buildEssential dependOS
   solns <- evalMonadOS (buildDepSolutions arch (map BinPkgName (P.preferred (P.params cache))) debianControl) dependOS
   -- let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) dependOS globalBuildDeps debianControl
   case solns of
@@ -487,7 +486,7 @@ prepareBuildImage cache dependOS sourceFingerprint buildOS target =
         dependOS' <- execMonadOS (installDependencies (cleanSource target) buildDepends sourceFingerprint) dependOS
         buildOS' <- case noClean of
                       True -> return buildOS
-                      False -> liftIO (syncEnv dependOS buildOS)
+                      False -> liftIO (syncEnv dependOS' buildOS)
         buildTree <- case noClean of
                        True ->
                            liftIO (findOneDebianBuildTree newPath) >>=
