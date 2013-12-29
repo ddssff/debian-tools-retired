@@ -19,7 +19,7 @@ import Data.Lens.Lazy (getL)
 import Data.List as List (intercalate, null, nub)
 import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
-import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
+import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS')
 import Debian.AutoBuilder.BuildTarget (retrieve)
 import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Target(buildTargets, showTargets)
@@ -158,7 +158,7 @@ runParameterSet init cache =
       dependOS <- execMonadOS (updateCacheSources (P.ifSourcesChanged params)) dependOS'
       let allTargets = P.buildPackages (C.params cache)
       qPutStr ("\n" ++ showTargets allTargets ++ "\n")
-      buildOS <- evalMonadOS (prepareBuildOS (P.buildRelease (C.params cache))) dependOS
+      buildOS <- evalMonadOS (prepareBuildOS' (P.buildRelease (C.params cache))) dependOS
       when (P.report params) (ePutStrLn . doReport $ allTargets)
       qPutStrLn "Retrieving all source code:\n"
       retrieved <-

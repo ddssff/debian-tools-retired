@@ -30,7 +30,7 @@ import qualified Data.Set as Set (difference, empty, fromList, insert, member, n
 import qualified Data.Text as T (pack, Text, unpack)
 import Data.Time (NominalDiffTime)
 import Debian.Arch (Arch)
-import Debian.AutoBuilder.BuildEnv (prepareBuildOS)
+import Debian.AutoBuilder.BuildEnv (prepareBuildOS')
 import qualified Debian.AutoBuilder.Params as P (baseRelease, isDevelopmentRelease)
 import Debian.AutoBuilder.Types.Buildable (Buildable(..), debianSourcePackageName, failing, prepareTarget, relaxDepends, Target(tgt, cleanSource, targetDepends), targetControl, targetName, targetRelaxed)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
@@ -45,7 +45,7 @@ import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, r
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
-import Debian.Repo.Apt.OSImage (updateOSEnv, execMonadOS, evalMonadOS)
+import Debian.Repo.Apt.OSImage (updateOS, execMonadOS, evalMonadOS)
 import Debian.Repo.Apt.Package (scanIncoming)
 import Debian.Repo.AptCache (MonadCache(rootDir, aptBinaryPackages), binaryPackages, buildArchOfEnv, sourcePackages)
 import Debian.Repo.AptImage (MonadApt, aptSourcePackagesSorted)
@@ -206,7 +206,7 @@ buildLoop cache localRepo dependOS !targets =
                      -- dependencies are added to unbuilt.
                      (\ mRepo ->
                           do dependOS' <- maybe (return dependOS)
-                                                (\ _ -> try (execMonadOS updateOSEnv dependOS) >>= either (\ (e :: SomeException) -> error ("Failed to update clean OS:\n " ++ show e)) return)
+                                                (\ _ -> try (execMonadOS updateOS dependOS) >>= either (\ (e :: SomeException) -> error ("Failed to update clean OS:\n " ++ show e)) return)
                                                 mRepo
                              -- Add to unbuilt any blocked packages that weren't already failed by
                              -- some other build
@@ -380,9 +380,8 @@ buildPackage :: (MonadRepos m, MonadTop m) =>
                 P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
 buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target status repo =
     checkDryRun >>
-    evalMonadOS (prepareBuildOS (P.buildRelease (P.params cache))) dependOS >>= \ buildOS ->
-    prepareBuildImage cache dependOS newFingerprint buildOS target >>=
-    logEntry >>= \ tree ->
+    prepareBuildImage cache dependOS newFingerprint target >>= \ (buildOS, tree) ->
+    logEntry tree >>
     noisier 1 (evalStateT (build tree) buildOS) >>=
     find >>=
     doLocalUpload
@@ -393,8 +392,8 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
                           liftIO (exitWith ExitSuccess))
       logEntry buildTree =
           case P.noClean (P.params cache) of
-            False -> liftIO (maybeAddLogEntry buildTree newVersion) >> return buildTree
-            True -> return buildTree
+            False -> liftIO (maybeAddLogEntry buildTree newVersion)
+            True -> return ()
       build :: forall m. (MonadOS m, MonadCache m, MonadRepos m, MonadCatchIO m) =>
                DebianBuildTree -> m (DebianBuildTree, NominalDiffTime)
       build buildTree =
@@ -478,11 +477,14 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
 -- these operations take place in a different order from other types
 -- of builds.  For lax: dependencies, then image copy, then source
 -- copy.  For other: image copy, then source copy, then dependencies.
-prepareBuildImage :: MonadRepos m => P.CacheRec -> OSImage -> Fingerprint -> OSImage -> Target -> m DebianBuildTree
-prepareBuildImage cache dependOS sourceFingerprint buildOS target =
+prepareBuildImage :: (MonadTop m, MonadRepos m) => P.CacheRec -> OSImage -> Fingerprint -> Target -> m (OSImage, DebianBuildTree)
+prepareBuildImage cache dependOS sourceFingerprint target =
+    evalMonadOS (prepareBuildOS' (P.buildRelease (P.params cache))) dependOS >>= \ buildOS ->
+    let oldPath = topdir . cleanSource $ target
+        newPath = evalState (rootPath <$> rootDir) buildOS ++ fromJust (dropPrefix (evalState (rootPath <$> rootDir) dependOS) oldPath) in
     case P.strictness (P.params cache) == P.Lax of
       True -> do
-        -- Install dependencies directly into the clean environment
+        -- Install dependencies into the dependency environment
         dependOS' <- execMonadOS (installDependencies (cleanSource target) buildDepends sourceFingerprint) dependOS
         buildOS' <- case noClean of
                       True -> return buildOS
@@ -493,7 +495,7 @@ prepareBuildImage cache dependOS sourceFingerprint buildOS target =
                            maybe (error ("No build tree at " ++ show newPath)) return
                        False ->
                            liftIO (copySourceTree (cleanSource target) newPath)
-        return buildTree
+        return (buildOS', buildTree)
       False -> do
         -- Install dependencies directly into the build environment
         buildTree <- case noClean of
@@ -507,10 +509,8 @@ prepareBuildImage cache dependOS sourceFingerprint buildOS target =
                       True -> return buildOS
                       False -> liftIO (syncEnv dependOS' buildOS)
         buildOS'' <- execMonadOS (installDependencies buildTree buildDepends sourceFingerprint) buildOS'
-        return buildTree
+        return (buildOS', buildTree)
     where
-      newPath = evalState (rootPath <$> rootDir) buildOS ++ fromJust (dropPrefix (evalState (rootPath <$> rootDir) dependOS) oldPath)
-      oldPath = topdir . cleanSource $ target
       noClean = P.noClean (P.params cache)
       buildDepends = P.buildDepends (P.params cache)
 

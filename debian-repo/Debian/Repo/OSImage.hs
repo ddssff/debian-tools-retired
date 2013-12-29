@@ -26,7 +26,7 @@ module Debian.Repo.OSImage
 
     , createOSImage
     , _pbuilderBuild'
-    , buildEnv'
+    , buildOS'
     , syncLocalPool
     ) where
 
@@ -482,7 +482,7 @@ _pbuilderBuild' root distro arch repo copy _extraEssential _omitEssential _extra
 
 -- Create a new clean build environment in root.clean
 -- FIXME: create an ".incomplete" flag and remove it when build-env succeeds
-buildEnv' :: (MonadIO m, MonadTop m, Functor m) =>
+buildOS' :: (MonadIO m, MonadTop m, Functor m) =>
             EnvRoot
          -> NamedSliceList
          -> Arch
@@ -492,7 +492,7 @@ buildEnv' :: (MonadIO m, MonadTop m, Functor m) =>
          -> [String]
          -> [String]
          -> m OSImage
-buildEnv' root distro arch repo copy include exclude components =
+buildOS' root distro arch repo copy include exclude components =
     quieter (-1) $
     do
       ePutStr (unlines [ "Creating clean build environment (" ++ relName (sliceListName distro) ++ ")"

@@ -4,8 +4,8 @@ module Debian.Repo.Apt.OSImage
     ( runMonadOS
     , execMonadOS
     , evalMonadOS
-    , prepareOSEnv
-    , updateOSEnv
+    , prepareOS
+    , updateOS
     , syncOS
     ) where
 
@@ -31,7 +31,7 @@ import Debian.Repo.Apt.Slice (verifySourcesList)
 import Debian.Repo.AptCache (buildArchOfRoot, distDir, MonadCache(aptArch, rootDir), sourcesPath)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
-import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildEnv', localeGen, MonadOS, neuterEnv, osBaseDistro, osBinaryPackages, osFullDistro, OSImage, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, createOSImage, syncLocalPool, updateLists, syncEnv)
+import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildOS', localeGen, MonadOS, neuterEnv, osBaseDistro, osBinaryPackages, osFullDistro, OSImage, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, createOSImage, syncLocalPool, updateLists, syncEnv)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
 import Debian.Repo.Prelude (access)
@@ -114,22 +114,22 @@ sliceIndexes slice =
             xs -> error $ "Internal error 5 - multiple releases named " ++ releaseName' release ++ "\n" ++ show xs
 
 -- |Find or create and update an OS image.
-prepareOSEnv :: (MonadRepos m, MonadTop m) =>
+prepareOS :: (MonadRepos m, MonadTop m) =>
               EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list of the base distribution
            -> LocalRepository           -- ^ The location of the local upload repository
            -> Bool			-- ^ If true, remove and rebuild the image
            -> SourcesChangedAction	-- ^ What to do if called with a sources.list that
-					-- differs from the previous call (unimplemented)
+					-- differs from the previous call
            -> [String]			-- ^ Extra packages to install - e.g. keyrings
            -> [String]			-- ^ More packages to install, but these may not be available
                                         -- immediately - e.g seereason-keyring.  Ignore exceptions.
            -> [String]			-- ^ Packages to exclude
            -> [String]			-- ^ Components of the base repository
            -> m OSImage
-prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude components =
+prepareOS root distro repo flush ifSourcesChanged include optional exclude components =
     do os <- findOSImage root >>= maybe (createOSImage root distro repo) return
-       os' <- if flush then return (Left Flushed) else try (execMonadOS updateOSEnv os)
+       os' <- if flush then return (Left Flushed) else try (execMonadOS updateOS os)
        execMonadOS (recreate os' >> doInclude >> doLocales >> syncLocalPool) os
     where
       recreate :: (MonadOS m, MonadCache m, MonadRepos m, MonadTop m) => Either UpdateError OSImage -> m ()
@@ -141,9 +141,8 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
                        show (pretty computed) ++ "\ninstalled:\n" ++
                        show (pretty installed)
       recreate (Left reason) =
-          do arch <- liftIO buildArchOfRoot -- This should be stored in os, but it is a Maybe - why?
+          do sources <- sourcesPath
              dist <- distDir
-             sources <- sourcesPath
              base <- access osBaseDistro
              liftIO $ do ePutStrLn $ "Removing and recreating build environment at " ++ rootPath root ++ ": " ++ show reason
                          -- ePutStrLn ("removeRecursiveSafely " ++ rootPath root)
@@ -152,13 +151,8 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
                          createDirectoryIfMissing True dist
                          -- ePutStrLn ("writeFile " ++ show sources ++ " " ++ show (show . osBaseDistro $ os))
                          replaceFile sources (show . pretty $ base)
-             master <- access osLocalMaster
-             copy <- access osLocalCopy
-             os' <- buildEnv root distro arch master copy include exclude components
-             put os'
-             doLocales
-             liftIO $ neuterEnv os'
-             syncLocalPool
+             rebuildOS root distro include exclude components
+
       doInclude =
           do aptGetInstall (map (\ s -> (BinPkgName s, Nothing)) include)
              aptGetInstall (map (\ s -> (BinPkgName s, Nothing)) optional) `catch` (\ (e :: IOError) -> ePutStrLn ("Ignoring exception on optional package install: " ++ show e))
@@ -167,7 +161,7 @@ prepareOSEnv root distro repo flush ifSourcesChanged include optional exclude co
           do localeName <- liftIO $ try (getEnv "LANG")
              localeGen (either (\ (_ :: IOError) -> "en_US.UTF-8") id localeName)
 
--- | Not used, but could be a substitute for buildEnv.
+-- | Not used, but could be a substitute for buildOS.
 _pbuilderBuild :: (MonadRepos m, MonadTop m) =>
             EnvRoot
          -> NamedSliceList
@@ -180,11 +174,27 @@ _pbuilderBuild :: (MonadRepos m, MonadTop m) =>
          -> m OSImage
 _pbuilderBuild root distro arch repo copy _extraEssential _omitEssential _extra =
     do os <- _pbuilderBuild' root distro arch repo copy _extraEssential _omitEssential _extra
-       try (execMonadOS updateOSEnv os) >>= either (\ (e :: SomeException) -> error (show e)) return
+       try (execMonadOS updateOS os) >>= either (\ (e :: SomeException) -> error (show e)) return
+
+rebuildOS :: (MonadOS m, MonadCache m, MonadRepos m, MonadTop m) =>
+             EnvRoot			-- ^ The location where image is to be built
+           -> NamedSliceList		-- ^ The sources.list of the base distribution
+           -> [String]			-- ^ Extra packages to install - e.g. keyrings
+           -> [String]			-- ^ Packages to exclude
+           -> [String]			-- ^ Components of the base repository
+           -> m ()
+rebuildOS root distro include exclude components =
+          do arch <- liftIO buildArchOfRoot -- This should be stored in os, but it is a Maybe - why?
+             master <- access osLocalMaster
+             copy <- access osLocalCopy
+             os' <- buildOS root distro arch master copy include exclude components
+             put os'
+             liftIO $ neuterEnv os'
+             syncLocalPool
 
 -- | Create a new clean build environment in root.clean FIXME: create
 -- an ".incomplete" flag and remove it when build-env succeeds
-buildEnv :: (MonadRepos m, MonadTop m) =>
+buildOS :: (MonadRepos m, MonadTop m) =>
             EnvRoot
          -> NamedSliceList
          -> Arch
@@ -194,19 +204,19 @@ buildEnv :: (MonadRepos m, MonadTop m) =>
          -> [String]
          -> [String]
          -> m OSImage
-buildEnv root distro arch repo copy include exclude components =
+buildOS root distro arch repo copy include exclude components =
     quieter (-1) $
-    do os <- buildEnv' root distro arch repo copy include exclude components
-       try (execMonadOS updateOSEnv os) >>= either (\ (e :: SomeException) -> error (show e)) return
+    do os <- buildOS' root distro arch repo copy include exclude components
+       try (execMonadOS updateOS os) >>= either (\ (e :: SomeException) -> error (show e)) return
 
 -- | Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.
-updateOSEnv :: (MonadOS m, MonadRepos m) => m ()
-updateOSEnv =
-    get >>= updateOSEnv' >>= either throw put
+updateOS :: (MonadOS m, MonadRepos m) => m ()
+updateOS =
+    get >>= updateOS' >>= either throw put
     where
-      updateOSEnv' :: MonadRepos m => OSImage -> m (Either UpdateError OSImage)
-      updateOSEnv' os =
+      updateOS' :: MonadRepos m => OSImage -> m (Either UpdateError OSImage)
+      updateOS' os =
           do let root = getL osRoot os
              liftIO $ createDirectoryIfMissing True (rootPath root ++ "/etc")
              liftIO $ readFile "/etc/resolv.conf" >>= writeFile (rootPath root ++ "/etc/resolv.conf")
