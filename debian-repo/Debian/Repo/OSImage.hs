@@ -13,7 +13,6 @@ module Debian.Repo.OSImage
     , MonadOS
 
     , chrootEnv
-    , syncEnv
     , localeGen
     , neuterEnv
     , restoreEnv
@@ -28,6 +27,7 @@ module Debian.Repo.OSImage
     , _pbuilderBuild'
     , buildOS'
     , syncLocalPool
+    , syncOS'
     ) where
 
 import Control.Applicative ((<$>))
@@ -177,17 +177,13 @@ instance Show UpdateError where
 chrootEnv :: OSImage -> EnvRoot -> OSImage
 chrootEnv os dst = setL osRoot dst os
 
--- Sync the environment from the clean copy.  All this does besides
--- performing the proper rsync command is to make sure the destination
--- directory exists, otherwise rsync will fail.  Not sure why the 'work'
--- subdir is appended.  There must have been a reason at one point.
-syncEnv :: OSImage -> OSImage -> IO OSImage
-syncEnv src dst =
+syncOS' :: OSImage -> OSImage -> IO OSImage
+syncOS' src dst =
     mkdir >> umount >> rsync ["--exclude=/work/build/*"] (rootPath (getL osRoot src)) (rootPath (getL osRoot dst)) >> return dst
     where
       mkdir = createDirectoryIfMissing True (rootPath (getL osRoot dst) ++ "/work")
       umount =
-          do qPutStrLn "syncEnv: umount"
+          do qPutStrLn "syncOS': umount"
              srcResult <- umountBelow False (rootPath (getL osRoot src))
              dstResult <- umountBelow False (rootPath (getL osRoot dst))
              case filter (\ (_, (code, _, _)) -> code /= ExitSuccess) (srcResult ++ dstResult) of

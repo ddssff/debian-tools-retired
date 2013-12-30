@@ -17,7 +17,6 @@ import Control.Arrow (second)
 import Control.Exception (AsyncException(UserInterrupt), evaluate, fromException, SomeException, throw, toException)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO, catch, try)
 import Control.Monad.RWS (liftIO, MonadIO, when)
-import Control.Monad.State (evalStateT, evalState, execStateT)
 import qualified Data.ByteString.Char8 as B (concat)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, concat, empty, toChunks, unpack)
 import qualified Data.ByteString.UTF8 as UTF8 (toString)
@@ -30,7 +29,7 @@ import qualified Data.Set as Set (difference, empty, fromList, insert, member, n
 import qualified Data.Text as T (pack, Text, unpack)
 import Data.Time (NominalDiffTime)
 import Debian.Arch (Arch)
-import Debian.AutoBuilder.BuildEnv (prepareBuildOS')
+import Debian.AutoBuilder.BuildEnv (prepareBuildOS)
 import qualified Debian.AutoBuilder.Params as P (baseRelease, isDevelopmentRelease)
 import Debian.AutoBuilder.Types.Buildable (Buildable(..), debianSourcePackageName, failing, prepareTarget, relaxDepends, Target(tgt, cleanSource, targetDepends), targetControl, targetName, targetRelaxed)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
@@ -45,11 +44,11 @@ import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, r
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
-import Debian.Repo.Apt.OSImage (updateOS, execMonadOS, evalMonadOS)
+import Debian.Repo.Apt.OSImage (updateOS, syncOS)
 import Debian.Repo.Apt.Package (scanIncoming)
 import Debian.Repo.AptCache (MonadCache(rootDir, aptBinaryPackages), binaryPackages, buildArchOfEnv, sourcePackages)
 import Debian.Repo.AptImage (MonadApt, aptSourcePackagesSorted)
-import Debian.Repo.OSImage (OSImage, syncEnv, syncLocalPool, updateLists, withProc, withTmp, buildEssential)
+import Debian.Repo.OSImage (syncLocalPool, updateLists, withProc, withTmp, buildEssential)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
@@ -60,7 +59,7 @@ import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID))
 import Debian.Repo.Prelude (symbol)
-import Debian.Repo.Repos (MonadRepos)
+import Debian.Repo.Repos (MonadRepos, evalMonadOS, OSKey)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..))
 import Debian.Repo.Top (MonadTop)
 import Debian.Time (getCurrentLocalRFC822Time)
@@ -147,12 +146,12 @@ partitionFailing xs =
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
 buildTargets :: (MonadRepos m, MonadTop m, MonadApt m) =>
-                P.CacheRec -> OSImage -> LocalRepository -> [Buildable] -> m (LocalRepository, [Target])
+                P.CacheRec -> OSKey -> LocalRepository -> [Buildable] -> m (LocalRepository, [Target])
 buildTargets _ _ localRepo [] = return (localRepo, [])
 buildTargets cache dependOS localRepo !targetSpecs =
     do globalBuildDeps <- evalMonadOS buildEssential dependOS
        qPutStrLn ("\n" ++ $(symbol 'buildTargets) ++ "\nAssembling source trees:\n")
-       targets <- evalStateT (prepareTargets cache globalBuildDeps targetSpecs) dependOS
+       targets <- evalMonadOS (prepareTargets cache globalBuildDeps targetSpecs) dependOS
        qPutStrLn "\nBuilding all targets:"
        failed <- buildLoop cache localRepo dependOS targets
        return (localRepo, failed)
@@ -160,13 +159,13 @@ buildTargets cache dependOS localRepo !targetSpecs =
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
 buildLoop :: (MonadRepos m, MonadTop m, MonadApt m) =>
-             P.CacheRec -> LocalRepository -> OSImage -> [Target] -> m [Target]
+             P.CacheRec -> LocalRepository -> OSKey -> [Target] -> m [Target]
 buildLoop cache localRepo dependOS !targets =
     Set.toList <$> loop dependOS (Set.fromList targets) Set.empty
     where
       -- This loop computes the ready targets and builds one.
       loop :: (MonadRepos m, MonadApt m, MonadTop m) =>
-              OSImage -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
+              OSKey -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
       loop _ unbuilt failed | Set.null unbuilt = return failed
       loop dependOS unbuilt failed =
           ePutStrLn "Computing ready targets..." >>
@@ -176,7 +175,7 @@ buildLoop cache localRepo dependOS !targets =
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
                           loop2 dependOS (Set.difference unbuilt ready) failed triples
       loop2 :: (MonadRepos m, MonadApt m, MonadTop m) =>
-               OSImage
+               OSKey
             -> Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
             -> Set.Set Target -- failed: Targets which either failed to build or were blocked by a target that failed to build
             -> [(Target, [Target], [Target])] -- ready: the list of known buildable targets
@@ -205,13 +204,11 @@ buildLoop cache localRepo dependOS !targets =
                      -- On success the target is discarded and its
                      -- dependencies are added to unbuilt.
                      (\ mRepo ->
-                          do dependOS' <- maybe (return dependOS)
-                                                (\ _ -> try (execMonadOS updateOS dependOS) >>= either (\ (e :: SomeException) -> error ("Failed to update clean OS:\n " ++ show e)) return)
-                                                mRepo
+                          do maybe (return ()) (\ _ -> evalMonadOS updateOS dependOS) mRepo
                              -- Add to unbuilt any blocked packages that weren't already failed by
                              -- some other build
                              let unbuilt' = Set.union unbuilt (Set.difference (Set.fromList blocked) failed)
-                             loop2 dependOS' unbuilt' failed ready')
+                             loop2 dependOS unbuilt' failed ready')
                      result
       handleBuildException :: MonadIO m => SomeException -> m (Failing (Maybe LocalRepository))
       handleBuildException e =
@@ -332,16 +329,16 @@ qError message = qPutStrLn message >> error message
 buildTarget ::
     (MonadRepos m, MonadTop m, MonadApt m) =>
     P.CacheRec ->			-- configuration info
-    OSImage ->				-- cleanOS
+    OSKey ->				-- cleanOS
     LocalRepository ->			-- The local repository the packages will be uploaded to
     Target ->
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
 buildTarget cache dependOS repo !target = do
-  dependOS' <- quieter 2 $ execStateT syncLocalPool dependOS
+  quieter 2 $ evalMonadOS syncLocalPool dependOS
   -- Get the control file from the clean source and compute the
   -- build dependencies
   let debianControl = targetControl target
-  root <- evalStateT rootDir dependOS'
+  root <- evalMonadOS rootDir dependOS
   arch <- liftIO $ buildArchOfEnv root
   solns <- evalMonadOS (buildDepSolutions arch (map BinPkgName (P.preferred (P.params cache))) debianControl) dependOS
   -- let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) dependOS globalBuildDeps debianControl
@@ -377,12 +374,12 @@ buildTarget cache dependOS repo !target = do
 
 -- | Build a package and upload it to the local repository.
 buildPackage :: (MonadRepos m, MonadTop m) =>
-                P.CacheRec -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
+                P.CacheRec -> OSKey -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
 buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target status repo =
     checkDryRun >>
     prepareBuildImage cache dependOS newFingerprint target >>= \ (buildOS, tree) ->
     logEntry tree >>
-    noisier 1 (evalStateT (build tree) buildOS) >>=
+    noisier 1 (evalMonadOS (build tree) buildOS) >>=
     find >>=
     doLocalUpload
     where
@@ -469,7 +466,7 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
             (_, errors) <- scanIncoming True Nothing repo
             case errors of
               -- Update lists to reflect the availability of the package we just built
-              [] -> execStateT updateLists dependOS >> return repo
+              [] -> evalMonadOS updateLists dependOS >> return repo
               _ -> error $ "Local upload failed:\n " ++ showErrors (map snd errors)
 
 -- |Prepare the build image by copying the clean image, installing
@@ -477,25 +474,25 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
 -- these operations take place in a different order from other types
 -- of builds.  For lax: dependencies, then image copy, then source
 -- copy.  For other: image copy, then source copy, then dependencies.
-prepareBuildImage :: (MonadTop m, MonadRepos m) => P.CacheRec -> OSImage -> Fingerprint -> Target -> m (OSImage, DebianBuildTree)
+prepareBuildImage :: (MonadTop m, MonadRepos m) => P.CacheRec -> OSKey -> Fingerprint -> Target -> m (OSKey, DebianBuildTree)
 prepareBuildImage cache dependOS sourceFingerprint target =
-    evalMonadOS (prepareBuildOS' (P.buildRelease (P.params cache))) dependOS >>= \ buildOS ->
+    evalMonadOS (rootPath <$> rootDir) dependOS >>= \ dependRoot ->
+    evalMonadOS (prepareBuildOS (P.buildRelease (P.params cache))) dependOS >>= \ buildOS ->
+    evalMonadOS (rootPath <$> rootDir) buildOS >>= \ buildRoot ->
     let oldPath = topdir . cleanSource $ target
-        newPath = evalState (rootPath <$> rootDir) buildOS ++ fromJust (dropPrefix (evalState (rootPath <$> rootDir) dependOS) oldPath) in
+        newPath = buildRoot ++ fromJust (dropPrefix dependRoot oldPath) in
     case P.strictness (P.params cache) == P.Lax of
       True -> do
         -- Install dependencies into the dependency environment
-        dependOS' <- execMonadOS (installDependencies (cleanSource target) buildDepends sourceFingerprint) dependOS
-        buildOS' <- case noClean of
-                      True -> return buildOS
-                      False -> liftIO (syncEnv dependOS' buildOS)
+        evalMonadOS (installDependencies (cleanSource target) buildDepends sourceFingerprint) dependOS
+        evalMonadOS (when (not noClean) $ syncOS dependOS) buildOS
         buildTree <- case noClean of
                        True ->
                            liftIO (findOneDebianBuildTree newPath) >>=
                            maybe (error ("No build tree at " ++ show newPath)) return
                        False ->
                            liftIO (copySourceTree (cleanSource target) newPath)
-        return (buildOS', buildTree)
+        return (buildOS, buildTree)
       False -> do
         -- Install dependencies directly into the build environment
         buildTree <- case noClean of
@@ -504,12 +501,10 @@ prepareBuildImage cache dependOS sourceFingerprint target =
                            maybe (error ("No build tree at " ++ show newPath)) return
                        False ->
                            liftIO $ copySourceTree (cleanSource target) newPath
-        dependOS' <- execMonadOS (withTmp (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS
-        buildOS' <- case noClean of
-                      True -> return buildOS
-                      False -> liftIO (syncEnv dependOS' buildOS)
-        buildOS'' <- execMonadOS (installDependencies buildTree buildDepends sourceFingerprint) buildOS'
-        return (buildOS', buildTree)
+        evalMonadOS (withTmp (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS
+        evalMonadOS (when (not noClean) $ syncOS dependOS) buildOS
+        evalMonadOS (installDependencies buildTree buildDepends sourceFingerprint) buildOS
+        return (buildOS, buildTree)
     where
       noClean = P.noClean (P.params cache)
       buildDepends = P.buildDepends (P.params cache)

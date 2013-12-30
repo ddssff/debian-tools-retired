@@ -1,10 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS -fno-warn-orphans #-}
 module Debian.Repo.Apt.OSImage
-    ( runMonadOS
-    , execMonadOS
-    , evalMonadOS
-    , prepareOS
+    ( prepareOS
     , updateOS
     , syncOS
     ) where
@@ -12,7 +9,7 @@ module Debian.Repo.Apt.OSImage
 import Control.Applicative ((<$>))
 import Control.Exception (SomeException, throw)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO(catch), try)
-import Control.Monad.State (MonadState(put, get), StateT, runStateT)
+import Control.Monad.State (MonadState(put, get), modify)
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
 import Data.Lens.Lazy (getL, modL, setL)
@@ -31,13 +28,13 @@ import Debian.Repo.Apt.Slice (verifySourcesList)
 import Debian.Repo.AptCache (buildArchOfRoot, distDir, MonadCache(aptArch, rootDir), sourcesPath)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
-import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildOS', localeGen, MonadOS, neuterEnv, osBaseDistro, osBinaryPackages, osFullDistro, OSImage, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, createOSImage, syncLocalPool, updateLists, syncEnv)
+import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildOS', localeGen, MonadOS, neuterEnv, osBaseDistro, osBinaryPackages, osFullDistro, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, createOSImage, syncLocalPool, updateLists, syncOS')
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
 import Debian.Repo.Prelude (access)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
-import Debian.Repo.Repos (binaryPackageMap, foldRepository, modifyRepos, MonadRepos(getRepos), sourcePackageMap, findOSImage, osImageMap)
+import Debian.Repo.Repos (OSKey, binaryPackageMap, foldRepository, modifyRepos, MonadRepos(getRepos), sourcePackageMap, findOSKey, putOSImage, evalMonadOS)
 import Debian.Repo.SSH (sshCopy)
 import Debian.Repo.Slice (binarySlices, NamedSliceList(sliceListName), Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices, UpdateError(..), SourcesChangedAction(..))
 import Debian.Repo.SourcesList (parseSourcesList)
@@ -50,7 +47,7 @@ import Network.URI (escapeURIString, URI(uriAuthority, uriPath), URIAuth(uriPort
 import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess))
-import System.FilePath (splitFileName, takeDirectory)
+import System.FilePath ((</>), splitFileName, takeDirectory)
 import qualified System.IO as IO (hClose, IOMode(ReadMode), openBinaryFile)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix (getFileStatus)
@@ -58,21 +55,6 @@ import System.Process (shell)
 import System.Process.Progress (ePutStrLn, oneResult, quieter, readProcessChunks)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
-
--- | Run MonadOS and update the osImageMap with the modified value
-runMonadOS :: (MonadRepos m, Functor m) => StateT OSImage m a -> OSImage -> m (a, OSImage)
-runMonadOS task os = do
-  (a, os') <- runStateT task os
-  modifyRepos (modL osImageMap (Map.insert (getL osRoot os') os'))
-  return (a, os')
-
--- | Run MonadOS and update the osImageMap with the modified value
-evalMonadOS :: (MonadRepos m, Functor m) => StateT OSImage m a -> OSImage -> m a
-evalMonadOS task os = fst <$> runMonadOS task os
-
--- | Run MonadOS and update the osImageMap with the modified value
-execMonadOS :: (MonadRepos m, Functor m) => StateT OSImage m a -> OSImage -> m OSImage
-execMonadOS task os = snd <$> runMonadOS task os
 
 getSourcePackages' :: (MonadRepos m, MonadOS m, MonadCache m) => m [SourcePackage]
 getSourcePackages' =
@@ -126,21 +108,21 @@ prepareOS :: (MonadRepos m, MonadTop m) =>
                                         -- immediately - e.g seereason-keyring.  Ignore exceptions.
            -> [String]			-- ^ Packages to exclude
            -> [String]			-- ^ Components of the base repository
-           -> m OSImage
+           -> m OSKey
 prepareOS root distro repo flush ifSourcesChanged include optional exclude components =
-    do os <- findOSImage root >>= maybe (createOSImage root distro repo) return
-       os' <- if flush then return (Left Flushed) else try (execMonadOS updateOS os)
-       execMonadOS (recreate os' >> doInclude >> doLocales >> syncLocalPool) os
+    do key <- findOSKey root >>= maybe (createOSImage root distro repo >>= putOSImage) return
+       if flush then evalMonadOS (recreate Flushed) key else evalMonadOS updateOS key `catch` (\ (e :: UpdateError) -> evalMonadOS (recreate e) key)
+       evalMonadOS (doInclude >> doLocales >> syncLocalPool) key
+       return key
     where
-      recreate :: (MonadOS m, MonadCache m, MonadRepos m, MonadTop m) => Either UpdateError OSImage -> m ()
-      recreate (Right os) = put os
-      recreate (Left (Changed name path computed installed))
+      recreate :: (MonadOS m, MonadCache m, MonadRepos m, MonadTop m) => UpdateError -> m ()
+      recreate (Changed name path computed installed)
           | ifSourcesChanged == SourcesChangedError =
               error $ "FATAL: Sources for " ++ relName name ++ " in " ++ path ++
                        " don't match computed configuration.\n\ncomputed:\n" ++
                        show (pretty computed) ++ "\ninstalled:\n" ++
                        show (pretty installed)
-      recreate (Left reason) =
+      recreate reason =
           do sources <- sourcesPath
              dist <- distDir
              base <- access osBaseDistro
@@ -171,10 +153,12 @@ _pbuilderBuild :: (MonadRepos m, MonadTop m) =>
          -> [String]
          -> [String]
          -> [String]
-         -> m OSImage
+         -> m OSKey
 _pbuilderBuild root distro arch repo copy _extraEssential _omitEssential _extra =
     do os <- _pbuilderBuild' root distro arch repo copy _extraEssential _omitEssential _extra
-       try (execMonadOS updateOS os) >>= either (\ (e :: SomeException) -> error (show e)) return
+       key <- putOSImage os
+       try (evalMonadOS updateOS key) >>= either (\ (e :: SomeException) -> error (show e)) return
+       return key
 
 rebuildOS :: (MonadOS m, MonadCache m, MonadRepos m, MonadTop m) =>
              EnvRoot			-- ^ The location where image is to be built
@@ -187,9 +171,7 @@ rebuildOS root distro include exclude components =
           do arch <- liftIO buildArchOfRoot -- This should be stored in os, but it is a Maybe - why?
              master <- access osLocalMaster
              copy <- access osLocalCopy
-             os' <- buildOS root distro arch master copy include exclude components
-             put os'
-             liftIO $ neuterEnv os'
+             _key <- buildOS root distro arch master copy include exclude components
              syncLocalPool
 
 -- | Create a new clean build environment in root.clean FIXME: create
@@ -203,16 +185,51 @@ buildOS :: (MonadRepos m, MonadTop m) =>
          -> [String]
          -> [String]
          -> [String]
-         -> m OSImage
+         -> m OSKey
 buildOS root distro arch repo copy include exclude components =
     quieter (-1) $
     do os <- buildOS' root distro arch repo copy include exclude components
-       try (execMonadOS updateOS os) >>= either (\ (e :: SomeException) -> error (show e)) return
+       key <- putOSImage os
+       evalMonadOS updateOS key
+       liftIO $ neuterEnv os
+       return key
 
 -- | Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.
-updateOS :: (MonadOS m, MonadRepos m) => m ()
-updateOS =
+updateOS :: (MonadOS m, MonadCache m, MonadRepos m) => m ()
+updateOS = do
+  root <- (rootPath . getL osRoot) <$> get
+  liftIO $ createDirectoryIfMissing True (root </> "etc")
+  liftIO $ readFile "/etc/resolv.conf" >>= writeFile (root </> "etc/resolv.conf")
+  verifySources
+  liftIO $ prepareDevs root
+  syncLocalPool
+  updateLists
+  _ <- liftIO $ sshCopy root
+  source' <- getSourcePackages'
+  binary <- getBinaryPackages'
+  modify (setL osSourcePackages source')
+  modify (setL osBinaryPackages binary)
+    where
+      verifySources :: (MonadOS m, MonadRepos m) => m ()
+      verifySources =
+          do root <- getL osRoot <$> get
+             computed <- remoteOnly <$> osFullDistro
+             let sourcesPath' = rootPath root </> "etc/apt/sources.list"
+             text <- liftIO (try $ readFile sourcesPath')
+             installed <-
+                 case text of
+                   Left (_ :: SomeException) -> return Nothing
+                   Right s -> verifySourcesList (Just root) (parseSourcesList s) >>= return . Just . remoteOnly
+             case installed of
+               Nothing -> access osBaseDistro >>= \ sources -> throw $ Missing (sliceListName sources) sourcesPath'
+               Just installed'
+                   | installed' /= computed ->
+                       (access osBaseDistro) >>= \ sources -> throw $ Changed (sliceListName sources) sourcesPath' computed installed'
+               _ -> return ()
+      remoteOnly :: SliceList -> SliceList
+      remoteOnly x = x {slices = filter r (slices x)} where r y = (uriScheme . sourceUri . sliceSource $ y) /= "file:"
+{-
     get >>= updateOS' >>= either throw put
     where
       updateOS' :: MonadRepos m => OSImage -> m (Either UpdateError OSImage)
@@ -225,7 +242,7 @@ updateOS =
                Left x -> return $ Left x
                Right _ ->
                    do liftIO $ prepareDevs (rootPath root)
-                      os' <- execMonadOS (syncLocalPool >> updateLists) os
+                      evalMonadOS (syncLocalPool >> updateLists) os
                       _ <- liftIO $ sshCopy (rootPath root)
                       source' <- evalMonadOS getSourcePackages' os'
                       binary <- evalMonadOS getBinaryPackages' os'
@@ -248,6 +265,7 @@ updateOS =
                _ -> return $ Right os
       remoteOnly :: SliceList -> SliceList
       remoteOnly x = x {slices = filter r (slices x)} where r y = (uriScheme . sourceUri . sliceSource $ y) /= "file:"
+-}
 
 -- |Prepare a minimal \/dev directory
 {-# WARNING prepareDevs "This function should check all the result codes" #-}
@@ -445,5 +463,9 @@ indexPrefix repo release index =
       '_' -> (init a) +?+ b
       _ -> a ++ "_" ++ b
 
-syncOS :: (MonadOS m, MonadIO m) => OSImage -> m ()
-syncOS src = get >>= liftIO . syncEnv src >>= put
+syncOS :: (MonadOS m, MonadRepos m) => OSKey -> m ()
+syncOS srcKey = do
+  dstOS <- get
+  srcOS <- evalMonadOS get srcKey
+  dstOS' <- liftIO $ syncOS' srcOS dstOS
+  put dstOS'

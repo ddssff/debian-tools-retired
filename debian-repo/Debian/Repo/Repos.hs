@@ -6,6 +6,7 @@
 -- such as the autobuilder.
 module Debian.Repo.Repos
     ( ReposState
+    , OSKey
     , MonadRepos(getRepos, putRepos)
     , modifyRepos
     , runReposT
@@ -16,10 +17,12 @@ module Debian.Repo.Repos
     , sourcePackageMap
     , binaryPackageMap
 
-    , findOSImage
+    , findOSKey
     , findAptImage
     , putOSImage
     , putAptImage
+    , evalMonadOS
+
     , prepareRemoteRepository
     , foldRepository
 
@@ -80,13 +83,15 @@ instance MonadRepos m => MonadRepos (StateT OSImage m) where
     getRepos = lift getRepos
     putRepos = lift . putRepos
 
+newtype OSKey = OSKey EnvRoot deriving (Eq, Ord, Show)
+
 -- | This represents the state of the IO system.
 data ReposState
     = ReposState
       { _repoMap :: Map.Map URI' RemoteRepository		-- ^ Map to look up known (remote) Repository objects
       , _releaseMap :: Map.Map (RepoKey, ReleaseName) Release -- ^ Map to look up known Release objects
       , _aptImageMap :: Map.Map EnvRoot AptImage	-- ^ Map to look up prepared AptImage objects
-      , _osImageMap :: Map.Map EnvRoot OSImage	-- ^ Map to look up prepared OSImage objects
+      , _osImageMap :: Map.Map OSKey OSImage	-- ^ Map to look up prepared OSImage objects
       , _sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
       , _binaryPackageMap :: Map.Map FilePath (FileStatus, [BinaryPackage])
       }
@@ -108,17 +113,33 @@ initState = ReposState
             , _binaryPackageMap = Map.empty
             }
 
-findOSImage :: MonadRepos m => EnvRoot -> m (Maybe OSImage)
-findOSImage key = (Map.lookup key . getL osImageMap) <$> getRepos
+-- | See if there is an OSImage associated with this directory
+findOS :: MonadRepos m => EnvRoot -> m (Maybe OSImage)
+findOS root = (Map.lookup (OSKey root) . getL osImageMap) <$> getRepos
+
+-- | See if there is an OSImage associated with this directory
+findOSKey :: MonadRepos m => EnvRoot -> m (Maybe OSKey)
+findOSKey root = fmap (OSKey . getL osRoot) <$> (findOS root)
 
 findAptImage :: MonadRepos m => EnvRoot -> m (Maybe AptImage)
 findAptImage key = (Map.lookup key . getL aptImageMap) <$> getRepos
 
-putOSImage :: MonadRepos m => OSImage -> m ()
-putOSImage repo = modifyRepos (modL osImageMap (Map.insert (getL osRoot repo) repo))
+putOSImage :: MonadRepos m => OSImage -> m OSKey
+putOSImage repo = do
+  let key = OSKey (getL osRoot repo)
+  modifyRepos (modL osImageMap (Map.insert key repo))
+  return key
 
 putAptImage :: MonadRepos m => AptImage -> m ()
 putAptImage repo = modifyRepos (modL aptImageMap (Map.insert (getL aptImageRoot repo) repo))
+
+-- | Run MonadOS and update the osImageMap with the modified value
+evalMonadOS :: (MonadRepos m, Functor m) => StateT OSImage m a -> OSKey -> m a
+evalMonadOS task (OSKey key) = do
+  Just os <- findOS key
+  (a, os') <- runStateT task os
+  putOSImage os'
+  return a
 
 prepareRemoteRepository :: MonadRepos m => URI -> m RemoteRepository
 prepareRemoteRepository uri =

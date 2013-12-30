@@ -2,22 +2,22 @@
 {-# OPTIONS -Wall #-}
 module Debian.AutoBuilder.BuildEnv
     ( prepareDependOS
-    , prepareBuildOS'
+    , prepareBuildOS
     ) where
 
 import Control.Applicative (Applicative, (<$>), (<*>))
 import Control.Monad (when)
 import Control.Monad.State (MonadIO(liftIO), get)
-import Data.Lens.Lazy (getL)
 import qualified Debian.AutoBuilder.LocalRepo as Local (prepare)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(archList, buildRelease, cleanUp, components, excludePackages, flushDepends, flushPool, flushRoot, ifSourcesChanged, includePackages, optionalIncludePackages))
 import Debian.Release (ReleaseName, releaseName')
 import Debian.Repo.Apt.OSImage (prepareOS)
 import Debian.Repo.Apt.Package (deleteGarbage)
 import Debian.Repo.EnvPath (EnvRoot(rootPath), EnvRoot(EnvRoot))
-import Debian.Repo.OSImage (MonadOS, OSImage, chrootEnv, osRoot)
+import Debian.Repo.OSImage (MonadOS, chrootEnv, osRoot)
 import Debian.Repo.LocalRepository (LocalRepository)
-import Debian.Repo.Repos (MonadRepos)
+import Debian.Repo.Prelude (access, checkRsyncExitCode)
+import Debian.Repo.Repos (MonadRepos, OSKey, evalMonadOS, putOSImage)
 import Debian.Repo.Slice (NamedSliceList)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Top (MonadTop, sub)
@@ -38,7 +38,7 @@ cleanEnvOfRelease :: (MonadIO m, MonadTop m) => ReleaseName -> m EnvRoot
 cleanEnvOfRelease distro =
     sub ("dists" </> releaseName' distro </> "clean") >>= return . EnvRoot
 
-prepareCleanOS :: (MonadRepos m, MonadTop m) => P.ParamRec -> NamedSliceList -> LocalRepository -> m OSImage
+prepareCleanOS :: (MonadRepos m, MonadTop m) => P.ParamRec -> NamedSliceList -> LocalRepository -> m OSKey
 prepareCleanOS params rel localRepo =
     do cleanRoot <- cleanEnv (P.buildRelease params)
        prepareOS cleanRoot
@@ -51,18 +51,19 @@ prepareCleanOS params rel localRepo =
                     (P.excludePackages params)
                     (P.components params)
 
-prepareDependOS :: (MonadRepos m, MonadTop m) => P.ParamRec -> NamedSliceList -> m OSImage
+prepareDependOS :: (MonadRepos m, MonadTop m) => P.ParamRec -> NamedSliceList -> m OSKey
 prepareDependOS params rel =
     do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archList params)
        -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
        when (P.cleanUp params) (deleteGarbage localRepo)
-       root <- dependRoot (P.buildRelease params)
-       exists <- liftIO $ doesDirectoryExist (rootPath root)
+       dRoot <- dependRoot (P.buildRelease params)
+       exists <- liftIO $ doesDirectoryExist (rootPath dRoot)
        when (not exists || P.flushDepends params)
             (do cleanOS <- prepareCleanOS params rel localRepo
-                _ <- rsync ["-x"] (rootPath (getL osRoot cleanOS)) (rootPath root)
+                code <- evalMonadOS (access osRoot >>= \ cRoot -> liftIO (rsync ["-x"] (rootPath cRoot) (rootPath dRoot))) cleanOS
+                checkRsyncExitCode code
                 return ())
-       prepareOS root
+       prepareOS dRoot
                   rel
                   localRepo
                   False
@@ -72,5 +73,7 @@ prepareDependOS params rel =
                   (P.excludePackages params)
                   (P.components params)
 
-prepareBuildOS' :: (MonadOS m, MonadTop m, MonadRepos m, Applicative m) => ReleaseName -> m OSImage
-prepareBuildOS' rel = chrootEnv <$> get <*> buildRoot rel
+prepareBuildOS :: (MonadOS m, MonadTop m, MonadRepos m, Applicative m) => ReleaseName -> m OSKey
+prepareBuildOS rel = do
+    os <- chrootEnv <$> get <*> buildRoot rel
+    putOSImage os

@@ -12,14 +12,13 @@ import Control.Applicative.Error (Failing(..))
 import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException, try)
 import Control.Monad(foldM, when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
-import Control.Monad.State (MonadIO(liftIO), evalStateT)
+import Control.Monad.State (MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
-import Data.Lens.Lazy (getL)
 import Data.List as List (intercalate, null, nub)
 import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
-import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS')
+import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
 import Debian.AutoBuilder.BuildTarget (retrieve)
 import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Target(buildTargets, showTargets)
@@ -32,9 +31,8 @@ import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (DebT)
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.Apt.AptImage (withAptImage)
-import Debian.Repo.Apt.OSImage (evalMonadOS, execMonadOS)
 import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
-import Debian.Repo.Repos (MonadRepos, foldRepository, runReposCachedT, MonadReposCached)
+import Debian.Repo.Repos (MonadRepos, foldRepository, runReposCachedT, MonadReposCached, evalMonadOS)
 import Debian.Repo.OSImage (MonadOS, osLocalMaster, osLocalCopy)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Prelude (access, symbol)
@@ -154,16 +152,16 @@ runParameterSet init cache =
       when (P.flushAll params) (liftIO $ doFlush top)
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
-      dependOS' <- prepareDependOS params buildRelease
-      dependOS <- execMonadOS (updateCacheSources (P.ifSourcesChanged params)) dependOS'
+      dependOS <- prepareDependOS params buildRelease
+      evalMonadOS (updateCacheSources (P.ifSourcesChanged params)) dependOS
       let allTargets = P.buildPackages (C.params cache)
       qPutStr ("\n" ++ showTargets allTargets ++ "\n")
-      buildOS <- evalMonadOS (prepareBuildOS' (P.buildRelease (C.params cache))) dependOS
+      buildOS <- evalMonadOS (prepareBuildOS (P.buildRelease (C.params cache))) dependOS
       when (P.report params) (ePutStrLn . doReport $ allTargets)
       qPutStrLn "Retrieving all source code:\n"
       retrieved <-
           countTasks' (map (\ (target :: P.Packages) ->
-                                (show (P.spec target), (Right <$> evalStateT (retrieve init cache target) buildOS) `IO.catch` handleRetrieveException target))
+                                (show (P.spec target), (Right <$> evalMonadOS (retrieve init cache target) buildOS) `IO.catch` handleRetrieveException target))
                            (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
       (failures, targets) <- mapM (either (return . Left) (\ download -> liftIO (try (asBuildable download)) >>= return. either (\ (e :: SomeException) -> Left (show e)) Right)) retrieved >>= return . partitionEithers
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
@@ -177,7 +175,8 @@ runParameterSet init cache =
       -- Compute the essential and build essential packages, they will all
       -- be implicit build dependencies.
       withAptImage (P.ifSourcesChanged params) poolSources
-                       (buildTargets cache dependOS (getL osLocalMaster dependOS) targets >>=
+                       (evalMonadOS (access osLocalMaster) dependOS >>= \ local ->
+                        buildTargets cache dependOS local targets >>=
                         upload >>=
                         liftIO . newDist)
       -- result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))
