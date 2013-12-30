@@ -475,36 +475,32 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
 -- of builds.  For lax: dependencies, then image copy, then source
 -- copy.  For other: image copy, then source copy, then dependencies.
 prepareBuildImage :: (MonadTop m, MonadRepos m) => P.CacheRec -> OSKey -> Fingerprint -> Target -> m (OSKey, DebianBuildTree)
-prepareBuildImage cache dependOS sourceFingerprint target =
-    evalMonadOS (rootPath <$> rootDir) dependOS >>= \ dependRoot ->
-    evalMonadOS (prepareBuildOS (P.buildRelease (P.params cache))) dependOS >>= \ buildOS ->
-    evalMonadOS (rootPath <$> rootDir) buildOS >>= \ buildRoot ->
-    let oldPath = topdir . cleanSource $ target
-        newPath = buildRoot ++ fromJust (dropPrefix dependRoot oldPath) in
-    case P.strictness (P.params cache) == P.Lax of
-      True -> do
-        -- Install dependencies into the dependency environment
-        evalMonadOS (installDependencies (cleanSource target) buildDepends sourceFingerprint) dependOS
-        evalMonadOS (when (not noClean) $ syncOS dependOS) buildOS
-        buildTree <- case noClean of
-                       True ->
-                           liftIO (findOneDebianBuildTree newPath) >>=
-                           maybe (error ("No build tree at " ++ show newPath)) return
-                       False ->
-                           liftIO (copySourceTree (cleanSource target) newPath)
-        return (buildOS, buildTree)
-      False -> do
-        -- Install dependencies directly into the build environment
-        buildTree <- case noClean of
-                       True ->
-                           liftIO (findOneDebianBuildTree newPath) >>=
-                           maybe (error ("No build tree at " ++ show newPath)) return
-                       False ->
-                           liftIO $ copySourceTree (cleanSource target) newPath
-        evalMonadOS (withTmp (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS
-        evalMonadOS (when (not noClean) $ syncOS dependOS) buildOS
-        evalMonadOS (installDependencies buildTree buildDepends sourceFingerprint) buildOS
-        return (buildOS, buildTree)
+prepareBuildImage cache dependOS sourceFingerprint target = do
+  dependRoot <- evalMonadOS (rootPath <$> rootDir) dependOS
+  buildOS <- evalMonadOS (prepareBuildOS (P.buildRelease (P.params cache))) dependOS
+  buildRoot <- evalMonadOS (rootPath <$> rootDir) buildOS
+  let oldPath = topdir . cleanSource $ target
+      newPath = buildRoot ++ fromJust (dropPrefix dependRoot oldPath)
+  when (P.strictness (P.params cache) == P.Lax)
+       (do -- Lax mode - dependencies accumulate in the dependency
+           -- environment, sync that to build environment.
+           evalMonadOS (installDependencies (cleanSource target) buildDepends sourceFingerprint) dependOS
+           evalMonadOS (when (not noClean) $ syncOS dependOS) buildOS)
+  buildTree <- case noClean of
+                 True ->
+                     liftIO (findOneDebianBuildTree newPath) >>=
+                     maybe (error ("No build tree at " ++ show newPath)) return
+                 False ->
+                     liftIO $ copySourceTree (cleanSource target) newPath
+  when (P.strictness (P.params cache) /= P.Lax)
+       (do -- Strict mode - download dependencies to depend environment,
+           -- sync downloads to build environment and install dependencies there.
+           evalMonadOS (withTmp (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS
+           evalMonadOS (do when (not noClean) $ syncOS dependOS
+                           installDependencies buildTree buildDepends sourceFingerprint
+                           return ()) buildOS)
+  return (buildOS, buildTree)
+
     where
       noClean = P.noClean (P.params cache)
       buildDepends = P.buildDepends (P.params cache)
