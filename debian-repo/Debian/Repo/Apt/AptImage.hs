@@ -17,7 +17,6 @@ import Data.Map as Map (insert, lookup)
 import Debian.Release (ReleaseName(relName))
 import Debian.Repo.Apt.PackageIndex (binaryPackagesFromSources, sourcePackagesFromSources)
 import Debian.Repo.Apt.Slice (updateCacheSources)
-import Debian.Repo.AptCache (MonadCache)
 import Debian.Repo.AptImage (aptGetUpdate, AptImage, aptImageArch, aptImageBinaryPackages, aptImageRoot, aptImageSourcePackages, aptImageSources, cacheRootDir, createAptImage, getApt, modifyApt, MonadApt(putApt, getApt))
 import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.PackageID (PackageID(packageVersion))
@@ -70,7 +69,7 @@ prepareAptImage' sourcesChangedAction sources =
 -- |Run apt-get update and then retrieve all the packages referenced
 -- by the sources.list.  The source packages are sorted so that
 -- packages with the same name are together with the newest first.
-updateAptEnv :: (MonadRepos m, MonadApt m, MonadCache m) => m ()
+updateAptEnv :: (MonadRepos m, MonadApt m) => m ()
 updateAptEnv =
     do aptGetUpdate
        sourcePackages <- getSourcePackages >>= return . sortBy cmp
@@ -93,7 +92,7 @@ updateAptEnv =
       ExitFailure n -> error $ cmd ++ " -> ExitFailure " ++ show n
 -}
 
-getSourcePackages :: (MonadRepos m, MonadApt m, MonadCache m) => m [SourcePackage]
+getSourcePackages :: (MonadRepos m, MonadApt m) => m [SourcePackage]
 getSourcePackages =
     do qPutStrLn "AptImage.getSourcePackages"
        root <- getL aptImageRoot <$> getApt
@@ -101,7 +100,7 @@ getSourcePackages =
        sources <- (sliceList . getL aptImageSources) <$> getApt
        sourcePackagesFromSources root arch sources
 
-getBinaryPackages :: (MonadRepos m, MonadApt m, MonadCache m) => m [BinaryPackage]
+getBinaryPackages :: (MonadRepos m, MonadApt m) => m [BinaryPackage]
 getBinaryPackages =
     do qPutStrLn "AptImage.getBinaryPackages"
        root <- getL aptImageRoot <$> getApt

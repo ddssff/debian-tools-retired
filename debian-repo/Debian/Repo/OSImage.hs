@@ -36,7 +36,7 @@ import Control.Applicative ((<$>))
 import Control.DeepSeq (force)
 import Control.Exception (evaluate, SomeException)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, MonadCatchIO, throw, try)
-import Control.Monad.State (evalStateT, get, MonadState, StateT)
+import Control.Monad.State (evalStateT, MonadState, StateT)
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString, empty)
 import Data.Data (Data)
@@ -48,8 +48,7 @@ import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (ParseRelations(parseRelations), PkgName, Relations)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
-import Debian.Repo.AptCache (MonadCache(..))
-import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot(EnvRoot, rootPath), EnvRoot, outsidePath)
+import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot(rootPath), EnvRoot, outsidePath)
 import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Prelude (access, (~=))
@@ -66,7 +65,6 @@ import Extra.Misc (sameInode, sameMd5sum)
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile, renameFile)
 import System.Exit (ExitCode(ExitFailure), ExitCode(ExitSuccess))
 import System.FilePath ((</>))
-import System.Posix.Env (setEnv)
 import System.Posix.Files (createLink)
 import System.Process (proc, readProcess, readProcessWithExitCode, shell)
 import System.Process.Progress (collectOutputs, doOutput, ePutStr, ePutStrLn, foldOutputsL, keepResult, qPutStr, qPutStrLn, quieter, runProcess, runProcessF, timeTask)
@@ -143,9 +141,6 @@ instance Ord OSImage where
 
 instance Eq OSImage where
     a == b = compare a b == EQ
-
-instance (Monad m, Functor m) => MonadCache (StateT OSImage m) where
-    aptBaseSources = _osBaseDistro <$> get
 
 -- |The sources.list is the list associated with the distro name, plus
 -- the local sources where we deposit newly built packages.

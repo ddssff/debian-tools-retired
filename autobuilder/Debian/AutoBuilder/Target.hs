@@ -47,7 +47,6 @@ import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
 import Debian.Repo.Apt.OSImage (updateOS, syncOS, buildArchOfOS)
 import Debian.Repo.Apt.Package (scanIncoming)
-import Debian.Repo.AptCache (MonadCache)
 import Debian.Repo.AptImage (MonadApt(getApt), aptImageSourcePackages)
 import Debian.Repo.OSImage (syncLocalPool, updateLists, withProc, withTmp, buildEssential, osRoot)
 import Debian.Repo.Changes (saveChangesFile)
@@ -113,7 +112,7 @@ _formatVersions buildDeps =
     "\n"
     where prefix = "\n    "
 
-prepareTargets :: (MonadOS m, MonadCache m, MonadRepos m) => P.CacheRec -> Relations -> [Buildable] -> m [Target]
+prepareTargets :: (MonadOS m, MonadRepos m) => P.CacheRec -> Relations -> [Buildable] -> m [Target]
 prepareTargets cache globalBuildDeps targetSpecs =
     do results <- mapM (prepare (length targetSpecs)) (zip [1..] targetSpecs)
        let (failures, targets) = partitionEithers results
@@ -123,7 +122,7 @@ prepareTargets cache globalBuildDeps targetSpecs =
          True -> return targets
          False -> ePutStr msg >> error msg
     where
-      prepare :: (MonadOS m, MonadCache m, MonadRepos m) => Int -> (Int, Buildable) -> m (Either SomeException Target)
+      prepare :: (MonadOS m, MonadRepos m) => Int -> (Int, Buildable) -> m (Either SomeException Target)
       prepare count (index, tgt) =
           do qPutStrLn (printf "[%2d of %2d] %s in %s" index count (P.unTargetName (T.handle $ download $ tgt)) (T.getTop $ download $ tgt))
              quieter 2 (try (prepareTarget cache globalBuildDeps tgt) >>=
@@ -391,7 +390,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
           case P.noClean (P.params cache) of
             False -> liftIO (maybeAddLogEntry buildTree newVersion)
             True -> return ()
-      build :: forall m. (MonadOS m, MonadCache m, MonadRepos m, MonadCatchIO m) =>
+      build :: forall m. (MonadOS m, MonadRepos m, MonadCatchIO m) =>
                DebianBuildTree -> m (DebianBuildTree, NominalDiffTime)
       build buildTree =
           do -- The --commit flag does not appear until dpkg-dev-1.16.1,
@@ -507,7 +506,7 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
 -- | Get the control info for the newest version of a source package
 -- available in a release.  Make sure that the files for this build
 -- architecture are available.
-getReleaseControlInfo :: (MonadOS m, MonadCache m) => Target -> m (Maybe SourcePackage, SourcePackageStatus, String)
+getReleaseControlInfo :: MonadOS m => Target -> m (Maybe SourcePackage, SourcePackageStatus, String)
 getReleaseControlInfo target = do
   sourcePackages' <- (sortBy compareVersion . sortSourcePackages [packageName]) <$> access osSourcePackages
   binaryPackages' <- sortBinaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages') <$> access osBinaryPackages
@@ -584,7 +583,7 @@ data Status = Complete | Missing [BinPkgName]
 -- |Compute a new version number for a package by adding a vendor tag
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
-computeNewVersion :: (MonadApt m, MonadRepos m, MonadCache m, MonadOS m) => P.CacheRec -> Target -> m (Failing DebianVersion)
+computeNewVersion :: (MonadApt m, MonadRepos m, MonadOS m) => P.CacheRec -> Target -> m (Failing DebianVersion)
 computeNewVersion cache target = do
   (releaseControlInfo, _releaseStatus, _message) <- getReleaseControlInfo target
   let current = if buildTrumped then Nothing else releaseControlInfo
@@ -637,7 +636,7 @@ computeNewVersion cache target = do
       buildTrumped = elem (targetName target) (P.buildTrumped (P.params cache))
 
 -- FIXME: Most of this code should move into Debian.Repo.Dependencies
-buildDepSolutions :: (MonadOS m, MonadIO m, MonadCache m) => Arch -> [BinPkgName] -> Control' T.Text -> m (Failing [(Int, [BinaryPackage])])
+buildDepSolutions :: (MonadOS m, MonadIO m) => Arch -> [BinPkgName] -> Control' T.Text -> m (Failing [(Int, [BinaryPackage])])
 buildDepSolutions arch preferred debianControl =
     do globalBuildDeps <- buildEssential
        packages <- access osBinaryPackages
@@ -726,7 +725,7 @@ sinkFields f (Paragraph fields) =
           f' (Comment _) = False
 
 -- |Download the package's build dependencies into /var/cache
-downloadDependencies :: (MonadOS m, MonadCache m, MonadIO m) => DebianBuildTree -> [String] -> Fingerprint -> m String
+downloadDependencies :: (MonadOS m, MonadIO m) => DebianBuildTree -> [String] -> Fingerprint -> m String
 downloadDependencies source extra sourceFingerprint =
     do root <- rootPath <$> access osRoot
        let path = pathBelow root (topdir source)
@@ -748,7 +747,7 @@ pathBelow root path =
     where message = "Expected a path below " ++ root ++ ", saw " ++ path
 
 -- |Install the package's build dependencies.
-installDependencies :: (MonadOS m, MonadCache m, MonadCatchIO m) => DebianBuildTree -> [String] -> Fingerprint -> m L.ByteString
+installDependencies :: (MonadOS m, MonadCatchIO m) => DebianBuildTree -> [String] -> Fingerprint -> m L.ByteString
 installDependencies source extra sourceFingerprint =
     do root <- rootPath <$> access osRoot
        let path = pathBelow root (topdir source)

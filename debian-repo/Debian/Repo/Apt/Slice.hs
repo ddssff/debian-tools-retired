@@ -20,14 +20,13 @@ import Data.Text as T (pack, Text, unpack)
 import Debian.Control (Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph')
 import Debian.Control.Text (decodeParagraph)
 import Debian.Release (parseReleaseName, parseSection')
-import Debian.Repo.AptCache (distDir, MonadCache(aptBaseSources), sourcesPath)
 import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..))
 import Debian.Repo.LocalRepository (prepareLocalRepository)
 import Debian.Repo.Repo (repoKey)
 import Debian.Repo.Repos (MonadRepos, prepareRemoteRepository)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..), SourcesChangedAction, doSourcesChangedAction)
 import Debian.Repo.SourcesList (parseSourcesList)
-import Debian.Repo.Top (MonadTop)
+import Debian.Repo.Top (MonadTop, distDir, sourcesPath)
 import Debian.Sources (DebSource(..), SourceType(Deb, DebSrc))
 import Debian.URI (dirFromURI, fileFromURI)
 import Extra.Files (replaceFile)
@@ -98,12 +97,10 @@ verifyDebSource chroot line =
 
 -- |Change the sources.list of an AptCache object, subject to the
 -- value of sourcesChangedAction.  (FIXME: Does this really work for MonadOS?)
-updateCacheSources :: ({-MonadApt m, MonadCache m,-} MonadRepos m, MonadTop m) => SourcesChangedAction -> NamedSliceList -> m ()
+updateCacheSources :: (MonadRepos m, MonadTop m) => SourcesChangedAction -> NamedSliceList -> m ()
 updateCacheSources sourcesChangedAction baseSources = do
   qPutStrLn "Updating cache sources"
   let rel = sliceListName baseSources
-  -- baseSources <- aptBaseSources
-  --let distro@(ReleaseCache _ dist _) = releaseFromConfig' top text
   dir <- distDir rel
   sources <- sourcesPath rel
   distExists <- liftIO $ doesFileExist sources

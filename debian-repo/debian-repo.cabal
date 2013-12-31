@@ -47,7 +47,6 @@ Library
         Debian.Repo.Apt.PackageIndex,
         Debian.Repo.Apt.Release,
         Debian.Repo.Apt.Slice,
-        Debian.Repo.AptCache,
         Debian.Repo.AptImage,
         Debian.Repo.Changes,
         Debian.Repo.Dependencies,

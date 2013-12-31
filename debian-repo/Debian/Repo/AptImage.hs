@@ -29,11 +29,10 @@ import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (SrcPkgName(unSrcPkgName), PkgName)
 import Debian.Release (ReleaseName(relName))
-import Debian.Repo.AptCache (distDir, MonadCache(..))
 import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName))
-import Debian.Repo.Top (MonadTop, dists)
+import Debian.Repo.Top (MonadTop, dists, distDir)
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Extra.Files (replaceFile, writeFileIfMissing)
 import Prelude hiding ((.))
@@ -67,9 +66,6 @@ instance (Monad m, Functor m) => MonadApt (StateT AptImage m) where
 
 instance Show AptImage where
     show apt = "AptImage " ++ relName (sliceListName (getL aptImageSources apt))
-
-instance (Monad m, Functor m) => MonadCache (StateT AptImage m) where
-    aptBaseSources = _aptImageSources <$> getApt
 
 instance Ord AptImage where
     compare a b = compare (sliceListName . getL aptImageSources $ a) (sliceListName . getL aptImageSources $ b)

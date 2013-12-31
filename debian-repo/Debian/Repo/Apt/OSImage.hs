@@ -20,7 +20,6 @@ import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Release (ReleaseName(relName))
 import Debian.Repo.Apt.PackageIndex (binaryPackagesFromSources, sourcePackagesFromSources)
 import Debian.Repo.Apt.Slice (verifySourcesList)
-import Debian.Repo.AptCache (distDir, MonadCache, sourcesPath)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
 import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildArchOfRoot, buildOS', createOSImage, localeGen, MonadOS, neuterEnv, osArch, osBaseDistro, osBinaryPackages, osFullDistro, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, syncLocalPool, syncOS', updateLists)
@@ -30,7 +29,7 @@ import Debian.Repo.Repos (evalMonadOS, findOSKey, MonadRepos, OSKey, putOSImage)
 import Debian.Repo.SSH (sshCopy)
 import Debian.Repo.Slice (NamedSliceList(sliceListName), Slice(sliceSource), SliceList(slices), SourcesChangedAction(SourcesChangedError), UpdateError(..))
 import Debian.Repo.SourcesList (parseSourcesList)
-import Debian.Repo.Top (MonadTop)
+import Debian.Repo.Top (MonadTop, distDir, sourcesPath)
 import Debian.Sources (DebSource(sourceUri))
 import Debian.URI (URI(uriScheme))
 import Extra.Files (replaceFile)
@@ -57,14 +56,14 @@ buildArchOfOS = do
           return $ Binary (ArchOS os) (ArchCPU cpu)
       _ -> error $ "Failure computing build architecture of build env at " ++ root ++ ": " ++ show (a, b)
 
-getSourcePackages' :: (MonadRepos m, MonadOS m, MonadCache m) => m [SourcePackage]
+getSourcePackages' :: (MonadRepos m, MonadOS m) => m [SourcePackage]
 getSourcePackages' =
     do root <- access osRoot
        arch <- access osArch
        sources <- osFullDistro
        sourcePackagesFromSources root arch sources
 
-getBinaryPackages' :: (MonadRepos m, MonadOS m, MonadCache m) => m [BinaryPackage]
+getBinaryPackages' :: (MonadRepos m, MonadOS m) => m [BinaryPackage]
 getBinaryPackages' =
     do root <- access osRoot
        arch <- access osArch
@@ -91,7 +90,7 @@ prepareOS root distro repo flush ifSourcesChanged include optional exclude compo
        evalMonadOS (doInclude >> doLocales >> syncLocalPool) key
        return key
     where
-      recreate :: (MonadOS m, MonadCache m, MonadRepos m, MonadTop m) => UpdateError -> m ()
+      recreate :: (MonadOS m, MonadRepos m, MonadTop m) => UpdateError -> m ()
       recreate (Changed name path computed installed)
           | ifSourcesChanged == SourcesChangedError =
               error $ "FATAL: Sources for " ++ relName name ++ " in " ++ path ++
@@ -136,7 +135,7 @@ _pbuilderBuild root distro arch repo copy _extraEssential _omitEssential _extra 
        try (evalMonadOS updateOS key) >>= either (\ (e :: SomeException) -> error (show e)) return
        return key
 
-rebuildOS :: (MonadOS m, MonadCache m, MonadRepos m, MonadTop m) =>
+rebuildOS :: (MonadOS m, MonadRepos m, MonadTop m) =>
              EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list of the base distribution
            -> [String]			-- ^ Extra packages to install - e.g. keyrings
@@ -172,7 +171,7 @@ buildOS root distro arch repo copy include exclude components =
 
 -- | Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.
-updateOS :: (MonadOS m, MonadCache m, MonadRepos m) => m ()
+updateOS :: (MonadOS m, MonadRepos m) => m ()
 updateOS = do
   root <- (rootPath . getL osRoot) <$> get
   liftIO $ createDirectoryIfMissing True (root </> "etc")

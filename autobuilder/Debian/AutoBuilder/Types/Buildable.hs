@@ -35,7 +35,6 @@ import Debian.Control (Control'(Control), fieldValue,  Paragraph'(Paragraph), Fi
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
-import Debian.Repo.AptCache (MonadCache)
 import Debian.Repo.OSImage (MonadOS, osRoot)
 import Debian.Repo.Prelude (access)
 import Debian.Repo.SourceTree (DebianBuildTree(..), control, entry, subdir, debdir, findDebianBuildTrees, findBuildTree, copySourceTree,
@@ -128,7 +127,7 @@ targetName = T.handle . download . tgt
 -- |Prepare a target for building in the given environment.  At this
 -- point, the target needs to be a DebianSourceTree or a
 -- DebianBuildTree. 
-prepareTarget :: (MonadOS m, MonadCache m, MonadIO m) => C.CacheRec -> Relations -> Buildable -> m Target
+prepareTarget :: (MonadOS m, MonadIO m) => C.CacheRec -> Relations -> Buildable -> m Target
 prepareTarget cache globalBuildDeps source =
     quieter 2 $ prepareBuild cache (download source) >>= \ tree ->
     liftIO (getTargetDependencyInfo globalBuildDeps tree) >>=
@@ -144,7 +143,7 @@ targetControl = control . cleanSource
 -- revision control files.  This ensures that the tarball and\/or the
 -- .diff.gz file in the deb don't contain extra junk.  It also makes
 -- sure that debian\/rules is executable.
-prepareBuild :: (MonadOS m, MonadCache m, MonadIO m) => C.CacheRec -> T.Download -> m DebianBuildTree
+prepareBuild :: (MonadOS m, MonadIO m) => C.CacheRec -> T.Download -> m DebianBuildTree
 prepareBuild _cache target =
     liftIO (try (findSourceTree (T.getTop target))) >>=
     either (\ (_ :: SomeException) ->
@@ -161,7 +160,7 @@ prepareBuild _cache target =
 {-    checkName tree = source == Just name
           where source = fieldValue "Source" (head (unControl (control' (debTree' tree)))) -}
 
-      copySource :: (MonadOS m, MonadCache m, MonadIO m) => DebianSourceTree -> m DebianBuildTree
+      copySource :: (MonadOS m, MonadIO m) => DebianSourceTree -> m DebianBuildTree
       copySource debSource =
           do root <- rootPath <$> access osRoot
              let name = logPackage . entry $ debSource
@@ -175,7 +174,7 @@ prepareBuild _cache target =
              maybe (return ()) (liftIO . copyOrigTarball dest name ver) (T.origTarball target)
              liftIO $ findBuildTree dest newdir
 
-      copyBuild :: (MonadOS m, MonadCache m, MonadIO m) => DebianBuildTree -> m DebianBuildTree
+      copyBuild :: (MonadOS m, MonadIO m) => DebianBuildTree -> m DebianBuildTree
       copyBuild debBuild =
           do root <- rootPath <$> access osRoot
              let name = logPackage . entry $ debBuild

@@ -33,7 +33,6 @@ import Data.Time (NominalDiffTime)
 import Debian.Changes (ChangeLogEntry(..), ChangesFile(..), parseEntries)
 import Debian.Control.Text (Control, Control'(Control), ControlFunctions(parseControl), Field'(Comment), Paragraph'(..))
 import Debian.Relation (BinPkgName, SrcPkgName(unSrcPkgName))
-import Debian.Repo.AptCache (MonadCache)
 import Debian.Repo.AptImage (aptDir, MonadApt(getApt), aptImageRoot, aptImageSourcePackages, aptGetSource)
 import Debian.Repo.Changes (findChangesFiles)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
@@ -107,7 +106,7 @@ explainSourcePackageStatus (Indep missing) = "Some or all architecture-dependent
 explainSourcePackageStatus None = "This version of the package is not present."
 
 -- | Run dpkg-buildpackage in a build tree.
-buildDebs :: (DebianBuildTreeC t, MonadOS m, MonadCache m, MonadIO m) => Bool -> Bool -> [(String, Maybe String)] -> t -> SourcePackageStatus -> m NominalDiffTime
+buildDebs :: (DebianBuildTreeC t, MonadOS m, MonadIO m) => Bool -> Bool -> [(String, Maybe String)] -> t -> SourcePackageStatus -> m NominalDiffTime
 buildDebs noClean _twice setEnv buildTree status =
     do
       root <- rootPath <$> access osRoot
@@ -302,7 +301,7 @@ instance DebianBuildTreeC DebianBuildTree where
     findBuildTree path d = findSourceTree (path </> d) >>= return . DebianBuildTree path d
 
 -- |Retrieve a source package via apt-get.
-prepareSource :: (MonadApt m, MonadCache m, MonadTop m, MonadIO m) =>
+prepareSource :: (MonadApt m, MonadTop m, MonadIO m) =>
                  SrcPkgName			-- The name of the package
               -> Maybe DebianVersion		-- The desired version, if Nothing get newest
               -> m DebianBuildTree		-- The resulting source tree

@@ -10,11 +10,15 @@ module Debian.Repo.Top
     , MonadTop(askTop)
     , sub
     , dists
+    , distDir
+    , sourcesPath
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Monad.Reader (ReaderT(runReaderT), MonadReader(ask))
 import Control.Monad.State (StateT)
 import Control.Monad.Trans (lift)
+import Debian.Release (ReleaseName(relName))
 import System.FilePath ((</>), isRelative)
 
 newtype TopDir = TopDir {unTopDir :: FilePath}
@@ -39,3 +43,12 @@ instance MonadTop m => MonadTop (StateT s m) where
 
 dists :: MonadTop m => m FilePath
 dists = sub "dists"
+
+-- | The directory in a repository where the package index files for a
+-- particular dist or release is stored.  (Wait, that's not right.)
+distDir :: MonadTop m => ReleaseName -> m FilePath
+distDir rel = (</> relName rel) <$> dists
+
+-- | The path of the text file containing the sources.list (aka SliceList)
+sourcesPath :: MonadTop m => ReleaseName -> m FilePath
+sourcesPath rel = (</> "sources") <$> distDir rel
