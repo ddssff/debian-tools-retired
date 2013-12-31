@@ -178,7 +178,7 @@ runParameterSet init cache =
       -- be implicit build dependencies.
       withAptImage (P.ifSourcesChanged params) poolSources
                        (evalMonadOS (access osLocalMaster) dependOS >>= \ local ->
-                        buildTargets cache dependOS local targets >>=
+                        buildTargets cache dependOS buildOS local targets >>=
                         upload >>=
                         liftIO . newDist)
       -- result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))

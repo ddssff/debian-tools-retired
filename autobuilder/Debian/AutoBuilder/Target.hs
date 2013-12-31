@@ -147,50 +147,49 @@ partitionFailing xs =
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
 buildTargets :: (MonadRepos m, MonadTop m, MonadApt m) =>
-                P.CacheRec -> OSKey -> LocalRepository -> [Buildable] -> m (LocalRepository, [Target])
-buildTargets _ _ localRepo [] = return (localRepo, [])
-buildTargets cache dependOS localRepo !targetSpecs =
+                P.CacheRec -> OSKey -> OSKey -> LocalRepository -> [Buildable] -> m (LocalRepository, [Target])
+buildTargets _ _ _ localRepo [] = return (localRepo, [])
+buildTargets cache dependOS buildOS localRepo !targetSpecs =
     do globalBuildDeps <- evalMonadOS buildEssential dependOS
        qPutStrLn ("\n" ++ $(symbol 'buildTargets) ++ "\nAssembling source trees:\n")
        targets <- evalMonadOS (prepareTargets cache globalBuildDeps targetSpecs) dependOS
        qPutStrLn "\nBuilding all targets:"
-       failed <- buildLoop cache localRepo dependOS targets
+       failed <- buildLoop cache localRepo dependOS buildOS targets
        return (localRepo, failed)
  
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
 buildLoop :: (MonadRepos m, MonadTop m, MonadApt m) =>
-             P.CacheRec -> LocalRepository -> OSKey -> [Target] -> m [Target]
-buildLoop cache localRepo dependOS !targets =
-    Set.toList <$> loop dependOS (Set.fromList targets) Set.empty
+             P.CacheRec -> LocalRepository -> OSKey -> OSKey -> [Target] -> m [Target]
+buildLoop cache localRepo dependOS buildOS !targets =
+    Set.toList <$> loop (Set.fromList targets) Set.empty
     where
       -- This loop computes the ready targets and builds one.
       loop :: (MonadRepos m, MonadApt m, MonadTop m) =>
-              OSKey -> Set.Set Target -> Set.Set Target -> m (Set.Set Target)
-      loop _ unbuilt failed | Set.null unbuilt = return failed
-      loop dependOS unbuilt failed =
+              Set.Set Target -> Set.Set Target -> m (Set.Set Target)
+      loop unbuilt failed | Set.null unbuilt = return failed
+      loop unbuilt failed =
           ePutStrLn "Computing ready targets..." >>
           case readyTargets cache (goals (Set.toList unbuilt)) (Set.toList unbuilt) of
             [] -> return failed
             triples -> do noisier 1 $ qPutStrLn (makeTable triples)
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
-                          loop2 dependOS (Set.difference unbuilt ready) failed triples
+                          loop2 (Set.difference unbuilt ready) failed triples
       loop2 :: (MonadRepos m, MonadApt m, MonadTop m) =>
-               OSKey
-            -> Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
+               Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
             -> Set.Set Target -- failed: Targets which either failed to build or were blocked by a target that failed to build
             -> [(Target, [Target], [Target])] -- ready: the list of known buildable targets
             -> m (Set.Set Target)
-      loop2 dependOS unbuilt failed [] =
+      loop2 unbuilt failed [] =
           -- Out of ready targets, re-do the dependency computation
-          loop dependOS unbuilt failed
-      loop2 dependOS unbuilt failed ((target, blocked, _) : ready') =
+          loop unbuilt failed
+      loop2 unbuilt failed ((target, blocked, _) : ready') =
           do ePutStrLn (printf "[%2d of %2d] TARGET: %s - %s"
                         (length targets - (Set.size unbuilt + length ready')) (length targets) (P.unTargetName (targetName target)) (show (T.method (download (tgt target)))))
              -- Build one target.
              result <- if Set.member (targetName target) (P.discard (P.params cache))
                        then return (Failure ["--discard option set"])
-                       else (Success <$> buildTarget cache dependOS localRepo target) `IO.catch` handleBuildException
+                       else (Success <$> buildTarget cache dependOS buildOS localRepo target) `IO.catch` handleBuildException
              failing -- On failure the target and its dependencies get
                      -- added to failed.
                      (\ errs ->
@@ -201,7 +200,7 @@ buildLoop cache localRepo dependOS !targets =
                                  unbuilt' = Set.difference unbuilt (Set.fromList blocked)
                                  -- Add the target and its dependencies to failed
                                  failed' = Set.insert target  . Set.union (Set.fromList blocked) $ failed
-                             loop2 dependOS unbuilt' failed' ready')
+                             loop2 unbuilt' failed' ready')
                      -- On success the target is discarded and its
                      -- dependencies are added to unbuilt.
                      (\ mRepo ->
@@ -209,7 +208,7 @@ buildLoop cache localRepo dependOS !targets =
                              -- Add to unbuilt any blocked packages that weren't already failed by
                              -- some other build
                              let unbuilt' = Set.union unbuilt (Set.difference (Set.fromList blocked) failed)
-                             loop2 dependOS unbuilt' failed ready')
+                             loop2 unbuilt' failed ready')
                      result
       handleBuildException :: MonadIO m => SomeException -> m (Failing (Maybe LocalRepository))
       handleBuildException e =
@@ -330,11 +329,12 @@ qError message = qPutStrLn message >> error message
 buildTarget ::
     (MonadRepos m, MonadTop m, MonadApt m) =>
     P.CacheRec ->			-- configuration info
-    OSKey ->				-- cleanOS
+    OSKey ->
+    OSKey ->
     LocalRepository ->			-- The local repository the packages will be uploaded to
     Target ->
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
-buildTarget cache dependOS repo !target = do
+buildTarget cache dependOS buildOS repo !target = do
   quieter 2 $ evalMonadOS syncLocalPool dependOS
   -- Get the control file from the clean source and compute the
   -- build dependencies
@@ -369,15 +369,15 @@ buildTarget cache dependOS repo !target = do
                      case decision of
                        Error message -> qError ("Failure making build decision: " ++ message)
                        No _ -> return Nothing
-                       _ ->  buildPackage cache dependOS buildVersion oldFingerprint newFingerprint target releaseStatus repo >>=
+                       _ ->  buildPackage cache dependOS buildOS buildVersion oldFingerprint newFingerprint target releaseStatus repo >>=
                              return . Just
 
 -- | Build a package and upload it to the local repository.
 buildPackage :: (MonadRepos m, MonadTop m) =>
-                P.CacheRec -> OSKey -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
-buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target status repo =
+                P.CacheRec -> OSKey -> OSKey -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
+buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !target status repo =
     checkDryRun >>
-    prepareBuildImage cache dependOS newFingerprint target >>= \ (buildOS, tree) ->
+    prepareBuildTree cache dependOS buildOS newFingerprint target >>= \ tree ->
     logEntry tree >>
     noisier 1 (evalMonadOS (build tree) buildOS) >>=
     find >>=
@@ -474,10 +474,9 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
 -- these operations take place in a different order from other types
 -- of builds.  For lax: dependencies, then image copy, then source
 -- copy.  For other: image copy, then source copy, then dependencies.
-prepareBuildImage :: (MonadTop m, MonadRepos m) => P.CacheRec -> OSKey -> Fingerprint -> Target -> m (OSKey, DebianBuildTree)
-prepareBuildImage cache dependOS sourceFingerprint target = do
+prepareBuildTree :: (MonadTop m, MonadRepos m) => P.CacheRec -> OSKey -> OSKey -> Fingerprint -> Target -> m DebianBuildTree
+prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
   dependRoot <- evalMonadOS (rootPath <$> access osRoot) dependOS
-  buildOS <- evalMonadOS (prepareBuildOS (P.buildRelease (P.params cache))) dependOS
   buildRoot <- evalMonadOS (rootPath <$> access osRoot) buildOS
   let oldPath = topdir . cleanSource $ target
       newPath = buildRoot ++ fromJust (dropPrefix dependRoot oldPath)
@@ -499,7 +498,7 @@ prepareBuildImage cache dependOS sourceFingerprint target = do
            evalMonadOS (do when (not noClean) $ syncOS dependOS
                            installDependencies buildTree buildDepends sourceFingerprint
                            return ()) buildOS)
-  return (buildOS, buildTree)
+  return buildTree
 
     where
       noClean = P.noClean (P.params cache)
