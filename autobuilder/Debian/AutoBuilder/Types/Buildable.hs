@@ -35,8 +35,9 @@ import Debian.Control (Control'(Control), fieldValue,  Paragraph'(Paragraph), Fi
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
-import Debian.Repo.AptCache (MonadCache, rootDir)
-import Debian.Repo.OSImage (MonadOS)
+import Debian.Repo.AptCache (MonadCache)
+import Debian.Repo.OSImage (MonadOS, osRoot)
+import Debian.Repo.Prelude (access)
 import Debian.Repo.SourceTree (DebianBuildTree(..), control, entry, subdir, debdir, findDebianBuildTrees, findBuildTree, copySourceTree,
                                DebianSourceTree(..), findSourceTree {-, SourceTree(dir')-})
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
@@ -162,7 +163,7 @@ prepareBuild _cache target =
 
       copySource :: (MonadOS m, MonadCache m, MonadIO m) => DebianSourceTree -> m DebianBuildTree
       copySource debSource =
-          do root <- rootPath <$> rootDir
+          do root <- rootPath <$> access osRoot
              let name = logPackage . entry $ debSource
                  dest = root ++ "/work/build/" ++ name
                  ver = Debian.Version.version . logVersion . entry $ debSource
@@ -176,7 +177,7 @@ prepareBuild _cache target =
 
       copyBuild :: (MonadOS m, MonadCache m, MonadIO m) => DebianBuildTree -> m DebianBuildTree
       copyBuild debBuild =
-          do root <- rootPath <$> rootDir
+          do root <- rootPath <$> access osRoot
              let name = logPackage . entry $ debBuild
                  dest = root ++ "/work/build/" ++ name
                  ver = Debian.Version.version . logVersion . entry $ debBuild

@@ -24,6 +24,7 @@ import Control.Exception (evaluate, SomeException, try)
 import Control.Monad (foldM)
 import Control.Monad.Trans (MonadIO(..))
 import qualified Data.ByteString.Lazy.Char8 as L (empty)
+import Data.Lens.Lazy (getL)
 import Data.List (intercalate, nubBy, sortBy)
 import Data.Maybe (listToMaybe)
 import Data.Text (Text)
@@ -32,13 +33,14 @@ import Data.Time (NominalDiffTime)
 import Debian.Changes (ChangeLogEntry(..), ChangesFile(..), parseEntries)
 import Debian.Control.Text (Control, Control'(Control), ControlFunctions(parseControl), Field'(Comment), Paragraph'(..))
 import Debian.Relation (BinPkgName, SrcPkgName(unSrcPkgName))
-import Debian.Repo.AptCache (aptGetSource, aptSourcePackages, MonadCache(rootDir))
-import Debian.Repo.AptImage (aptDir, MonadApt)
+import Debian.Repo.AptCache (MonadCache)
+import Debian.Repo.AptImage (aptDir, MonadApt(getApt), aptImageRoot, aptImageSourcePackages, aptGetSource)
 import Debian.Repo.Changes (findChangesFiles)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
-import Debian.Repo.OSImage (MonadOS)
+import Debian.Repo.OSImage (MonadOS, osRoot)
 import Debian.Repo.PackageID (PackageID(packageName, packageVersion))
 import Debian.Repo.PackageIndex (SourcePackage(sourcePackageID))
+import Debian.Repo.Prelude (access)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Top (MonadTop)
 import Debian.Version (DebianVersion)
@@ -108,7 +110,7 @@ explainSourcePackageStatus None = "This version of the package is not present."
 buildDebs :: (DebianBuildTreeC t, MonadOS m, MonadCache m, MonadIO m) => Bool -> Bool -> [(String, Maybe String)] -> t -> SourcePackageStatus -> m NominalDiffTime
 buildDebs noClean _twice setEnv buildTree status =
     do
-      root <- rootPath <$> rootDir
+      root <- rootPath <$> access osRoot
       noSecretKey <- liftIO $ getEnv "HOME" >>= return . (++ "/.gnupg") >>= doesDirectoryExist >>= return . not
       env0 <- liftIO getEnvironment
       -- Set LOGNAME so dpkg-buildpackage doesn't die when it fails to
@@ -305,11 +307,11 @@ prepareSource :: (MonadApt m, MonadCache m, MonadTop m, MonadIO m) =>
               -> Maybe DebianVersion		-- The desired version, if Nothing get newest
               -> m DebianBuildTree		-- The resulting source tree
 prepareSource package version =
-    do root <- rootPath <$> rootDir
+    do root <- (rootPath . getL aptImageRoot) <$> getApt
        dir <- aptDir package
        liftIO $ createDirectoryIfMissing True dir
        ready <- liftIO $ findDebianBuildTrees dir
-       pkgs <- aptSourcePackages
+       pkgs <- getL aptImageSourcePackages <$> getApt
        let newest = (listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . packageName . sourcePackageID)) $ pkgs
        let version' = maybe newest Just version
        case (version', ready) of

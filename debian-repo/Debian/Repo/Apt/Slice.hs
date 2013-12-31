@@ -25,7 +25,7 @@ import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..))
 import Debian.Repo.LocalRepository (prepareLocalRepository)
 import Debian.Repo.Repo (repoKey)
 import Debian.Repo.Repos (MonadRepos, prepareRemoteRepository)
-import Debian.Repo.Slice (NamedSliceList(sliceList), Slice(..), SliceList(..), SourcesChangedAction, doSourcesChangedAction)
+import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..), SourcesChangedAction, doSourcesChangedAction)
 import Debian.Repo.SourcesList (parseSourcesList)
 import Debian.Repo.Top (MonadTop)
 import Debian.Sources (DebSource(..), SourceType(Deb, DebSrc))
@@ -98,24 +98,21 @@ verifyDebSource chroot line =
 
 -- |Change the sources.list of an AptCache object, subject to the
 -- value of sourcesChangedAction.  (FIXME: Does this really work for MonadOS?)
-updateCacheSources :: ({-MonadApt m,-} MonadCache m, MonadRepos m, MonadTop m) => SourcesChangedAction -> m ()
-updateCacheSources sourcesChangedAction =
-    -- (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
-    qPutStrLn "Updating cache sources" >>
-    do
-      baseSources <- aptBaseSources
-      --let distro@(ReleaseCache _ dist _) = releaseFromConfig' top text
-      dir <- distDir
-      sources <- sourcesPath
-      distExists <- liftIO $ doesFileExist sources
-      case distExists of
-        True ->
-            do
-	      fileSources <- liftIO (readFile sources) >>= verifySourcesList Nothing . parseSourcesList
-              when (fileSources /= sliceList baseSources)
-                   (liftIO $ doSourcesChangedAction dir sources baseSources fileSources sourcesChangedAction)
-        False ->
-	    do
-              liftIO $ createDirectoryIfMissing True dir
-	      liftIO $ replaceFile sources (show (pretty baseSources))
-      return ()
+updateCacheSources :: ({-MonadApt m, MonadCache m,-} MonadRepos m, MonadTop m) => SourcesChangedAction -> NamedSliceList -> m ()
+updateCacheSources sourcesChangedAction baseSources = do
+  qPutStrLn "Updating cache sources"
+  let rel = sliceListName baseSources
+  -- baseSources <- aptBaseSources
+  --let distro@(ReleaseCache _ dist _) = releaseFromConfig' top text
+  dir <- distDir rel
+  sources <- sourcesPath rel
+  distExists <- liftIO $ doesFileExist sources
+  case distExists of
+    True -> do
+      fileSources <- liftIO (readFile sources) >>= verifySourcesList Nothing . parseSourcesList
+      when (fileSources /= sliceList baseSources)
+           (liftIO $ doSourcesChangedAction dir sources baseSources fileSources sourcesChangedAction)
+    False -> do
+      liftIO $ createDirectoryIfMissing True dir
+      liftIO $ replaceFile sources (show (pretty baseSources))
+  return ()

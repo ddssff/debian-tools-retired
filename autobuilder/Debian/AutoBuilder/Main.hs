@@ -12,16 +12,17 @@ import Control.Applicative.Error (Failing(..))
 import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException, try)
 import Control.Monad(foldM, when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
-import Control.Monad.State (MonadIO(liftIO))
+import Control.Monad.State (MonadIO(liftIO), get)
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
+import Data.Lens.Lazy (getL)
 import Data.List as List (intercalate, null, nub)
 import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
 import Debian.AutoBuilder.BuildTarget (retrieve)
 import qualified Debian.AutoBuilder.Params as P
-import Debian.AutoBuilder.Target(buildTargets, showTargets)
+import Debian.AutoBuilder.Target (buildTargets, showTargets)
 import Debian.AutoBuilder.Types.Buildable (Target, targetName, asBuildable)
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import Debian.AutoBuilder.Types.Download (Download)
@@ -33,7 +34,7 @@ import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.Apt.AptImage (withAptImage)
 import Debian.Repo.Apt.Slice (repoSources, updateCacheSources)
 import Debian.Repo.Repos (MonadRepos, foldRepository, runReposCachedT, MonadReposCached, evalMonadOS)
-import Debian.Repo.OSImage (MonadOS, osLocalMaster, osLocalCopy)
+import Debian.Repo.OSImage (MonadOS, osLocalMaster, osLocalCopy, osBaseDistro)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.Prelude (access, symbol)
 import Debian.Repo.Release (Release(releaseName))
@@ -153,11 +154,12 @@ runParameterSet init cache =
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       dependOS <- prepareDependOS params buildRelease
-      evalMonadOS (updateCacheSources (P.ifSourcesChanged params)) dependOS
       let allTargets = P.buildPackages (C.params cache)
-      qPutStr ("\n" ++ showTargets allTargets ++ "\n")
-      buildOS <- evalMonadOS (prepareBuildOS (P.buildRelease (C.params cache))) dependOS
-      when (P.report params) (ePutStrLn . doReport $ allTargets)
+      buildOS <- evalMonadOS (do sources <- getL osBaseDistro <$> get
+                                 updateCacheSources (P.ifSourcesChanged params) sources
+                                 when (P.report params) (ePutStrLn . doReport $ allTargets)
+                                 qPutStr ("\n" ++ showTargets allTargets ++ "\n")
+                                 prepareBuildOS (P.buildRelease (C.params cache))) dependOS
       qPutStrLn "Retrieving all source code:\n"
       retrieved <-
           countTasks' (map (\ (target :: P.Packages) ->

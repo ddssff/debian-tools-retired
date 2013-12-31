@@ -18,15 +18,19 @@ module Debian.Repo.PackageIndex
     , sourceIndexList
     , binaryIndexList
     , releaseDir
+
+    , sortSourcePackages
+    , sortBinaryPackages
     ) where
 
+import Data.List (sortBy)
 import Data.Text (Text)
 import Debian.Arch (Arch(..), prettyArch)
 import qualified Debian.Control.Text as T
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import qualified Debian.Relation as B (Relations)
 import Debian.Release (releaseName', Section(..), sectionName')
-import Debian.Repo.PackageID (PackageID, prettyPackageID)
+import Debian.Repo.PackageID (PackageID(packageName, packageVersion), prettyPackageID)
 import Debian.Repo.Release (Release(..))
 import System.Posix.Types (FileOffset)
 import Text.PrettyPrint.ANSI.Leijen (Doc)
@@ -162,3 +166,30 @@ binaryIndexList release =
             --archIndex :: Arch -> PackageIndex
             archIndex arch = PackageIndex { packageIndexComponent = component
                                           , packageIndexArch = arch }
+
+-- | Return a sorted list of available source packages, newest version first.
+sortSourcePackages :: [SrcPkgName] -> [SourcePackage] -> [SourcePackage]
+sortSourcePackages names pkgs =
+    sortBy cmp . filterNames $ pkgs
+    where
+      filterNames :: [SourcePackage] -> [SourcePackage]
+      filterNames packages =
+          filter (flip elem names . packageName . sourcePackageID) packages
+      cmp p1 p2 =
+          compare v2 v1		-- Flip args to get newest first
+          where
+            v1 = packageVersion . sourcePackageID $ p1
+            v2 = packageVersion . sourcePackageID $ p2
+
+sortBinaryPackages :: [BinPkgName] -> [BinaryPackage] -> [BinaryPackage]
+sortBinaryPackages names pkgs =
+    sortBy cmp . filterNames $ pkgs
+    where
+      filterNames :: [BinaryPackage] -> [BinaryPackage]
+      filterNames packages =
+          filter (flip elem names . packageName . packageID) packages
+      cmp p1 p2 =
+          compare v2 v1		-- Flip args to get newest first
+          where
+            v1 = packageVersion . packageID $ p1
+            v2 = packageVersion . packageID $ p2

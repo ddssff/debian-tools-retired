@@ -1,99 +1,75 @@
 {-# LANGUAGE DeriveDataTypeable, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS -fno-warn-orphans #-}
 module Debian.Repo.Apt.OSImage
-    ( prepareOS
+    ( buildArchOfOS
+    , prepareOS
     , updateOS
     , syncOS
     ) where
 
 import Control.Applicative ((<$>))
+import Control.DeepSeq (force)
 import Control.Exception (SomeException, throw)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO(catch), try)
-import Control.Monad.State (MonadState(put, get), modify)
+import Control.Monad.State (modify, MonadState(put, get))
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
-import Data.Lens.Lazy (getL, modL, setL)
-import Data.List (intercalate)
-import Data.List as List (map, partition)
-import Data.Map as Map (insert, lookup)
-import Data.Maybe (catMaybes)
-import qualified Data.Text as T (Text, unpack)
-import Debian.Arch (Arch, Arch(..), prettyArch)
-import Debian.Control (ControlFunctions(stripWS), formatParagraph)
-import qualified Debian.Control.Text as B (Control'(Control), ControlFunctions(lookupP), ControlFunctions(parseControlFromHandle), Field, Field'(Field), fieldValue, Paragraph)
+import Data.Lens.Lazy (getL, setL)
+import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (BinPkgName(BinPkgName))
-import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
-import Debian.Release (ReleaseName(..), releaseName', sectionName')
+import Debian.Release (ReleaseName(relName))
+import Debian.Repo.Apt.PackageIndex (binaryPackagesFromSources, sourcePackagesFromSources)
 import Debian.Repo.Apt.Slice (verifySourcesList)
-import Debian.Repo.AptCache (buildArchOfRoot, distDir, MonadCache(aptArch, rootDir), sourcesPath)
+import Debian.Repo.AptCache (distDir, MonadCache, sourcesPath)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
-import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildOS', localeGen, MonadOS, neuterEnv, osBaseDistro, osBinaryPackages, osFullDistro, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, createOSImage, syncLocalPool, updateLists, syncOS')
-import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
-import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
+import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildArchOfRoot, buildOS', createOSImage, localeGen, MonadOS, neuterEnv, osArch, osBaseDistro, osBinaryPackages, osFullDistro, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, syncLocalPool, syncOS', updateLists)
+import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Prelude (access)
-import Debian.Repo.Release (Release(releaseName))
-import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
-import Debian.Repo.Repos (OSKey, binaryPackageMap, foldRepository, modifyRepos, MonadRepos(getRepos), sourcePackageMap, findOSKey, putOSImage, evalMonadOS)
+import Debian.Repo.Repos (evalMonadOS, findOSKey, MonadRepos, OSKey, putOSImage)
 import Debian.Repo.SSH (sshCopy)
-import Debian.Repo.Slice (binarySlices, NamedSliceList(sliceListName), Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices, UpdateError(..), SourcesChangedAction(..))
+import Debian.Repo.Slice (NamedSliceList(sliceListName), Slice(sliceSource), SliceList(slices), SourcesChangedAction(SourcesChangedError), UpdateError(..))
 import Debian.Repo.SourcesList (parseSourcesList)
 import Debian.Repo.Top (MonadTop)
-import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SourceType(..))
-import Debian.URI (URI(uriScheme), uriToString')
-import Debian.Version (parseDebianVersion)
+import Debian.Sources (DebSource(sourceUri))
+import Debian.URI (URI(uriScheme))
 import Extra.Files (replaceFile)
-import Network.URI (escapeURIString, URI(uriAuthority, uriPath), URIAuth(uriPort, uriRegName, uriUserInfo))
 import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess))
-import System.FilePath ((</>), splitFileName, takeDirectory)
-import qualified System.IO as IO (hClose, IOMode(ReadMode), openBinaryFile)
-import System.IO.Unsafe (unsafeInterleaveIO)
-import System.Posix (getFileStatus)
-import System.Process (shell)
+import System.FilePath ((</>), splitFileName)
+import System.Posix.Env (setEnv)
+import System.Process (proc, readProcess, readProcessWithExitCode, shell)
 import System.Process.Progress (ePutStrLn, oneResult, quieter, readProcessChunks)
+import System.Unix.Chroot (useEnv)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
+buildArchOfOS :: (MonadIO m, MonadOS m) => m Arch
+buildArchOfOS = do
+  root <- rootPath <$> access osRoot
+  liftIO $ do
+    setEnv "LOGNAME" "root" True -- This is required for dpkg-architecture to work in a build environment
+    a@(code1, out1, _err1) <- useEnv root (return . force) $ readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_OS"] ""
+    b@(code2, out2, _err2) <- useEnv root (return . force) $ readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_CPU"] ""
+    case (code1, lines out1, code2, lines out2) of
+      (ExitSuccess, os : _, ExitSuccess, cpu : _) ->
+          return $ Binary (ArchOS os) (ArchCPU cpu)
+      _ -> error $ "Failure computing build architecture of build env at " ++ root ++ ": " ++ show (a, b)
+
 getSourcePackages' :: (MonadRepos m, MonadOS m, MonadCache m) => m [SourcePackage]
 getSourcePackages' =
-    do indexes <- (slices . sourceSlices <$> osFullDistro) >>= mapM sliceIndexes >>= return . concat
-       mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' repo rel index) indexes >>= return . concat
+    do root <- access osRoot
+       arch <- access osArch
+       sources <- osFullDistro
+       sourcePackagesFromSources root arch sources
 
 getBinaryPackages' :: (MonadRepos m, MonadOS m, MonadCache m) => m [BinaryPackage]
 getBinaryPackages' =
-    do indexes <- (slices . binarySlices <$> osFullDistro) >>= mapM sliceIndexes >>= return . concat
-       mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' repo rel index) indexes >>= return . concat
-
--- |Return a list of the index files that contain the packages of a
--- slice.
-sliceIndexes :: forall m. (MonadRepos m, MonadCache m) => Slice -> m [(RepoKey, Release, PackageIndex)]
-sliceIndexes slice =
-    foldRepository f f (sliceRepoKey slice)
-    where
-      f :: Repo r => r -> m [(RepoKey, Release, PackageIndex)]
-      f repo =
-          case (sourceDist (sliceSource slice)) of
-            Left exact -> error $ "Can't handle exact path in sources.list: " ++ exact
-            Right (release, sections) -> aptArch >>= \ arch -> return $ map (makeIndex arch repo release) sections
-      makeIndex arch repo release section =
-          (repoKey repo,
-           findReleaseInfo repo release,
-           PackageIndex { packageIndexComponent = section
-                        , packageIndexArch = case (sourceType (sliceSource slice)) of
-                                               DebSrc -> Source
-                                               Deb -> arch })
-      findReleaseInfo repo release =
-          case filter ((==) release . releaseName) (repoReleaseInfo repo) of
-            [x] -> x
-            [] -> error $ ("sliceIndexes: Invalid release name: " ++ releaseName' release ++
-                           "\n  You may need to remove ~/.autobuilder/repoCache." ++
-                           "\n  Available: " ++ (show . map releaseName . repoReleaseInfo $ repo)) ++
-                           "\n repoKey: " ++ show (repoKey repo) ++
-                           "\n repoReleaseInfo: " ++ show (repoReleaseInfo repo) ++
-                           "\n slice: " ++ show slice
-            xs -> error $ "Internal error 5 - multiple releases named " ++ releaseName' release ++ "\n" ++ show xs
+    do root <- access osRoot
+       arch <- access osArch
+       sources <- osFullDistro
+       binaryPackagesFromSources root arch sources
 
 -- |Find or create and update an OS image.
 prepareOS :: (MonadRepos m, MonadTop m) =>
@@ -123,9 +99,9 @@ prepareOS root distro repo flush ifSourcesChanged include optional exclude compo
                        show (pretty computed) ++ "\ninstalled:\n" ++
                        show (pretty installed)
       recreate reason =
-          do sources <- sourcesPath
-             dist <- distDir
-             base <- access osBaseDistro
+          do base <- access osBaseDistro
+             sources <- sourcesPath (sliceListName base)
+             dist <- distDir (sliceListName base)
              liftIO $ do ePutStrLn $ "Removing and recreating build environment at " ++ rootPath root ++ ": " ++ show reason
                          -- ePutStrLn ("removeRecursiveSafely " ++ rootPath root)
                          removeRecursiveSafely (rootPath root)
@@ -289,179 +265,6 @@ prepareDevs root = do
                      case exists of
                        False -> readProcessChunks (shell cmd) L.empty >>= return . oneResult
                        True -> return ExitSuccess
-
--- FIXME: assuming the index is part of the cache
-sourcePackagesOfIndex' :: (MonadCache m, MonadRepos m) => RepoKey -> Release -> PackageIndex -> m [SourcePackage]
-sourcePackagesOfIndex' repo release index =
-    do -- state <- getApt
-       -- let cached = lookupSourcePackages path state <$> getApt
-       root <- rootPath <$> rootDir
-       suff <- indexCacheFile repo release index
-       let path = root ++ suff
-       cached <- (Map.lookup path . getL sourcePackageMap) <$> getRepos
-       status <- liftIO $ getFileStatus path `catch` (\ (_ :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory root ++ " and try again - sorry about that.")
-       case cached of
-         Just (status', packages) | status == status' -> return packages
-         _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
-                 let packages = List.map (toSourcePackage index) paragraphs
-                 modifyRepos $ modL sourcePackageMap (Map.insert path (status, packages))
-                 -- sourcePackageMap %= Map.insert path (status, packages)
-                 return packages
-
-toSourcePackage :: PackageIndex -> B.Paragraph -> SourcePackage
-toSourcePackage index package =
-    case (B.fieldValue "Directory" package,
-          B.fieldValue "Files" package,
-          B.fieldValue "Package" package,
-          maybe Nothing (Just . parseDebianVersion . T.unpack) (B.fieldValue "Version" package)) of
-      (Just directory, Just files, Just name, Just version) ->
-          case (parseSourcesFileList files, parseSourceParagraph package) of
-            (Right files', Right para) ->
-                SourcePackage
-                { sourcePackageID = makeSourcePackageID (T.unpack name) version
-                , sourceParagraph = package
-                , sourceControl = para
-                , sourceDirectory = T.unpack directory
-                , sourcePackageFiles = files' }
-            (Left messages, _) -> error $ "Invalid file list: " ++ show messages
-            (_, Left messages) -> error $ "Error in source paragraph\n package=" ++ show package ++ "\n  index=" ++ show index ++ "\n  messages:\n   " ++ intercalate "\n   " messages
-      x -> error $ "Missing info in source package control information in " ++ show index ++ " -> " ++ show x ++ " :\n" ++ T.unpack (formatParagraph package)
-    where
-      -- Parse the list of files in a paragraph of a Sources index.
-      parseSourcesFileList :: T.Text -> Either [String] [SourceFileSpec]
-      parseSourcesFileList text =
-          merge . catMaybes . List.map parseSourcesFiles . lines . T.unpack $ text
-      parseSourcesFiles line =
-          case words line of
-            [md5sum, size, name] -> Just (Right (SourceFileSpec md5sum (read size) name))
-            [] -> Nothing
-            _ -> Just (Left ("Invalid line in Files list: '" ++ show line ++ "'"))
-      merge x = case partition (either (const True) (const False)) x of
-                  (a, []) -> Left . catMaybes . List.map (either Just (const Nothing )) $ a
-                  (_, a) -> Right . catMaybes . List.map (either (const Nothing) Just) $ a
-
-parseSourceParagraph :: B.Paragraph -> Either [String] SourceControl
-parseSourceParagraph p =
-    -- Look up the required fields
-    case (B.fieldValue "Package" p,
-          B.fieldValue "Maintainer" p) of
-      (Just source', Just maintainer') ->
-          -- The optional fields can be parsed as pure values
-          Right (SourceControl
-                  { source = source'
-                  , maintainer = maintainer'
-                  , uploaders = maybe [] (: []) $ B.fieldValue "Uploaders" p
-                  , packageSection = fmap stripWS $ B.fieldValue "Section" p
-                  , packagePriority = fmap stripWS $ B.fieldValue "Priority" p
-                  , buildDepends = maybe [] (: []) $ B.fieldValue "Build-Depends" p
-                  , buildDependsIndep = maybe [] (: []) $ B.fieldValue "Build-Depends-Indep" p
-                  , buildConflicts = maybe [] (: []) $ B.fieldValue "Build-Conflicts" p
-                  , buildConflictsIndep = maybe [] (: []) $ B.fieldValue "Build-Conflicts-Indep" p
-                  , standardsVersion = fmap stripWS $ B.fieldValue "Standards-Version" p
-                  , homepage = fmap stripWS $ B.fieldValue "Homepage" p })
-      _x -> Left ["parseSourceParagraph - One or more required fields (Package, Maintainer, Standards-Version) missing: " ++ show p]
-
--- FIXME: assuming the index is part of the cache 
-binaryPackagesOfIndex' :: (MonadRepos m, MonadCache m) => RepoKey -> Release -> PackageIndex -> m [BinaryPackage]
-binaryPackagesOfIndex' repo release index =
-    do root <- rootPath <$> rootDir
-       suff <- indexCacheFile repo release index
-       let path = root ++ suff
-       cached <- (Map.lookup path . getL binaryPackageMap) <$> getRepos
-       status <- liftIO $ getFileStatus path
-       case cached of
-         Just (status', packages) | status == status' -> return packages
-         _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
-                 let packages = List.map (toBinaryPackage release index) paragraphs
-                 modifyRepos $ modL binaryPackageMap (Map.insert path (status, packages))
-                 return packages
-
-toBinaryPackage :: Release -> PackageIndex -> B.Paragraph -> BinaryPackage
-toBinaryPackage release index p =
-    case (B.fieldValue "Package" p, B.fieldValue "Version" p) of
-      (Just name, Just version) ->
-          BinaryPackage 
-          { packageID =
-                makeBinaryPackageID (T.unpack name) (parseDebianVersion (T.unpack version))
-          , packageInfo = p
-          , pDepends = tryParseRel $ B.lookupP "Depends" p
-          , pPreDepends = tryParseRel $ B.lookupP "Pre-Depends" p
-          , pConflicts = tryParseRel $ B.lookupP "Conflicts" p
-          , pReplaces =  tryParseRel $ B.lookupP "Replaces" p
-          , pProvides =  tryParseRel $ B.lookupP "Provides" p
-          }
-      _ -> error ("Invalid data in source index:\n " ++ packageIndexPath release index)
-
-tryParseRel :: Maybe B.Field -> B.Relations
-tryParseRel (Just (B.Field (_, relStr))) = either (error . show) id (B.parseRelations relStr)
-tryParseRel _ = []
-
-readParagraphs :: FilePath -> IO [B.Paragraph]
-readParagraphs path =
-    do --IO.hPutStrLn IO.stderr ("OSImage.paragraphsFromFile " ++ path)			-- Debugging output
-       h <- IO.openBinaryFile path IO.ReadMode
-       B.Control paragraphs <- B.parseControlFromHandle path h >>= return . (either (error . show) id)
-       IO.hClose h
-       --IO.hPutStrLn IO.stderr ("OSImage.paragraphsFromFile " ++ path ++ " done.")	-- Debugging output
-       return paragraphs
-
-indexCacheFile :: (MonadCache m) => RepoKey -> Release -> PackageIndex -> m FilePath
-indexCacheFile repo release index =
-    do arch <- aptArch
-       case (arch, packageIndexArch index) of
-         (Binary _ _, Source) -> return $ indexPrefix repo release index ++ "_source_Sources"
-         (Binary _ _, arch@(Binary _ _)) -> return $ indexPrefix repo release index ++ "_binary-" ++ show (prettyArch arch) ++ "_Packages"
-         (x, _) -> error $ "Invalid build architecture: " ++ show x
-
-indexPrefix :: RepoKey -> Release -> PackageIndex -> FilePath
-indexPrefix repo release index =
-    (escapeURIString (/= '@') ("/var/lib/apt/lists/" ++ uriText +?+ "dists_") ++
-     releaseName' distro ++ "_" ++ (sectionName' $ section))
-    where
-      section = packageIndexComponent index
-      uri = repoKeyURI repo
-      distro = releaseName $ release
-      scheme = uriScheme uri
-      auth = uriAuthority uri
-      path = uriPath uri
-      userpass = maybe "" uriUserInfo auth
-      reg = maybeOfString $ maybe "" uriRegName auth
-      port = maybe "" uriPort auth
-      (user, pass) = break (== ':') userpass
-      user' = maybeOfString user
-      pass' = maybeOfString pass
-      uriText = prefix scheme user' pass' reg port path
-      -- If user is given and password is not, the user name is
-      -- added to the file name.  Otherwise it is not.  Really.
-      prefix "http:" (Just user'') Nothing (Just host) port' path' =
-          user'' ++ host ++ port' ++ escape path'
-      prefix "http:" _ _ (Just host) port' path' =
-          host ++ port' ++ escape path'
-      prefix "ftp:" _ _ (Just host) _ path' =
-          host ++ escape path'
-      prefix "file:" Nothing Nothing Nothing "" path' =
-          escape path'
-      prefix "ssh:" (Just user'') Nothing (Just host) port' path' =
-          user'' ++ host ++ port' ++ escape path'
-      prefix "ssh" _ _ (Just host) port' path' =
-          host ++ port' ++ escape path'
-      prefix _ _ _ _ _ _ = error ("invalid repo URI: " ++ (uriToString' . repoKeyURI $ repo))
-      maybeOfString "" = Nothing
-      maybeOfString s = Just s
-      escape s = intercalate "_" (wordsBy (== '/') s)
-      wordsBy :: Eq a => (a -> Bool) -> [a] -> [[a]]
-      wordsBy p s =
-          case (break p s) of
-            (s', []) -> [s']
-            (h, t) -> h : wordsBy p (drop 1 t)
-
-(+?+) :: String -> String -> String
-(+?+) a ('_' : b) = a +?+ b
-(+?+) "" b = b
-(+?+) a b =
-    case last a of
-      '_' -> (init a) +?+ b
-      _ -> a ++ "_" ++ b
 
 syncOS :: (MonadOS m, MonadRepos m) => OSKey -> m ()
 syncOS srcKey = do

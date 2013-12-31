@@ -12,6 +12,8 @@ module Debian.Repo.OSImage
     , osArch
     , MonadOS
 
+    , buildArchOfRoot
+
     , chrootEnv
     , localeGen
     , neuterEnv
@@ -47,7 +49,7 @@ import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (ParseRelations(parseRelations), PkgName, Relations)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
 import Debian.Repo.AptCache (MonadCache(..))
-import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot(rootPath), EnvRoot, outsidePath)
+import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot(EnvRoot, rootPath), EnvRoot, outsidePath)
 import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Prelude (access, (~=))
@@ -64,6 +66,7 @@ import Extra.Misc (sameInode, sameMd5sum)
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile, renameFile)
 import System.Exit (ExitCode(ExitFailure), ExitCode(ExitSuccess))
 import System.FilePath ((</>))
+import System.Posix.Env (setEnv)
 import System.Posix.Files (createLink)
 import System.Process (proc, readProcess, readProcessWithExitCode, shell)
 import System.Process.Progress (collectOutputs, doOutput, ePutStr, ePutStrLn, foldOutputsL, keepResult, qPutStr, qPutStrLn, quieter, runProcess, runProcessF, timeTask)
@@ -142,11 +145,7 @@ instance Eq OSImage where
     a == b = compare a b == EQ
 
 instance (Monad m, Functor m) => MonadCache (StateT OSImage m) where
-    rootDir = _osRoot <$> get
-    aptArch = _osArch <$> get
     aptBaseSources = _osBaseDistro <$> get
-    aptSourcePackages = _osSourcePackages <$> get
-    aptBinaryPackages = _osBinaryPackages <$> get
 
 -- |The sources.list is the list associated with the distro name, plus
 -- the local sources where we deposit newly built packages.

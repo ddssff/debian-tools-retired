@@ -7,38 +7,41 @@ module Debian.Repo.AptImage
     , modifyApt
     , aptDir
     , aptImageRoot
+    , aptImageArch
     , aptImageSources
     , aptImageSourcePackages
     , aptImageBinaryPackages
-    , aptSourcePackagesSorted
     , createAptImage
     , cacheRootDir
+    , aptGetSource
+    , aptGetUpdate
     ) where
 
 import Control.Applicative ((<$>))
 import Control.Category ((.))
 import Control.Monad.State (StateT, MonadState(get, put))
 import Control.Monad.Trans (liftIO, MonadIO)
+import qualified Data.ByteString.Lazy as L (empty)
 import Data.Data (Data)
 import Data.Lens.Lazy (getL)
 import Data.Lens.Template (makeLenses)
-import Data.List (sortBy)
 import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
-import Debian.Relation (SrcPkgName(unSrcPkgName))
+import Debian.Relation (SrcPkgName(unSrcPkgName), PkgName)
 import Debian.Release (ReleaseName(relName))
 import Debian.Repo.AptCache (distDir, MonadCache(..))
-import Debian.Repo.EnvPath (EnvRoot(..))
-import Debian.Repo.PackageID (PackageID(packageVersion, packageName))
-import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage(sourcePackageID))
+import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
+import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName))
-import Debian.Repo.Top (askTop, MonadTop)
+import Debian.Repo.Top (MonadTop, dists)
+import Debian.Version (DebianVersion, prettyDebianVersion)
 import Extra.Files (replaceFile, writeFileIfMissing)
 import Prelude hiding ((.))
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>))
-import System.Process (readProcessWithExitCode)
+import System.Process (readProcessWithExitCode, proc, CreateProcess(cwd))
+import System.Process.Progress (runProcessF)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 data AptImage =
@@ -66,11 +69,7 @@ instance Show AptImage where
     show apt = "AptImage " ++ relName (sliceListName (getL aptImageSources apt))
 
 instance (Monad m, Functor m) => MonadCache (StateT AptImage m) where
-    rootDir = _aptImageRoot <$> getApt
-    aptArch = _aptImageArch <$> getApt
     aptBaseSources = _aptImageSources <$> getApt
-    aptSourcePackages = _aptImageSourcePackages <$> getApt
-    aptBinaryPackages = _aptImageBinaryPackages <$> getApt
 
 instance Ord AptImage where
     compare a b = compare (sliceListName . getL aptImageSources $ a) (sliceListName . getL aptImageSources $ b)
@@ -80,9 +79,10 @@ instance Eq AptImage where
 
 -- | The location of the top directory of a source packages's files in
 -- an AptImage (but not an OSImage.)
-aptDir :: (MonadTop m, MonadCache m) => SrcPkgName -> m FilePath
+aptDir :: (MonadTop m, MonadApt m) => SrcPkgName -> m FilePath
 aptDir package =
-    do dir <- distDir
+    do rel <- getL aptImageSources <$> getApt
+       dir <- distDir (sliceListName rel)
        return $ dir </> "apt" </> unSrcPkgName package
 
 -- The following are path functions which can be used while
@@ -137,19 +137,31 @@ createAptImage sources = do
     return os
 
 cacheRootDir :: MonadTop m => ReleaseName -> m EnvRoot
-cacheRootDir release =
-    do top <- askTop
-       return $ EnvRoot (top </> "dists" </> relName release </> "aptEnv")
+cacheRootDir release = EnvRoot . (</> relName release </> "aptEnv") <$> dists
 
--- |Return all the named source packages sorted by version
-aptSourcePackagesSorted :: MonadApt m => [SrcPkgName] -> m [SourcePackage]
-aptSourcePackagesSorted names =
-    (sortBy cmp . filterNames names . getL aptImageSourcePackages) <$> getApt
+-- | Run an apt-get command in a particular directory with a
+-- particular list of packages.  Note that apt-get source works for
+-- binary or source package names.
+aptGetSource :: (MonadIO m, MonadApt m, PkgName n) => FilePath -> [(n, Maybe DebianVersion)] -> m ()
+aptGetSource dir packages =
+    do args <- aptOpts
+       let p = (proc "apt-get" (args ++ ["source"] ++ map formatPackage packages)) {cwd = Just dir}
+       liftIO $ createDirectoryIfMissing True dir >> runProcessF (Just (" 1> ", " 2> ")) p L.empty >> return ()
     where
-      filterNames names' packages =
-          filter (flip elem names' . packageName . sourcePackageID) packages
-      cmp p1 p2 =
-          compare v2 v1		-- Flip args to get newest first
-          where
-            v1 = packageVersion . sourcePackageID $ p1
-            v2 = packageVersion . sourcePackageID $ p2
+      formatPackage (name, Nothing) = show (pretty name)
+      formatPackage (name, Just version) = show (pretty name) ++ "=" ++ show (prettyDebianVersion version)
+
+aptGetUpdate :: (MonadIO m, MonadApt m) => m ()
+aptGetUpdate =
+    do args <- aptOpts
+       _ <- liftIO $ runProcessF (Just (" 1> ", " 2> ")) (proc "apt-get" (args ++ ["update"])) L.empty
+       return ()
+
+aptOpts :: MonadApt m => m [String]
+aptOpts =
+    do root <- (rootPath . getL aptImageRoot) <$> getApt
+       return $ [ "-o=Dir::State::status=" ++ root ++ "/var/lib/dpkg/status"
+                , "-o=Dir::State::Lists=" ++ root ++ "/var/lib/apt/lists"
+                , "-o=Dir::Cache::Archives=" ++ root ++ "/var/cache/apt/archives"
+                , "-o=Dir::Etc::SourceList=" ++ root ++ "/etc/apt/sources.list"
+                , "-o=Dir::Etc::SourceParts=" ++ root ++ "/etc/apt/sources.list.d" ]

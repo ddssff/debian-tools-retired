@@ -22,6 +22,7 @@ import qualified Data.ByteString.Lazy.Char8 as L (ByteString, concat, empty, toC
 import qualified Data.ByteString.UTF8 as UTF8 (toString)
 import Data.Either (partitionEithers)
 import Data.Function (on)
+import Data.Lens.Lazy (getL)
 import Data.List (intercalate, intersect, intersperse, isSuffixOf, nub, partition, sortBy)
 import Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe)
 import Data.Monoid ((<>))
@@ -44,21 +45,21 @@ import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, r
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
-import Debian.Repo.Apt.OSImage (updateOS, syncOS)
+import Debian.Repo.Apt.OSImage (updateOS, syncOS, buildArchOfOS)
 import Debian.Repo.Apt.Package (scanIncoming)
-import Debian.Repo.AptCache (MonadCache(rootDir, aptBinaryPackages), binaryPackages, buildArchOfEnv, sourcePackages)
-import Debian.Repo.AptImage (MonadApt, aptSourcePackagesSorted)
-import Debian.Repo.OSImage (syncLocalPool, updateLists, withProc, withTmp, buildEssential)
+import Debian.Repo.AptCache (MonadCache)
+import Debian.Repo.AptImage (MonadApt(getApt), aptImageSourcePackages)
+import Debian.Repo.OSImage (syncLocalPool, updateLists, withProc, withTmp, buildEssential, osRoot)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.InstallResult (showErrors)
 import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
-import Debian.Repo.OSImage (MonadOS)
+import Debian.Repo.OSImage (MonadOS, osBinaryPackages, osSourcePackages)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
-import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID))
-import Debian.Repo.Prelude (symbol)
+import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
+import Debian.Repo.Prelude (symbol, access)
 import Debian.Repo.Repos (MonadRepos, evalMonadOS, OSKey)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..))
 import Debian.Repo.Top (MonadTop)
@@ -338,8 +339,7 @@ buildTarget cache dependOS repo !target = do
   -- Get the control file from the clean source and compute the
   -- build dependencies
   let debianControl = targetControl target
-  root <- evalMonadOS rootDir dependOS
-  arch <- liftIO $ buildArchOfEnv root
+  arch <- evalMonadOS buildArchOfOS dependOS
   solns <- evalMonadOS (buildDepSolutions arch (map BinPkgName (P.preferred (P.params cache))) debianControl) dependOS
   -- let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) dependOS globalBuildDeps debianControl
   case solns of
@@ -398,7 +398,7 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
              -- so we need to check this version number.  We also
              -- don't want to leave the patches subdirectory here
              -- unless we actually created a patch.
-             root <- rootPath <$> rootDir
+             root <- rootPath <$> access osRoot
              let path = debdir buildTree
                  path' = fromJust (dropPrefix root path)
                  doDpkgSource False =
@@ -476,9 +476,9 @@ buildPackage cache dependOS newVersion oldFingerprint newFingerprint !target sta
 -- copy.  For other: image copy, then source copy, then dependencies.
 prepareBuildImage :: (MonadTop m, MonadRepos m) => P.CacheRec -> OSKey -> Fingerprint -> Target -> m (OSKey, DebianBuildTree)
 prepareBuildImage cache dependOS sourceFingerprint target = do
-  dependRoot <- evalMonadOS (rootPath <$> rootDir) dependOS
+  dependRoot <- evalMonadOS (rootPath <$> access osRoot) dependOS
   buildOS <- evalMonadOS (prepareBuildOS (P.buildRelease (P.params cache))) dependOS
-  buildRoot <- evalMonadOS (rootPath <$> rootDir) buildOS
+  buildRoot <- evalMonadOS (rootPath <$> access osRoot) buildOS
   let oldPath = topdir . cleanSource $ target
       newPath = buildRoot ++ fromJust (dropPrefix dependRoot oldPath)
   when (P.strictness (P.params cache) == P.Lax)
@@ -510,8 +510,8 @@ prepareBuildImage cache dependOS sourceFingerprint target = do
 -- architecture are available.
 getReleaseControlInfo :: (MonadOS m, MonadCache m) => Target -> m (Maybe SourcePackage, SourcePackageStatus, String)
 getReleaseControlInfo target = do
-  sourcePackages' <- sortBy compareVersion <$> sourcePackages [packageName]
-  binaryPackages' <- binaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages')
+  sourcePackages' <- (sortBy compareVersion . sortSourcePackages [packageName]) <$> access osSourcePackages
+  binaryPackages' <- sortBinaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages') <$> access osBinaryPackages
   let sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
       message status =
           intercalate "\n"
@@ -616,7 +616,7 @@ computeNewVersion cache target = do
            -}
           -- All the versions that exist in the pool in any dist,
           -- the new version number must not equal any of these.
-          aptSourcePackagesSorted [G.sourceName (targetDepends target)] >>= \ available ->
+          getApt >>= return . sortSourcePackages [G.sourceName (targetDepends target)] . getL aptImageSourcePackages >>= \ available ->
           case parseTag (vendor : oldVendors) sourceVersion of
             (_, Just tag) -> return $
                              Failure ["Error: the version string in the changelog has a vendor tag (" ++ show tag ++
@@ -641,7 +641,7 @@ computeNewVersion cache target = do
 buildDepSolutions :: (MonadOS m, MonadIO m, MonadCache m) => Arch -> [BinPkgName] -> Control' T.Text -> m (Failing [(Int, [BinaryPackage])])
 buildDepSolutions arch preferred debianControl =
     do globalBuildDeps <- buildEssential
-       packages <- aptBinaryPackages
+       packages <- access osBinaryPackages
        case G.buildDependencies debianControl of
          Left s -> return $ Failure [s]
          Right info ->
@@ -729,7 +729,7 @@ sinkFields f (Paragraph fields) =
 -- |Download the package's build dependencies into /var/cache
 downloadDependencies :: (MonadOS m, MonadCache m, MonadIO m) => DebianBuildTree -> [String] -> Fingerprint -> m String
 downloadDependencies source extra sourceFingerprint =
-    do root <- rootPath <$> rootDir
+    do root <- rootPath <$> access osRoot
        let path = pathBelow root (topdir source)
            pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
            command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
@@ -751,7 +751,7 @@ pathBelow root path =
 -- |Install the package's build dependencies.
 installDependencies :: (MonadOS m, MonadCache m, MonadCatchIO m) => DebianBuildTree -> [String] -> Fingerprint -> m L.ByteString
 installDependencies source extra sourceFingerprint =
-    do root <- rootPath <$> rootDir
+    do root <- rootPath <$> access osRoot
        let path = pathBelow root (topdir source)
            pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
            aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
