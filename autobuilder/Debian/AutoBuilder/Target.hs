@@ -22,7 +22,6 @@ import qualified Data.ByteString.Lazy.Char8 as L (ByteString, concat, empty, toC
 import qualified Data.ByteString.UTF8 as UTF8 (toString)
 import Data.Either (partitionEithers)
 import Data.Function (on)
-import Data.Lens.Lazy (getL)
 import Data.List (intercalate, intersect, intersperse, isSuffixOf, nub, partition, sortBy)
 import Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe)
 import Data.Monoid ((<>))
@@ -30,7 +29,6 @@ import qualified Data.Set as Set (difference, empty, fromList, insert, member, n
 import qualified Data.Text as T (pack, Text, unpack)
 import Data.Time (NominalDiffTime)
 import Debian.Arch (Arch)
-import Debian.AutoBuilder.BuildEnv (prepareBuildOS)
 import qualified Debian.AutoBuilder.Params as P (baseRelease, isDevelopmentRelease)
 import Debian.AutoBuilder.Types.Buildable (Buildable(..), debianSourcePackageName, failing, prepareTarget, relaxDepends, Target(tgt, cleanSource, targetDepends), targetControl, targetName, targetRelaxed)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
@@ -45,9 +43,10 @@ import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, r
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
+import Debian.Repo.Apt.AptImage (aptImageSourcePackages)
 import Debian.Repo.Apt.OSImage (updateOS, syncOS, buildArchOfOS)
 import Debian.Repo.Apt.Package (scanIncoming)
-import Debian.Repo.AptImage (MonadApt(getApt), aptImageSourcePackages)
+import Debian.Repo.AptImage (MonadApt)
 import Debian.Repo.OSImage (syncLocalPool, updateLists, withProc, withTmp, buildEssential, osRoot)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
@@ -614,7 +613,7 @@ computeNewVersion cache target = do
            -}
           -- All the versions that exist in the pool in any dist,
           -- the new version number must not equal any of these.
-          getApt >>= return . sortSourcePackages [G.sourceName (targetDepends target)] . getL aptImageSourcePackages >>= \ available ->
+          sortSourcePackages [G.sourceName (targetDepends target)] <$> aptImageSourcePackages >>= \ available ->
           case parseTag (vendor : oldVendors) sourceVersion of
             (_, Just tag) -> return $
                              Failure ["Error: the version string in the changelog has a vendor tag (" ++ show tag ++

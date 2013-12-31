@@ -9,8 +9,6 @@ module Debian.Repo.AptImage
     , aptImageRoot
     , aptImageArch
     , aptImageSources
-    , aptImageSourcePackages
-    , aptImageBinaryPackages
     , createAptImage
     , cacheRootDir
     , aptGetSource
@@ -19,7 +17,7 @@ module Debian.Repo.AptImage
 
 import Control.Applicative ((<$>))
 import Control.Category ((.))
-import Control.Monad.State (StateT, MonadState(get, put))
+import Control.Monad.State (MonadState(get, put), StateT)
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
 import Data.Data (Data)
@@ -27,19 +25,18 @@ import Data.Lens.Lazy (getL)
 import Data.Lens.Template (makeLenses)
 import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
-import Debian.Relation (SrcPkgName(unSrcPkgName), PkgName)
+import Debian.Relation (PkgName, SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(relName))
 import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
-import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName))
-import Debian.Repo.Top (MonadTop, dists, distDir)
+import Debian.Repo.Top (distDir, dists, MonadTop)
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Extra.Files (replaceFile, writeFileIfMissing)
 import Prelude hiding ((.))
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>))
-import System.Process (readProcessWithExitCode, proc, CreateProcess(cwd))
+import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode)
 import System.Process.Progress (runProcessF)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
@@ -47,8 +44,6 @@ data AptImage =
     AptImage { _aptImageRoot :: EnvRoot
              , _aptImageArch :: Arch
              , _aptImageSources :: NamedSliceList
-             , _aptImageSourcePackages :: [SourcePackage]
-             , _aptImageBinaryPackages :: [BinaryPackage]
              }
 
 $(makeLenses [''AptImage])
@@ -113,9 +108,7 @@ createAptImage sources = do
     arch <- buildArchOfRoot
     let os = AptImage { _aptImageRoot = root
                       , _aptImageArch = arch
-                      , _aptImageSources = sources
-                      , _aptImageSourcePackages = []
-                      , _aptImageBinaryPackages = [] }
+                      , _aptImageSources = sources }
 
     --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
     createDirectoryIfMissing True (rootPath root ++ "/var/lib/apt/lists/partial")

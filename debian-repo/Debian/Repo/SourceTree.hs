@@ -16,7 +16,6 @@ module Debian.Repo.SourceTree
     , DebianBuildTree (debTree', topdir')
     , DebianSourceTree(tree', control')
     , SourceTree(dir')
-    , prepareSource
     ) where
 
 import Control.Applicative ((<$>), (<*>), pure)
@@ -24,25 +23,18 @@ import Control.Exception (evaluate, SomeException, try)
 import Control.Monad (foldM)
 import Control.Monad.Trans (MonadIO(..))
 import qualified Data.ByteString.Lazy.Char8 as L (empty)
-import Data.Lens.Lazy (getL)
 import Data.List (intercalate, nubBy, sortBy)
-import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text.IO as T (readFile)
 import Data.Time (NominalDiffTime)
 import Debian.Changes (ChangeLogEntry(..), ChangesFile(..), parseEntries)
 import Debian.Control.Text (Control, Control'(Control), ControlFunctions(parseControl), Field'(Comment), Paragraph'(..))
-import Debian.Relation (BinPkgName, SrcPkgName(unSrcPkgName))
-import Debian.Repo.AptImage (aptDir, MonadApt(getApt), aptImageRoot, aptImageSourcePackages, aptGetSource)
+import Debian.Relation (BinPkgName)
 import Debian.Repo.Changes (findChangesFiles)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.OSImage (MonadOS, osRoot)
-import Debian.Repo.PackageID (PackageID(packageName, packageVersion))
-import Debian.Repo.PackageIndex (SourcePackage(sourcePackageID))
 import Debian.Repo.Prelude (access)
 import Debian.Repo.Sync (rsync)
-import Debian.Repo.Top (MonadTop)
-import Debian.Version (DebianVersion)
 import qualified Debian.Version as V (version)
 import "Extra" Extra.Files (getSubDirectories, replaceFile)
 import "Extra" Extra.List (dropPrefix)
@@ -52,9 +44,8 @@ import System.Exit (ExitCode(ExitFailure), ExitCode(ExitSuccess))
 import System.FilePath ((</>))
 import System.IO (hGetContents, IOMode(ReadMode), withFile)
 import System.Process (CmdSpec(..), CreateProcess(cwd, env, cmdspec), proc, readProcessWithExitCode, showCommandForUser)
-import System.Process.Progress (keepResult, noisier, qPutStr, runProcessF, timeTask)
+import System.Process.Progress (keepResult, noisier, runProcessF, timeTask)
 import System.Unix.Chroot (useEnv)
-import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- |Any directory containing source code.
@@ -299,38 +290,3 @@ instance DebianSourceTreeC DebianBuildTree where
 instance DebianBuildTreeC DebianBuildTree where
     subdir = subdir'
     findBuildTree path d = findSourceTree (path </> d) >>= return . DebianBuildTree path d
-
--- |Retrieve a source package via apt-get.
-prepareSource :: (MonadApt m, MonadTop m, MonadIO m) =>
-                 SrcPkgName			-- The name of the package
-              -> Maybe DebianVersion		-- The desired version, if Nothing get newest
-              -> m DebianBuildTree		-- The resulting source tree
-prepareSource package version =
-    do root <- (rootPath . getL aptImageRoot) <$> getApt
-       dir <- aptDir package
-       liftIO $ createDirectoryIfMissing True dir
-       ready <- liftIO $ findDebianBuildTrees dir
-       pkgs <- getL aptImageSourcePackages <$> getApt
-       let newest = (listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . packageName . sourcePackageID)) $ pkgs
-       let version' = maybe newest Just version
-       case (version', ready) of
-         (Nothing, _) ->
-             fail $ "No available versions of " ++ unSrcPkgName package ++ " in " ++ root
-         (Just requested, [tree])
-             | requested == (logVersion . entry $ tree) ->
-                 return tree
-         (Just requested, []) ->
-             do aptGetSource dir [(package, Just requested)]
-                trees <- liftIO $ findDebianBuildTrees dir
-                case trees of
-                  [tree] -> return tree
-                  _ -> fail $ "apt-get source failed in " ++ dir ++ " (1): trees=" ++ show (map (dir' . tree' . debTree') trees)
-         (Just requested, _) ->
-             do -- One or more incorrect versions are available, remove them
-                liftIO $ removeRecursiveSafely dir
-                qPutStr $ "Retrieving APT source for " ++ unSrcPkgName package
-                aptGetSource dir [(package, Just requested)]
-                trees <- liftIO $ findDebianBuildTrees dir
-                case trees of
-                  [tree] -> return tree
-                  _ -> fail $ "apt-get source failed (2): trees=" ++ show (map (dir' . tree' . debTree') trees)

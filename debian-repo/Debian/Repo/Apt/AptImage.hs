@@ -2,25 +2,36 @@
 {-# OPTIONS -Wall -fno-warn-orphans #-}
 module Debian.Repo.Apt.AptImage
     ( withAptImage
+    , aptImageSourcePackages
+    , aptImageBinaryPackages
+    , prepareSource
     ) where
 
 import Control.Applicative ((<$>))
 import Control.Monad.State (StateT)
-import Control.Monad.Trans (MonadTrans(lift))
+import Control.Monad.Trans (MonadIO(..), MonadTrans(lift))
 import Data.Function (on)
-import Data.Lens.Lazy (getL, setL)
+import Data.Lens.Lazy (getL)
 import Data.List (sortBy)
+import Data.Maybe (listToMaybe)
+import Debian.Changes (ChangeLogEntry(logVersion))
+import Debian.Relation (SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(relName))
 import Debian.Repo.Apt.PackageIndex (binaryPackagesFromSources, sourcePackagesFromSources)
 import Debian.Repo.Apt.Slice (updateCacheSources)
-import Debian.Repo.AptImage (aptGetUpdate, AptImage, aptImageArch, aptImageBinaryPackages, aptImageRoot, aptImageSourcePackages, aptImageSources, cacheRootDir, createAptImage, getApt, modifyApt, MonadApt(putApt, getApt))
+import Debian.Repo.AptImage (aptDir, aptGetSource, aptGetUpdate, AptImage, aptImageArch, aptImageRoot, aptImageSources, cacheRootDir, createAptImage, MonadApt(..))
+import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.OSImage (OSImage)
-import Debian.Repo.PackageID (PackageID(packageVersion))
+import Debian.Repo.PackageID (PackageID(packageName), PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage(sourcePackageID))
-import Debian.Repo.Repos (AptKey, findAptKey, putAptImage, MonadRepos, evalMonadApt)
+import Debian.Repo.Repos (AptKey, evalMonadApt, findAptKey, MonadRepos, putAptImage)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), SliceList, SourcesChangedAction)
+import Debian.Repo.SourceTree (DebianBuildTree(debTree'), DebianSourceTree(tree'), DebianSourceTreeC(entry), findDebianBuildTrees, SourceTree(dir'))
 import Debian.Repo.Top (MonadTop)
-import System.Process.Progress (qPutStrLn, quieter)
+import Debian.Version (DebianVersion)
+import System.Directory (createDirectoryIfMissing)
+import System.Process.Progress (qPutStr, qPutStrLn, quieter)
+import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 instance MonadApt m => MonadApt (StateT OSImage m) where
@@ -54,27 +65,13 @@ prepareAptImage' sourcesChangedAction sources =
 -- by the sources.list.  The source packages are sorted so that
 -- packages with the same name are together with the newest first.
 updateAptEnv :: (MonadRepos m, MonadApt m) => m ()
-updateAptEnv =
-    do aptGetUpdate
-       sourcePackages <- getSourcePackages >>= return . sortBy cmp
-       binaryPackages <- getBinaryPackages
-       modifyApt (setL aptImageSourcePackages sourcePackages)
-       modifyApt (setL aptImageBinaryPackages binaryPackages)
-    where
-      -- Flip args to get newest version first
-      cmp = flip (compare `on` (packageVersion . sourcePackageID))
-{-
-      cmp p1 p2 =
-          compare v2 v1		-- Flip args to get newest first
-          where
-            v1 = packageVersion . sourcePackageID $ p1
-            v2 = packageVersion . sourcePackageID $ p2
+updateAptEnv = aptGetUpdate
 
-    putStrLn ("> " ++ cmd) >> system cmd >>= \ code ->
-    case code of
-      ExitSuccess -> return ()
-      ExitFailure n -> error $ cmd ++ " -> ExitFailure " ++ show n
--}
+aptImageSourcePackages :: (MonadRepos m, MonadApt m) => m [SourcePackage]
+aptImageSourcePackages = sortBy (flip (compare `on` (packageVersion . sourcePackageID))) <$> getSourcePackages
+
+aptImageBinaryPackages :: (MonadRepos m, MonadApt m) => m [BinaryPackage]
+aptImageBinaryPackages = getBinaryPackages
 
 getSourcePackages :: (MonadRepos m, MonadApt m) => m [SourcePackage]
 getSourcePackages =
@@ -101,3 +98,42 @@ instance Show UpdateError where
     show (Changed r p l1 l2) = unwords ["Changed", show r, show p, show (pretty l1), show (pretty l2)]
     show (Missing r p) = unwords ["Missing", show r, show p]
     show Flushed = "Flushed"
+
+-- |Retrieve a source package via apt-get.
+prepareSource :: (MonadRepos m, MonadApt m, MonadTop m, MonadIO m) =>
+                 SrcPkgName			-- The name of the package
+              -> Maybe DebianVersion		-- The desired version, if Nothing get newest
+              -> m DebianBuildTree		-- The resulting source tree
+prepareSource package version =
+    do root <- (rootPath . getL aptImageRoot) <$> getApt
+       dir <- aptDir package
+       liftIO $ createDirectoryIfMissing True dir
+       ready <- liftIO $ findDebianBuildTrees dir
+       version' <- latestVersion package version
+       case (version', ready) of
+         (Nothing, _) ->
+             fail $ "No available versions of " ++ unSrcPkgName package ++ " in " ++ root
+         (Just requested, [tree])
+             | requested == (logVersion . entry $ tree) ->
+                 return tree
+         (Just requested, []) ->
+             do aptGetSource dir [(package, Just requested)]
+                trees <- liftIO $ findDebianBuildTrees dir
+                case trees of
+                  [tree] -> return tree
+                  _ -> fail $ "apt-get source failed in " ++ dir ++ " (1): trees=" ++ show (map (dir' . tree' . debTree') trees)
+         (Just requested, _) ->
+             do -- One or more incorrect versions are available, remove them
+                liftIO $ removeRecursiveSafely dir
+                qPutStr $ "Retrieving APT source for " ++ unSrcPkgName package
+                aptGetSource dir [(package, Just requested)]
+                trees <- liftIO $ findDebianBuildTrees dir
+                case trees of
+                  [tree] -> return tree
+                  _ -> fail $ "apt-get source failed (2): trees=" ++ show (map (dir' . tree' . debTree') trees)
+
+latestVersion :: (MonadRepos m, MonadApt m) => SrcPkgName -> Maybe DebianVersion -> m (Maybe DebianVersion)
+latestVersion package version = do
+  pkgs <- aptImageSourcePackages
+  let newest = (listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . packageName . sourcePackageID)) $ pkgs
+  return $ maybe newest Just version
