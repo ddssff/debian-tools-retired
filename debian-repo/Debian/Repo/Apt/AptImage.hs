@@ -1,19 +1,15 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS -Wall -fno-warn-orphans #-}
 module Debian.Repo.Apt.AptImage
-    ( evalMonadApt
-    , execMonadApt
-    , runMonadApt
-    , withAptImage
+    ( withAptImage
     ) where
 
 import Control.Applicative ((<$>))
-import Control.Monad.State (runStateT, StateT)
+import Control.Monad.State (StateT)
 import Control.Monad.Trans (MonadTrans(lift))
 import Data.Function (on)
-import Data.Lens.Lazy (getL, modL, setL)
+import Data.Lens.Lazy (getL, setL)
 import Data.List (sortBy)
-import Data.Map as Map (insert, lookup)
 import Debian.Release (ReleaseName(relName))
 import Debian.Repo.Apt.PackageIndex (binaryPackagesFromSources, sourcePackagesFromSources)
 import Debian.Repo.Apt.Slice (updateCacheSources)
@@ -21,7 +17,7 @@ import Debian.Repo.AptImage (aptGetUpdate, AptImage, aptImageArch, aptImageBinar
 import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage(sourcePackageID))
-import Debian.Repo.Repos (aptImageMap, findAptImage, modifyRepos, MonadRepos(getRepos))
+import Debian.Repo.Repos (AptKey, findAptKey, putAptImage, MonadRepos, evalMonadApt)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), SliceList, SourcesChangedAction)
 import Debian.Repo.Top (MonadTop)
 import System.Process.Progress (qPutStrLn, quieter)
@@ -31,21 +27,6 @@ instance MonadApt m => MonadApt (StateT OSImage m) where
     getApt = lift getApt
     putApt = lift . putApt
 
--- | Run MonadOS and update the osImageMap with the modified value
-evalMonadApt :: (MonadRepos m, Functor m) => StateT AptImage m a -> AptImage -> m a
-evalMonadApt task apt = fst <$> runMonadApt task apt
-
--- | Run MonadOS and update the osImageMap with the modified value
-execMonadApt :: (MonadRepos m, Functor m) => StateT AptImage m a -> AptImage -> m AptImage
-execMonadApt task apt = snd <$> runMonadApt task apt
-
--- | Run MonadOS and update the osImageMap with the modified value
-runMonadApt :: (MonadRepos m, Functor m) => StateT AptImage m a -> AptImage -> m (a, AptImage)
-runMonadApt task apt = do
-  (a, apt') <- runStateT task apt
-  modifyRepos (modL aptImageMap (Map.insert (getL aptImageRoot apt') apt'))
-  return (a, apt')
-
 withAptImage :: (MonadRepos m, MonadTop m) => SourcesChangedAction -> NamedSliceList -> StateT AptImage m a -> m a
 withAptImage sourcesChangedAction sources action = prepareAptImage sourcesChangedAction sources >>= evalMonadApt action
 
@@ -53,18 +34,21 @@ withAptImage sourcesChangedAction sources action = prepareAptImage sourcesChange
 prepareAptImage :: (MonadTop m, MonadRepos m) =>
                  SourcesChangedAction	-- What to do if environment already exists and sources.list is different
               -> NamedSliceList		-- The sources.list
-              -> m AptImage		-- The resulting environment
-prepareAptImage sourcesChangedAction sources =
-    (\ x -> qPutStrLn ("Preparing apt-get environment for " ++ show (relName (sliceListName sources))) >> quieter 2 x) $
-    cacheRootDir (sliceListName sources) >>= \ root ->
-    getRepos >>= return . Map.lookup root . getL aptImageMap >>=
-    maybe (prepareAptImage' sourcesChangedAction sources) return
+              -> m AptKey		-- The resulting environment
+prepareAptImage sourcesChangedAction sources = do
+  qPutStrLn ("Preparing apt-get environment for " ++ show (relName (sliceListName sources)))
+  quieter 2 $ do
+    root <- cacheRootDir (sliceListName sources)
+    mkey <- findAptKey root
+    maybe (prepareAptImage' sourcesChangedAction sources) return mkey
 
-prepareAptImage' :: (MonadTop m, MonadRepos m) => SourcesChangedAction -> NamedSliceList -> m AptImage
+prepareAptImage' :: (MonadTop m, MonadRepos m) => SourcesChangedAction -> NamedSliceList -> m AptKey
 prepareAptImage' sourcesChangedAction sources =
     cacheRootDir (sliceListName sources) >>= \ root ->
-    findAptImage root >>=
-    maybe (createAptImage sources >>= execMonadApt (updateCacheSources sourcesChangedAction sources >> updateAptEnv)) return
+    findAptKey root >>=
+    maybe (createAptImage sources >>= putAptImage >>= \ key ->
+           evalMonadApt (updateCacheSources sourcesChangedAction sources >> updateAptEnv) key >>
+           return key) return
 
 -- |Run apt-get update and then retrieve all the packages referenced
 -- by the sources.list.  The source packages are sorted so that
