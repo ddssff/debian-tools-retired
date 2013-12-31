@@ -2,6 +2,8 @@
 {-# OPTIONS -fno-warn-orphans #-}
 module Debian.Repo.Apt.OSImage
     ( buildArchOfOS
+    , osBinaryPackages
+    , osSourcePackages
     , prepareOS
     , updateOS
     , syncOS
@@ -11,10 +13,10 @@ import Control.Applicative ((<$>))
 import Control.DeepSeq (force)
 import Control.Exception (SomeException, throw)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO(catch), try)
-import Control.Monad.State (modify, MonadState(put, get))
+import Control.Monad.State (MonadState(get, put))
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
-import Data.Lens.Lazy (getL, setL)
+import Data.Lens.Lazy (getL)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Release (ReleaseName(relName))
@@ -22,14 +24,14 @@ import Debian.Repo.Apt.PackageIndex (binaryPackagesFromSources, sourcePackagesFr
 import Debian.Repo.Apt.Slice (verifySourcesList)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
-import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildArchOfRoot, buildOS', createOSImage, localeGen, MonadOS, neuterEnv, osArch, osBaseDistro, osBinaryPackages, osFullDistro, osLocalCopy, osLocalMaster, osRoot, osSourcePackages, syncLocalPool, syncOS', updateLists)
+import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildArchOfRoot, buildOS', createOSImage, localeGen, MonadOS, neuterEnv, osArch, osBaseDistro, osFullDistro, osLocalCopy, osLocalMaster, osRoot, syncLocalPool, syncOS', updateLists)
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Prelude (access)
 import Debian.Repo.Repos (evalMonadOS, findOSKey, MonadRepos, OSKey, putOSImage)
 import Debian.Repo.SSH (sshCopy)
 import Debian.Repo.Slice (NamedSliceList(sliceListName), Slice(sliceSource), SliceList(slices), SourcesChangedAction(SourcesChangedError), UpdateError(..))
 import Debian.Repo.SourcesList (parseSourcesList)
-import Debian.Repo.Top (MonadTop, distDir, sourcesPath)
+import Debian.Repo.Top (distDir, MonadTop, sourcesPath)
 import Debian.Sources (DebSource(sourceUri))
 import Debian.URI (URI(uriScheme))
 import Extra.Files (replaceFile)
@@ -38,7 +40,7 @@ import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>), splitFileName)
 import System.Posix.Env (setEnv)
-import System.Process (proc, readProcess, readProcessWithExitCode, shell)
+import System.Process (readProcessWithExitCode, shell)
 import System.Process.Progress (ePutStrLn, oneResult, quieter, readProcessChunks)
 import System.Unix.Chroot (useEnv)
 import System.Unix.Directory (removeRecursiveSafely)
@@ -169,6 +171,12 @@ buildOS root distro arch repo copy include exclude components =
        liftIO $ neuterEnv os
        return key
 
+osSourcePackages :: (MonadRepos m, MonadOS m) => m [SourcePackage]
+osSourcePackages = getSourcePackages'
+
+osBinaryPackages :: (MonadRepos m, MonadOS m) => m [BinaryPackage]
+osBinaryPackages = getBinaryPackages'
+
 -- | Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.
 updateOS :: (MonadOS m, MonadRepos m) => m ()
@@ -180,11 +188,10 @@ updateOS = do
   liftIO $ prepareDevs root
   syncLocalPool
   updateLists
-  _ <- liftIO $ sshCopy root
-  source' <- getSourcePackages'
-  binary <- getBinaryPackages'
-  modify (setL osSourcePackages source')
-  modify (setL osBinaryPackages binary)
+  code <- liftIO $ sshCopy root
+  case code of
+    ExitSuccess -> return ()
+    _ -> error $ "sshCopy -> " ++ show code
     where
       verifySources :: (MonadOS m, MonadRepos m) => m ()
       verifySources =

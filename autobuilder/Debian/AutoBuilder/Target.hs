@@ -44,7 +44,7 @@ import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
 import Debian.Repo.Apt.AptImage (aptImageSourcePackages)
-import Debian.Repo.Apt.OSImage (updateOS, syncOS, buildArchOfOS)
+import Debian.Repo.Apt.OSImage (osSourcePackages, osBinaryPackages, updateOS, syncOS, buildArchOfOS)
 import Debian.Repo.Apt.Package (scanIncoming)
 import Debian.Repo.AptImage (MonadApt)
 import Debian.Repo.OSImage (syncLocalPool, updateLists, withProc, withTmp, buildEssential, osRoot)
@@ -53,7 +53,7 @@ import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, soluti
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.InstallResult (showErrors)
 import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
-import Debian.Repo.OSImage (MonadOS, osBinaryPackages, osSourcePackages)
+import Debian.Repo.OSImage (MonadOS)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
@@ -505,10 +505,10 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
 -- | Get the control info for the newest version of a source package
 -- available in a release.  Make sure that the files for this build
 -- architecture are available.
-getReleaseControlInfo :: MonadOS m => Target -> m (Maybe SourcePackage, SourcePackageStatus, String)
+getReleaseControlInfo :: (MonadOS m, MonadRepos m) => Target -> m (Maybe SourcePackage, SourcePackageStatus, String)
 getReleaseControlInfo target = do
-  sourcePackages' <- (sortBy compareVersion . sortSourcePackages [packageName]) <$> access osSourcePackages
-  binaryPackages' <- sortBinaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages') <$> access osBinaryPackages
+  sourcePackages' <- (sortBy compareVersion . sortSourcePackages [packageName]) <$> osSourcePackages
+  binaryPackages' <- sortBinaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages') <$> osBinaryPackages
   let sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
       message status =
           intercalate "\n"
@@ -635,10 +635,10 @@ computeNewVersion cache target = do
       buildTrumped = elem (targetName target) (P.buildTrumped (P.params cache))
 
 -- FIXME: Most of this code should move into Debian.Repo.Dependencies
-buildDepSolutions :: (MonadOS m, MonadIO m) => Arch -> [BinPkgName] -> Control' T.Text -> m (Failing [(Int, [BinaryPackage])])
+buildDepSolutions :: (MonadOS m, MonadIO m, MonadRepos m) => Arch -> [BinPkgName] -> Control' T.Text -> m (Failing [(Int, [BinaryPackage])])
 buildDepSolutions arch preferred debianControl =
     do globalBuildDeps <- buildEssential
-       packages <- access osBinaryPackages
+       packages <- osBinaryPackages
        case G.buildDependencies debianControl of
          Left s -> return $ Failure [s]
          Right info ->

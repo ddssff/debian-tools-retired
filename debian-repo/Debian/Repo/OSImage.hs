@@ -6,8 +6,6 @@ module Debian.Repo.OSImage
     , osFullDistro
     , osLocalMaster
     , osLocalCopy
-    , osSourcePackages
-    , osBinaryPackages
     , osRoot
     , osArch
     , MonadOS
@@ -48,9 +46,8 @@ import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (ParseRelations(parseRelations), PkgName, Relations)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
-import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot(rootPath), EnvRoot, outsidePath)
+import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot, EnvRoot(rootPath), outsidePath)
 import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
-import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Prelude (access, (~=))
 import Debian.Repo.Repo (repoKey, repoURI)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(Slice, sliceRepoKey, sliceSource), SliceList, SliceList(..))
@@ -90,8 +87,6 @@ data OSImage
 	 -- environment.
          , _osLocalCopy :: LocalRepository
          -- | A copy of osLocalMaster which is inside the changeroot
-         , _osSourcePackages :: [SourcePackage]
-         , _osBinaryPackages :: [BinaryPackage]
          }
 
 $(makeLenses [''OSImage])
@@ -418,9 +413,7 @@ createOSImage root distro repo =
                    , _osBaseDistro = distro
                    , _osArch = arch
                    , _osLocalMaster = repo
-                   , _osLocalCopy = copy
-                   , _osSourcePackages = []
-                   , _osBinaryPackages = [] }
+                   , _osLocalCopy = copy }
        return os
 
 _pbuilderBuild' :: (MonadIO m, MonadTop m, Functor m) =>
@@ -449,9 +442,7 @@ _pbuilderBuild' root distro arch repo copy _extraEssential _omitEssential _extra
                    , _osBaseDistro = distro
                    , _osArch = arch
                    , _osLocalMaster = repo
-                   , _osLocalCopy = copy
-                   , _osSourcePackages = []
-                   , _osBinaryPackages = [] }
+                   , _osLocalCopy = copy }
        let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
        -- Rewrite the sources.list with the local pool added.
        sources <- (show . pretty) <$> evalStateT osFullDistro os
@@ -499,9 +490,7 @@ buildOS' root distro arch repo copy include exclude components =
                   , _osBaseDistro = distro
                   , _osArch = arch
                   , _osLocalMaster = repo
-                  , _osLocalCopy = copy
-                  , _osSourcePackages = []
-                  , _osBinaryPackages = [] }
+                  , _osLocalCopy = copy }
       let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
       -- Rewrite the sources.list with the local pool added.
       sources <- (show . pretty) <$> evalStateT osFullDistro os
