@@ -80,13 +80,11 @@ data OSImage
     = OS { _osRoot :: EnvRoot
          , _osBaseDistro :: NamedSliceList
          , _osArch :: Arch
-	 -- | The associated local repository, where packages we
-         -- build inside this image are first uploaded to.
          , _osLocalMaster :: LocalRepository
-	 -- | A copy of osLocalMaster located inside the os root
-	 -- environment.
+	 -- ^ The associated local repository, where packages we build
+	 -- inside this image are first uploaded to.
          , _osLocalCopy :: LocalRepository
-         -- | A copy of osLocalMaster which is inside the changeroot
+	 -- ^ A copy of osLocalMaster located inside the os root environment.
          }
 
 $(makeLenses [''OSImage])
