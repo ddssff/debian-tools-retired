@@ -1,3 +1,10 @@
+haskell-process-progress (0.8) unstable; urgency=low
+
+  * Move the NFData ExitCode instance here from debian-repo
+  * Minor documentation updates
+
+ -- David Fox <dsf@seereason.com>  Wed, 01 Jan 2014 09:40:50 -0800
+
 haskell-process-progress (0.7) unstable; urgency=low
 
   * Fix the prefix feature, which prepends different prefixes to the
