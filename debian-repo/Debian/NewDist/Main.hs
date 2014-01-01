@@ -10,14 +10,13 @@ import Data.Text (pack)
 import Debian.Arch (Arch(Binary, Source), ArchCPU(..), ArchOS(..), prettyArch)
 import Debian.Changes (ChangesFile(..))
 import Debian.Config (option)
-import Debian.NewDist.Options (Params(..), homeParams, optSpecs)
+import Debian.NewDist.Options (Params(install, rootParam, printVersion, layout, dryRun, binaryOrphans, cleanUp, signRepo, notifyEmail, senderEmail, keyName, aliases, sections, architectures, releases, expire, removePackages), homeParams, optSpecs)
 import Debian.NewDist.Version (myVersion)
 import Debian.Relation (BinPkgName)
 import Debian.Release (ReleaseName, releaseName', parseReleaseName, Section, parseSection')
-import Debian.Repo.Apt.Package (scanIncoming, deleteSourcePackages, deleteTrumped, deleteBinaryOrphans, deleteGarbage)
+import Debian.Repo.Apt.Package (scanIncoming, deleteSourcePackages, deleteTrumped, deleteBinaryOrphans, deleteGarbage, InstallResult(Ok), explainError, resultToProblems, showErrors)
 import Debian.Repo.Apt.Release (findReleases, prepareRelease, signReleases, mergeReleases)
 import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), envPath)
-import Debian.Repo.InstallResult (InstallResult, explainError, resultToProblems, showErrors)
 import Debian.Repo.LocalRepository (LocalRepository, Layout, repoRoot, prepareLocalRepository, setRepositoryCompatibility)
 import Debian.Repo.PackageID (PackageID, makeBinaryPackageID)
 import Debian.Repo.PackageIndex (PackageIndex(PackageIndex))
@@ -62,11 +61,10 @@ runFlags flags =
        rels <- findReleases repo
        _ <- liftIO (deletePackages (dryRun flags) repo rels flags keyname)
        liftIO $ setRepositoryCompatibility repo
-       when (install flags)
-                ((scanIncoming False keyname repo) >>=
-                     \ (ok, errors) -> (liftIO (sendEmails senderAddr emailAddrs (map (successEmail repo) ok) >>
-                                                sendEmails senderAddr emailAddrs (map (\ (changes, e) -> failureEmail changes e) errors) >>
-                                                exitOnError (map snd errors))))
+       when (install flags) $ do
+         results <- scanIncoming False keyname repo
+         liftIO $ sendEmails senderAddr emailAddrs (map (email repo) results)
+         liftIO $ exitOnError results
        when (expire flags)  $ liftIO (deleteTrumped (dryRun flags) keyname repo rels) >> return ()
        when (binaryOrphans flags)  $ deleteBinaryOrphans (dryRun flags) keyname repo rels >> return ()
        when (cleanUp flags) $ deleteGarbage repo >> return ()
@@ -77,16 +75,15 @@ runFlags flags =
           catMaybes . map parseEmail . concat . map (splitRegex (mkRegex "[ \t]*,[ \t]*")) . notifyEmail $ flags
       senderAddr :: (String, String)
       senderAddr = maybe ("autobuilder", "somewhere") id . maybe Nothing parseEmail . senderEmail $ flags
-      successEmail :: LocalRepository -> ChangesFile -> (String, [String])
-      successEmail repo changesFile =
-          let subject = ("newdist: " ++ changePackage changesFile ++ "-" ++ show (prettyDebianVersion (changeVersion changesFile)) ++ 
+      email :: LocalRepository -> (ChangesFile, InstallResult) -> (String, [String])
+      email repo (changesFile, Ok) =
+          let subject = ("newdist: " ++ changePackage changesFile ++ "-" ++ show (prettyDebianVersion (changeVersion changesFile)) ++
                          " now available in " ++ releaseName' (changeRelease changesFile) ++
                          " (" ++ show (prettyArch (changeArch changesFile)) ++")")
               body = ("Repository " ++ envPath (repoRoot repo)) : [] : (lines $ show $ pretty $ changeInfo changesFile) in
     	  (subject, body)
-      failureEmail :: ChangesFile -> InstallResult -> (String, [String])
-      failureEmail changesFile e =
-          let subject = ("newdist failure: " ++ changePackage changesFile ++ "-" ++ show (prettyDebianVersion (changeVersion changesFile)) ++ 
+      email _repo (changesFile, e) =
+          let subject = ("newdist failure: " ++ changePackage changesFile ++ "-" ++ show (prettyDebianVersion (changeVersion changesFile)) ++
                          " failed to install in " ++ releaseName' (changeRelease changesFile))
               body = concat (map (lines . explainError) (resultToProblems e)) in
           (subject, body)
@@ -158,12 +155,12 @@ createAlias repo arg =
                _ -> error $ "Internal error 3"
       _ -> error $ "Invalid argument to --create-alias: " ++ arg
 
-exitOnError :: [InstallResult] -> IO ()
-exitOnError [] = return ()
-exitOnError errors =
-    do qPutStrLn (showErrors errors)
+exitOnError :: [(ChangesFile, InstallResult)] -> IO ()
+exitOnError results | any (not . (== Ok) . snd) results =
+    do qPutStrLn (showErrors (map snd results))
        liftIO $ IO.hFlush IO.stderr
        liftIO $ exitWith (ExitFailure 1)
+exitOnError _ = return ()
 
 -- |Return the list of releases in the repository at root, creating
 -- the ones in the dists list with the given components and

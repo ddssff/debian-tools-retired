@@ -1,3 +1,4 @@
+-- | A release is a named collection of package indexes, e.g. sid.
 {-# LANGUAGE FlexibleInstances, PackageImports, ScopedTypeVariables, StandaloneDeriving, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Release

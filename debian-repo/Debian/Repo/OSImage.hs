@@ -48,10 +48,9 @@ import Debian.Relation (ParseRelations(parseRelations), PkgName, Relations)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
 import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot, EnvRoot(rootPath), outsidePath)
 import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
-import Debian.Repo.Prelude (access, (~=))
+import Debian.Repo.Prelude (access, (~=), rsync)
 import Debian.Repo.Repo (repoKey, repoURI)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(Slice, sliceRepoKey, sliceSource), SliceList, SliceList(..))
-import Debian.Repo.Sync (rsync)
 import Debian.Repo.Top (askTop, MonadTop)
 import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SourceType(..), SourceType(..))
 import Debian.URI (uriToString')
@@ -293,9 +292,9 @@ restoreFile os (file, mustExist) =
 -- the OSImage.
 buildEssential :: (MonadOS m, MonadIO m) => m Relations
 buildEssential =
-    qPutStrLn "Computing build essentials" >>
     access osRoot >>= \ root ->
     liftIO $ quieter 2 $ do
+      qPutStrLn "Computing build essentials"
       essential <-
           readFile (rootPath root ++ "/usr/share/build-essential/essential-packages-list") >>=
           return . lines >>= return . dropWhile (/= "") >>= return . tail >>= return . filter (/= "sysvinit") >>=

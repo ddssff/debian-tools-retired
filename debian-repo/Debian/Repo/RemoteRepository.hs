@@ -4,7 +4,7 @@ module Debian.Repo.RemoteRepository
     ( RemoteRepository(..)
     ) where
 
-import qualified Debian.Repo.Pretty as F (Pretty(..))
+import qualified Debian.Repo.Prelude as F (Pretty(..))
 import Debian.Repo.Release (Release)
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey(Remote))
 import Debian.URI (fromURI', URI')

@@ -5,15 +5,13 @@ License-File:	debian/copyright
 Author:         David Fox
 Category:	System
 Maintainer:     david@seereason.com
-Homepage:       http://src.seereason.com//debian-tools/debian-repo
+Homepage:       http://src.seereason.com/debian-tools/debian-repo
 Build-Type:	Simple
-Synopsis:       Modules for working with the Debian package system
+Synopsis:       Modules for working with Debian repositories
 Description:
-  This library includes modules covering almost every aspect of the Debian
-  packaging system, including low level data types such as version numbers
-  and dependency relations, on up to the types necessary for computing and
-  installing build dependencies, building source and binary packages,
-  and inserting them into a repository.
+  This library includes modules covering the management of Debian
+  package repositories, local caches of remote debian repositories,
+  and Debian build environments.
 Cabal-version: >= 1.2.3
 Data-Files:
         demos/Versions.hs debian/changelog
@@ -51,23 +49,19 @@ Library
         Debian.Repo.Changes,
         Debian.Repo.Dependencies,
         Debian.Repo.EnvPath,
-        Debian.Repo.InstallResult,
         Debian.Repo.LocalRepository,
         Debian.Repo.OSImage,
         Debian.Repo.Package,
         Debian.Repo.PackageID,
         Debian.Repo.PackageIndex,
         Debian.Repo.Prelude,
-        Debian.Repo.Pretty,
         Debian.Repo.RemoteRepository,
         Debian.Repo.Release,
         Debian.Repo.Repo,
         Debian.Repo.Repos,
         Debian.Repo.Slice,
-        Debian.Repo.SourcesList,
         Debian.Repo.SourceTree,
         Debian.Repo.SSH,
-        Debian.Repo.Sync,
         Debian.Repo.Top,
         Debian.VersionPolicy
 

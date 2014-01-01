@@ -154,12 +154,12 @@ runParameterSet init cache =
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       dependOS <- prepareDependOS params buildRelease
-      let allTargets = P.buildPackages (C.params cache)
+      let allTargets = P.buildPackages params
       buildOS <- evalMonadOS (do sources <- getL osBaseDistro <$> get
                                  updateCacheSources (P.ifSourcesChanged params) sources
                                  when (P.report params) (ePutStrLn . doReport $ allTargets)
                                  qPutStr ("\n" ++ showTargets allTargets ++ "\n")
-                                 prepareBuildOS (P.buildRelease (C.params cache))) dependOS
+                                 prepareBuildOS (P.buildRelease params)) dependOS
       qPutStrLn "Retrieving all source code:\n"
       retrieved <-
           countTasks' (map (\ (target :: P.Packages) ->
@@ -172,17 +172,14 @@ runParameterSet init cache =
       -- used to avoid creating package versions that already exist.  Also include the sources
       -- for the local repository to avoid collisions there as well.
       localSources <- evalMonadOS getLocalSources buildOS
+      local <- evalMonadOS (access osLocalMaster) dependOS
       let poolSources = NamedSliceList { sliceListName = ReleaseName (relName (sliceListName buildRelease) ++ "-all")
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
-      -- Compute the essential and build essential packages, they will all
-      -- be implicit build dependencies.
+
       withAptImage (P.ifSourcesChanged params) poolSources
-                       (evalMonadOS (access osLocalMaster) dependOS >>= \ local ->
-                        buildTargets cache dependOS buildOS local targets >>=
+                       (buildTargets cache dependOS buildOS local targets >>=
                         upload >>=
                         liftIO . newDist)
-      -- result <- (upload buildResult >>= liftIO . newDist) `IO.catch` (\ (e :: SomeException) -> return (Failure [show e]))
-      -- return result
     where
       params = C.params cache
       baseRelease =  either (error . show) id (P.findSlice cache (P.baseRelease params))

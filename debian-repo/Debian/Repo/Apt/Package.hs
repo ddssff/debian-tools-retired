@@ -1,3 +1,4 @@
+-- | Install packages to and delete packages from a local repository.
 {-# LANGUAGE BangPatterns, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-name-shadowing -fno-warn-missing-signatures #-}
 -- |Install binary packages into and delete binary packages from a repository.
@@ -8,6 +9,12 @@ module Debian.Repo.Apt.Package
     , deleteBinaryOrphans
     , deleteGarbage
     , deleteSourcePackages
+    -- * Install result
+    , InstallResult(..)
+    , resultToProblems
+    , explainError
+    , explainErrors
+    , showErrors
     ) where
 
 import Control.Applicative ((<$>))
@@ -37,12 +44,11 @@ import Debian.Release (parseSection', ReleaseName, releaseName', Section(..), se
 import Debian.Repo.Apt.Release (findReleases, prepareRelease, signRelease)
 import Debian.Repo.Changes (changeName, changePath, findChangesFiles)
 import Debian.Repo.EnvPath (EnvPath, outsidePath)
-import Debian.Repo.InstallResult (InstallResult(..), isError, mergeResults, Problem(..))
 import Debian.Repo.LocalRepository (Layout(..), LocalRepository, poolDir', repoLayout, repoReleaseInfoLocal, repoRoot)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageName, packageVersion), prettyPackageID)
-import Debian.Repo.PackageIndex (binaryIndexList, BinaryPackage(packageID, packageInfo), BinaryPackage(BinaryPackage, pConflicts, pDepends, pPreDepends, pProvides, pReplaces), PackageIndex(..), packageIndexList, packageIndexPath, prettyBinaryPackage, SourceControl(..), SourceFileSpec(SourceFileSpec, sourceFileName), sourceIndexList, SourcePackage(sourcePackageID), SourcePackage(SourcePackage, sourceControl, sourceDirectory, sourcePackageFiles, sourceParagraph))
+import Debian.Repo.PackageIndex (binaryIndexes, BinaryPackage(packageID, packageInfo), BinaryPackage(BinaryPackage, pConflicts, pDepends, pPreDepends, pProvides, pReplaces), PackageIndex(..), packageIndexes, packageIndexPath, prettyBinaryPackage, SourceControl(..), SourceFileSpec(SourceFileSpec, sourceFileName), sourceIndexes, SourcePackage(sourcePackageID), SourcePackage(SourcePackage, sourceControl, sourceDirectory, sourcePackageFiles, sourceParagraph))
 import Debian.Repo.Prelude (nub')
-import qualified Debian.Repo.Pretty as F (Pretty(..))
+import qualified Debian.Repo.Prelude as F (Pretty(..))
 import Debian.Repo.Repo (Repo, repoArchList, repoKey, RepoKey, repoKeyURI)
 import Debian.Repo.Repos (MonadRepos)
 import Debian.Repo.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
@@ -58,14 +64,105 @@ import System.Exit (ExitCode(..))
 import System.FilePath ((</>), splitFileName)
 import System.IO ()
 import qualified System.Posix.Files as F (createLink, fileSize, getFileStatus)
+import System.Posix.Types (FileOffset)
 import System.Process (runInteractiveCommand, waitForProcess)
 import System.Process.Progress (ePutStrLn, qPutStr, qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (cat, pretty, Pretty(..), text)
 import Text.Regex (matchRegex, mkRegex, splitRegex)
 
--- | Find the .changes files in the incoming directory and try to
--- process each.
-scanIncoming :: MonadRepos m => Bool -> Maybe PGPKey -> LocalRepository -> m ([ChangesFile], [(ChangesFile, InstallResult)])
+data InstallResult
+    = Ok
+    | Failed [Problem]		-- Package can not currently be installed
+    | Rejected [Problem]	-- Package can not ever be installed
+    deriving (Show, Eq)
+
+data Problem
+    = NoSuchRelease ReleaseName
+    | NoSuchSection ReleaseName [Section]
+    | ShortFile FilePath FileOffset FileOffset
+    | LongFile FilePath FileOffset FileOffset
+    | MissingFile FilePath
+    | BadChecksum FilePath String String
+    | OtherProblem String
+    deriving (Eq)
+
+instance Show Problem where
+    show (NoSuchRelease rel) = "NoSuchRelease  " ++ releaseName' rel
+    show (NoSuchSection rel sect) = "NoSuchSection " ++ releaseName' rel ++ " " ++ show (List.map sectionName' sect)
+    show (ShortFile path a b) = "ShortFile " ++ path ++ " " ++ show a ++ " " ++ show b
+    show (LongFile path a b) = "LongFile " ++ path ++ " " ++ show a ++ " " ++ show b
+    show (MissingFile path) = "MissingFile " ++ path
+    show (BadChecksum path a b) = "BadChecksum " ++ path ++ " " ++ show a ++ " " ++ show b
+    show (OtherProblem s) = "OtherProblem " ++ show s
+
+mergeResults :: [InstallResult] -> InstallResult
+mergeResults results =
+    doMerge Ok results
+    where
+      doMerge x [] = x
+      doMerge x (Ok : more) = doMerge x more
+      doMerge (Rejected p1) (Rejected p2 : more) = doMerge (Rejected (p1 ++ p2)) more
+      doMerge (Rejected p1) (Failed p2 : more) = doMerge (Rejected (p1 ++ p2)) more
+      doMerge (Failed p1) (Rejected p2 : more) = doMerge (Rejected (p1 ++ p2)) more
+      doMerge (Failed p1) (Failed p2 : more) = doMerge (Failed (p1 ++ p2)) more
+      doMerge Ok (x : more) = doMerge x more
+
+showErrors :: [InstallResult] -> String
+showErrors = intercalate "\n" . List.map explainError . concatMap resultToProblems
+
+-- | Return the list of issues that provoked a result - the Ok result
+-- becomes the empty list, a Failed or Rejected result becomes a
+-- non-empty list.
+resultToProblems :: InstallResult -> [Problem]
+resultToProblems Ok = []
+resultToProblems (Failed x) = x
+resultToProblems (Rejected x) = x
+
+explainErrors :: [InstallResult] -> [String]
+explainErrors = List.map explainError . concatMap resultToProblems
+
+explainError :: Problem -> String
+explainError (NoSuchRelease dist) =
+    ("\nThe distribution in the .changes file (" ++ releaseName' dist ++ ") does not exist.  There\n" ++
+     "are three common reasons this might happen:\n" ++
+     " (1) The value in the latest debian/changelog entry is wrong\n" ++
+     " (2) A new release needs to be created in the repository.\n" ++
+     "       newdist --root <root> --create-release " ++ releaseName' dist ++ "\n" ++
+     " (3) A new alias needs to be created in the repository (typically 'unstable', 'testing', or 'stable'.)\n" ++
+     "       newdist --root <root> --create-alias <existing release> " ++ releaseName' dist ++ "\n")
+explainError (NoSuchSection dist components) =
+    ("\nThe component" ++ plural "s" components ++ " " ++ intercalate ", " (List.map sectionName' components) ++
+     " in release " ++ releaseName' dist ++ " " ++
+     plural "do" components ++ " not exist.\n" ++
+     "either the 'Section' value in debian/control was wrong or the section needs to be created:" ++
+     concat (List.map (\ component -> "\n  newdist --root <root> --create-section " ++ releaseName' dist ++ "," ++ sectionName' component) components))
+explainError (ShortFile path a b) =
+    ("\nThe file " ++ path ++ "\n" ++
+     "is shorter than it should be (expected: " ++ show a ++ ", actual: " ++ show b ++ ".)  This usually\n" ++
+     "happens while the package is still being uploaded to the repository.")
+explainError (LongFile path _ _) =
+    ("\nThe file " ++ path ++
+     "\nis longer than it should be.  This can happen when the --force-build\n" ++
+     "option is used.  In this case the --flush-pool option should help.")
+explainError (BadChecksum path _ _) =
+    ("\nThe checksum of the file " ++ path ++ "\n" ++
+     "is different from the value in the .changes file.\n" ++
+     "This can happen when the --force-build option is used.  In this case the\n" ++
+     "--flush-pool option should help.  It may also mean a hardware failure.")
+explainError other = show other
+
+plural :: String -> [a] -> String
+plural "do" [_] = "does"
+plural "do" _ = "do"
+
+plural "s" [_] = ""
+plural "s" _ = "s"
+
+plural _ _ = ""
+
+-- | Find all the .changes files in the incoming directory and try to
+-- process each to install the package into a local repository.
+scanIncoming :: MonadRepos m => Bool -> Maybe PGPKey -> LocalRepository -> m [(ChangesFile, InstallResult)]
 scanIncoming createSections keyname repo =
     (\ x -> qPutStrLn ("Uploading packages to " ++ outsidePath (repoRoot repo) ++ "/incoming") >> {-quieter 2-} x) $
     do changes <- liftIO (findChangesFiles (outsidePath (repoRoot repo) </> "incoming"))
@@ -77,8 +174,7 @@ scanIncoming createSections keyname repo =
          [] -> return ()
          _ -> qPutStrLn ("Upload results:\n  " ++
                          (intercalate "\n  " . List.map (uncurry showResult) $ (zip changes results)))
-       let (bad, good) = List.partition (isError . snd) (zip changes results)
-       return (List.map fst good, bad)
+       return (zip changes results)
     where
       showResult changes result =
           changesFileName changes ++ ": " ++
@@ -494,7 +590,7 @@ deleteTrumped dry keyname repo releases =
 findTrumped :: LocalRepository -> Release -> IO (Either String [(Release, PackageIndex, BinaryPackage)])
 findTrumped repo release =
     do
-      mapM doIndex (sourceIndexList release) >>= return . merge
+      mapM doIndex (sourceIndexes release) >>= return . merge
     where
       doIndex index = getPackages_ (repoKey repo) release index >>= return . either Left (Right . (List.map (\ b -> (release, index, b))))
 
@@ -506,9 +602,9 @@ deleteBinaryOrphans :: (MonadIO m, Functor m) => Bool -> Maybe PGPKey -> LocalRe
 deleteBinaryOrphans _ _ _ [] = error "deleteBinaryOrphans called with empty release list"
 deleteBinaryOrphans dry keyname repo releases =
     do -- All the source packages in the repository
-       ((exns1, sourcePackages) :: ([[SomeException]], [[[(Release, PackageIndex, SourcePackage)]]])) <- unzip <$> mapM (\ release -> partitionEithers <$> mapM (sourcePackagesOfIndex' (repoKey repo) release) (sourceIndexList release)) releases
+       ((exns1, sourcePackages) :: ([[SomeException]], [[[(Release, PackageIndex, SourcePackage)]]])) <- unzip <$> mapM (\ release -> partitionEithers <$> mapM (sourcePackagesOfIndex' (repoKey repo) release) (sourceIndexes release)) releases
        -- All the binary packages in the repository
-       ((exns2, binaryPackages) :: ([[SomeException]], [[[(Release, PackageIndex, BinaryPackage)]]])) <- unzip <$> mapM (\ release -> partitionEithers <$> mapM (liftIO . getPackages' (repoKey repo) release) (binaryIndexList release)) releases
+       ((exns2, binaryPackages) :: ([[SomeException]], [[[(Release, PackageIndex, BinaryPackage)]]])) <- unzip <$> mapM (\ release -> partitionEithers <$> mapM (liftIO . getPackages' (repoKey repo) release) (binaryIndexes release)) releases
        case (concat exns1, concat exns2, concat (concat sourcePackages), concat (concat binaryPackages)) of
          ([], [], sps, bps) ->
              do let bps' = Set.fromList (List.map (\ (r, i, b) -> (r, i, packageID b)) bps)
@@ -645,7 +741,7 @@ deleteSourcePackages dry keyname repo packages =
       put release index (junk, keep) =
           qPutStrLn ("deleteSourcePackages  - Removing packages from " ++ show (F.pretty (repo, release, index)) ++ ":\n  " ++ intercalate "\n " (List.map (show . F.pretty . packageID) junk)) >>
           putIndex' keyname release index keep
-      allIndexes = Set.fold Set.union Set.empty (Set.map (\ r -> Set.fromList (List.map (r,) (packageIndexList r))) (fromList (repoReleaseInfoLocal repo))) -- concatMap allIndexes (Set.toList indexes)
+      allIndexes = Set.fold Set.union Set.empty (Set.map (\ r -> Set.fromList (List.map (r,) (packageIndexes r))) (fromList (repoReleaseInfoLocal repo))) -- concatMap allIndexes (Set.toList indexes)
       -- (indexes, invalid) = Set.partition (\ (_, i) -> packageIndexArch i == Source) (Set.fromList (List.map (\ (r, i, _) -> (r, i)) (repoReleaseInfoLocal repo)))
       -- (source, invalid) = Set.partition (\ (r, i, b) -> packageIndexArch i == Source) (Set.fromList packages)
       -- (indexes, invalid) = Set.partition (\ index -> packageIndexArch index == Source) (Set.fromList (List.map fst packages))
@@ -683,7 +779,7 @@ deleteBinaryPackages dry keyname repo blacklist =
       put release index (junk, keep) =
           qPutStrLn ("deleteBinaryPackages - removing " ++ show (length junk) ++ " packages from " ++ show (F.pretty (repo, release, index)) ++ ", leaving " ++ show (length keep) {- ++ ":\n " ++ intercalate "\n " (List.map (show . F.pretty . packageID) junk) -}) >>
           putIndex' keyname release index keep
-      allIndexes = Set.fold Set.union Set.empty (Set.map (\ r -> Set.fromList (List.map (r,) (packageIndexList r))) (fromList (repoReleaseInfoLocal repo)))
+      allIndexes = Set.fold Set.union Set.empty (Set.map (\ r -> Set.fromList (List.map (r,) (packageIndexes r))) (fromList (repoReleaseInfoLocal repo)))
 
       -- (invalid, indexes) = Set.partition (\ (_, i) -> packageIndexArch i == Source) (Set.fromList (List.map (\ (r, i, _) -> (r, i)) (toList packages)))
       -- (source, invalid) = Set.partition (\ (r, i, b) -> packageIndexArch i == Source) (Set.fromList packages)
@@ -919,7 +1015,7 @@ indexPrefix repo release index =
 -- | Return a list of all source packages.
 releaseSourcePackages_ :: {- MonadRepoCache k r -} MonadIO m => RepoKey -> Release -> m (Set SourcePackage)
 releaseSourcePackages_ repo release =
-    mapM (sourcePackagesOfIndex_ repo release) (sourceIndexList release) >>= return . test
+    mapM (sourcePackagesOfIndex_ repo release) (sourceIndexes release) >>= return . test
     where
       test :: [Either SomeException [SourcePackage]] -> Set SourcePackage
       test xs = case partitionEithers xs of
@@ -929,7 +1025,7 @@ releaseSourcePackages_ repo release =
 -- | Return a list of all the binary packages for all supported architectures.
 releaseBinaryPackages_ :: {- MonadRepoCache k r -} MonadIO m => RepoKey -> Release -> m (Set BinaryPackage)
 releaseBinaryPackages_ repo release =
-    mapM (binaryPackagesOfIndex_ repo release) (binaryIndexList release) >>= return . test
+    mapM (binaryPackagesOfIndex_ repo release) (binaryIndexes release) >>= return . test
     where
       test xs = case partitionEithers xs of
                   ([], ok) -> Set.unions (List.map Set.fromList ok)

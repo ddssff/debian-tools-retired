@@ -1,3 +1,4 @@
+-- | A repository located on localhost
 {-# LANGUAGE FlexibleInstances, PackageImports, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.LocalRepository
@@ -32,10 +33,11 @@ import Debian.Repo.Changes (changeKey, changePath, findChangesFiles)
 import Debian.Repo.Dependencies (readSimpleRelation)
 import Debian.Repo.EnvPath (EnvPath(envPath), outsidePath)
 import Debian.Repo.PackageID (PackageID)
+import Debian.Repo.Prelude (rsync)
+import qualified Debian.Repo.Prelude as F (Pretty(..))
 import Debian.Repo.Release (parseReleaseFile, Release)
 import Debian.Repo.Repo (compatibilityFile, libraryCompatibilityLevel, Repo(..), RepoKey(..))
 import Debian.Repo.SSH (sshVerify)
-import Debian.Repo.Sync (rsync)
 import Debian.URI (URI(uriAuthority, uriPath), URIAuth(uriPort, uriRegName, uriUserInfo), uriToString')
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Bool (cond)
@@ -48,7 +50,6 @@ import System.FilePath ((</>), splitFileName)
 import qualified System.Posix.Files as F (createLink, fileMode, getFileStatus, getSymbolicLinkStatus, isSymbolicLink, readSymbolicLink, removeLink, setFileMode)
 import System.Process (readProcessWithExitCode, shell, showCommandForUser)
 import System.Process.Progress (foldOutputsL, Output, qPutStrLn, quieter, runProcessV, timeTask)
-import qualified Debian.Repo.Pretty as F (Pretty(..))
 import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
 import Text.Regex (matchRegex, mkRegex)
 
@@ -106,7 +107,7 @@ readLocalRepo root layout =
        let distGroups = groupBy fstEq . sort $ aliasPairs
        let aliases = map (checkAliases  . partition (uncurry (==))) distGroups
        releaseInfo <- mapM (liftIO . getReleaseInfo) aliases
-       qPutStrLn ("LocalRepository releaseInfo " ++ show root ++ ": " ++ show releaseInfo)
+       -- qPutStrLn ("LocalRepository releaseInfo " ++ show root ++ ": " ++ show releaseInfo)
        let repo = LocalRepository { repoRoot = root
                                   , repoLayout = layout
                                   , repoReleaseInfoLocal = releaseInfo }

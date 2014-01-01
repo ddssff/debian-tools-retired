@@ -21,7 +21,7 @@ import Debian.Repo (findReleases, runReposT)
 import Debian.Repo.EnvPath (EnvPath, rootEnvPath)
 import Debian.Repo.LocalRepository (Layout(Pool), prepareLocalRepository)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
-import Debian.Repo.PackageIndex (binaryIndexList, BinaryPackage(..), PackageIndex(packageIndexArch), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), sourceIndexList, SourcePackage(..))
+import Debian.Repo.PackageIndex (binaryIndexes, BinaryPackage(..), PackageIndex(packageIndexArch), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), sourceIndexes, SourcePackage(..))
 import Debian.Repo.Release (Release)
 import Debian.Repo.Repo (Repo, repoURI)
 import Debian.Repo.Top (runTopT)
@@ -62,7 +62,7 @@ main = runReposT $ runTopT root' $ quieter (- 3) $
 -- | Return a list of all source packages.
 releaseSourcePackages :: Repo r => (r, Release) -> IO (Set SourcePackage)
 releaseSourcePackages (repo, release) =
-    mapM (sourcePackagesOfIndex (repo, release)) (sourceIndexList release) >>= return . test
+    mapM (sourcePackagesOfIndex (repo, release)) (sourceIndexes release) >>= return . test
     where
       test :: [Either SomeException [SourcePackage]] -> Set SourcePackage
       test xs = case partitionEithers xs of
@@ -72,7 +72,7 @@ releaseSourcePackages (repo, release) =
 -- | Return a list of all the binary packages for all supported architectures.
 releaseBinaryPackages :: Repo r => (r, Release) -> IO (Set BinaryPackage)
 releaseBinaryPackages (repo, release) =
-    mapM (binaryPackagesOfIndex (repo, release)) (binaryIndexList release) >>= return . test
+    mapM (binaryPackagesOfIndex (repo, release)) (binaryIndexes release) >>= return . test
     where
       test xs = case partitionEithers xs of
                   ([], ok) -> Set.unions (List.map Set.fromList ok)

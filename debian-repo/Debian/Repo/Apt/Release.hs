@@ -27,7 +27,7 @@ import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(p
 import Debian.Release (ReleaseName, releaseName', Section, sectionName')
 import Debian.Repo.EnvPath (outsidePath)
 import Debian.Repo.LocalRepository (LocalRepository, prepareLocalRepository, repoLayout, repoReleaseInfoLocal, repoRoot)
-import Debian.Repo.PackageIndex (PackageIndex(packageIndexArch, packageIndexComponent), packageIndexDir, packageIndexList, packageIndexName, releaseDir)
+import Debian.Repo.PackageIndex (PackageIndex(packageIndexArch, packageIndexComponent), packageIndexDir, packageIndexes, packageIndexName, releaseDir)
 import Debian.Repo.Release (parseArchitectures, parseComponents, Release(..))
 import Debian.Repo.Repo (Repo(repoKey))
 import Debian.Repo.Repos (MonadRepos(getRepos), modifyRepos, releaseMap)
@@ -73,7 +73,7 @@ prepareRelease repo dist aliases sections archList =
                                    , releaseComponents = sections
                                    , releaseArchitectures = archList }
              -- vPutStrLn 0 ("packageIndexList: " ++ show (packageIndexList release))
-             _ <- mapM (initIndex (outsidePath root) release) (packageIndexList release)
+             _ <- mapM (initIndex (outsidePath root) release) (packageIndexes release)
              mapM_ (initAlias (outsidePath root) dist) aliases
              _ <- liftIO (writeRelease repo release)
 	     -- This ought to be identical to repo, but the layout should be
@@ -88,7 +88,7 @@ prepareRelease repo dist aliases sections archList =
              liftIO $ setFileMode dir 0o040755
              ensureIndex (dir </> name)
       initAlias root' dist alias =
-          liftIO $ EF.prepareSymbolicLink (releaseName' dist) (root' <> "/dists/" <> releaseName' alias)
+          liftIO $ EF.prepareSymbolicLink (releaseName' dist) (root' </> "dists" </> releaseName' alias)
       root = repoRoot repo
 
 -- | Make sure an index file exists.
@@ -123,7 +123,7 @@ writeRelease repo release =
        return (masterReleaseFile : indexReleaseFiles)
     where
       writeIndexReleases root release =
-          mapM (writeIndex root release) (packageIndexList release)
+          mapM (writeIndex root release) (packageIndexes release)
       -- It should only be necessary to write these when the component
       -- is created, not every time the index files are changed.  But
       -- for now we're doing it anyway.
@@ -135,12 +135,12 @@ writeRelease repo release =
                            S.Field ("Architecture", pack $ show (prettyArch (packageIndexArch index))),
                            S.Field ("Origin", " SeeReason Partners LLC"),
                            S.Field ("Label", " SeeReason")] :: S.Paragraph' Text
-             let path = packageIndexDir release index ++ "/Release"
+             let path = packageIndexDir release index </> "Release"
              EF.maybeWriteFile (root </> path) (show (pretty para))
              return path
       writeMasterRelease :: FilePath -> Release -> IO FilePath
       writeMasterRelease root release =
-          do let paths = concat . map (indexPaths release) $ (packageIndexList release)
+          do let paths = concat . map (indexPaths release) $ (packageIndexes release)
              (paths', sums,sizes) <-
                  liftIO (EG.cd root
                          (do paths' <- filterM doesFileExist paths
@@ -159,7 +159,7 @@ writeRelease repo release =
                                      S.Field ("Components", " " <> (T.intercalate " " . map (pack . sectionName') . releaseComponents $ release)),
                                      S.Field ("Description", " SeeReason Internal Use - Not Released"),
                                      S.Field ("Md5Sum", "\n" <> pack checksums)] :: S.Paragraph' Text
-             let path = "dists/" ++ (releaseName' . releaseName $ release) ++ "/Release"
+             let path = "dists" </> (releaseName' . releaseName $ release) </> "Release"
              liftIO $ EF.maybeWriteFile (root </> path) (show (pretty para))
              return path
       indexPaths release index | packageIndexArch index == Source =
@@ -195,7 +195,7 @@ findLocalRelease repo releaseInfo =
     where
       readRelease :: MonadRepos m => m Release
       readRelease =
-          do let path = (outsidePath (repoRoot repo) <> "/dists/" <> releaseName' dist <> "/Release")
+          do let path = (outsidePath (repoRoot repo) </> "dists" </> releaseName' dist </> "Release")
              info <- liftIO $ S.parseControlFromFile path
              case info of
                Right (S.Control (paragraph : _)) ->

@@ -1,11 +1,11 @@
-{-# LANGUAGE PackageImports, ScopedTypeVariables, ScopedTypeVariables #-}
-{-# OPTIONS -Werror -fwarn-missing-signatures #-}
--- |This dependency solver determines which binary packages to install 
+-- | This dependency solver determines which binary packages to install
 -- in order to satisfy a set of dependency relations.  It uses a brute
 -- force method, but tweaked to the point where it is usually able to
 -- complete on real-world inputs.
 --
 -- Author: David Fox <dsf@seereason.com>
+{-# LANGUAGE PackageImports, ScopedTypeVariables, ScopedTypeVariables #-}
+{-# OPTIONS -Werror -fwarn-missing-signatures #-}
 module Debian.Repo.Dependencies
     ( simplifyRelations
     , solutions

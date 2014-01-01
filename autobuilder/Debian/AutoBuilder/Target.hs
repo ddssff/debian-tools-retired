@@ -45,13 +45,12 @@ import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
 import Debian.Repo.Apt.AptImage (aptImageSourcePackages)
 import Debian.Repo.Apt.OSImage (osSourcePackages, osBinaryPackages, updateOS, syncOS, buildArchOfOS)
-import Debian.Repo.Apt.Package (scanIncoming)
+import Debian.Repo.Apt.Package (scanIncoming, InstallResult(Ok), showErrors)
 import Debian.Repo.AptImage (MonadApt)
 import Debian.Repo.OSImage (syncLocalPool, updateLists, withProc, withTmp, buildEssential, osRoot)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
-import Debian.Repo.InstallResult (showErrors)
 import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.OSImage (MonadOS)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
@@ -461,11 +460,11 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
             -- The upload to the local repository is done even when
             -- the --dry-run flag is given.  Or it would be if we
             -- didn't exit when the first buildworthy target is found.
-            (_, errors) <- scanIncoming True Nothing repo
-            case errors of
+            results <- scanIncoming True Nothing repo
+            case filter (not . (== Ok) . snd) results of
               -- Update lists to reflect the availability of the package we just built
               [] -> evalMonadOS updateLists dependOS >> return repo
-              _ -> error $ "Local upload failed:\n " ++ showErrors (map snd errors)
+              _ -> error $ "Local upload failed:\n " ++ showErrors (map snd results)
 
 -- |Prepare the build image by copying the clean image, installing
 -- dependencies, and copying the clean source tree.  For a lax build

@@ -1,3 +1,6 @@
+-- | The 'PackageID' type fully identifies a Debian package (source or
+-- binary, depending on the n type variable) by name and version.  This
+-- corresponds to Cabal's Distribution.Cabal.PackageIdentifier.
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.PackageID
@@ -11,10 +14,6 @@ import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import qualified Debian.Relation as B (PkgName)
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Text.PrettyPrint.ANSI.Leijen ((<>), Doc, Pretty(pretty), text)
-
--- | The 'PackageID' type fully identifies a package by name, version,
--- and a 'PackageIndex' which identifies the package's release,
--- component and architecture.
 
 data PackageID n
     = PackageID

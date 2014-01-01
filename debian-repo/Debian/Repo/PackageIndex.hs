@@ -1,3 +1,8 @@
+-- | The 'PackageIndex' type is the result of parsing a file
+-- containing control information about debian packages, either source
+-- or binary.  Examples of such files include
+-- @http://ftp.debian.org/debian/dists/sid/main/source/Sources.bz2@ or
+-- @http://ftp.debian.org/debian/dists/sid/main/binary-amd64/Packages.bz2@.
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving #-}
 module Debian.Repo.PackageIndex
     ( PackageIndex(..)
@@ -12,11 +17,11 @@ module Debian.Repo.PackageIndex
     , packageIndexName
     , packageIndexPath
     , packageIndexDir
-    , packageIndexPathList
-    , packageIndexDirList
-    , packageIndexList
-    , sourceIndexList
-    , binaryIndexList
+    , packageIndexPaths
+    , packageIndexDirs
+    , packageIndexes
+    , sourceIndexes
+    , binaryIndexes
     , releaseDir
 
     , sortSourcePackages
@@ -32,6 +37,7 @@ import qualified Debian.Relation as B (Relations)
 import Debian.Release (releaseName', Section(..), sectionName')
 import Debian.Repo.PackageID (PackageID(packageName, packageVersion), prettyPackageID)
 import Debian.Repo.Release (Release(..))
+import System.FilePath ((</>))
 import System.Posix.Types (FileOffset)
 import Text.PrettyPrint.ANSI.Leijen (Doc)
 
@@ -40,13 +46,8 @@ deriving instance Ord (T.Field' Text)
 deriving instance Show T.Paragraph
 deriving instance Ord T.Paragraph
 
----------------- PACKAGES AND PACKAGE INDEXES -------------
-
--- |The PackageIndex type is the meta-information of a file containing
--- control information about debian packages, either source or binary.
--- Though the control information for a binary package does not
--- specify an architecture, the architecture here is that of the
--- environment where the package information is cached.
+-- | A package index is identified by Section (e.g. main, contrib,
+-- non-free) and architecture (e.g. source, i386, amd64.)
 data PackageIndex
     = PackageIndex { packageIndexComponent :: Section
                    , packageIndexArch :: Arch
@@ -126,37 +127,36 @@ packageIndexName index =
       _ -> "Packages"
 
 packageIndexPath :: Release -> PackageIndex -> FilePath
-packageIndexPath release index = packageIndexDir release index ++ "/" ++ packageIndexName index
+packageIndexPath release index = packageIndexDir release index </> packageIndexName index
 
 packageIndexDir :: Release -> PackageIndex -> FilePath
 packageIndexDir release index =
     case packageIndexArch index of
-      Source -> releaseDir release ++ "/" ++ sectionName' (packageIndexComponent index) ++ "/source"
-      _ -> (releaseDir release ++ "/" ++
-            sectionName' (packageIndexComponent index) ++
+      Source -> releaseDir release </> sectionName' (packageIndexComponent index) </> "source"
+      _ -> (releaseDir release </> sectionName' (packageIndexComponent index) </>
             -- Will prettyArch give us linux-amd64 when we just want amd64?
-            "/binary-" ++ show (prettyArch (packageIndexArch index)))
+            "binary-" ++ show (prettyArch (packageIndexArch index)))
 
 releaseDir :: Release -> String
-releaseDir release = "dists/" ++ (releaseName' . releaseName $ release)
+releaseDir release = "dists" </> (releaseName' . releaseName $ release)
 
-packageIndexPathList :: Release -> [FilePath]
-packageIndexPathList release = map (packageIndexPath release) . packageIndexList $ release
+packageIndexPaths :: Release -> [FilePath]
+packageIndexPaths release = map (packageIndexPath release) . packageIndexes $ release
 
-packageIndexDirList :: Release -> [FilePath]
-packageIndexDirList release = map (packageIndexDir release) . packageIndexList $ release
+packageIndexDirs :: Release -> [FilePath]
+packageIndexDirs release = map (packageIndexDir release) . packageIndexes $ release
 
-packageIndexList :: Release -> [PackageIndex]
-packageIndexList release = sourceIndexList release ++ binaryIndexList release
+packageIndexes :: Release -> [PackageIndex]
+packageIndexes release = sourceIndexes release ++ binaryIndexes release
 
-sourceIndexList :: Release -> [PackageIndex]
-sourceIndexList release =
+sourceIndexes :: Release -> [PackageIndex]
+sourceIndexes release =
     map componentIndex (releaseComponents $ release)
     where componentIndex component = PackageIndex { packageIndexComponent = component
                                                   , packageIndexArch = Source }
 
-binaryIndexList :: Release -> [PackageIndex]
-binaryIndexList release =
+binaryIndexes :: Release -> [PackageIndex]
+binaryIndexes release =
     concat . map componentIndexes $ (releaseComponents release)
     where
       --componentIndexes :: Section -> [PackageIndex]

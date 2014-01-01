@@ -1,3 +1,4 @@
+-- | Set up or verify SSH access to a remove machine.
 module Debian.Repo.SSH
     ( sshVerify
     , sshExportDeprecated
