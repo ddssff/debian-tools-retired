@@ -15,7 +15,6 @@ module Debian.Repo.Prelude
     , checkRsyncExitCode
     ) where
 
-import Control.DeepSeq (NFData)
 import Control.Monad.State (MonadState, MonadIO, modify, get)
 import qualified Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L (empty)
@@ -81,4 +80,3 @@ checkRsyncExitCode (ExitFailure n) =
       35 -> error "Timeout waiting for daemon connection"
       _ -> error $ "Unexpected failure in rsync: " ++ show n
 
-instance NFData ExitCode
