@@ -21,7 +21,6 @@ module System.Process.Read.Monad
 import Control.Monad (when, unless)
 import Control.Monad.State (StateT(runStateT), get, put)
 import Control.Monad.Trans (MonadIO, liftIO)
-import Data.List (intercalate)
 import qualified Data.ListLike as P
 import Prelude hiding (print)
 import System.Exit (ExitCode(ExitFailure))
@@ -90,10 +89,6 @@ runProcessM p input =
          (out7 :: [P.Output s]) <- (if failEcho s then P.foldFailure (\ n -> unless (trace s) (hPutStrLn stderr ("<- " ++ showCommand (cmdspec p) ++ ": " ++ show (ExitFailure n))) >>
                                                                               doOutput (prefixes s) out5 >> return (P.Result (ExitFailure n))) else return) out6
          return out7
-    where
-      text (P.Stdout x) = P.toList x
-      text (P.Stderr x) = P.toList x
-      text _ = []
 
 doOutput :: (P.ListLikePlus a c, Enum c) => Maybe (a, a) -> [P.Output a] -> IO [P.Output a]
 doOutput prefixes out = maybe (P.doOutput out) (\ (sout, serr) -> P.prefixed sout serr out) prefixes >> return out
@@ -105,8 +100,8 @@ s = echoCommand False
 c :: MonadIO m => RunT s m ()
 c = echoCommand True
 
-v :: (P.ListLikePlus s c, MonadIO m) => RunT s m ()
-v = echoOutput True >> {- setPrefixes (Just (P.fromList " 1> ", P.fromList " 2> ")) >> -} echoOnFailure False
+v :: (Enum c, P.ListLikePlus s c, MonadIO m) => RunT s m ()
+v = echoOutput True >> setPrefixes (Just (P.fromList (map (toEnum . fromEnum) " 1> "), P.fromList (map (toEnum . fromEnum) " 2> "))) >> echoOnFailure False
 
 d :: MonadIO m => RunT s m ()
 d = charsPerDot 50 >> echoOutput False
@@ -114,10 +109,10 @@ d = charsPerDot 50 >> echoOutput False
 f :: MonadIO m => RunT s m ()
 f = exceptionOnFailure True
 
-e :: (P.ListLikePlus s c, MonadIO m) => RunT s m ()
-e = echoOnFailure True >> {- setPrefixes (Just (P.fromList " 1> ", P.fromList " 2> ")) >> -} exceptionOnFailure True >> echoOutput False
+e :: (Enum c, P.ListLikePlus s c, MonadIO m) => RunT s m ()
+e = echoOnFailure True >> setPrefixes (Just (P.fromList (map (toEnum . fromEnum) " 1> "), P.fromList (map (toEnum . fromEnum) " 2> "))) >> exceptionOnFailure True >> echoOutput False
 
--- | No output.
+-- | Run silently
 runProcessS :: (P.NonBlocking a c, Enum c, MonadIO m) => CreateProcess -> a -> m [P.Output a]
 runProcessS p input = withRunState defaultRunState (s >> runProcessM p input)
 

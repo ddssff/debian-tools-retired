@@ -1,7 +1,11 @@
--- | The hhGetContents function reads the output from two handles
--- (presumably stdout and stderr) and interleaves them into a list of
--- Output.  Unlike readProcessWithExitCode, this preserves the order
--- in which the chunks of text were written by the process.
+-- | The 'readProcessChunks' function is a process reader that returns
+-- a list (stream) of 'Output', which represent chunks of text read
+-- from 'Stdout', 'Stderr', a 'Result' code, or an 'Exception'.  This
+-- has the advantage of preserving the order in which these things
+-- appeared.  The 'foldOutput', 'foldOutputsL', and 'foldOutputsR'
+-- functions can be used to process the output stream.  The output
+-- text can be any 'NonBlocking' instance, which needs to be implemented
+-- using a non-blocking read function like 'B.hGetSome'.
 
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables, TypeSynonymInstances #-}
 module System.Process.Read.Chunks (
@@ -16,7 +20,8 @@ module System.Process.Read.Chunks (
 
 import Control.Applicative ((<$>))
 import Control.Concurrent (forkIO, threadDelay, MVar, newEmptyMVar, putMVar, takeMVar)
-import Control.Exception (onException, catch, mask, try, throwIO, SomeException)
+import Control.DeepSeq (NFData)
+import Control.Exception as E (onException, catch, mask, try, throwIO, SomeException)
 import Control.Monad (unless)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -24,7 +29,7 @@ import Data.ListLike (ListLike(..), ListLikeIO(..))
 import Data.Word (Word8)
 import qualified GHC.IO.Exception as E
 import GHC.IO.Exception (IOErrorType(ResourceVanished), IOException(ioe_type))
-import Prelude hiding (catch, null, length, rem)
+import Prelude hiding (null, length, rem)
 import qualified Prelude
 import System.Exit (ExitCode)
 import System.IO hiding (hPutStr, hGetContents)
@@ -33,6 +38,10 @@ import System.Process.Read (ListLikePlus(..))
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Process (CreateProcess(..), StdStream(CreatePipe), ProcessHandle,
                        createProcess, waitForProcess, terminateProcess)
+
+-- | This lets us use deepseq's force on the stream of data returned
+-- by the process-progress functions.
+instance NFData ExitCode
 
 -- | Class of types which can also be used by 'System.Process.Read.readProcessChunks'.
 class ListLikePlus a c => NonBlocking a c where
@@ -108,7 +117,7 @@ readProcessChunks p input = mask $ \ restore -> do
 
     -- now write and flush any input
     (do unless (null input) (hPutStr inh input >> hFlush inh)
-        hClose inh) `catch` resourceVanished (\ _e -> return ())
+        hClose inh) `E.catch` resourceVanished (\ _e -> return ())
 
     -- wait on the output
     waitOut
