@@ -214,7 +214,7 @@ installPackages createSections keyname repo changeFileList =
       -- Hard link the files of each package into the repository pool,
       -- but don't unlink the files in incoming in case of subsequent
       -- failure.
-      installFiles :: MonadRepos m => EnvPath -> (Set.Set Text, [Release], [InstallResult]) -> ChangesFile -> m (Set.Set Text, [Release], [InstallResult])
+      installFiles :: MonadRepos m => EnvPath -> (Set Text, [Release], [InstallResult]) -> ChangesFile -> m (Set Text, [Release], [InstallResult])
       installFiles root (live, releases, results) changes =
           findOrCreateRelease releases (changeRelease changes) >>=
           maybe (return (live, releases, Failed [NoSuchRelease (changeRelease changes)] : results)) installFiles'
@@ -229,6 +229,7 @@ installPackages createSections keyname repo changeFileList =
                          installFiles'' release'
                   (False, missing) ->
                       return (live, releases, Failed [NoSuchSection (releaseName release) missing] : results)
+            installFiles'' :: MonadRepos m => Release -> m (Set Text, [Release], [InstallResult])
             installFiles'' release' =
                 do let releases' = release' : filter ((/= (releaseName $ release')) . releaseName) releases
                    result <- mapM (installFile root) (changeFiles changes) >>= return . mergeResults
@@ -246,34 +247,33 @@ installPackages createSections keyname repo changeFileList =
                    available <- liftIO $ doesFileExist src
                    let indexed = Set.member (T.pack dst) live
                    case (available, indexed, installed) of
-                     (False, _, _) ->			-- Perhaps this file is about to be uploaded
-                         return (Failed [MissingFile src])
-                     (True, False, False) ->		-- This just needs to be installed
-			 liftIO (createDirectoryIfMissing True dir) >>
-                         liftIO (F.createLink src dst) >>
-                         return Ok
-                     (True, False, True) ->		-- A garbage file is already present
-                         qPutStrLn ("  Replacing unlisted file: " ++ dst) >>
-			 liftIO (removeFile dst) >>
-                         liftIO (F.createLink src dst) >>
-                         return Ok
-                     (True, True, False) ->		-- Apparantly the repository is damaged.
-                         return (Failed [OtherProblem $ ("Missing from repository: " ++ dst)])
-                     (True, True, True) ->		-- Further inspection is required
-                         do installedSize <- liftIO $ F.getFileStatus dst >>= return . F.fileSize
-                            installedMD5sum <- liftIO $ L.readFile dst >>= return . show . md5
-                            case () of
-                              _ | changedFileSize file < installedSize ->
-	                            -- File may be in the process of being uploaded
-                                    return (Failed [ShortFile dst (changedFileSize file) installedSize])
-                              _ | changedFileSize file > installedSize ->
-                                    -- We could skip this size test and just do the checksum test,
-                                    -- but a file that is too long indicates a different type of
-                                    -- failure than a file with a checksum mismatch.
-                                    return (Rejected [LongFile dst (changedFileSize file) installedSize])
-                              _ | changedFileMD5sum file /= installedMD5sum ->
-                                    return (Rejected [BadChecksum dst (changedFileMD5sum file) installedMD5sum])
-                              _ -> return Ok	-- The correct file is already installed - so be it.
+                     (False, _, _) -> do			-- Perhaps this file is about to be uploaded
+                       return (Failed [MissingFile src])
+                     (True, False, False) -> do		-- This just needs to be installed
+		       liftIO (createDirectoryIfMissing True dir)
+                       liftIO (F.createLink src dst)
+                       return Ok
+                     (True, False, True) -> do		-- A garbage file is already present
+                       qPutStrLn ("  Replacing unlisted file: " ++ dst)
+		       liftIO (removeFile dst)
+                       liftIO (F.createLink src dst)
+                       return Ok
+                     (True, True, False) -> do		-- Apparantly the repository is damaged.
+                       return (Failed [OtherProblem $ ("Missing from repository: " ++ dst)])
+                     (True, True, True) -> do		-- Further inspection is required
+                       installedSize <- liftIO $ F.getFileStatus dst >>= return . F.fileSize
+                       installedMD5sum <- liftIO $ L.readFile dst >>= return . show . md5
+                       let status =
+                               case (compare (changedFileSize file) installedSize, compare (changedFileMD5sum file) installedMD5sum) of
+	                         -- Somehow the correct file is already installed - so be it.
+                                 (EQ, EQ) -> Ok
+	                         -- The wrong file of the right length is installed
+                                 (EQ, _) -> Rejected [BadChecksum dst (changedFileMD5sum file) installedMD5sum]
+	                         -- File may be in the process of being uploaded
+                                 (LT, _) -> Failed [ShortFile dst (changedFileSize file) installedSize]
+	                         -- This must be the wrong file
+                                 (GT, _) -> Rejected [LongFile dst (changedFileSize file) installedSize]
+                       return status
 
       -- Update all the index files affected by the successful
       -- installs.  This is a time consuming operation, so we want to
@@ -404,6 +404,7 @@ distribute :: ([a], b) -> [(a, b)]
 distribute (ilist, p) = List.map (\ i -> (i, p)) ilist
 
 undistribute :: [[(a, b)]] -> [(a, [b])]
+-- undistribute pairss = Map.toList (Map.fromListWith (++) (map (\ (a, b) -> (a, [b])) (concat pairss)))
 undistribute [] = []
 undistribute ([] : tail) = undistribute tail
 undistribute (((index, info) : items) : tail) =
@@ -449,9 +450,9 @@ addSourceFields repo changes file info =
       filesLine file = changedFileMD5sum file ++ " "  ++ show (changedFileSize file) ++ " " ++ changedFileName file
       sha1Line file = changedFileSHA1sum file ++ " "  ++ show (changedFileSize file) ++ " " ++ changedFileName file
       sha256Line file = changedFileSHA256sum file ++ " "  ++ show (changedFileSize file) ++ " " ++ changedFileName file
-{-    
+{-
     let info' = B.renameField (T.pack "Source") (T.pack "Package") info in
-    let info'' = B.modifyField (T.pack "Files") (\ b -> (T.pack (B.unpack b ++ "\n " ++ changedFileMD5sum file ++ " "  ++ 
+    let info'' = B.modifyField (T.pack "Files") (\ b -> (T.pack (B.unpack b ++ "\n " ++ changedFileMD5sum file ++ " "  ++
                                                                  show (changedFileSize file) ++ " " ++
                                                                  changedFileName file))) info' in
     let info''' = B.raiseFields (== (T.pack "Package")) info'' in
@@ -460,7 +461,7 @@ addSourceFields repo changes file info =
                      B.Field (T.pack "Directory", T.pack (" " ++ poolDir' release changes file))] ++
                     maybe [] (\ s -> [B.Field (T.pack "Build-Info", T.pack (" " ++ s))])
                               (B.fieldValue "Build-Info" (changeInfo changes)) in
-    Right $ B.appendFields newfields info'''    
+    Right $ B.appendFields newfields info'''
 -}
 
 moveFile :: FilePath -> FilePath -> IO ()
@@ -476,9 +477,10 @@ addPackagesToIndexes :: [((LocalRepository, Release, PackageIndex), [B.Paragraph
 addPackagesToIndexes pairs =
     do oldPackageLists <- mapM (\ (repo, release, index) -> getPackages_ (repoKey repo) release index) (List.map fst pairs)
        case partitionEithers oldPackageLists of
-         ([], _) -> 
-             do let (oldPackageLists' :: [[BinaryPackage]]) = rights oldPackageLists
-                let (indexMemberFns :: [BinaryPackage -> Bool]) = List.map indexMemberFn oldPackageLists'
+         -- No errors
+         ([], oldPackageLists') ->
+             do let (indexMemberFns :: [BinaryPackage -> Bool]) = List.map indexMemberFn oldPackageLists'
+                    newPackageLists = List.map (\ ((_repo, release, index), info) -> List.map (toBinaryPackage_ release index) info) pairs
                 -- if none of the new packages are already in the index, add them
                 case concat (List.map (uncurry filter) (zip indexMemberFns newPackageLists)) of
                   [] -> do mapM_ updateIndex (zip3 indexes oldPackageLists' newPackageLists)
@@ -489,11 +491,7 @@ addPackagesToIndexes pairs =
       updateIndex ((repo, release, index), oldPackages, newPackages) = putPackages_ repo release index (oldPackages ++ newPackages)
       indexes = List.map fst pairs
       indexMemberFn :: [BinaryPackage] -> BinaryPackage -> Bool
-      indexMemberFn packages =
-          let set = Set.fromList . List.map packageID $ packages
-          in
-            \package -> Set.member (packageID package) set
-      newPackageLists = List.map (\ ((_repo, release, index), info) -> List.map (toBinaryPackage_ release index) info) pairs
+      indexMemberFn packages package = any (== (packageID package)) (List.map packageID packages)
 
 -- Repository Accessors and Inquiries
 
