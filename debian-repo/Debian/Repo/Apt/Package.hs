@@ -207,7 +207,7 @@ installPackages createSections keyname repo changeFileList =
          False -> return results''
          True -> do
            mapM_ (liftIO . uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'')
-           let rels = catMaybes . List.map (findRelease releases) . nub' . List.map changeRelease $ changeFileList
+           let rels = catMaybes . List.map (findRelease releases') . nub' . List.map changeRelease $ changeFileList
            mapM_ (\ rel -> liftIO $ writeRelease repo rel >>= signRelease keyname repo rel) rels
            return results''
     where
