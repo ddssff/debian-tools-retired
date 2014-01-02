@@ -1,3 +1,10 @@
+haskell-debian-repo (5.52) unstable; urgency=low
+
+  * Fix for release file writing bug
+  * Restore old --flush-pool functionality
+
+ -- David Fox <dsf@seereason.com>  Thu, 02 Jan 2014 13:20:48 -0800
+
 haskell-debian-repo (5.51) unstable; urgency=low
 
   * Don't cache so many packages
