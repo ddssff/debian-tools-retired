@@ -7,7 +7,6 @@ module Debian.Repo.Apt.Release
     , prepareRelease'
     , findReleases
     , signRelease
-    , signReleases
     , mergeReleases
     ) where
 
@@ -98,9 +97,6 @@ ensureIndex path =
        case exists of
          False -> liftIO $ EF.writeAndZipFile path L.empty
          True -> return $ Right ()
-
-signReleases :: Maybe EG.PGPKey -> [(LocalRepository, Release)] -> IO ()
-signReleases keyname releases = mapM_ (uncurry (signRelease keyname)) releases
 
 signRelease :: Maybe EG.PGPKey -> LocalRepository -> Release -> IO ()
 signRelease keyname repo release =
