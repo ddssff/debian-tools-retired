@@ -356,8 +356,11 @@ optSpecs =
     , Option [] ["flush-repo-cache"] (NoArg (Right (\ p -> p {useRepoCache = False})))
       (unlines [ "Ignore the existing cached information about the remote repositories,"
                , "instead rebuild it from scratch and save the new result" ])
-    , Option [] ["flush-pool"] (NoArg (Right (\ p -> p {flushPool = True, flushDepends = True})))
-      "Flush the local repository before building."
+    , Option [] ["flush-pool"] (NoArg (Right (\ p -> p {flushPool = True})))
+      (unlines [ "Flush the local repository before building.  It is probably a good"
+               , "idea to also use --flush-depends, the packages being flushed from the"
+               , "local pool might have also been installed into the build environment"
+               , "to satisfy build dependencies." ])
     , Option [] ["flush-root"] (NoArg (Right (\ p -> p {flushRoot = True})))
       "Discard and recreate the clean and build environments."
     , Option [] ["flush-source"] (NoArg (Right (\ p -> p {flushSource = True})))
