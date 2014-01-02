@@ -1,5 +1,5 @@
 -- | A repository located on localhost
-{-# LANGUAGE FlexibleInstances, PackageImports, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances, PackageImports, StandaloneDeriving, ScopedTypeVariables, TemplateHaskell, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.LocalRepository
     ( LocalRepository(..)
@@ -119,8 +119,8 @@ readLocalRepo root layout =
       checkAliases _ = error "Symbolic link points to itself!"
       getReleaseInfo :: (ReleaseName, [ReleaseName]) -> IO Release
       getReleaseInfo (dist, aliases) = parseReleaseFile (releasePath dist) dist aliases
-      releasePath dist = distDir </> releaseName' dist ++ "/Release"
-      distDir = outsidePath root ++ "/dists"
+      releasePath dist = distDir </> releaseName' dist </> "Release"
+      distDir = outsidePath root </> "dists"
 
 isSymLink :: FilePath -> IO Bool
 isSymLink path = F.getSymbolicLinkStatus path >>= return . F.isSymbolicLink
@@ -152,9 +152,9 @@ prepareLocalRepository root layout =
              actualMode <- F.getFileStatus path >>= return . F.fileMode
              when (mode /= actualMode) (F.setFileMode path mode)
 {-      notSymbolicLink root name =
-          getSymbolicLinkStatus (root ++ "/dists/" ++ name) >>= return . not . isSymbolicLink
+          getSymbolicLinkStatus (root </> "dists" </> name) >>= return . not . isSymbolicLink
       hasReleaseFile root name =
-          doesFileExist (root ++ "/dists/" ++ name ++ "/Release") -}
+          doesFileExist (root </> "dists" </> name </> "Release") -}
 
 -- |Change the root directory of a repository.  FIXME: This should
 -- also sync the repository to ensure consistency.

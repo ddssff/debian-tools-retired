@@ -19,14 +19,14 @@ import System.Directory
 import System.Exit
 import System.FilePath (splitFileName, (</>))
 import System.Process (shell, proc)
-import System.Process.Progress (Output, keepStdout, keepStderr, keepResult, timeTask, runProcessF, runProcess)
+import System.Process.Progress (Output, keepStdout, keepStderr, keepResult, timeTask)
 import System.Unix.Directory
 
 documentation = [ "svn:<uri> - A target of this form retrieves the source code from"
                 , "a subversion repository." ]
 
 svn :: [String] -> IO [Output L.ByteString]
-svn args = runProcessF (Just (" 1> ", " 2> ")) (proc "svn" args) L.empty
+svn args = runProc (proc "svn" args)
 
 username userInfo =
     let un = takeWhile (/= ':') userInfo in
@@ -54,7 +54,7 @@ prepare cache package uri =
                            , T.cleanTarget =
                                \ path -> 
                                    let cmd = "find " ++ path ++ " -name .svn -type d -print0 | xargs -0 -r -n1 rm -rf" in
-                                   timeTask (runProcessF (Just (" 1> ", " 2> ")) (shell cmd) L.empty)
+                                   timeTask (runProc (shell cmd))
                            , T.buildWrapper = id
                            }
     where
@@ -82,7 +82,7 @@ prepare cache package uri =
           findSourceTree dir :: IO SourceTree
       checkout :: FilePath -> IO (Either String [Output L.ByteString])
       --checkout = svn createStyle args 
-      checkout dir = runProcess (proc "svn" args) L.empty >>= return . finish
+      checkout dir = readProc (proc "svn" args) >>= return . finish
           where
             args = ([ "co","--no-auth-cache","--non-interactive"] ++ 
                     (username userInfo) ++ (password userInfo) ++ 

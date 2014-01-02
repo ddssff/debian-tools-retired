@@ -27,7 +27,7 @@ import Magic
 import System.FilePath (splitFileName, (</>))
 import System.Directory
 import System.Process (shell)
-import System.Process.Progress (timeTask, runProcessF)
+import System.Process.Progress (timeTask)
 import System.Unix.Directory
 
 documentation = [ "uri:<string>:<md5sum> - A target of this form retrieves the file at the"
@@ -74,7 +74,7 @@ prepare c package u s =
              _output <-
                  case exists of
                    True -> return []
-                   False -> runProcessF (Just (" 1> ", " 2> ")) (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'")) B.empty
+                   False -> R.runProc (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'"))
              -- We should do something with the output
              return ()
       -- Make sure what we just downloaded has the correct checksum
@@ -100,13 +100,13 @@ prepare c package u s =
                    fileInfo <- liftIO $ magicFile magic tar
                    case () of
                      _ | isPrefixOf "Zip archive data" fileInfo ->
-                           liftIO $ timeTask $ runProcessF (Just (" 1> ", " 2> ")) (shell ("unzip " ++ tar ++ " -d " ++ src)) B.empty
+                           liftIO $ timeTask $ R.runProc (shell ("unzip " ++ tar ++ " -d " ++ src))
                        | isPrefixOf "gzip" fileInfo ->
-                           liftIO $ timeTask $ runProcessF (Just (" 1> ", " 2> ")) (shell ("tar xfz " ++ tar ++ " -C " ++ src)) B.empty
+                           liftIO $ timeTask $ R.runProc (shell ("tar xfz " ++ tar ++ " -C " ++ src))
                        | isPrefixOf "bzip2" fileInfo ->
-                           liftIO $ timeTask $ runProcessF (Just (" 1> ", " 2> ")) (shell ("tar xfj " ++ tar ++ " -C " ++ src)) B.empty
+                           liftIO $ timeTask $ R.runProc (shell ("tar xfj " ++ tar ++ " -C " ++ src))
                        | True ->
-                           liftIO $ timeTask $ runProcessF (Just (" 1> ", " 2> ")) (shell ("cp " ++ tar ++ " " ++ src ++ "/")) B.empty
+                           liftIO $ timeTask $ R.runProc (shell ("cp " ++ tar ++ " " ++ src ++ "/"))
             read (_output, _elapsed) = sourceDir s >>= \ src -> liftIO (getDir src)
             getDir dir = getDirectoryContents dir >>= return . filter (not . flip elem [".", ".."])
             search files = checkContents (filter (not . flip elem [".", ".."]) files)

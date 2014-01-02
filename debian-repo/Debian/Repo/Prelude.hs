@@ -12,6 +12,7 @@ module Debian.Repo.Prelude
     , (%=)
     , symbol
     , runProc
+    , readProc
     , rsync
     , checkRsyncExitCode
     , Pretty(..)
@@ -27,6 +28,7 @@ import System.Exit (ExitCode(..))
 import System.Process (CreateProcess)
 import System.Process.Read
 import System.Process.Progress (ePutStrLn, keepResult, keepResult, runProcessF)
+import System.Process.Read.Verbosity (runProcess, quieter)
 import Text.PrettyPrint.ANSI.Leijen (Doc, text)
 import Text.Printf (printf)
 
@@ -64,17 +66,18 @@ l %= f = modify (modL l f)
 symbol :: Name -> Q Exp
 symbol x = return $ LitE (StringL (maybe "" (++ ".") (nameModule x) ++ nameBase x))
 
-runProc p = runProcessF (Just (" 1> ", " 2> ")) p L.empty
+runProc p = quieter 0 $ runProcessF (Just (" 1> ", " 2> ")) p L.empty
+
+readProc p = quieter 0 $ runProcess p L.empty
 
 prefixes :: Maybe (B.ByteString, B.ByteString)
 prefixes = Just (" 1> ", " 2> ")
 
 rsync :: (Functor m, MonadIO m) => [String] -> FilePath -> FilePath -> m ExitCode
 rsync extra source dest =
-    do result <- runProcessF prefixes
-                             (proc "rsync" (["-aHxSpDt", "--delete"] ++ extra ++
-                                            [dropTrailingPathSeparator source ++ "/",
-                                             dropTrailingPathSeparator dest])) B.empty >>= return . keepResult
+    do result <- runProc (proc "rsync" (["-aHxSpDt", "--delete"] ++ extra ++
+                                        [dropTrailingPathSeparator source ++ "/",
+                                         dropTrailingPathSeparator dest])) >>= return . keepResult
        case result of
          [x] -> return x
          _ -> error "Missing or multiple exit codes"

@@ -33,7 +33,7 @@ import Debian.Relation (BinPkgName)
 import Debian.Repo.Changes (findChangesFiles)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.OSImage (MonadOS, osRoot)
-import Debian.Repo.Prelude (access, rsync)
+import Debian.Repo.Prelude (access, rsync, runProc)
 import qualified Debian.Version as V (version)
 import "Extra" Extra.Files (getSubDirectories, replaceFile)
 import "Extra" Extra.List (dropPrefix)
@@ -43,7 +43,7 @@ import System.Exit (ExitCode(ExitFailure), ExitCode(ExitSuccess))
 import System.FilePath ((</>))
 import System.IO (hGetContents, IOMode(ReadMode), withFile)
 import System.Process (CmdSpec(..), CreateProcess(cwd, env, cmdspec), proc, readProcessWithExitCode, showCommandForUser)
-import System.Process.Progress (keepResult, noisier, runProcessF, timeTask)
+import System.Process.Progress (keepResult, noisier, timeTask)
 import System.Unix.Chroot (useEnv)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
@@ -104,9 +104,8 @@ buildDebs noClean _twice setEnv buildTree status =
       env0 <- liftIO getEnvironment
       -- Set LOGNAME so dpkg-buildpackage doesn't die when it fails to
       -- get the original user's login information
-      let run cmd = timeTask . useEnv root forceList . noisier 3 $ runProcessF (Just (" 1> ", " 2> "))
-                                                                               (cmd {env = Just (modEnv (("LOGNAME", Just "root") : setEnv) env0),
-                                                                                     cwd = dropPrefix root path}) L.empty
+      let run cmd = timeTask . useEnv root forceList $ runProc (cmd {env = Just (modEnv (("LOGNAME", Just "root") : setEnv) env0),
+                                                                     cwd = dropPrefix root path})
       _ <- liftIO $ run (proc "chmod" ["ugo+x", "debian/rules"])
       let buildCmd = proc "dpkg-buildpackage" (concat [["-sa"],
                                                        case status of Indep _ -> ["-B"]; _ -> [],

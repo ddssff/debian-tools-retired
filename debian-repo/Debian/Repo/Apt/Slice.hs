@@ -16,6 +16,7 @@ import qualified Data.ByteString.Char8 as B (concat)
 import qualified Data.ByteString.Lazy.Char8 as L (toChunks)
 import Data.List (nubBy)
 import Data.Maybe (catMaybes, fromMaybe)
+import Data.Monoid ((<>))
 import Data.Text as T (pack, Text, unpack)
 import Debian.Control (Control'(Control), ControlFunctions(parseControl), fieldValue, Paragraph')
 import Debian.Control.Text (decodeParagraph)
@@ -100,6 +101,7 @@ updateCacheSources :: (MonadRepos m, MonadTop m) => SourcesChangedAction -> Name
 updateCacheSources sourcesChangedAction baseSources = do
   qPutStrLn "Updating cache sources"
   let rel = sliceListName baseSources
+  qPutStrLn $ "Updating cache sources for " <> show rel
   dir <- distDir rel
   sources <- sourcesPath rel
   distExists <- liftIO $ doesFileExist sources

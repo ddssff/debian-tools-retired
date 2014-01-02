@@ -41,7 +41,6 @@ import System.Process.Progress (qPutStrLn)
 retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatchIO m) =>
             DebT IO () -> C.CacheRec -> P.Packages -> m Download
 retrieve defaultAtoms cache target =
-    (\ x -> qPutStrLn (" " ++ show (P.spec target)) >> x) $
      case P.spec target of
       P.Apt dist package -> Apt.prepare cache target dist (SrcPkgName package)
       P.Bzr string -> Bzr.prepare cache target string
@@ -129,9 +128,9 @@ withProc task =
     rootPath <$> rootDir >>= \ root -> do liftIO $
       let dir = root </> "proc" in
       createDirectoryIfMissing True dir
-      _ <- quieter 1 $ runProcessF (Just (" 1> ", " 2> ")) (proc "mount" ["--bind", "/proc", dir]) L.empty
+      _ <- quieter 1 $ runProc (proc "mount" ["--bind", "/proc", dir])
       result <- try task :: IO (Either SomeException a)
-      _ <- quieter 1 $ runProcessF (Just (" 1> ", " 2> ")) (proc "umount" [dir]) L.empty
+      _ <- quieter 1 $ runProc (proc "umount" [dir])
       either throw return result
 -}
 

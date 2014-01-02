@@ -14,7 +14,7 @@ import Debian.Repo
 import System.Directory
 import System.FilePath (splitFileName, (</>))
 import System.Process (shell)
-import System.Process.Progress (timeTask, runProcessF)
+import System.Process.Progress (timeTask)
 import System.Unix.Directory
 
 documentation = [ "hg:<string> - A target of this form target obtains the source"
@@ -35,23 +35,23 @@ prepare cache package archive =
                           , T.cleanTarget =
                               \ path -> 
                                   let cmd = "rm -rf " ++ path ++ "/.hg" in
-                                  timeTask (runProcessF (Just (" 1> ", " 2> ")) (shell cmd) empty)
+                                  timeTask (runProc (shell cmd))
                           , T.buildWrapper = id
                           }
     where
       verifySource dir =
-          try (runProcessF (Just (" 1> ", " 2> ")) (shell ("cd " ++ dir ++ " && hg status | grep -q .")) empty) >>=
+          try (runProc (shell ("cd " ++ dir ++ " && hg status | grep -q ."))) >>=
           either (\ (_ :: SomeException) -> updateSource dir)	-- failure means there were no changes
                  (\ _ -> removeSource dir >> createSource dir)	-- success means there was a change
 
       removeSource dir = liftIO $ removeRecursiveSafely dir
 
       updateSource dir =
-          runProcessF (Just (" 1> ", " 2> ")) (shell ("cd " ++ dir ++ " && hg pull -u")) empty >>
+          runProc (shell ("cd " ++ dir ++ " && hg pull -u")) >>
           findSourceTree dir :: IO SourceTree
 
       createSource dir =
           let (parent, _) = splitFileName dir in
           liftIO (createDirectoryIfMissing True parent) >>
-          runProcessF (Just (" 1> ", " 2> ")) (shell ("hg clone " ++ archive ++ " " ++ dir)) empty >>
+          runProc (shell ("hg clone " ++ archive ++ " " ++ dir)) >>
           findSourceTree dir :: IO SourceTree

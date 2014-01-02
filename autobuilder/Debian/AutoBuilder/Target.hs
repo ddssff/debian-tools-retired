@@ -56,7 +56,7 @@ import Debian.Repo.OSImage (MonadOS)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
-import Debian.Repo.Prelude (symbol, access)
+import Debian.Repo.Prelude (symbol, access, runProc, readProc)
 import Debian.Repo.Repos (MonadRepos, evalMonadOS, OSKey)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..))
 import Debian.Repo.Top (MonadTop)
@@ -72,7 +72,7 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
 import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
-import System.Process.Progress (collectOutputs, ePutStr, ePutStrLn, keepResult, keepResult, keepStdout, mergeToStdout, noisier, qPutStrLn, quieter, runProcess, runProcessF)
+import System.Process.Progress (collectOutputs, ePutStr, ePutStrLn, keepResult, keepResult, keepStdout, mergeToStdout, noisier, qPutStrLn, quieter)
 import System.Process.Read (readCreateProcess)
 import System.Unix.Chroot (useEnv)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -148,7 +148,7 @@ buildTargets :: (MonadRepos m, MonadTop m, MonadApt m) =>
 buildTargets _ _ _ localRepo [] = return (localRepo, [])
 buildTargets cache dependOS buildOS localRepo !targetSpecs =
     do globalBuildDeps <- evalMonadOS buildEssential dependOS
-       qPutStrLn ("\n" ++ $(symbol 'buildTargets) ++ "\nAssembling source trees:\n")
+       qPutStrLn ("\nAssembling source trees: (" ++ $(symbol 'buildTargets) ++ ")\n")
        targets <- evalMonadOS (prepareTargets cache globalBuildDeps targetSpecs) dependOS
        qPutStrLn "\nBuilding all targets:"
        failed <- buildLoop cache localRepo dependOS buildOS targets
@@ -166,7 +166,7 @@ buildLoop cache localRepo dependOS buildOS !targets =
               Set.Set Target -> Set.Set Target -> m (Set.Set Target)
       loop unbuilt failed | Set.null unbuilt = return failed
       loop unbuilt failed =
-          ePutStrLn "Computing ready targets..." >>
+          ePutStrLn "\nComputing ready targets..." >>
           case readyTargets cache (goals (Set.toList unbuilt)) (Set.toList unbuilt) of
             [] -> return failed
             triples -> do noisier 1 $ qPutStrLn (makeTable triples)
@@ -315,9 +315,11 @@ showTargets :: P.Packages -> String
 showTargets targets =
     unlines (heading :
              map (const '-') heading :
-             map concat (columns (reverse (snd (P.foldPackages (\ name spec _flags (count, rows) -> (count + 1, [printf "%4d. " count, P.unTargetName name, " ", show spec] : rows)) targets (1 :: Int, []))))))
+             map concat (columns (reverse (snd (P.foldPackages (\ name spec _flags (count, rows) -> (count + 1, [printf "%4d. " count, P.unTargetName name, " ", limit 100 (show spec)] : rows)) targets (1 :: Int, []))))))
     where
       heading = show (P.packageCount targets) ++ " Targets:"
+
+limit n s = if length s > n + 3 then take n s ++ "..." else s
 
 qError :: MonadIO m => String -> m b
 qError message = qPutStrLn message >> error message
@@ -406,9 +408,9 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
                  doDpkgSource' = readCreateProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
              _ <- liftIO $ useEnv' root (\ _ -> return ())
                              (-- Get the version number of dpkg-dev in the build environment
-                              runProcessF (Just (" 1> ", " 2> ")) (shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")) L.empty >>= return . head . words . L.unpack . L.concat . keepStdout >>= \ installed ->
+                              runProc (shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")) >>= return . head . words . L.unpack . L.concat . keepStdout >>= \ installed ->
                               -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
-                              runProcess (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) L.empty >>= return . (== [ExitSuccess]) . keepResult >>= \ newer ->
+                              readProc (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) >>= return . (== [ExitSuccess]) . keepResult >>= \ newer ->
                               when newer (doesDirectoryExist (path' </> "debian/patches") >>= doDpkgSource)
                               {- when newer (do createDirectoryIfMissing True (path' </> "debian/patches")
                                              -- Create the patch if there are any changes
@@ -694,10 +696,10 @@ updateChangesFile elapsed changes = do
 {-    autobuilderVersion <- processOutput "dpkg -s autobuilder | sed -n 's/^Version: //p'" >>=
                             return . either (const Nothing) Just >>=
                             return . maybe Nothing (listToMaybe . lines) -}
-      hostname <- runProcessF (Just (" 1> ", " 2> ")) (shell "hostname") L.empty >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
+      hostname <- runProc (shell "hostname") >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
       cpuInfo <- parseProcCpuinfo
       memInfo <- parseProcMeminfo
-      machine <- runProcessF (Just (" 1> ", " 2> ")) (shell "uname -m") L.empty >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
+      machine <- runProc (shell "uname -m") >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
       let buildInfo = ["Autobuilder-Version: " ++ V.autoBuilderVersion] ++
                       ["Time: " ++ show elapsed] ++
                       maybeField "Memory: " (lookup "MemTotal" memInfo) ++
@@ -733,7 +735,7 @@ downloadDependencies source extra sourceFingerprint =
        -- qPutStrLn "Downloading build dependencies"
        quieter 0 $ qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)
        qPutStrLn ("Downloading build dependencies into " ++ root)
-       (code, out, _, _) <- liftIO (useEnv' root forceList (runProcess (shell command) L.empty) >>= return . collectOutputs . mergeToStdout)
+       (code, out, _, _) <- liftIO (useEnv' root forceList (readProc (shell command)) >>= return . collectOutputs . mergeToStdout)
        let out' = decode out
        case code of
          [ExitSuccess] -> return out'
@@ -753,7 +755,7 @@ installDependencies source extra sourceFingerprint =
            aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
            command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
        qPutStrLn $ "Installing build dependencies into " ++ root
-       (code, out, _, _) <- withProc (liftIO $ useEnv' root forceList $ runProcess (shell command) L.empty) >>=
+       (code, out, _, _) <- withProc (liftIO $ useEnv' root forceList $ readProc (shell command)) >>=
                             return . collectOutputs . mergeToStdout
        case code of
          [ExitSuccess] -> return out

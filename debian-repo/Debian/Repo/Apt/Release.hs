@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts, OverloadedStrings, TemplateHaskell #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Apt.Release
     ( flushLocalRepository
@@ -27,6 +27,7 @@ import Debian.Release (ReleaseName, releaseName', Section, sectionName')
 import Debian.Repo.EnvPath (outsidePath)
 import Debian.Repo.LocalRepository (LocalRepository, prepareLocalRepository, repoLayout, repoReleaseInfoLocal, repoRoot)
 import Debian.Repo.PackageIndex (PackageIndex(packageIndexArch, packageIndexComponent), packageIndexDir, packageIndexes, packageIndexName, releaseDir)
+import Debian.Repo.Prelude (symbol)
 import Debian.Repo.Release (parseArchitectures, parseComponents, Release(..))
 import Debian.Repo.Repo (Repo(repoKey))
 import Debian.Repo.Repos (MonadRepos(getRepos), modifyRepos, releaseMap)

@@ -44,6 +44,7 @@ import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepo
 import Debian.Repo.Top (MonadTop(askTop))
 import Debian.Repo.EnvPath (EnvPath(..))
 import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
+import Debian.Repo.Prelude (runProc)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
@@ -55,7 +56,7 @@ import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import qualified System.IO as IO
 import System.Process (proc)
-import System.Process.Progress (Output, timeTask, defaultVerbosity, runProcessF, withModifiedVerbosity, quieter, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
+import System.Process.Progress (Output, timeTask, defaultVerbosity, withModifiedVerbosity, quieter, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -115,7 +116,7 @@ doParameterSet init results params =
       _ ->
           noisier (P.verbosity params)
             (do top <- askTop
-                withLock (top </> "lockfile") (quieter 2 (P.buildCache params) >>= runParameterSet init))
+                withLock (top </> "lockfile") (quieter 0 (P.buildCache params) >>= runParameterSet init))
             `IO.catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
           (\ result -> return (result : results))
     where
@@ -135,12 +136,10 @@ doParameterSet init results params =
 -- build environment.
 getLocalSources :: (MonadRepos m, MonadOS m, MonadIO m) => m SliceList
 getLocalSources = do
-  qPutStrLn $(symbol 'getLocalSources)
-  quieter 1 $ do
-    root <- repoRoot <$> access osLocalCopy
-    case parseURI ("file://" ++ envPath root) of
-      Nothing -> error $ "Invalid local repo root: " ++ show root
-      Just uri -> repoSources (Just (envRoot root)) uri
+  root <- repoRoot <$> access osLocalCopy
+  case parseURI ("file://" ++ envPath root) of
+    Nothing -> error $ "Invalid local repo root: " ++ show root
+    Just uri -> repoSources (Just (envRoot root)) uri
 
 runParameterSet :: MonadReposCached m => DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet init cache =
@@ -192,7 +191,7 @@ runParameterSet init cache =
           let abv = parseDebianVersion V.autoBuilderVersion
               rqvs = P.requiredVersion params in
           case filter (\ (v, _) -> v > abv) rqvs of
-            [] -> quieter 1 $ qPutStrLn $ "Installed autobuilder version " ++ show (prettyDebianVersion abv) ++ " newer than required: " ++ show (map (first prettyDebianVersion) rqvs)
+            [] -> return ()
             reasons ->
                 do ePutStrLn ("Installed autobuilder library version " ++ V.autoBuilderVersion ++ " is too old:")
                    mapM_ printReason reasons
@@ -245,12 +244,12 @@ runParameterSet init cache =
                                          "--sign", "--root", uriPath uri] ++
                                         (concat . map (\ rel -> ["--create", rel]) . P.createRelease $ params) in
                              qPutStrLn "Running newdist on remote repository" >>
-                             try (timeTask (runProcessF (Just (" 1> ", " 2> ")) (proc cmd args) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
+                             try (timeTask (runProc (proc cmd args))) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                          Nothing ->
                              let cmd = P.newDistProgram params
                                  args = ["--sign", "--root", uriPath uri] in
                              qPutStr "Running newdist on a local repository" >>
-                             try (timeTask (runProcessF (Just (" 1> ", " 2> ")) (proc cmd args) L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
+                             try (timeTask (runProc (proc cmd args))) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                 _ -> error "Missing Upload-URI parameter"
           | True = return (Success ([], (fromInteger 0)))
 
@@ -293,9 +292,11 @@ countTasks' tasks =
     where
       countTask :: MonadIO m => Int -> (Int, (String, m a)) -> m a
       countTask count (index, (message, task)) =
-          liftIO (IO.hPutStrLn IO.stderr (printf "[%2d of %2d] %s:" index count message)) >>
+          liftIO (IO.hPutStrLn IO.stderr (printf "[%2d of %2d] %s:" index count (limit 100 message))) >>
           task >>= \ a ->
           return a
+
+limit n s = if length s > n + 3 then take n s ++ "..." else s
 
 doReport :: P.Packages -> String
 doReport =

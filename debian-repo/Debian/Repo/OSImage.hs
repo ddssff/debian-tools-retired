@@ -41,6 +41,7 @@ import Data.Data (Data)
 import Data.Lens.Lazy (getL, setL)
 import Data.Lens.Template (makeLenses)
 import Data.List (intercalate)
+import Data.Monoid ((<>))
 import Data.Time (NominalDiffTime)
 import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
@@ -48,7 +49,7 @@ import Debian.Relation (ParseRelations(parseRelations), PkgName, Relations)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
 import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot, EnvRoot(rootPath), outsidePath)
 import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
-import Debian.Repo.Prelude (access, (~=), rsync)
+import Debian.Repo.Prelude (access, (~=), rsync, runProc, readProc, symbol)
 import Debian.Repo.Repo (repoKey, repoURI)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(Slice, sliceRepoKey, sliceSource), SliceList, SliceList(..))
 import Debian.Repo.Top (askTop, MonadTop)
@@ -63,7 +64,7 @@ import System.Exit (ExitCode(ExitFailure), ExitCode(ExitSuccess))
 import System.FilePath ((</>))
 import System.Posix.Files (createLink)
 import System.Process (proc, readProcess, readProcessWithExitCode, shell)
-import System.Process.Progress (collectOutputs, doOutput, ePutStr, ePutStrLn, foldOutputsL, keepResult, qPutStr, qPutStrLn, quieter, runProcess, runProcessF, timeTask)
+import System.Process.Progress (collectOutputs, doOutput, ePutStr, ePutStrLn, foldOutputsL, keepResult, qPutStr, qPutStrLn, quieter, noisier, timeTask)
 import System.Unix.Chroot (useEnv)
 import System.Unix.Directory (removeRecursiveSafely)
 import System.Unix.Mount (umountBelow)
@@ -169,8 +170,7 @@ syncOS' src dst =
     where
       mkdir = createDirectoryIfMissing True (rootPath (getL osRoot dst) ++ "/work")
       umount =
-          do qPutStrLn "syncOS': umount"
-             srcResult <- umountBelow False (rootPath (getL osRoot src))
+          do srcResult <- umountBelow False (rootPath (getL osRoot src))
              dstResult <- umountBelow False (rootPath (getL osRoot dst))
              case filter (\ (_, (code, _, _)) -> code /= ExitSuccess) (srcResult ++ dstResult) of
                [] -> return ()
@@ -181,9 +181,9 @@ localeGen :: (MonadOS m, MonadIO m) => String -> m ()
 localeGen locale =
     do root <- access osRoot
        qPutStr ("Generating locale " ++  locale ++ " (" ++ stripDist (rootPath root) ++ ")...")
-       result <- liftIO $ try $ useEnv (rootPath root) forceList (runProcess (shell cmd) L.empty) >>= return . collectOutputs
+       result <- liftIO $ try $ useEnv (rootPath root) forceList (readProc (shell cmd)) >>= return . collectOutputs
        either (\ (e :: SomeException) -> error $ "Failed to generate locale " ++ rootPath root ++ ": " ++ show e)
-              (\ _ -> qPutStr ("done"))
+              (\ _ -> qPutStrLn "done")
               result
     where
       cmd = "locale-gen " ++ locale
@@ -337,10 +337,10 @@ updateLists =
          out <- useEnv root forceList (readProc update)
          _ <- case keepResult out of
                 [ExitFailure _] ->
-                    do _ <- useEnv root forceList (runProcessF prefixes configure L.empty)
-                       useEnv root forceList (runProcessF prefixes update L.empty)
+                    do _ <- useEnv root forceList (runProc configure)
+                       useEnv root forceList (runProc update)
                 _ -> return []
-         (_, elapsed) <- timeTask (useEnv root forceList (runProcessF prefixes upgrade L.empty))
+         (_, elapsed) <- timeTask (useEnv root forceList (runProc upgrade))
          return elapsed
     where
        update = proc "apt-get" ["update"]
@@ -383,7 +383,7 @@ aptGetInstall :: (MonadOS m, MonadIO m, PkgName n) => [(n, Maybe DebianVersion)]
 aptGetInstall packages =
     do root <- rootPath <$> access osRoot
        liftIO $ useEnv root (return . force) $ do
-         _ <- runProcessF (Just (" 1> ", " 2> ")) p L.empty
+         _ <- runProc p
          return ()
     where
       p = proc "apt-get" args'
@@ -402,8 +402,7 @@ createOSImage :: (MonadIO m, MonadTop m) =>
            -> LocalRepository           -- ^ The location of the local upload repository
            -> m OSImage
 createOSImage root distro repo =
-    do ePutStrLn ("Preparing clean " ++ relName (sliceListName distro) ++ " build environment at " ++
-                  rootPath root ++ ", osLocalRepoMaster: " ++ show repo)
+    do ePutStrLn ("Preparing clean " ++ relName (sliceListName distro) ++ " build environment at " ++ rootPath root)
        copy <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) repo
        arch <- liftIO buildArchOfRoot
        let os = OS { _osRoot = root
@@ -433,7 +432,7 @@ _pbuilderBuild' root distro arch repo copy _extraEssential _omitEssential _extra
        ePutStrLn ("# " ++ cmd top)
        let codefn _ ExitSuccess = return ()
            codefn _ failure = error ("Could not create build environment:\n " ++ cmd top ++ " -> " ++ show failure)
-       liftIO (runProcess (shell (cmd top)) L.empty) >>= liftIO . doOutput >>= foldOutputsL codefn outfn errfn exnfn (return ())
+       liftIO (readProc (shell (cmd top))) >>= liftIO . doOutput >>= foldOutputsL codefn outfn errfn exnfn (return ())
        ePutStrLn "done."
        let os = OS { _osRoot = root
                    , _osBaseDistro = distro
@@ -481,7 +480,7 @@ buildOS' root distro arch repo copy include exclude components =
       -- file:// URIs because they can't yet be visible inside the
       -- environment.  So we grep them out, create the environment, and
       -- then add them back in.
-      runProcess (shell cmd) L.empty >>= foldOutputsL codefn outfn errfn exnfn (return ())
+      readProc (shell cmd) >>= foldOutputsL codefn outfn errfn exnfn (return ())
       ePutStrLn "done."
       let os = OS { _osRoot = root
                   , _osBaseDistro = distro

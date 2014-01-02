@@ -20,7 +20,7 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (shell)
-import System.Process.Progress (keepResult, timeTask, runProcessF, runProcess)
+import System.Process.Progress (keepResult, timeTask)
 import System.Unix.Directory
 
 documentation = [ "darcs:<string> - a target of this form obtains the source code by running"
@@ -31,7 +31,7 @@ documentation = [ "darcs:<string> - a target of this form obtains the source cod
 {-
 darcsRev :: SourceTree -> P.RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
-    try (runProcess (shell cmd) B.empty >>= return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack . B.concat . keepStdout) >>= 
+    try (readProc (shell cmd) >>= return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack . B.concat . keepStdout) >>= 
     return . either Left (maybe (fail $ "could not find hash field in output of '" ++ cmd ++ "'")
                                 (\ rev -> Right (show m ++ "=" ++ head rev)))
     where
@@ -55,14 +55,14 @@ prepare cache package theUri =
                           , T.origTarball = Nothing
                           , T.cleanTarget =
                               \ top -> let cmd = "find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf" in
-                                       timeTask (runProcessF (Just (" 1> ", " 2> ")) (shell cmd) B.empty)
+                                       timeTask (runProc (shell cmd))
                           , T.buildWrapper = id
                           }
     where
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do result <- runProcess (shell ("cd " ++ dir ++ " && darcs whatsnew")) B.empty >>= return . keepResult
+          do result <- readProc (shell ("cd " ++ dir ++ " && darcs whatsnew")) >>= return . keepResult
              case result of
                (ExitSuccess : _) -> removeSource dir >> createSource dir		-- Yes changes
                _ -> updateSource dir				-- No Changes!
@@ -71,7 +71,7 @@ prepare cache package theUri =
 
       updateSource :: FilePath -> IO SourceTree
       updateSource dir =
-          runProcessF (Just (" 1> ", " 2> ")) (shell ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri')) B.empty >>
+          runProc (shell ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri')) >>
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
 
@@ -79,7 +79,7 @@ prepare cache package theUri =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _output <- runProcessF (Just (" 1> ", " 2> ")) (shell cmd) B.empty
+             _output <- runProc (shell cmd)
              findSourceTree dir
           where
             cmd = unwords $ ["darcs", "get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", "'" ++ tag ++ "'"]) theTag ++ [dir]
@@ -87,7 +87,7 @@ prepare cache package theUri =
       fixLink base =
           let link = base ++ "/" ++ name
               cmd = "rm -rf " ++ link ++ " && ln -s " ++ sum ++ " " ++ link in
-          runProcessF (Just (" 1> ", " 2> ")) (shell cmd) B.empty
+          runProc (shell cmd)
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndTag))
       uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag

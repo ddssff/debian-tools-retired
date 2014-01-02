@@ -10,12 +10,13 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Control.String as S
+import Debian.Repo.Prelude (readProc)
 import Debian.Repo.Repos (MonadRepos)
 import qualified Debian.Version as V
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.Process (shell)
-import System.Process.Progress (runProcess, keepResult)
+import System.Process.Progress (keepResult)
 --import System.Unix.Progress.Outputs (exitCodeOnly)
 
 documentation = [ "sourcedeb:<target> - A target of this form unpacks the source deb"
@@ -33,7 +34,7 @@ prepare _cache package base =
        case sortBy compareVersions (zip dscFiles dscInfo) of
          [] -> return $  error ("Invalid sourcedeb base: no .dsc file in " ++ show (T.method base))
          (dscName, Right (S.Control (dscInfo : _))) : _ ->
-             do out <- liftIO (runProcess (shell (unpack top dscName)) L.empty)
+             do out <- liftIO (readProc (shell (unpack top dscName)))
                 case keepResult out of
                   [ExitSuccess] -> liftIO $ makeTarget dscInfo dscName
                   _ -> error ("*** FAILURE: " ++ unpack top dscName)
