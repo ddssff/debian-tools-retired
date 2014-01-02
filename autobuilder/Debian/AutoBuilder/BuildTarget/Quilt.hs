@@ -82,7 +82,7 @@ failing _ s (Success x) = s x
 
 prepare :: (MonadRepos m, MonadTop m) => P.Packages -> T.Download -> T.Download -> m T.Download
 prepare package base patch =
-    (\ x -> qPutStrLn "Preparing quilt target" >> quieter 1 x) $
+    (\ x -> qPutStrLn "Preparing quilt target" >> quieter 0 x) $
     makeQuiltTree (P.spec package) base patch >>= liftIO . withUpstreamQuiltHidden make
     where
       withUpstreamQuiltHidden make (quiltTree, quiltDir) =

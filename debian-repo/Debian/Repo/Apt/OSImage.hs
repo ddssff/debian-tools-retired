@@ -40,7 +40,7 @@ import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>), splitFileName)
 import System.Posix.Env (setEnv)
 import System.Process (readProcessWithExitCode, shell)
-import System.Process.Progress (ePutStrLn, oneResult, quieter, readProcessChunks)
+import System.Process.Progress (ePutStrLn, oneResult, quieter, noisier, readProcessChunks)
 import System.Unix.Chroot (useEnv)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -163,7 +163,7 @@ buildOS :: (MonadRepos m, MonadTop m) =>
          -> [String]
          -> m OSKey
 buildOS root distro arch repo copy include exclude components =
-    quieter (-1) $
+    noisier 1 $
     do os <- buildOS' root distro arch repo copy include exclude components
        key <- putOSImage os
        evalMonadOS updateOS key

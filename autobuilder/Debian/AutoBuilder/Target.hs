@@ -123,7 +123,7 @@ prepareTargets cache globalBuildDeps targetSpecs =
       prepare :: (MonadOS m, MonadRepos m) => Int -> (Int, Buildable) -> m (Either SomeException Target)
       prepare count (index, tgt) =
           do qPutStrLn (printf "[%2d of %2d] %s in %s" index count (P.unTargetName (T.handle $ download $ tgt)) (T.getTop $ download $ tgt))
-             quieter 2 (try (prepareTarget cache globalBuildDeps tgt) >>=
+             quieter 0 (try (prepareTarget cache globalBuildDeps tgt) >>=
                              either (\ (e :: SomeException) ->
                                          ePutStrLn (printf "[%2d of %2d] - could not prepare %s: %s"
                                                            index count (show (T.method (download tgt))) (show e)) >>
@@ -332,7 +332,7 @@ buildTarget ::
     Target ->
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
 buildTarget cache dependOS buildOS repo !target = do
-  quieter 2 $ evalMonadOS syncLocalPool dependOS
+  quieter 0 $ evalMonadOS syncLocalPool dependOS
   -- Get the control file from the clean source and compute the
   -- build dependencies
   let debianControl = targetControl target
@@ -687,9 +687,9 @@ lookupAll a (_ : pairs) = lookupAll a pairs
 
 -- |Add Build-Info field to the .changes file
 updateChangesFile :: NominalDiffTime -> ChangesFile -> IO ChangesFile
-updateChangesFile elapsed changes =
-    (\ x -> qPutStrLn "Updating changes file" >> quieter 1 x) $
-    do
+updateChangesFile elapsed changes = do
+  qPutStrLn "Updating changes file"
+  quieter 0 $ do
       let (Paragraph fields) = changeInfo changes
 {-    autobuilderVersion <- processOutput "dpkg -s autobuilder | sed -n 's/^Version: //p'" >>=
                             return . either (const Nothing) Just >>=
@@ -731,7 +731,7 @@ downloadDependencies source extra sourceFingerprint =
            command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
            aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True --download-only " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
        -- qPutStrLn "Downloading build dependencies"
-       quieter 1 $ qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)
+       quieter 0 $ qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)
        qPutStrLn ("Downloading build dependencies into " ++ root)
        (code, out, _, _) <- liftIO (useEnv' root forceList (runProcess (shell command) L.empty) >>= return . collectOutputs . mergeToStdout)
        let out' = decode out
@@ -762,7 +762,7 @@ installDependencies source extra sourceFingerprint =
 
 -- | This should probably be what the real useEnv does.
 useEnv' :: FilePath -> (a -> IO a) -> IO a -> IO a
-useEnv' rootPath force action = quieter 1 $ useEnv rootPath force $ noisier 1 action
+useEnv' rootPath force action = quieter 0 $ useEnv rootPath force $ noisier 1 action
 
 -- |Set a "Revision" line in the .dsc file, and update the .changes
 -- file to reflect the .dsc file's new md5sum.  By using our newdist
@@ -772,7 +772,7 @@ useEnv' rootPath force action = quieter 1 $ useEnv rootPath force $ noisier 1 ac
 -- TLA revision to decide whether to build.
 setRevisionInfo :: Fingerprint -> ChangesFile -> IO ChangesFile
 setRevisionInfo fingerprint changes {- @(Changes dir name version arch fields files) -} =
-    (\ x -> qPutStrLn "Setting revision info" >> quieter 1 x) $
+    (\ x -> qPutStrLn "Setting revision info" >> quieter 0 x) $
     case partition (isSuffixOf ".dsc" . changedFileName) (changeFiles changes) of
       ([file], otherFiles) ->
           do

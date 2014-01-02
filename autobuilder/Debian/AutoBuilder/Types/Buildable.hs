@@ -129,7 +129,7 @@ targetName = T.handle . download . tgt
 -- DebianBuildTree. 
 prepareTarget :: (MonadOS m, MonadIO m) => C.CacheRec -> Relations -> Buildable -> m Target
 prepareTarget cache globalBuildDeps source =
-    quieter 2 $ prepareBuild cache (download source) >>= \ tree ->
+    quieter 0 $ prepareBuild cache (download source) >>= \ tree ->
     liftIO (getTargetDependencyInfo globalBuildDeps tree) >>=
     failing (\ msgs -> error (intercalate "\n  " ("Failure obtaining dependency information:" : msgs)))
             (\ deps -> return $ Target { tgt = source, cleanSource = tree, targetDepends = deps })

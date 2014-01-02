@@ -199,7 +199,7 @@ data UploadFile = Upload FilePath String DebianVersion Arch
 
 -- |Make sure we can access the upload uri without typing a password.
 verifyUploadURI :: MonadIO m => Bool -> URI -> m ()
-verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ show uri) >> quieter 2 x) $
+verifyUploadURI doExport uri = (\ x -> qPutStrLn ("Verifying upload URI: " ++ show uri) >> quieter 0 x) $
     case doExport of
       True -> export
       False -> verify >> mkdir
@@ -386,7 +386,7 @@ dupload uri dir changesFile  =
             let cmd = "cd " ++ dir ++ " && dupload --to default -c " ++ changesFile
             qPutStrLn ("Uploading " ++ show changesFile)
             (result, elapsed) <-
-                quieter 1 $ timeTask $ do
+                quieter 0 $ timeTask $ do
                 output <- runProcessV (shell cmd) L.empty
                 foldOutputsL (doCode cmd) ignore ignore ignore (return (Right output)) output
             qPutStrLn ("Upload finished, elapsed time " ++ show elapsed)

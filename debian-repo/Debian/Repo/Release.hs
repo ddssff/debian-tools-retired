@@ -93,8 +93,8 @@ parseArchitectures archList =
 getReleaseInfoRemote :: URI -> IO [Release]
 getReleaseInfoRemote uri =
     qPutStr ("(verifying " ++ uriToString' uri ++ ".") >>
-    quieter 2 (dirFromURI distsURI) >>=
-    quieter 2 . either (error . show) verify >>=
+    quieter 0 (dirFromURI distsURI) >>=
+    quieter 0 . either (error . show) verify >>=
     return . catMaybes >>= 
     (\ result -> qPutStr ")\n" >> return result)
     where

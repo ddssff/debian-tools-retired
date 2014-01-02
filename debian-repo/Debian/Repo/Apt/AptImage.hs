@@ -48,7 +48,7 @@ prepareAptImage :: (MonadTop m, MonadRepos m) =>
               -> m AptKey		-- The resulting environment
 prepareAptImage sourcesChangedAction sources = do
   qPutStrLn ("Preparing apt-get environment for " ++ show (relName (sliceListName sources)))
-  quieter 2 $ do
+  quieter 0 $ do
     root <- cacheRootDir (sliceListName sources)
     mkey <- findAptKey root
     maybe (prepareAptImage' sourcesChangedAction sources) return mkey
