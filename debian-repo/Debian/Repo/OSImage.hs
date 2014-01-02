@@ -470,7 +470,7 @@ buildOS' :: (MonadIO m, MonadTop m, Functor m) =>
          -> [String]
          -> m OSImage
 buildOS' root distro arch repo copy include exclude components =
-    noisier 1 $
+    noisier 0 $
     do
       ePutStr (unlines [ "Creating clean build environment (" ++ relName (sliceListName distro) ++ ")"
                        , "  root: " ++ show root

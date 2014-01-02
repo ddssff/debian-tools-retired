@@ -169,7 +169,7 @@ buildLoop cache localRepo dependOS buildOS !targets =
           ePutStrLn "\nComputing ready targets..." >>
           case readyTargets cache (goals (Set.toList unbuilt)) (Set.toList unbuilt) of
             [] -> return failed
-            triples -> do noisier 1 $ qPutStrLn (makeTable triples)
+            triples -> do noisier 0 $ qPutStrLn (makeTable triples)
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
                           loop2 (Set.difference unbuilt ready) failed triples
       loop2 :: (MonadRepos m, MonadApt m, MonadTop m) =>
@@ -378,7 +378,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
     checkDryRun >>
     prepareBuildTree cache dependOS buildOS newFingerprint target >>= \ tree ->
     logEntry tree >>
-    noisier 1 (evalMonadOS (build tree) buildOS) >>=
+    noisier 0 (evalMonadOS (build tree) buildOS) >>=
     find >>=
     doLocalUpload
     where
@@ -764,7 +764,7 @@ installDependencies source extra sourceFingerprint =
 
 -- | This should probably be what the real useEnv does.
 useEnv' :: FilePath -> (a -> IO a) -> IO a -> IO a
-useEnv' rootPath force action = quieter 0 $ useEnv rootPath force $ noisier 1 action
+useEnv' rootPath force action = quieter 0 $ useEnv rootPath force $ noisier 0 action
 
 -- |Set a "Revision" line in the .dsc file, and update the .changes
 -- file to reflect the .dsc file's new md5sum.  By using our newdist
