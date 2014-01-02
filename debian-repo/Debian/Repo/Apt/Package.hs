@@ -1,6 +1,6 @@
 -- | Install packages to and delete packages from a local repository.
 {-# LANGUAGE BangPatterns, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell, TupleSections #-}
-{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-name-shadowing -fno-warn-missing-signatures #-}
+{-# OPTIONS_GHC -fno-warn-orphans -fno-warn-name-shadowing #-}
 -- |Install binary packages into and delete binary packages from a repository.
 module Debian.Repo.Apt.Package
     ( scanIncoming
@@ -21,10 +21,13 @@ import Control.Applicative ((<$>))
 import Control.Exception (SomeException)
 import Control.Exception as E (ErrorCall(ErrorCall), SomeException(..), try)
 import Control.Monad (filterM, foldM, when)
-import Control.Monad.Trans (liftIO, MonadIO)
+import Control.Monad.State (StateT, runStateT, evalStateT, MonadState(get, put))
+import Control.Monad.Trans (liftIO, MonadIO, lift)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, fromChunks, readFile)
 import Data.Digest.Pure.MD5 (md5)
-import Data.Either (partitionEithers, rights)
+import Data.Either (partitionEithers)
+import Data.Lens.Lazy (getL, modL)
+import Data.Lens.Template (makeLenses)
 import Data.List as List (filter, groupBy, intercalate, intersperse, isSuffixOf, map, partition, sortBy)
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>), mconcat)
@@ -47,10 +50,10 @@ import Debian.Repo.EnvPath (EnvPath, outsidePath)
 import Debian.Repo.LocalRepository (Layout(..), LocalRepository, poolDir', repoLayout, repoReleaseInfoLocal, repoRoot)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageName, packageVersion), prettyPackageID)
 import Debian.Repo.PackageIndex (binaryIndexes, BinaryPackage(packageID, packageInfo), BinaryPackage(BinaryPackage, pConflicts, pDepends, pPreDepends, pProvides, pReplaces), PackageIndex(..), packageIndexes, packageIndexPath, prettyBinaryPackage, SourceControl(..), SourceFileSpec(SourceFileSpec, sourceFileName), sourceIndexes, SourcePackage(sourcePackageID), SourcePackage(SourcePackage, sourceControl, sourceDirectory, sourcePackageFiles, sourceParagraph))
-import Debian.Repo.Prelude (nub', symbol)
+import Debian.Repo.Prelude (nub')
 import qualified Debian.Repo.Prelude as F (Pretty(..))
 import Debian.Repo.Repo (Repo, repoArchList, repoKey, RepoKey, repoKeyURI)
-import Debian.Repo.Repos (MonadRepos)
+import Debian.Repo.Repos (MonadRepos(getRepos, putRepos))
 import Debian.Repo.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
 import Debian.URI (fileFromURIStrict)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
@@ -69,6 +72,30 @@ import System.Process (runInteractiveCommand, waitForProcess)
 import System.Process.Progress (ePutStrLn, qPutStr, qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (cat, pretty, Pretty(..), text)
 import Text.Regex (matchRegex, mkRegex, splitRegex)
+
+data InstallState
+    = InstallState
+      { _repository :: LocalRepository
+      , _live :: Set Text
+      , _releases :: [Release]
+      }
+
+$(makeLenses [''InstallState])
+
+class MonadRepos m => MonadInstall m where
+    getInstall :: m InstallState
+    putInstall :: InstallState -> m ()
+
+modifyInstall :: MonadInstall m => (InstallState -> InstallState) -> m ()
+modifyInstall f = getInstall >>= putInstall . f
+
+instance MonadRepos m => MonadInstall (StateT InstallState m) where
+    getInstall = get
+    putInstall = put
+
+instance MonadRepos m => MonadRepos (StateT InstallState m) where
+    getRepos = lift getRepos
+    putRepos = lift . putRepos
 
 data InstallResult
     = Ok
@@ -199,92 +226,25 @@ installPackages :: MonadRepos m =>
 installPackages createSections keyname repo changeFileList =
     do releases <- findReleases repo
        live <- findLive repo
-       (_, releases', results) <- foldM (installFiles (repoRoot repo)) (live, releases, []) changeFileList
-       let results' = reverse results
-       results'' <- liftIO $ updateIndexes (repoRoot repo) releases' results'
-       -- The install is done, now we will try to clean up incoming.
-       case elem Ok results'' of
-         False -> return results''
-         True -> do
-           mapM_ (liftIO . uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'')
-           let rels = catMaybes . List.map (findRelease releases') . nub' . List.map changeRelease $ changeFileList
-           mapM_ (\ rel -> liftIO $ writeRelease repo rel >>= signRelease keyname repo rel) rels
-           return results''
+       evalStateT (do results' <- foldM (installFiles createSections) [] changeFileList
+                      results'' <- updateIndexes (reverse results')
+                      when (elem Ok results'')
+                           (do mapM_ (liftIO . uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'')
+                               let releaseNames = nub' (List.map changeRelease changeFileList)
+                               releases' <- catMaybes <$> mapM findRelease' releaseNames
+                               mapM_ (\ rel -> liftIO $ writeRelease repo rel >>= signRelease keyname repo rel) releases')
+                      return results'') (InstallState repo live releases)
     where
-      -- Hard link the files of each package into the repository pool,
-      -- but don't unlink the files in incoming in case of subsequent
-      -- failure.
-      installFiles :: MonadRepos m => EnvPath -> (Set Text, [Release], [InstallResult]) -> ChangesFile -> m (Set Text, [Release], [InstallResult])
-      installFiles root (live, releases, results) changes =
-          findOrCreateRelease releases (changeRelease changes) >>=
-          maybe (return (live, releases, Failed [NoSuchRelease (changeRelease changes)] : results)) installFiles'
-          where
-            installFiles' release =
-                let sections = nub' . List.map (section . changedFileSection) . changeFiles $ changes in
-                case (createSections, listDiff sections (releaseComponents release)) of
-                  (_, []) -> installFiles'' release
-                  (True, missing) ->
-                      do qPutStrLn ("Creating missing sections: " ++ intercalate " " (List.map sectionName' missing))
-                         release' <- prepareRelease repo (releaseName release) [] missing (releaseArchitectures release)
-                         installFiles'' release'
-                  (False, missing) ->
-                      return (live, releases, Failed [NoSuchSection (releaseName release) missing] : results)
-            installFiles'' :: MonadRepos m => Release -> m (Set Text, [Release], [InstallResult])
-            installFiles'' release' =
-                do let releases' = release' : filter ((/= (releaseName $ release')) . releaseName) releases
-                   result <- mapM (installFile root) (changeFiles changes) >>= return . mergeResults
-                   let live' =
-                           case result of
-                             -- Add the successfully installed files to the live file set
-                             Ok -> foldr Set.insert live (List.map (T.pack . ((outsidePath root) </>) . poolDir' repo changes) (changeFiles changes))
-                             _ -> live
-                   return (live', releases', result : results)
-            installFile root file =
-                do let dir = outsidePath root </> poolDir' repo changes file
-                   let src = outsidePath root </> "incoming" </> changedFileName file
-                   let dst = dir </> changedFileName file
-                   installed <- liftIO $ doesFileExist dst
-                   available <- liftIO $ doesFileExist src
-                   let indexed = Set.member (T.pack dst) live
-                   case (available, indexed, installed) of
-                     (False, _, _) -> do			-- Perhaps this file is about to be uploaded
-                       return (Failed [MissingFile src])
-                     (True, False, False) -> do		-- This just needs to be installed
-		       liftIO (createDirectoryIfMissing True dir)
-                       liftIO (F.createLink src dst)
-                       return Ok
-                     (True, False, True) -> do		-- A garbage file is already present
-                       qPutStrLn ("  Replacing unlisted file: " ++ dst)
-		       liftIO (removeFile dst)
-                       liftIO (F.createLink src dst)
-                       return Ok
-                     (True, True, False) -> do		-- Apparantly the repository is damaged.
-                       return (Failed [OtherProblem $ ("Missing from repository: " ++ dst)])
-                     (True, True, True) -> do		-- Further inspection is required
-                       installedSize <- liftIO $ F.getFileStatus dst >>= return . F.fileSize
-                       installedMD5sum <- liftIO $ L.readFile dst >>= return . show . md5
-                       let status =
-                               case (compare (changedFileSize file) installedSize, compare (changedFileMD5sum file) installedMD5sum) of
-	                         -- Somehow the correct file is already installed - so be it.
-                                 (EQ, EQ) -> Ok
-	                         -- The wrong file of the right length is installed
-                                 (EQ, _) -> Rejected [BadChecksum dst (changedFileMD5sum file) installedMD5sum]
-	                         -- File may be in the process of being uploaded
-                                 (LT, _) -> Failed [ShortFile dst (changedFileSize file) installedSize]
-	                         -- This must be the wrong file
-                                 (GT, _) -> Rejected [LongFile dst (changedFileSize file) installedSize]
-                       return status
-
       -- Update all the index files affected by the successful
       -- installs.  This is a time consuming operation, so we want to
       -- do this all at once, rather than one package at a time
-      updateIndexes :: EnvPath -> [Release] -> [InstallResult] -> IO [InstallResult]
-      updateIndexes root releases results =
+      updateIndexes :: MonadInstall m => [InstallResult] -> m [InstallResult]
+      updateIndexes results =
           do (pairLists :: [Either InstallResult [((LocalRepository, Release, PackageIndex), B.Paragraph)]]) <-
-                 mapM (uncurry $ buildInfo root releases) (zip changeFileList results)
+                 mapM (uncurry buildInfo) (zip changeFileList results)
              let sortedByIndex = sortBy compareIndex (concat (keepRight pairLists))
              let groupedByIndex = undistribute (groupBy (\ a b -> compareIndex a b == EQ) sortedByIndex)
-             result <- addPackagesToIndexes groupedByIndex
+             result <- liftIO $ addPackagesToIndexes groupedByIndex
              case result of
                Ok -> return $ List.map (either id (const Ok)) pairLists
                problem -> return $ List.map (const problem) results
@@ -292,11 +252,13 @@ installPackages createSections keyname repo changeFileList =
             compareIndex :: ((LocalRepository, Release, PackageIndex), B.Paragraph) -> ((LocalRepository, Release, PackageIndex), B.Paragraph) -> Ordering
             compareIndex (a, _) (b, _) = compare a b
       -- Build the control information to be added to the package indexes.
-      buildInfo :: EnvPath -> [Release] -> ChangesFile -> InstallResult -> IO (Either InstallResult [((LocalRepository, Release, PackageIndex), B.Paragraph)])
-      buildInfo root releases changes Ok =
-          do case findRelease releases (changeRelease changes) of
+      buildInfo :: MonadInstall m => ChangesFile -> InstallResult -> m (Either InstallResult [((LocalRepository, Release, PackageIndex), B.Paragraph)])
+      buildInfo changes Ok =
+          do root <- (repoRoot . getL repository) <$> getInstall
+             mrel <- findRelease' (changeRelease changes)
+             case mrel of
                Just release ->
-                   do (info :: [Either InstallResult B.Paragraph]) <- mapM (fileInfo root repo) indexFiles
+                   do (info :: [Either InstallResult B.Paragraph]) <- mapM (liftIO . fileInfo root repo) indexFiles
                       case keepLeft info of
                         [] ->
                             let (pairs :: [([(LocalRepository, Release, PackageIndex)], Either InstallResult B.Paragraph)]) = zip (indexLists repo release) info in
@@ -351,7 +313,7 @@ installPackages createSections keyname repo changeFileList =
                            ExitSuccess -> return control
                            ExitFailure n -> return . Left $ "Failure: " ++ cmd ++ " -> " ++ show n
                   path = outsidePath root ++ "/incoming/" ++ changedFileName file
-      buildInfo _ _ _ notOk = return . Left $ notOk
+      buildInfo _ notOk = return . Left $ notOk
       -- For a successful install this unlinks the files from INCOMING and
       -- moves the .changes file into INSTALLED.  For a failure it moves
       -- all the files to REJECT.
@@ -374,22 +336,100 @@ installPackages createSections keyname repo changeFileList =
           where dst = case layout of
                         Flat -> outsidePath root </> changeName changes
                         Pool -> outsidePath root ++ "/installed/" ++ changeName changes
-      findOrCreateRelease :: MonadRepos m => [Release] -> ReleaseName -> m (Maybe Release)
-      findOrCreateRelease releases name =
-          case createSections of
-            False -> return (findRelease releases name)
-            True -> do let release = findRelease releases name
+
+findRelease' :: MonadInstall m => ReleaseName -> m (Maybe Release)
+findRelease' name = do
+    rels <- getL releases <$> getInstall
+    return $ findRelease rels name
+
+findRelease :: [Release] -> ReleaseName -> Maybe Release
+findRelease releases name =
+    case filter (\ release -> elem name (releaseName release : releaseAliases release)) releases of
+      [] -> Nothing
+      [x] -> Just x
+      _ -> error $ "Internal error 16 - multiple releases named " ++ releaseName' name
+
+-- | Hard link the files of each package into the repository pool,
+-- but don't unlink the files in incoming in case of subsequent
+-- failure.
+installFiles :: MonadInstall m => Bool -> [InstallResult] -> ChangesFile -> m [InstallResult]
+installFiles createSections results changes = do
+  mrel <- findOrCreateRelease (changeRelease changes)
+  maybe (return (Failed [NoSuchRelease (changeRelease changes)] : results)) (installFiles' createSections changes results) mrel
+    where
+      findOrCreateRelease :: MonadInstall m => ReleaseName -> m (Maybe Release)
+      findOrCreateRelease name = do
+        rels <- getL releases <$> getInstall
+        case createSections of
+            False -> return (findRelease rels name)
+            True -> do let release = findRelease rels name
+                       repo <- (getL repository <$> getInstall)
                        case release of
                          Nothing ->
                              do newRelease <- prepareRelease repo name [] [parseSection' "main"] (repoArchList repo)
+                                modifyInstall (modL releases (newRelease :))
                                 return (Just newRelease)
                          Just release -> return (Just release)
-      findRelease :: [Release] -> ReleaseName -> Maybe Release
-      findRelease releases name = 
-          case filter (\ release -> elem name (releaseName release : releaseAliases release)) releases of
-            [] -> Nothing
-            [x] -> Just x
-            _ -> error $ "Internal error 16 - multiple releases named " ++ releaseName' name
+
+installFiles' :: MonadInstall m => Bool -> ChangesFile -> [InstallResult] -> Release -> m [InstallResult]
+installFiles' createSections changes results release =
+                let sections = nub' . List.map (section . changedFileSection) . changeFiles $ changes in
+                case (createSections, listDiff sections (releaseComponents release)) of
+                  (_, []) -> installFiles'' changes results
+                  (True, missing) ->
+                      do qPutStrLn ("Creating missing sections: " ++ intercalate " " (List.map sectionName' missing))
+                         repo <- getL repository <$> getInstall
+                         release' <- prepareRelease repo (releaseName release) [] missing (releaseArchitectures release)
+                         installFiles'' changes results
+                  (False, missing) ->
+                      return (Failed [NoSuchSection (releaseName release) missing] : results)
+
+installFiles'' :: MonadInstall m => ChangesFile -> [InstallResult] -> m [InstallResult]
+installFiles'' changes results = do
+  repo <- getL repository <$> getInstall
+  result <- mapM (installFile changes) (changeFiles changes) >>= return . mergeResults
+  when (result == Ok) (modifyInstall (modL live (\ old -> foldr Set.insert old (List.map (T.pack . ((outsidePath (repoRoot repo)) </>) . poolDir' repo changes) (changeFiles changes)))))
+  return $ result : results
+
+installFile :: MonadInstall m => ChangesFile -> ChangedFileSpec -> m InstallResult
+installFile changes file = do
+  repo <- getL repository <$> getInstall
+  live' <- getL live <$> getInstall
+  let root = repoRoot repo
+  let dir = outsidePath root </> poolDir' repo changes file
+  let src = outsidePath root </> "incoming" </> changedFileName file
+  let dst = dir </> changedFileName file
+  installed <- liftIO $ doesFileExist dst
+  available <- liftIO $ doesFileExist src
+  let indexed = Set.member (T.pack dst) live'
+  case (available, indexed, installed) of
+    (False, _, _) -> do                        -- Perhaps this file is about to be uploaded
+      return (Failed [MissingFile src])
+    (True, False, False) -> do         -- This just needs to be installed
+      liftIO (createDirectoryIfMissing True dir)
+      liftIO (F.createLink src dst)
+      return Ok
+    (True, False, True) -> do          -- A garbage file is already present
+      qPutStrLn ("  Replacing unlisted file: " ++ dst)
+      liftIO (removeFile dst)
+      liftIO (F.createLink src dst)
+      return Ok
+    (True, True, False) -> do          -- Apparantly the repository is damaged.
+      return (Failed [OtherProblem $ ("Missing from repository: " ++ dst)])
+    (True, True, True) -> do           -- Further inspection is required
+      installedSize <- liftIO $ F.getFileStatus dst >>= return . F.fileSize
+      installedMD5sum <- liftIO $ L.readFile dst >>= return . show . md5
+      let status =
+              case (compare (changedFileSize file) installedSize, compare (changedFileMD5sum file) installedMD5sum) of
+                -- Somehow the correct file is already installed - so be it.
+                (EQ, EQ) -> Ok
+                -- The wrong file of the right length is installed
+                (EQ, _) -> Rejected [BadChecksum dst (changedFileMD5sum file) installedMD5sum]
+                -- File may be in the process of being uploaded
+                (LT, _) -> Failed [ShortFile dst (changedFileSize file) installedSize]
+                -- This must be the wrong file
+                (GT, _) -> Rejected [LongFile dst (changedFileSize file) installedSize]
+      return status
 
 archList :: Release -> ChangesFile -> ChangedFileSpec -> [Arch]
 archList release changes file =
