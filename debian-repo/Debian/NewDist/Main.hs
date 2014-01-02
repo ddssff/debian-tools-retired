@@ -15,7 +15,7 @@ import Debian.NewDist.Version (myVersion)
 import Debian.Relation (BinPkgName)
 import Debian.Release (ReleaseName, releaseName', parseReleaseName, Section, parseSection')
 import Debian.Repo.Apt.Package (scanIncoming, deleteSourcePackages, deleteTrumped, deleteBinaryOrphans, deleteGarbage, InstallResult(Ok), explainError, resultToProblems, showErrors)
-import Debian.Repo.Apt.Release (findReleases, prepareRelease, signRelease, mergeReleases)
+import Debian.Repo.Apt.Release (findReleases, prepareRelease, writeRelease, signRelease, mergeReleases)
 import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), envPath)
 import Debian.Repo.LocalRepository (LocalRepository, Layout, repoRoot, prepareLocalRepository, setRepositoryCompatibility)
 import Debian.Repo.PackageID (PackageID, makeBinaryPackageID)
@@ -68,7 +68,7 @@ runFlags flags =
        when (expire flags)  $ liftIO (deleteTrumped (dryRun flags) keyname repo rels) >> return ()
        when (binaryOrphans flags)  $ deleteBinaryOrphans (dryRun flags) keyname repo rels >> return ()
        when (cleanUp flags) $ deleteGarbage repo >> return ()
-       when (signRepo flags) $ liftIO (mapM_ (\ rel -> signRelease keyname repo rel) rels)
+       when (signRepo flags) $ liftIO (mapM_ (\ rel -> writeRelease repo rel >>= signRelease keyname repo rel) rels)
     where
       emailAddrs :: [(String, String)]
       emailAddrs =

@@ -6,6 +6,7 @@ module Debian.Repo.Apt.Release
     , prepareRelease
     , prepareRelease'
     , findReleases
+    , writeRelease
     , signRelease
     , mergeReleases
     ) where
@@ -99,10 +100,10 @@ ensureIndex path =
          False -> liftIO $ EF.writeAndZipFile path L.empty
          True -> return $ Right ()
 
-signRelease :: Maybe EG.PGPKey -> LocalRepository -> Release -> IO ()
-signRelease keyname repo release =
+signRelease :: Maybe EG.PGPKey -> LocalRepository -> Release -> [FilePath] -> IO ()
+signRelease keyname repo release files =
     do let root = repoRoot repo
-       files <- writeRelease repo release
+       -- files <- writeRelease repo release
        case keyname of
          Nothing -> return ()
          Just key -> do results <- liftIO (EG.pgpSignFiles (outsidePath root) key files)

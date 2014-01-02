@@ -41,7 +41,7 @@ import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(p
 import Debian.Relation (BinPkgName, PkgName)
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (parseSection', ReleaseName, releaseName', Section(..), sectionName, sectionName', SubSection(section))
-import Debian.Repo.Apt.Release (findReleases, prepareRelease, signRelease)
+import Debian.Repo.Apt.Release (findReleases, prepareRelease, writeRelease, signRelease)
 import Debian.Repo.Changes (changeName, changePath, findChangesFiles)
 import Debian.Repo.EnvPath (EnvPath, outsidePath)
 import Debian.Repo.LocalRepository (Layout(..), LocalRepository, poolDir', repoLayout, repoReleaseInfoLocal, repoRoot)
@@ -163,18 +163,17 @@ plural _ _ = ""
 -- | Find all the .changes files in the incoming directory and try to
 -- process each to install the package into a local repository.
 scanIncoming :: MonadRepos m => Bool -> Maybe PGPKey -> LocalRepository -> m [(ChangesFile, InstallResult)]
-scanIncoming createSections keyname repo =
-    (\ x -> qPutStrLn ("Uploading packages to " ++ outsidePath (repoRoot repo) ++ "/incoming") >> {-quieter 2-} x) $
-    do changes <- liftIO (findChangesFiles (outsidePath (repoRoot repo) </> "incoming"))
-       case changes of
-         [] -> qPutStrLn "Nothing to install."
-         _ -> qPutStrLn ("To install:\n  " ++ (intercalate "\n  " . List.map (show . pretty) $ changes))
-       results <- installPackages createSections keyname repo changes
-       case results of
-         [] -> return ()
-         _ -> qPutStrLn ("Upload results:\n  " ++
-                         (intercalate "\n  " . List.map (uncurry showResult) $ (zip changes results)))
-       return (zip changes results)
+scanIncoming createSections keyname repo = do
+  qPutStrLn ("Uploading packages to " ++ outsidePath (repoRoot repo) ++ "/incoming")
+  changes <- liftIO (findChangesFiles (outsidePath (repoRoot repo) </> "incoming"))
+  case changes of
+    [] -> qPutStrLn "Nothing to install."
+    _ -> qPutStrLn ("To install:\n  " ++ (intercalate "\n  " . List.map (show . pretty) $ changes))
+  results <- installPackages createSections keyname repo changes
+  case results of
+    [] -> return ()
+    _ -> qPutStrLn ("Upload results:\n  " ++ (intercalate "\n  " . List.map (uncurry showResult) $ (zip changes results)))
+  return (zip changes results)
     where
       showResult changes result =
           changesFileName changes ++ ": " ++
@@ -205,12 +204,12 @@ installPackages createSections keyname repo changeFileList =
        results'' <- liftIO $ updateIndexes (repoRoot repo) releases' results'
        -- The install is done, now we will try to clean up incoming.
        case elem Ok results'' of
-         False ->
-             return results''
-         True ->
-             mapM_ (liftIO . uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'') >>
-             mapM_ (liftIO . signRelease keyname repo) (catMaybes . List.map (findRelease releases) . nub' . List.map changeRelease $ changeFileList) >>
-             return results''
+         False -> return results''
+         True -> do
+           mapM_ (liftIO . uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'')
+           let rels = catMaybes . List.map (findRelease releases) . nub' . List.map changeRelease $ changeFileList
+           mapM_ (\ rel -> liftIO $ writeRelease repo rel >>= signRelease keyname repo rel) rels
+           return results''
     where
       -- Hard link the files of each package into the repository pool,
       -- but don't unlink the files in incoming in case of subsequent
@@ -758,7 +757,7 @@ deleteSourcePackages dry keyname repo packages =
           do let root = repoRoot repo
              case dry of
                True -> ePutStrLn ("dry run: not changing " ++ show index)
-               False -> putIndex root release index entries >> signRelease keyname repo release
+               False -> putIndex root release index entries >> writeRelease repo release >>= signRelease keyname repo release
              return release
       putIndex :: EnvPath -> Release -> PackageIndex -> [BinaryPackage] -> IO (Either [String] ())
       putIndex root release index packages =
@@ -798,7 +797,7 @@ deleteBinaryPackages dry keyname repo blacklist =
           do let root = repoRoot repo
              case dry of
                True -> ePutStrLn ("dry run: not changing " ++ show index)
-               False -> putIndex root release index entries >> signRelease keyname repo release
+               False -> putIndex root release index entries >> writeRelease repo release >>= signRelease keyname repo release
              return release
       putIndex :: EnvPath -> Release -> PackageIndex -> [BinaryPackage] -> IO (Either [String] ())
       putIndex root release index packages =
