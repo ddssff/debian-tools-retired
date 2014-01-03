@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell #-}
 {-# OPTIONS -Wall -fno-warn-orphans #-}
 module Debian.Repo.State.PackageIndex
     ( binaryPackagesFromSources
@@ -22,10 +22,11 @@ import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
+import Debian.Repo.Prelude (symbol)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
 import Debian.Repo.Slice (Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices, binarySlices)
-import Debian.Repo.State (binaryPackageMap, foldRepository, modifyRepos, MonadRepos(getRepos), sourcePackageMap)
+import Debian.Repo.State (foldRepository, modifyRepos, MonadRepos(getRepos))
 import Debian.Sources (DebSource(sourceDist, sourceType), SourceType(Deb, DebSrc))
 import Debian.URI (URI(uriScheme), uriToString')
 import Debian.Version (parseDebianVersion)
@@ -34,6 +35,7 @@ import System.FilePath (takeDirectory)
 import qualified System.IO as IO (hClose, IOMode(ReadMode), openBinaryFile)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix (getFileStatus)
+import System.Process.Progress (qPutStrLn)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- |Return a list of the index files that contain the packages of a

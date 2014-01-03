@@ -29,8 +29,9 @@ module Debian.Repo.PackageIndex
     ) where
 
 import Data.List (sortBy)
+import Data.Monoid ((<>))
 import Data.Text (Text)
-import Debian.Arch (Arch(..), prettyArch)
+import Debian.Arch (Arch(..), ArchOS(..), ArchCPU(..), prettyArch)
 import qualified Debian.Control.Text as T
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import qualified Debian.Relation as B (Relations)
@@ -39,7 +40,7 @@ import Debian.Repo.PackageID (PackageID(packageName, packageVersion), prettyPack
 import Debian.Repo.Release (Release(..))
 import System.FilePath ((</>))
 import System.Posix.Types (FileOffset)
-import Text.PrettyPrint.ANSI.Leijen (Doc)
+import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), Doc, text)
 
 deriving instance Show (T.Field' Text)
 deriving instance Ord (T.Field' Text)
@@ -52,6 +53,20 @@ data PackageIndex
     = PackageIndex { packageIndexComponent :: Section
                    , packageIndexArch :: Arch
                    } deriving (Eq, Ord, Show)
+
+instance Pretty PackageIndex where
+    pretty x = pretty (packageIndexComponent x) <> text "_" <> pretty (packageIndexArch x)
+
+instance Pretty Section where
+    pretty (Section x) = text x
+
+instance Pretty Arch where
+    pretty Source = text "source"
+    pretty All = text "all"
+    pretty (Binary ArchOSAny ArchCPUAny) = text "any"
+    pretty (Binary (ArchOS os) ArchCPUAny) = text os
+    pretty (Binary ArchOSAny (ArchCPU cpu)) = text cpu
+    pretty (Binary (ArchOS os) (ArchCPU cpu)) = text (os <> "-" <> cpu)
 
 {-
 instance PackageVersion BinaryPackage where
