@@ -19,7 +19,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Relation (prettyRelations)
 import Debian.Repo.Prelude (rsync)
-import Debian.Repo.Repos (MonadRepos)
+import Debian.Repo.State (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub)
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..))

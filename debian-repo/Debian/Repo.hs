@@ -19,13 +19,13 @@ module Debian.Repo
     , module Debian.Repo.SourceTree
     , module Debian.Repo.AptImage
     , module Debian.Repo.RemoteRepository
-    , module Debian.Repo.Repos
-    , module Debian.Repo.Apt.Release
-    , module Debian.Repo.Apt.Slice
-    , module Debian.Repo.Apt.PackageIndex
-    , module Debian.Repo.Apt.AptImage
-    , module Debian.Repo.Apt.Package
-    , module Debian.Repo.Apt.OSImage
+    , module Debian.Repo.State
+    , module Debian.Repo.State.Release
+    , module Debian.Repo.State.Slice
+    , module Debian.Repo.State.PackageIndex
+    , module Debian.Repo.State.AptImage
+    , module Debian.Repo.State.Package
+    , module Debian.Repo.State.OSImage
     ) where
 
 import Debian.Repo.Prelude
@@ -45,10 +45,10 @@ import Debian.Repo.OSImage
 import Debian.Repo.SourceTree
 import Debian.Repo.AptImage
 import Debian.Repo.RemoteRepository
-import Debian.Repo.Repos
-import Debian.Repo.Apt.Release
-import Debian.Repo.Apt.Slice
-import Debian.Repo.Apt.PackageIndex
-import Debian.Repo.Apt.AptImage
-import Debian.Repo.Apt.Package
-import Debian.Repo.Apt.OSImage
+import Debian.Repo.State
+import Debian.Repo.State.Release
+import Debian.Repo.State.Slice
+import Debian.Repo.State.PackageIndex
+import Debian.Repo.State.AptImage
+import Debian.Repo.State.Package
+import Debian.Repo.State.OSImage

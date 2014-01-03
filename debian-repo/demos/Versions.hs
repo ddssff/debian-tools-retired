@@ -7,7 +7,7 @@ import Control.Monad.Trans (MonadIO(liftIO))
 import Data.Maybe (fromJust)
 import Debian.Arch (Arch(Binary), ArchCPU(..), ArchOS(..))
 import Debian.Repo.Repo (RepoKey(Remote), repoReleaseInfo)
-import Debian.Repo.Repos (MonadRepos, foldRepository, runReposT, putRelease)
+import Debian.Repo.State (MonadRepos, foldRepository, runReposT, putRelease)
 import Debian.URI (readURI')
 
 main :: IO ()

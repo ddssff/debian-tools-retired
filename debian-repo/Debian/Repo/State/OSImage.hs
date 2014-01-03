@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS -fno-warn-orphans #-}
-module Debian.Repo.Apt.OSImage
+module Debian.Repo.State.OSImage
     ( buildArchOfOS
     , osBinaryPackages
     , osSourcePackages
@@ -20,16 +20,16 @@ import Data.Lens.Lazy (getL)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Release (ReleaseName(relName))
-import Debian.Repo.Apt.PackageIndex (binaryPackagesFromSources, sourcePackagesFromSources)
-import Debian.Repo.Apt.Slice (verifySourcesList)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
 import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildArchOfRoot, buildOS', createOSImage, localeGen, MonadOS, neuterEnv, osArch, osBaseDistro, osFullDistro, osLocalCopy, osLocalMaster, osRoot, syncLocalPool, syncOS', updateLists)
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Prelude (access)
-import Debian.Repo.Repos (evalMonadOS, findOSKey, MonadRepos, OSKey, putOSImage)
-import Debian.Repo.SSH (sshCopy)
 import Debian.Repo.Slice (NamedSliceList(sliceListName), Slice(sliceSource), SliceList(slices), SourcesChangedAction(SourcesChangedError), UpdateError(..))
+import Debian.Repo.SSH (sshCopy)
+import Debian.Repo.State (evalMonadOS, findOSKey, MonadRepos, OSKey, putOSImage)
+import Debian.Repo.State.PackageIndex (binaryPackagesFromSources, sourcePackagesFromSources)
+import Debian.Repo.State.Slice (verifySourcesList)
 import Debian.Repo.Top (distDir, MonadTop, sourcesPath)
 import Debian.Sources (DebSource(sourceUri), parseSourcesList)
 import Debian.URI (URI(uriScheme))

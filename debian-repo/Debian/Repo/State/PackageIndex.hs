@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS -Wall -fno-warn-orphans #-}
-module Debian.Repo.Apt.PackageIndex
+module Debian.Repo.State.PackageIndex
     ( binaryPackagesFromSources
     , sourcePackagesFromSources
     ) where
@@ -24,8 +24,8 @@ import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
-import Debian.Repo.Repos (binaryPackageMap, foldRepository, modifyRepos, MonadRepos(getRepos), sourcePackageMap)
 import Debian.Repo.Slice (Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices, binarySlices)
+import Debian.Repo.State (binaryPackageMap, foldRepository, modifyRepos, MonadRepos(getRepos), sourcePackageMap)
 import Debian.Sources (DebSource(sourceDist, sourceType), SourceType(Deb, DebSrc))
 import Debian.URI (URI(uriScheme), uriToString')
 import Debian.Version (parseDebianVersion)

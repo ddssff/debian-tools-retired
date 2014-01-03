@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS -Wall -fno-warn-orphans #-}
-module Debian.Repo.Apt.AptImage
+module Debian.Repo.State.AptImage
     ( withAptImage
     , aptImageSourcePackages
     , aptImageBinaryPackages
@@ -17,16 +17,16 @@ import Data.Maybe (listToMaybe)
 import Debian.Changes (ChangeLogEntry(logVersion))
 import Debian.Relation (SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(relName))
-import Debian.Repo.Apt.PackageIndex (binaryPackagesFromSources, sourcePackagesFromSources)
-import Debian.Repo.Apt.Slice (updateCacheSources)
 import Debian.Repo.AptImage (aptDir, aptGetSource, aptGetUpdate, AptImage, aptImageArch, aptImageRoot, aptImageSources, cacheRootDir, createAptImage, MonadApt(..))
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.PackageID (PackageID(packageName), PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage(sourcePackageID))
-import Debian.Repo.Repos (AptKey, evalMonadApt, findAptKey, MonadRepos, putAptImage)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), SliceList, SourcesChangedAction)
 import Debian.Repo.SourceTree (DebianBuildTree(debTree'), DebianSourceTree(tree'), DebianSourceTreeC(entry), findDebianBuildTrees, SourceTree(dir'))
+import Debian.Repo.State (AptKey, evalMonadApt, findAptKey, MonadRepos, putAptImage)
+import Debian.Repo.State.PackageIndex (binaryPackagesFromSources, sourcePackagesFromSources)
+import Debian.Repo.State.Slice (updateCacheSources)
 import Debian.Repo.Top (MonadTop)
 import Debian.Version (DebianVersion)
 import System.Directory (createDirectoryIfMissing)

@@ -1,10 +1,10 @@
+-- | 'MonadRepos' is a state monad that maintains maps of all the
+-- known repositories, releases, apt-get environements and operating
+-- system environments.
 {-# LANGUAGE ConstraintKinds, FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses,
              PackageImports, ScopedTypeVariables, TemplateHaskell, TypeSynonymInstances, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
--- |AptIO is an instance of the RWS monad used to manage the global
--- state and output style parameters of clients of the Apt library,
--- such as the autobuilder.
-module Debian.Repo.Repos
+module Debian.Repo.State
     ( ReposState
     , MonadRepos(getRepos, putRepos)
     , modifyRepos

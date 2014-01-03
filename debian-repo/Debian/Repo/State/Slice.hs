@@ -3,7 +3,7 @@
 -- list of DebSource.  This is called a slice because some sections
 -- may be omitted, and because different repositories may be combined
 -- in the list.
-module Debian.Repo.Apt.Slice
+module Debian.Repo.State.Slice
     ( verifySourcesList
     , repoSources
     , updateCacheSources
@@ -24,8 +24,8 @@ import Debian.Release (parseReleaseName, parseSection')
 import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..))
 import Debian.Repo.LocalRepository (prepareLocalRepository)
 import Debian.Repo.Repo (repoKey)
-import Debian.Repo.Repos (MonadRepos, prepareRemoteRepository)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..), SourcesChangedAction, doSourcesChangedAction)
+import Debian.Repo.State (MonadRepos, prepareRemoteRepository)
 import Debian.Repo.Top (MonadTop, distDir, sourcesPath)
 import Debian.Sources (DebSource(..), SourceType(Deb, DebSrc), parseSourcesList)
 import Debian.URI (dirFromURI, fileFromURI)

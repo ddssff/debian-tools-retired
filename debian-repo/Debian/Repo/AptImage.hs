@@ -106,9 +106,9 @@ createAptImage sources = do
   root <- cacheRootDir (sliceListName sources)
   liftIO $ do
     arch <- buildArchOfRoot
-    let os = AptImage { _aptImageRoot = root
-                      , _aptImageArch = arch
-                      , _aptImageSources = sources }
+    let apt = AptImage { _aptImageRoot = root
+                       , _aptImageArch = arch
+                       , _aptImageSources = sources }
 
     --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
     createDirectoryIfMissing True (rootPath root ++ "/var/lib/apt/lists/partial")
@@ -123,7 +123,7 @@ createAptImage sources = do
     let sourceListText = show (pretty (sliceList sources))
     -- ePut ("writeFile " ++ (root ++ "/etc/apt/sources.list") ++ "\n" ++ sourceListText)
     replaceFile (rootPath root ++ "/etc/apt/sources.list") sourceListText
-    return os
+    return apt
 
 cacheRootDir :: MonadTop m => ReleaseName -> m EnvRoot
 cacheRootDir release = EnvRoot . (</> relName release </> "aptEnv") <$> dists

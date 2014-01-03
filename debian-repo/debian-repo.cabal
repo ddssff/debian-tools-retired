@@ -39,12 +39,6 @@ Library
         Unixutils >= 1.51, bzlib, zlib, HaXml, MIME, applicative-extras, utf8-string
   Exposed-modules:
         Debian.Repo,
-        Debian.Repo.Apt.AptImage,
-        Debian.Repo.Apt.OSImage,
-        Debian.Repo.Apt.Package,
-        Debian.Repo.Apt.PackageIndex,
-        Debian.Repo.Apt.Release,
-        Debian.Repo.Apt.Slice,
         Debian.Repo.AptImage,
         Debian.Repo.Changes,
         Debian.Repo.Dependencies,
@@ -58,10 +52,16 @@ Library
         Debian.Repo.RemoteRepository,
         Debian.Repo.Release,
         Debian.Repo.Repo,
-        Debian.Repo.Repos,
         Debian.Repo.Slice,
         Debian.Repo.SourceTree,
         Debian.Repo.SSH,
+        Debian.Repo.State,
+        Debian.Repo.State.AptImage,
+        Debian.Repo.State.OSImage,
+        Debian.Repo.State.Package,
+        Debian.Repo.State.PackageIndex,
+        Debian.Repo.State.Release,
+        Debian.Repo.State.Slice,
         Debian.Repo.Top,
         Debian.VersionPolicy
 

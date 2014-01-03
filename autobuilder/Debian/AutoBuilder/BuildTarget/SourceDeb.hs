@@ -11,7 +11,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Control.String as S
 import Debian.Repo.Prelude (readProc)
-import Debian.Repo.Repos (MonadRepos)
+import Debian.Repo.State (MonadRepos)
 import qualified Debian.Version as V
 import System.Directory
 import System.Exit (ExitCode(..))

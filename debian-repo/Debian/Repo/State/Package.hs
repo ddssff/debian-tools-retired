@@ -2,7 +2,7 @@
 {-# LANGUAGE BangPatterns, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell, TupleSections #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-name-shadowing #-}
 -- |Install binary packages into and delete binary packages from a repository.
-module Debian.Repo.Apt.Package
+module Debian.Repo.State.Package
     ( scanIncoming
     , installPackages
     , deleteTrumped
@@ -44,7 +44,6 @@ import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(p
 import Debian.Relation (BinPkgName, PkgName)
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (parseSection', ReleaseName, releaseName', Section(..), sectionName, sectionName', SubSection(section))
-import Debian.Repo.Apt.Release (findReleases, prepareRelease, writeRelease, signRelease)
 import Debian.Repo.Changes (changeName, changePath, findChangesFiles)
 import Debian.Repo.EnvPath (EnvPath, outsidePath)
 import Debian.Repo.LocalRepository (Layout(..), LocalRepository, poolDir', repoLayout, repoReleaseInfoLocal, repoRoot)
@@ -53,8 +52,9 @@ import Debian.Repo.PackageIndex (binaryIndexes, BinaryPackage(packageID, package
 import Debian.Repo.Prelude (nub')
 import qualified Debian.Repo.Prelude as F (Pretty(..))
 import Debian.Repo.Repo (Repo, repoArchList, repoKey, RepoKey, repoKeyURI)
-import Debian.Repo.Repos (MonadRepos(getRepos, putRepos))
 import Debian.Repo.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
+import Debian.Repo.State (MonadRepos(getRepos, putRepos))
+import Debian.Repo.State.Release (findReleases, prepareRelease, writeRelease, signRelease)
 import Debian.URI (fileFromURIStrict)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.Version.Text ()

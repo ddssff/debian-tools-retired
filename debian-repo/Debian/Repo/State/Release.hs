@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts, OverloadedStrings, TemplateHaskell #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
-module Debian.Repo.Apt.Release
+module Debian.Repo.State.Release
     ( flushLocalRepository
     , prepareRelease
     , prepareRelease'
@@ -26,7 +26,7 @@ import Debian.Repo.LocalRepository (LocalRepository, prepareLocalRepository, rep
 import Debian.Repo.PackageIndex (PackageIndex(packageIndexArch, packageIndexComponent), packageIndexDir, packageIndexes, packageIndexName, releaseDir)
 import Debian.Repo.Release (parseArchitectures, parseComponents, Release(..))
 import Debian.Repo.Repo (Repo)
-import Debian.Repo.Repos (MonadRepos, ReleaseKey, findRelease, putRelease)
+import Debian.Repo.State (MonadRepos, ReleaseKey, findRelease, putRelease)
 import qualified Extra.Files as EF (maybeWriteFile, prepareSymbolicLink, writeAndZipFile)
 import qualified Extra.GPGSign as EG (cd, PGPKey, pgpSignFiles)
 import qualified Extra.Time as ET (formatDebianDate)
