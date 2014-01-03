@@ -2,17 +2,15 @@
 {-# OPTIONS -Wall -fno-warn-orphans #-}
 module Debian.Repo.State.AptImage
     ( withAptImage
-    , aptImageSourcePackages
-    , aptImageBinaryPackages
+    , aptSourcePackages
+    , aptBinaryPackages
     , prepareSource
     ) where
 
 import Control.Applicative ((<$>))
 import Control.Monad.State (StateT)
 import Control.Monad.Trans (MonadIO(..), MonadTrans(lift))
-import Data.Function (on)
 import Data.Lens.Lazy (getL)
-import Data.List (sortBy)
 import Data.Maybe (listToMaybe)
 import Debian.Changes (ChangeLogEntry(logVersion))
 import Debian.Relation (SrcPkgName(unSrcPkgName))
@@ -67,22 +65,16 @@ prepareAptImage' sourcesChangedAction sources =
 updateAptEnv :: (MonadRepos m, MonadApt m) => m ()
 updateAptEnv = aptGetUpdate
 
-aptImageSourcePackages :: (MonadRepos m, MonadApt m) => m [SourcePackage]
-aptImageSourcePackages = sortBy (flip (compare `on` (packageVersion . sourcePackageID))) <$> getSourcePackages
-
-aptImageBinaryPackages :: (MonadRepos m, MonadApt m) => m [BinaryPackage]
-aptImageBinaryPackages = getBinaryPackages
-
-getSourcePackages :: (MonadRepos m, MonadApt m) => m [SourcePackage]
-getSourcePackages =
+aptSourcePackages :: (MonadRepos m, MonadApt m) => m [SourcePackage]
+aptSourcePackages =
     do qPutStrLn "AptImage.getSourcePackages"
        root <- getL aptImageRoot <$> getApt
        arch <- getL aptImageArch <$> getApt
        sources <- (sliceList . getL aptImageSources) <$> getApt
        sourcePackagesFromSources root arch sources
 
-getBinaryPackages :: (MonadRepos m, MonadApt m) => m [BinaryPackage]
-getBinaryPackages =
+aptBinaryPackages :: (MonadRepos m, MonadApt m) => m [BinaryPackage]
+aptBinaryPackages =
     do qPutStrLn "AptImage.getBinaryPackages"
        root <- getL aptImageRoot <$> getApt
        arch <- getL aptImageArch <$> getApt
@@ -134,6 +126,6 @@ prepareSource package version =
 
 latestVersion :: (MonadRepos m, MonadApt m) => SrcPkgName -> Maybe DebianVersion -> m (Maybe DebianVersion)
 latestVersion package version = do
-  pkgs <- aptImageSourcePackages
+  pkgs <- aptSourcePackages
   let newest = (listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . packageName . sourcePackageID)) $ pkgs
   return $ maybe newest Just version

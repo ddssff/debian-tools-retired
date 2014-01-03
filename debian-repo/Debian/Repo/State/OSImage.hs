@@ -57,15 +57,15 @@ buildArchOfOS = do
           return $ Binary (ArchOS os) (ArchCPU cpu)
       _ -> error $ "Failure computing build architecture of build env at " ++ root ++ ": " ++ show (a, b)
 
-getSourcePackages' :: (MonadRepos m, MonadOS m) => m [SourcePackage]
-getSourcePackages' =
+osSourcePackages :: (MonadRepos m, MonadOS m) => m [SourcePackage]
+osSourcePackages =
     do root <- access osRoot
        arch <- access osArch
        sources <- osFullDistro
        sourcePackagesFromSources root arch sources
 
-getBinaryPackages' :: (MonadRepos m, MonadOS m) => m [BinaryPackage]
-getBinaryPackages' =
+osBinaryPackages :: (MonadRepos m, MonadOS m) => m [BinaryPackage]
+osBinaryPackages =
     do root <- access osRoot
        arch <- access osArch
        sources <- osFullDistro
@@ -169,12 +169,6 @@ buildOS root distro arch repo copy include exclude components =
        evalMonadOS updateOS key
        liftIO $ neuterEnv os
        return key
-
-osSourcePackages :: (MonadRepos m, MonadOS m) => m [SourcePackage]
-osSourcePackages = getSourcePackages'
-
-osBinaryPackages :: (MonadRepos m, MonadOS m) => m [BinaryPackage]
-osBinaryPackages = getBinaryPackages'
 
 -- | Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.

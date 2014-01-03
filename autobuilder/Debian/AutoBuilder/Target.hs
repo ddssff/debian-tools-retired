@@ -56,7 +56,7 @@ import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourc
 import Debian.Repo.Prelude (symbol, access, runProc, readProc)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..))
 import Debian.Repo.State (MonadRepos, evalMonadOS, OSKey)
-import Debian.Repo.State.AptImage (aptImageSourcePackages)
+import Debian.Repo.State.AptImage (aptSourcePackages)
 import Debian.Repo.State.OSImage (osSourcePackages, osBinaryPackages, updateOS, syncOS, buildArchOfOS)
 import Debian.Repo.State.Package (scanIncoming, InstallResult(Ok), showErrors)
 import Debian.Repo.Top (MonadTop)
@@ -614,7 +614,7 @@ computeNewVersion cache target = do
            -}
           -- All the versions that exist in the pool in any dist,
           -- the new version number must not equal any of these.
-          sortSourcePackages [G.sourceName (targetDepends target)] <$> aptImageSourcePackages >>= \ available ->
+          sortSourcePackages [G.sourceName (targetDepends target)] <$> aptSourcePackages >>= \ available ->
           case parseTag (vendor : oldVendors) sourceVersion of
             (_, Just tag) -> return $
                              Failure ["Error: the version string in the changelog has a vendor tag (" ++ show tag ++
