@@ -191,7 +191,7 @@ plural _ _ = ""
 -- process each to install the package into a local repository.
 scanIncoming :: MonadRepos m => Bool -> Maybe PGPKey -> LocalRepository -> m [(ChangesFile, InstallResult)]
 scanIncoming createSections keyname repo = do
-  qPutStrLn ("Uploading packages to " ++ outsidePath (repoRoot repo) ++ "/incoming")
+  qPutStrLn ("Uploading packages to " ++ outsidePath (repoRoot repo) </> "incoming")
   changes <- liftIO (findChangesFiles (outsidePath (repoRoot repo) </> "incoming"))
   case changes of
     [] -> qPutStrLn "Nothing to install."
@@ -229,7 +229,7 @@ installPackages createSections keyname repo changeFileList =
        evalStateT (do results' <- foldM (installFiles createSections) [] changeFileList
                       results'' <- updateIndexes (reverse results')
                       when (elem Ok results'')
-                           (do mapM_ (liftIO . uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'')
+                           (do mapM_ (uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'')
                                let releaseNames = nub' (List.map changeRelease changeFileList)
                                releases' <- catMaybes <$> mapM findRelease' releaseNames
                                mapM_ (\ rel -> liftIO $ writeRelease repo rel >>= signRelease keyname repo rel) releases')
@@ -251,14 +251,15 @@ installPackages createSections keyname repo changeFileList =
           where
             compareIndex :: ((LocalRepository, Release, PackageIndex), B.Paragraph) -> ((LocalRepository, Release, PackageIndex), B.Paragraph) -> Ordering
             compareIndex (a, _) (b, _) = compare a b
-      -- Build the control information to be added to the package indexes.
-      buildInfo :: MonadInstall m => ChangesFile -> InstallResult -> m (Either InstallResult [((LocalRepository, Release, PackageIndex), B.Paragraph)])
-      buildInfo changes Ok =
-          do root <- (repoRoot . getL repository) <$> getInstall
-             mrel <- findRelease' (changeRelease changes)
+
+-- Build the control information to be added to the package indexes.
+buildInfo :: MonadInstall m => ChangesFile -> InstallResult -> m (Either InstallResult [((LocalRepository, Release, PackageIndex), B.Paragraph)])
+buildInfo changes Ok =
+          do mrel <- findRelease' (changeRelease changes)
+             repo <- getL repository <$> getInstall
              case mrel of
                Just release ->
-                   do (info :: [Either InstallResult B.Paragraph]) <- mapM (liftIO . fileInfo root repo) indexFiles
+                   do (info :: [Either InstallResult B.Paragraph]) <- mapM (fileInfo changes) indexFiles
                       case keepLeft info of
                         [] ->
                             let (pairs :: [([(LocalRepository, Release, PackageIndex)], Either InstallResult B.Paragraph)]) = zip (indexLists repo release) info in
@@ -282,60 +283,76 @@ installPackages createSections keyname repo changeFileList =
             -- (indepDebs, archDebs) = partition (isSuffixOf "_all.deb" . changedFileName) debs
             -- (dsc, other) = partition (isSuffixOf ".dsc" . changedFileName) nonDebs
             --fileIndex release file = List.map (PackageIndex release (section . changedFileSection $ file)) (archList release changes file)
-            fileInfo :: EnvPath -> LocalRepository -> ChangedFileSpec -> IO (Either InstallResult B.Paragraph)
-            fileInfo root repo file =
-                getControl >>= return . addFields
+buildInfo _ notOk = return . Left $ notOk
+
+-- For a successful install this unlinks the files from INCOMING and
+-- moves the .changes file into INSTALLED.  For a failure it moves
+-- all the files to REJECT.
+finish :: MonadInstall m => EnvPath -> Layout -> ChangesFile -> InstallResult -> m ()
+finish root layout changes Ok =
+          do --vPutStrBl 1 stderr $ "  finish Ok " ++ changesFileName changes
+             mapM_ (liftIO . removeFile . ((outsidePath root </> "incoming") </>) . changedFileName) (changeFiles changes)
+             installChangesFile root layout changes
+finish root _ changes (Rejected _) =
+          do --vPutStrBl 1 stderr $ "  finish Rejected " ++ changesFileName changes
+             mapM_ (\ name -> liftIO $ moveFile (outsidePath root </> "incoming" </> name) (outsidePath root </> "reject" </> name))
+                      (List.map changedFileName (changeFiles changes))
+             liftIO $ moveFile (outsidePath root </> "incoming" </> changeName changes) (outsidePath root </> "reject" </> changeName changes)
+finish _ _ changes (Failed _) =
+          do qPutStrLn $ "  Finish Failed " ++ changesFileName changes
+             return ()
+
+installChangesFile :: MonadInstall m => EnvPath -> Layout -> ChangesFile -> m ()
+installChangesFile root layout changes =
+          liftIO (moveFile (changePath changes) dst)
+          where dst = case layout of
+                        Flat -> outsidePath root </> changeName changes
+                        Pool -> outsidePath root </> "installed" </> changeName changes
+
+incoming :: MonadInstall m => m FilePath
+incoming = do
+  root <- repoRoot . getL repository <$> getInstall
+  return $ outsidePath root </> "incoming" {- </> changedFileName file -}
+
+reject :: MonadInstall m => ChangedFileSpec -> m FilePath
+reject file = do
+  root <- repoRoot . getL repository <$> getInstall
+  return $ outsidePath root </> "reject" </> changedFileName file
+
+fileInfo :: MonadInstall m => ChangesFile -> ChangedFileSpec -> m (Either InstallResult B.Paragraph)
+fileInfo changes file = do
+  repo <- getL repository <$> getInstall
+  getControl >>= return . addFields repo
                 where
-                  getControl :: IO (Either InstallResult B.Paragraph)
+                  getControl :: MonadInstall m => m (Either InstallResult B.Paragraph)
                   getControl =
-                      do control <-
+                      do -- path <- incoming file
+                         dir <- incoming
+                         control <-
                              case isSuffixOf ".deb" . changedFileName $ file of
-                               True -> getDebControl path
-                               False -> liftIO $ S.parseControlFromFile path >>= return . either (Left . show) Right
+                               True -> getDebControl
+                               False -> liftIO $ S.parseControlFromFile (dir </> changedFileName file) >>= return . either (Left . show) Right
                          case control of
                            Left message -> return . Left . Rejected $ [OtherProblem message]
                            Right (S.Control [info]) -> return (Right info)
                            Right (S.Control _) -> return . Left . Rejected $ [OtherProblem "Invalid control file"]
-                  addFields :: (Either InstallResult B.Paragraph) -> (Either InstallResult B.Paragraph)
-                  addFields (Left result) = Left result
-                  addFields (Right info) =
+                  addFields :: LocalRepository -> (Either InstallResult B.Paragraph) -> (Either InstallResult B.Paragraph)
+                  addFields _ (Left result) = Left result
+                  addFields repo (Right info) =
                       case isSuffixOf ".deb" . changedFileName $ file of
                         True -> addDebFields repo changes file info
                         False -> addSourceFields repo changes file info
                   -- | Extract the control file from a binary .deb.
-                  getDebControl :: FilePath -> IO (Either String B.Control)
-                  getDebControl path =
-                      do let cmd = "ar p " ++ path ++ " control.tar.gz | tar xzO ./control"
+                  getDebControl :: MonadInstall m => m (Either String B.Control)
+                  getDebControl =
+                      do dir <- incoming
+                         let cmd = "ar p " ++ dir </> changedFileName file ++ " control.tar.gz | tar xzO ./control"
                          (_, outh, _, handle) <- liftIO $ runInteractiveCommand cmd
                          control <- liftIO $ B.parseControlFromHandle cmd outh >>= return . either (Left . show) Right
                          exitcode <- liftIO $ waitForProcess handle
                          case exitcode of
                            ExitSuccess -> return control
                            ExitFailure n -> return . Left $ "Failure: " ++ cmd ++ " -> " ++ show n
-                  path = outsidePath root ++ "/incoming/" ++ changedFileName file
-      buildInfo _ notOk = return . Left $ notOk
-      -- For a successful install this unlinks the files from INCOMING and
-      -- moves the .changes file into INSTALLED.  For a failure it moves
-      -- all the files to REJECT.
-      finish root layout changes Ok =
-          do --vPutStrBl 1 stderr $ "  finish Ok " ++ changesFileName changes
-             mapM_ (removeFile . ((outsidePath root ++ "/incoming/") ++) . changedFileName) (changeFiles changes)
-             installChangesFile root layout changes
-      finish root _ changes (Rejected _) =
-          do --vPutStrBl 1 stderr $ "  finish Rejected " ++ changesFileName changes
-             mapM_ (\ name -> moveFile (outsidePath root ++ "/incoming/" ++ name) (outsidePath root ++ "/reject/" ++ name))
-                      (List.map changedFileName (changeFiles changes))
-             moveFile (outsidePath root ++ "/incoming/" ++ changeName changes)
-                                (outsidePath root ++ "/reject/" ++ changeName changes)
-      finish _ _ changes (Failed _) =
-          do qPutStrLn $ "  Finish Failed " ++ changesFileName changes
-             return ()
-      installChangesFile :: EnvPath -> Layout -> ChangesFile -> IO ()
-      installChangesFile root layout changes =
-          liftIO (moveFile (changePath changes) dst)
-          where dst = case layout of
-                        Flat -> outsidePath root </> changeName changes
-                        Pool -> outsidePath root ++ "/installed/" ++ changeName changes
 
 findRelease' :: MonadInstall m => ReleaseName -> m (Maybe Release)
 findRelease' name = do
@@ -482,7 +499,7 @@ addSourceFields repo changes file info =
                B.modifyField (T.pack "Checksums-Sha1") (\ b -> (T.pack (T.unpack b ++ "\n " ++ sha1Line file))) .
                B.modifyField (T.pack "Checksums-Sha256") (\ b -> (T.pack (T.unpack b ++ "\n " ++ sha256Line file)))
       raise = B.raiseFields (== (T.pack "Package"))
-      append = B.appendFields $ 
+      append = B.appendFields $
                [B.Field (T.pack "Priority", T.pack (" " ++ changedFilePriority file)),
                 B.Field (T.pack "Section", T.pack  (" " ++ (sectionName (changedFileSection file)))),
                 B.Field (T.pack "Directory", T.pack (" " ++ poolDir' repo changes file))] ++
