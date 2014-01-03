@@ -18,14 +18,8 @@ module Debian.Debianize.Monad
     ) where
 
 import Control.Monad.State (evalState, evalStateT, execState, execStateT, runState, State, StateT(runStateT))
-import Data.Map as Map (alter)
-import Data.Version (Version)
 import Debian.Debianize.Types.Atoms (Atoms)
-import Debian.Debianize.Types (debianNameMap)
-import Debian.Debianize.Prelude ((%=))
-import Debian.Debianize.VersionSplits (insertSplit, makePackage, VersionSplits)
 import Debian.Orphans ()
-import Distribution.Package (PackageName)
 import Prelude hiding (init, log, unlines)
 
 type DebT m = StateT Atoms m
