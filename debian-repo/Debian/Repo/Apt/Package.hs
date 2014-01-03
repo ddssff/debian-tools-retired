@@ -21,7 +21,7 @@ import Control.Applicative ((<$>))
 import Control.Exception (SomeException)
 import Control.Exception as E (ErrorCall(ErrorCall), SomeException(..), try)
 import Control.Monad (filterM, foldM, when)
-import Control.Monad.State (StateT, runStateT, evalStateT, MonadState(get, put))
+import Control.Monad.State (StateT, evalStateT, MonadState(get, put))
 import Control.Monad.Trans (liftIO, MonadIO, lift)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, fromChunks, readFile)
 import Data.Digest.Pure.MD5 (md5)
@@ -218,10 +218,10 @@ scanIncoming createSections keyname repo = do
 -- 5. moving the files from the incoming directory to the proper
 --    place in the package pool.
 installPackages :: MonadRepos m =>
-                   Bool				-- ^ ok to create new releases and sections
+                   Bool			-- ^ ok to create new releases and sections
                 -> Maybe PGPKey		-- ^ key to sign repository with
-                -> LocalRepository		-- ^ destination repository
-                -> [ChangesFile]		-- ^ Package to be installed
+                -> LocalRepository	-- ^ destination repository
+                -> [ChangesFile]	-- ^ Packages to be installed
                 -> m [InstallResult]	-- ^ Outcome of each source package
 installPackages createSections keyname repo changeFileList =
     do releases <- findReleases repo

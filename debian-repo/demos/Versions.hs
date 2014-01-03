@@ -6,9 +6,8 @@ module Main where
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.Maybe (fromJust)
 import Debian.Arch (Arch(Binary), ArchCPU(..), ArchOS(..))
-import Debian.Repo.Apt.Release (insertRelease)
 import Debian.Repo.Repo (RepoKey(Remote), repoReleaseInfo)
-import Debian.Repo.Repos (MonadRepos, foldRepository, runReposT)
+import Debian.Repo.Repos (MonadRepos, foldRepository, runReposT, putRelease)
 import Debian.URI (readURI')
 
 main :: IO ()
@@ -19,10 +18,10 @@ main' =
     do foldRepository f g (Remote (fromJust (readURI' uri)))
     where
       f repo =
-          do releases <- mapM (insertRelease repo) (repoReleaseInfo repo)
+          do releases <- mapM (putRelease repo) (repoReleaseInfo repo)
              liftIO (putStrLn ("\n" ++ show releases))
       g repo =
-          do releases <- mapM (insertRelease repo) (repoReleaseInfo repo)
+          do releases <- mapM (putRelease repo) (repoReleaseInfo repo)
              liftIO (putStrLn ("\n" ++ show releases))
 {-
     do repo <- prepareRepository (Remote (fromJust (readURI' uri)))

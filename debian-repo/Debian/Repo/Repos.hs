@@ -26,6 +26,10 @@ module Debian.Repo.Repos
     , putAptImage
     , evalMonadApt
 
+    , ReleaseKey(ReleaseKey)
+    , findRelease
+    , putRelease
+
     , prepareRemoteRepository
     , foldRepository
 
@@ -49,9 +53,9 @@ import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot))
 import Debian.Repo.LocalRepository (LocalRepository, prepareLocalRepository)
 import Debian.Repo.OSImage (OSImage, osRoot)
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
-import Debian.Repo.Release (getReleaseInfoRemote, Release)
+import Debian.Repo.Release (getReleaseInfoRemote, Release(releaseName))
 import Debian.Repo.RemoteRepository (RemoteRepository, RemoteRepository(RemoteRepository))
-import Debian.Repo.Repo (RepoKey(..))
+import Debian.Repo.Repo (Repo, repoKey, RepoKey(..))
 import Debian.Repo.Top (MonadTop, runTopT, sub, TopT)
 import Debian.URI (fromURI', toURI', URI(uriPath, uriScheme), URI')
 import System.IO.Error (isDoesNotExistError)
@@ -90,11 +94,13 @@ newtype OSKey = OSKey EnvRoot deriving (Eq, Ord, Show)
 
 newtype AptKey = AptKey EnvRoot deriving (Eq, Ord, Show)
 
+data ReleaseKey = ReleaseKey RepoKey ReleaseName deriving (Eq, Ord, Show)
+
 -- | This represents the state of the IO system.
 data ReposState
     = ReposState
       { _repoMap :: Map.Map URI' RemoteRepository		-- ^ Map to look up known (remote) Repository objects
-      , _releaseMap :: Map.Map (RepoKey, ReleaseName) Release -- ^ Map to look up known Release objects
+      , _releaseMap :: Map.Map ReleaseKey Release -- ^ Map to look up known Release objects
       , _aptImageMap :: Map.Map AptKey AptImage	-- ^ Map to look up prepared AptImage objects
       , _osImageMap :: Map.Map OSKey OSImage	-- ^ Map to look up prepared OSImage objects
       , _sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
@@ -159,6 +165,20 @@ evalMonadApt task (AptKey key) = do
   (a, apt') <- runStateT task apt
   putAptImage apt'
   return a
+
+findRelease :: (Repo r, MonadRepos m) => r -> ReleaseName -> m (Maybe Release)
+findRelease repo dist = (Map.lookup (ReleaseKey (repoKey repo) dist) . getL releaseMap) <$> getRepos
+
+getRelease :: MonadRepos m => ReleaseKey -> m Release
+getRelease key = do
+    Just rel <- (Map.lookup key . getL releaseMap) <$> getRepos
+    return rel
+
+putRelease :: (Repo r, MonadRepos m) => r -> Release -> m ReleaseKey
+putRelease repo release = do
+    let key = ReleaseKey (repoKey repo) (releaseName release)
+    modifyRepos $ modL releaseMap (Map.insert key release)
+    return key
 
 prepareRemoteRepository :: MonadRepos m => URI -> m RemoteRepository
 prepareRemoteRepository uri =
