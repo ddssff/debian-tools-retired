@@ -11,8 +11,8 @@ module Debian.Repo.State
     , runReposT
 
     , releaseMap
-    , sourcePackageMap
-    , binaryPackageMap
+    -- , sourcePackageMap
+    -- , binaryPackageMap
 
     , osImageMap
     , OSKey
@@ -104,8 +104,8 @@ data ReposState
       , _releaseMap :: Map.Map ReleaseKey Release -- ^ Map to look up known Release objects
       , _aptImageMap :: Map.Map AptKey AptImage	-- ^ Map to look up prepared AptImage objects
       , _osImageMap :: Map.Map OSKey OSImage	-- ^ Map to look up prepared OSImage objects
-      , _sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
-      , _binaryPackageMap :: Map.Map FilePath (FileStatus, [BinaryPackage])
+      -- , _sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
+      -- , _binaryPackageMap :: Map.Map FilePath (FileStatus, [BinaryPackage])
       }
 
 $(makeLenses [''ReposState])
@@ -121,8 +121,8 @@ initState = ReposState
             , _releaseMap = Map.empty
             , _aptImageMap = Map.empty
             , _osImageMap = Map.empty
-            , _sourcePackageMap = Map.empty
-            , _binaryPackageMap = Map.empty
+            -- , _sourcePackageMap = Map.empty
+            -- , _binaryPackageMap = Map.empty
             }
 
 -- | See if there is an OSImage associated with this directory

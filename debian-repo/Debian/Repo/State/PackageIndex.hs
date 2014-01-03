@@ -80,15 +80,12 @@ sourcePackagesOfIndex' root arch repo release index =
        -- let cached = lookupSourcePackages path state <$> getApt
        let suff = indexCacheFile arch repo release index
        let path = rootPath root ++ suff
-       cached <- (Map.lookup path . getL sourcePackageMap) <$> getRepos
-       status <- liftIO $ getFileStatus path `catch` (\ (_ :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory (rootPath root) ++ " and try again - sorry about that.")
-       case cached of
-         Just (status', packages) | status == status' -> return packages
-         _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
-                 let packages = List.map (toSourcePackage index) paragraphs
-                 modifyRepos $ modL sourcePackageMap (Map.insert path (status, packages))
-                 -- sourcePackageMap %= Map.insert path (status, packages)
-                 return packages
+       -- cached <- (Map.lookup path . getL sourcePackageMap) <$> getRepos
+       -- status <- liftIO $ getFileStatus path `catch` (\ (_ :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory (rootPath root) ++ " and try again - sorry about that.")
+       paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
+       let packages = List.map (toSourcePackage index) paragraphs
+       -- modifyRepos $ modL sourcePackageMap (Map.insert path (status, packages))
+       return packages
 
 toSourcePackage :: PackageIndex -> B.Paragraph -> SourcePackage
 toSourcePackage index package =
@@ -153,14 +150,12 @@ binaryPackagesOfIndex' :: MonadRepos m => EnvRoot -> Arch -> RepoKey -> Release 
 binaryPackagesOfIndex' root arch repo release index =
     do let suff = indexCacheFile arch repo release index
        let path = rootPath root ++ suff
-       cached <- (Map.lookup path . getL binaryPackageMap) <$> getRepos
-       status <- liftIO $ getFileStatus path
-       case cached of
-         Just (status', packages) | status == status' -> return packages
-         _ -> do paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
-                 let packages = List.map (toBinaryPackage release index) paragraphs
-                 modifyRepos $ modL binaryPackageMap (Map.insert path (status, packages))
-                 return packages
+       -- cached <- (Map.lookup path . getL binaryPackageMap) <$> getRepos
+       -- status <- liftIO $ getFileStatus path
+       paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
+       let packages = List.map (toBinaryPackage release index) paragraphs
+       -- modifyRepos $ modL binaryPackageMap (Map.insert path (status, packages))
+       return packages
 
 toBinaryPackage :: Release -> PackageIndex -> B.Paragraph -> BinaryPackage
 toBinaryPackage release index p =
