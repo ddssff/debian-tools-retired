@@ -26,9 +26,10 @@ module Debian.Repo.Repos
     , putAptImage
     , evalMonadApt
 
-    , ReleaseKey(ReleaseKey)
+    , ReleaseKey
     , findRelease
     , putRelease
+    , getRelease
 
     , prepareRemoteRepository
     , foldRepository

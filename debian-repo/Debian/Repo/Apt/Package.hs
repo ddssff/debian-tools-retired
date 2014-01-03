@@ -21,7 +21,7 @@ import Control.Applicative ((<$>))
 import Control.Exception (SomeException)
 import Control.Exception as E (ErrorCall(ErrorCall), SomeException(..), try)
 import Control.Monad (filterM, foldM, when)
-import Control.Monad.State (StateT, evalStateT, MonadState(get, put))
+import Control.Monad.State (StateT, runStateT, evalStateT, MonadState(get, put))
 import Control.Monad.Trans (liftIO, MonadIO, lift)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, fromChunks, readFile)
 import Data.Digest.Pure.MD5 (md5)
@@ -77,10 +77,22 @@ data InstallState
     = InstallState
       { _repository :: LocalRepository
       , _live :: Set Text
+      -- ^ All the files that are part of this repository - debs,
+      -- original tarballs, index files, etc.
       , _releases :: [Release]
+      -- ^ All the releases in this repository.
       }
 
 $(makeLenses [''InstallState])
+
+runInstall :: MonadRepos m => StateT InstallState m a -> LocalRepository -> m (a, InstallState)
+runInstall task repo = do
+  releases <- findReleases repo
+  live <- findLive repo
+  runStateT task (InstallState repo live releases)
+
+evalInstall :: MonadRepos m => StateT InstallState m a -> LocalRepository -> m a
+evalInstall task repo = fst <$> runInstall task repo
 
 class MonadRepos m => MonadInstall m where
     getInstall :: m InstallState
@@ -224,16 +236,16 @@ installPackages :: MonadRepos m =>
                 -> [ChangesFile]	-- ^ Packages to be installed
                 -> m [InstallResult]	-- ^ Outcome of each source package
 installPackages createSections keyname repo changeFileList =
-    do releases <- findReleases repo
-       live <- findLive repo
-       evalStateT (do results' <- foldM (installFiles createSections) [] changeFileList
-                      results'' <- updateIndexes (reverse results')
-                      when (elem Ok results'')
-                           (do mapM_ (uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'')
-                               let releaseNames = nub' (List.map changeRelease changeFileList)
-                               releases' <- catMaybes <$> mapM findRelease' releaseNames
-                               mapM_ (\ rel -> liftIO $ writeRelease repo rel >>= signRelease keyname repo rel) releases')
-                      return results'') (InstallState repo live releases)
+    evalInstall
+      (do results' <- foldM (installFiles createSections) [] changeFileList
+          results'' <- updateIndexes (reverse results')
+          when (elem Ok results'')
+               (do mapM_ (uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'')
+                   let releaseNames = nub' (List.map changeRelease changeFileList)
+                   releases' <- catMaybes <$> mapM findRelease' releaseNames
+                   mapM_ (\ rel -> liftIO $ writeRelease repo rel >>= signRelease keyname repo rel) releases')
+          return results'')
+      repo
     where
       -- Update all the index files affected by the successful
       -- installs.  This is a time consuming operation, so we want to
