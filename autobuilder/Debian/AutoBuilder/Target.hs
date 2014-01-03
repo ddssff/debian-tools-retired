@@ -465,7 +465,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
             results <- scanIncoming True Nothing repo
             case filter (not . (== Ok) . snd) results of
               -- Update lists to reflect the availability of the package we just built
-              [] -> evalMonadOS updateLists dependOS >> return repo
+              [] -> evalMonadOS (updateLists >> syncLocalPool) dependOS >> return repo
               _ -> error $ "Local upload failed:\n " ++ showErrors (map snd results)
 
 -- |Prepare the build image by copying the clean image, installing
