@@ -18,14 +18,14 @@ import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), envPath)
 import Debian.Repo.LocalRepository (LocalRepository, Layout, repoRoot, prepareLocalRepository, setRepositoryCompatibility)
 import Debian.Repo.PackageID (PackageID, makeBinaryPackageID)
 import Debian.Repo.PackageIndex (PackageIndex(PackageIndex))
+import Extra.Email (sendEmails)
+import Debian.Repo.Prelude.GPGSign (PGPKey(Default, Key))
+import Debian.Repo.Prelude.Lock (withLock)
 import Debian.Repo.Release (Release, parseArchitectures, releaseName, releaseAliases, releaseComponents, releaseArchitectures)
 import Debian.Repo.State (MonadRepos, runReposT)
 import Debian.Repo.State.Package (scanIncoming, deleteSourcePackages, deleteTrumped, deleteBinaryOrphans, deleteGarbage, InstallResult(Ok), explainError, resultToProblems, showErrors, MonadInstall, evalInstall)
 import Debian.Repo.State.Release (findReleases, prepareRelease, writeRelease, signRelease, mergeReleases)
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
-import Extra.Email (sendEmails)
-import Extra.GPGSign (PGPKey(Default, Key))
-import Extra.Lock (withLock)
 import Prelude hiding (putStr, putStrLn, putChar)
 import System.Console.GetOpt (ArgOrder(Permute), getOpt, usageInfo)
 import System.Directory (createDirectoryIfMissing)
@@ -92,8 +92,8 @@ runFlags flags =
           case (keyName flags, signRepo flags) of
             (Just "none", _) -> Nothing
             (_, False) -> Nothing
-            (Nothing, True) -> Just Extra.GPGSign.Default
-            (Just x, True) -> Just (Extra.GPGSign.Key x)
+            (Nothing, True) -> Just {-Debian.Repo.Prelude.GPGSign.-}Default
+            (Just x, True) -> Just ({-Debian.Repo.Prelude.GPGSign.-}Key x)
       parseEmail s = case break (== '@') s of
                        (user, ('@' : host)) -> Just (user, host)
                        _ -> Nothing
@@ -188,7 +188,7 @@ deletePackages dry rels flags keyname =
                       (\ release -> (release,
                                      PackageIndex (parseSection' component) Source,
                                      makeBinaryPackageID name (parseDebianVersion ver)))
-                      (findReleaseByName (parseReleaseName dist)) 
+                      (findReleaseByName (parseReleaseName dist))
             x -> error ("Invalid remove spec: " ++ show x)
       findReleaseByName :: ReleaseName -> Maybe Release
       findReleaseByName dist =

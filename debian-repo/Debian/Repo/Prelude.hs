@@ -21,24 +21,41 @@ module Debian.Repo.Prelude
     , replaceFile
     , cond
     , listIntersection
+    , sameInode
+    , sameMd5sum
+    , isSublistOf
+    , cd
+    , cartesianProduct
+    , writeFileIfMissing
+    , getSubDirectories
+    , dropPrefix
     ) where
 
-import Control.Exception (catch, try)
-import Control.Monad (foldM)
+import Control.Exception as E (catch, try, bracket)
+import Control.Monad (filterM, foldM)
 import Control.Monad.State (get, modify, MonadIO, MonadState)
-import qualified Data.ByteString.Lazy as B (ByteString)
-import qualified Data.ByteString.Lazy.Char8 as L (empty)
+import qualified Data.ByteString.Lazy as L (empty)
+import qualified Data.ByteString.Lazy.Char8 as B (ByteString, readFile)
+import qualified Data.Digest.Pure.MD5 (md5)
 import Data.Lens.Lazy (getL, Lens, modL)
-import Data.List as List (group, intersect, map, sort)
+import Data.List (find, group, inits, intersect, isSuffixOf, sort, isPrefixOf)
+import Data.List as List (map)
+import Debian.Repo.Prelude.Bool
+import Debian.Repo.Prelude.Files
+import Debian.Repo.Prelude.GPGSign
+import Debian.Repo.Prelude.List
+import Debian.Repo.Prelude.Misc
 import Language.Haskell.TH (Exp(LitE), Lit(StringL), Name, nameBase, nameModule, Q)
-import System.Directory (removeFile)
+import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory, getDirectoryContents, removeFile, setCurrentDirectory)
 import System.Exit (ExitCode(..))
-import System.FilePath (dropTrailingPathSeparator)
+import System.FilePath (dropTrailingPathSeparator, splitFileName)
 import System.IO.Error (isDoesNotExistError)
+import System.Posix.Files (deviceID, fileID, getFileStatus, getSymbolicLinkStatus, isSymbolicLink)
 import System.Process (CreateProcess, proc)
 import System.Process.Progress (ePutStrLn, keepResult, keepResult, runProcessF)
 import System.Process.Read.Chunks (Output)
 import System.Process.Read.Verbosity (quieter, runProcess)
+import System.Unix.Directory hiding (find)
 import Text.PrettyPrint.ANSI.Leijen (Doc, text)
 import Text.Printf (printf)
 
@@ -126,41 +143,3 @@ class Pretty a where
 
 instance Pretty a => Pretty [a] where
   pretty = text . show .map pretty
-
-partitionM :: (Monad m) => (a -> m Bool) -> [a] -> m ([a], [a])
-partitionM p xs =
-    foldM f ([], []) xs
-    where f (a, b) x = p x >>= (\ flag -> return $ if flag then (x : a, b) else (a, x : b))
-
--- | Write a file if its content is different from the given text.
-maybeWriteFile :: FilePath -> String -> IO ()
-maybeWriteFile path s =
-    try (readFile path) >>= maybeWrite
-    where
-      maybeWrite (Left (e :: IOError)) | isDoesNotExistError e = writeFile path s
-      maybeWrite (Left e) = error ("maybeWriteFile: " ++ show e)
-      maybeWrite (Right old) | old == s = return ()
-      maybeWrite (Right _old) =
-          --hPutStrLn stderr ("Old text: " ++ show old) >>
-          --hPutStrLn stderr ("New text: " ++ show text) >>
-          replaceFile path s
-
--- Replace a file's contents, accounting for the possibility that the
--- old contents of the file may still be being read.  Apparently there
--- is a race condition in the file system so we may get one or more
--- isAlreadyBusyError exceptions before the writeFile succeeds.
-replaceFile :: FilePath -> String -> IO ()
-replaceFile path s =
-    --tries 100 10 f	-- There is now a fix for this problem, see ghc ticket 2122.
-    f
-    where
-      f :: IO ()
-      f = removeFile path `Control.Exception.catch` (\ e -> if isDoesNotExistError e then return () else ioError e) >> writeFile path s
-
-cond :: a -> a -> Bool -> a
-cond t _ True = t
-cond _ f False = f
-
-listIntersection :: Eq a => [[a]] -> [a]
-listIntersection [] = []
-listIntersection (first : rest) = foldr intersect first rest

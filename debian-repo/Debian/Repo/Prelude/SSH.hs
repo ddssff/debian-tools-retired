@@ -1,5 +1,5 @@
 -- | Set up or verify SSH access to a remove machine.
-module Debian.Repo.SSH
+module Debian.Repo.Prelude.SSH
     ( sshVerify
     , sshExportDeprecated
     , sshCopy
@@ -12,6 +12,7 @@ import System.Environment
 import System.Exit
 import System.IO
 import System.Process (readProcessWithExitCode, showCommandForUser)
+
 -- |Set up access to destination (user\@host).
 sshExportDeprecated :: String -> Maybe Int -> IO (Either String ())
 sshExportDeprecated dest port =

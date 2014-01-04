@@ -3,7 +3,6 @@
 -- repositories which are queried in the course of execution.
 module Debian.Repo
     ( module Debian.Repo.Prelude
-    , module Debian.Repo.SSH
     , module Debian.Repo.PackageID
     , module Debian.Repo.Changes
     , module Debian.Repo.Release
@@ -29,7 +28,6 @@ module Debian.Repo
     ) where
 
 import Debian.Repo.Prelude
-import Debian.Repo.SSH
 import Debian.Repo.PackageID
 import Debian.Repo.Changes
 import Debian.Repo.Release

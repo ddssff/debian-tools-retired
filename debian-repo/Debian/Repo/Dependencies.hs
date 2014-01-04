@@ -28,8 +28,8 @@ import qualified Debian.Control.Text as S ()
 import Debian.Relation (ArchitectureReq(..), BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(..))
 import Debian.Repo.PackageID (PackageID(PackageID, packageName, packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, packageID, pProvides)
+import Debian.Repo.Prelude (cartesianProduct)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
-import "Extra" Extra.List (cartesianProduct)
 import Text.PrettyPrint.ANSI.Leijen (Doc, pretty, text)
 
 type Excuse = String
