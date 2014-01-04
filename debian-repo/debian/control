@@ -9,8 +9,6 @@ Build-Depends: debhelper (>= 7.0)
                , ghc-prof
                , libghc-cabal-dev | ghc
                , libghc-cabal-prof | ghc-prof
-               , libghc-extra-dev (>= 1.43)
-               , libghc-extra-prof (>= 1.43)
                , libghc-haxml-dev
                , libghc-haxml-prof
                , libghc-mime-dev
@@ -79,7 +77,6 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-zlib-prof
 Build-Depends-Indep: ghc-doc
                      , libghc-cabal-doc | ghc-doc
-                     , libghc-extra-doc (>= 1.43)
                      , libghc-haxml-doc
                      , libghc-mime-doc
                      , libghc-monadcatchio-mtl-doc

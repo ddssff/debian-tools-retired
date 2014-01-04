@@ -16,15 +16,24 @@ module Debian.Repo.Prelude
     , rsync
     , checkRsyncExitCode
     , Pretty(..)
+    , partitionM
+    , maybeWriteFile		-- writeFileUnlessSame
+    , replaceFile
+    , cond
+    , listIntersection
     ) where
 
+import Control.Exception (try, catch)
+import Control.Monad (foldM)
 import Control.Monad.State (MonadState, MonadIO, modify, get)
 import qualified Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L (empty)
 import Data.Lens.Lazy (Lens, getL, modL)
-import Data.List as List (group, map, sort)
+import Data.List as List (group, map, sort, intersect)
 import Language.Haskell.TH
+import System.Directory (removeFile)
 import System.Exit (ExitCode(..))
+import System.IO.Error (IOError, isDoesNotExistError)
 import System.Process (CreateProcess)
 import System.Process.Read
 import System.Process.Progress (ePutStrLn, keepResult, keepResult, runProcessF)
@@ -114,3 +123,41 @@ class Pretty a where
 
 instance Pretty a => Pretty [a] where
   pretty = text . show .map pretty
+
+partitionM :: (Monad m) => (a -> m Bool) -> [a] -> m ([a], [a])
+partitionM p xs =
+    foldM f ([], []) xs
+    where f (a, b) x = p x >>= (\ flag -> return $ if flag then (x : a, b) else (a, x : b))
+
+-- | Write a file if its content is different from the given text.
+maybeWriteFile :: FilePath -> String -> IO ()
+maybeWriteFile path text =
+    try (readFile path) >>= maybeWrite
+    where
+      maybeWrite (Left (e :: IOError)) | isDoesNotExistError e = writeFile path text
+      maybeWrite (Left e) = error ("maybeWriteFile: " ++ show e)
+      maybeWrite (Right old) | old == text = return ()
+      maybeWrite (Right _old) = 
+          --hPutStrLn stderr ("Old text: " ++ show old) >>
+          --hPutStrLn stderr ("New text: " ++ show text) >>
+          replaceFile path text
+
+-- Replace a file's contents, accounting for the possibility that the
+-- old contents of the file may still be being read.  Apparently there
+-- is a race condition in the file system so we may get one or more
+-- isAlreadyBusyError exceptions before the writeFile succeeds.
+replaceFile :: FilePath -> String -> IO ()
+replaceFile path text =
+    --tries 100 10 f	-- There is now a fix for this problem, see ghc ticket 2122.
+    f
+    where
+      f :: IO ()
+      f = removeFile path `Control.Exception.catch` (\ e -> if isDoesNotExistError e then return () else ioError e) >> writeFile path text
+
+cond :: a -> a -> Bool -> a
+cond t _ True = t
+cond _ f False = f
+
+listIntersection :: Eq a => [[a]] -> [a]
+listIntersection [] = []
+listIntersection (first : rest) = foldr intersect first rest
