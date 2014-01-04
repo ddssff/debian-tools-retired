@@ -73,6 +73,11 @@ import System.Process.Progress (ePutStrLn, qPutStr, qPutStrLn, quieter)
 import Text.PrettyPrint.ANSI.Leijen (cat, pretty, Pretty(..), text)
 import Text.Regex (matchRegex, mkRegex, splitRegex)
 
+-- | A monad for installing or deleting packages from the releases in a repository.
+class MonadRepos m => MonadInstall m where
+    getInstall :: m InstallState
+    putInstall :: InstallState -> m ()
+
 data InstallState
     = InstallState
       { _repository :: LocalRepository
@@ -84,6 +89,14 @@ data InstallState
       , _modified :: Set ReleaseKey
       -- ^ Releases which have been modified and need to be rewritten and signed
       }
+
+instance MonadRepos m => MonadInstall (StateT InstallState m) where
+    getInstall = get
+    putInstall = put
+
+instance MonadRepos m => MonadRepos (StateT InstallState m) where
+    getRepos = lift getRepos
+    putRepos = lift . putRepos
 
 $(makeLenses [''InstallState])
 
@@ -98,20 +111,8 @@ runInstall task repo keyname = do
 evalInstall :: MonadRepos m => StateT InstallState m a -> LocalRepository -> Maybe PGPKey -> m a
 evalInstall task repo keyname = fst <$> runInstall task repo keyname
 
-class MonadRepos m => MonadInstall m where
-    getInstall :: m InstallState
-    putInstall :: InstallState -> m ()
-
 modifyInstall :: MonadInstall m => (InstallState -> InstallState) -> m ()
 modifyInstall f = getInstall >>= putInstall . f
-
-instance MonadRepos m => MonadInstall (StateT InstallState m) where
-    getInstall = get
-    putInstall = put
-
-instance MonadRepos m => MonadRepos (StateT InstallState m) where
-    getRepos = lift getRepos
-    putRepos = lift . putRepos
 
 data InstallResult
     = Ok
