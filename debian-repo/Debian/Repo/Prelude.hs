@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, OverloadedStrings,
              PackageImports, ScopedTypeVariables, TemplateHaskell, TypeSynonymInstances, UndecidableInstances #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 -- |AptIO is an instance of the RWS monad used to manage the global
 -- state and output style parameters of clients of the Apt library,
 -- such as the autobuilder.
@@ -23,30 +23,24 @@ module Debian.Repo.Prelude
     , listIntersection
     ) where
 
-import Control.Exception (try, catch)
+import Control.Exception (catch, try)
 import Control.Monad (foldM)
-import Control.Monad.State (MonadState, MonadIO, modify, get)
-import qualified Data.ByteString.Lazy (ByteString)
+import Control.Monad.State (get, modify, MonadIO, MonadState)
+import qualified Data.ByteString.Lazy as B (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as L (empty)
-import Data.Lens.Lazy (Lens, getL, modL)
-import Data.List as List (group, map, sort, intersect)
-import Language.Haskell.TH
+import Data.Lens.Lazy (getL, Lens, modL)
+import Data.List as List (group, intersect, map, sort)
+import Language.Haskell.TH (Exp(LitE), Lit(StringL), Name, nameBase, nameModule, Q)
 import System.Directory (removeFile)
 import System.Exit (ExitCode(..))
-import System.IO.Error (IOError, isDoesNotExistError)
-import System.Process (CreateProcess)
-import System.Process.Read
+import System.FilePath (dropTrailingPathSeparator)
+import System.IO.Error (isDoesNotExistError)
+import System.Process (CreateProcess, proc)
 import System.Process.Progress (ePutStrLn, keepResult, keepResult, runProcessF)
-import System.Process.Read.Verbosity (runProcess, quieter)
+import System.Process.Read.Chunks (Output)
+import System.Process.Read.Verbosity (quieter, runProcess)
 import Text.PrettyPrint.ANSI.Leijen (Doc, text)
 import Text.Printf (printf)
-
-import Control.Monad.Trans (MonadIO)
-import qualified Data.ByteString as B
-import System.Exit (ExitCode)
-import System.FilePath (dropTrailingPathSeparator)
-import System.Process (proc)
-import System.Process.Progress (runProcessF, keepResult)
 
 -- | Perform a list of tasks with log messages.
 countTasks :: MonadIO m => [(String, m a)] -> m [a]
@@ -75,9 +69,18 @@ l %= f = modify (modL l f)
 symbol :: Name -> Q Exp
 symbol x = return $ LitE (StringL (maybe "" (++ ".") (nameModule x) ++ nameBase x))
 
-runProc p = quieter 0 $ runProcessF (Just (" 1> ", " 2> ")) p L.empty
+-- | Convenience function for running shell commands
+--    1. Runs quietly by default, but that can be controlled by the VERBOSITY environement variable
+--    2. If it exits with an error code all its output is echoed (with prefixes) and an exception is thrown
+--    3. The process input is the empty string
+--    4. When the output is echoed stdout is prefixed with "1>" and stderr with "2>".
+--    5. The output is a stream of 'Output'
+runProc :: MonadIO m => CreateProcess -> m [Output B.ByteString]
+runProc p = quieter 1 $ runProcessF prefixes p L.empty
 
-readProc p = quieter 0 $ runProcess p L.empty
+-- | Like runProc, but does not raise an exception when process exit code is not 0.
+readProc :: MonadIO m => CreateProcess -> m [Output B.ByteString]
+readProc p = quieter 1 $ runProcess p L.empty
 
 prefixes :: Maybe (B.ByteString, B.ByteString)
 prefixes = Just (" 1> ", " 2> ")
@@ -131,28 +134,28 @@ partitionM p xs =
 
 -- | Write a file if its content is different from the given text.
 maybeWriteFile :: FilePath -> String -> IO ()
-maybeWriteFile path text =
+maybeWriteFile path s =
     try (readFile path) >>= maybeWrite
     where
-      maybeWrite (Left (e :: IOError)) | isDoesNotExistError e = writeFile path text
+      maybeWrite (Left (e :: IOError)) | isDoesNotExistError e = writeFile path s
       maybeWrite (Left e) = error ("maybeWriteFile: " ++ show e)
-      maybeWrite (Right old) | old == text = return ()
-      maybeWrite (Right _old) = 
+      maybeWrite (Right old) | old == s = return ()
+      maybeWrite (Right _old) =
           --hPutStrLn stderr ("Old text: " ++ show old) >>
           --hPutStrLn stderr ("New text: " ++ show text) >>
-          replaceFile path text
+          replaceFile path s
 
 -- Replace a file's contents, accounting for the possibility that the
 -- old contents of the file may still be being read.  Apparently there
 -- is a race condition in the file system so we may get one or more
 -- isAlreadyBusyError exceptions before the writeFile succeeds.
 replaceFile :: FilePath -> String -> IO ()
-replaceFile path text =
+replaceFile path s =
     --tries 100 10 f	-- There is now a fix for this problem, see ghc ticket 2122.
     f
     where
       f :: IO ()
-      f = removeFile path `Control.Exception.catch` (\ e -> if isDoesNotExistError e then return () else ioError e) >> writeFile path text
+      f = removeFile path `Control.Exception.catch` (\ e -> if isDoesNotExistError e then return () else ioError e) >> writeFile path s
 
 cond :: a -> a -> Bool -> a
 cond t _ True = t
