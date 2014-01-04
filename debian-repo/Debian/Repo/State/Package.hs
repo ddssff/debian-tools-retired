@@ -53,7 +53,7 @@ import Debian.Repo.Prelude (nub')
 import qualified Debian.Repo.Prelude as F (Pretty(..))
 import Debian.Repo.Repo (Repo, repoArchList, repoKey, RepoKey, repoKeyURI)
 import Debian.Repo.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
-import Debian.Repo.State (MonadRepos(getRepos, putRepos))
+import Debian.Repo.State (MonadRepos(getRepos, putRepos), getRelease, ReleaseKey)
 import Debian.Repo.State.Release (findReleases, prepareRelease, writeRelease, signRelease)
 import Debian.URI (fileFromURIStrict)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
@@ -81,18 +81,22 @@ data InstallState
       -- original tarballs, index files, etc.
       , _releases :: [Release]
       -- ^ All the releases in this repository.
+      , _modified :: Set ReleaseKey
+      -- ^ Releases which have been modified and need to be rewritten and signed
       }
 
 $(makeLenses [''InstallState])
 
-runInstall :: MonadRepos m => StateT InstallState m a -> LocalRepository -> m (a, InstallState)
-runInstall task repo = do
+runInstall :: MonadRepos m => StateT InstallState m a -> LocalRepository -> Maybe PGPKey -> m (a, InstallState)
+runInstall task repo keyname = do
   releases <- findReleases repo
   live <- findLive repo
-  runStateT task (InstallState repo live releases)
+  (r, st) <- runStateT task (InstallState repo live releases empty)
+  mapM_ (\ key -> getRelease key >>= \ rel -> liftIO (writeRelease repo rel >>= signRelease keyname repo rel)) (Set.toList (getL modified st))
+  return (r, st)
 
-evalInstall :: MonadRepos m => StateT InstallState m a -> LocalRepository -> m a
-evalInstall task repo = fst <$> runInstall task repo
+evalInstall :: MonadRepos m => StateT InstallState m a -> LocalRepository -> Maybe PGPKey -> m a
+evalInstall task repo keyname = fst <$> runInstall task repo keyname
 
 class MonadRepos m => MonadInstall m where
     getInstall :: m InstallState
@@ -246,6 +250,7 @@ installPackages createSections keyname repo changeFileList =
                    mapM_ (\ rel -> liftIO $ writeRelease repo rel >>= signRelease keyname repo rel) releases')
           return results'')
       repo
+      keyname
     where
       -- Update all the index files affected by the successful
       -- installs.  This is a time consuming operation, so we want to
@@ -377,6 +382,9 @@ findRelease releases name =
       [] -> Nothing
       [x] -> Just x
       _ -> error $ "Internal error 16 - multiple releases named " ++ releaseName' name
+
+markReleaseModified :: MonadInstall m => ReleaseKey -> m ()
+markReleaseModified = modifyInstall . modL modified . Set.insert
 
 -- | Hard link the files of each package into the repository pool,
 -- but don't unlink the files in incoming in case of subsequent
