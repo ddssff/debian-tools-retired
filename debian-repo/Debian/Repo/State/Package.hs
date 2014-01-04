@@ -27,7 +27,7 @@ import Control.Monad.State (StateT, runStateT, MonadState(get, put))
 import Control.Monad.Trans (liftIO, MonadIO, lift)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, fromChunks, readFile)
 import Data.Digest.Pure.MD5 (md5)
-import Data.Either (partitionEithers)
+import Data.Either (partitionEithers, lefts, rights)
 import Data.Lens.Lazy (getL, modL)
 import Data.Lens.Template (makeLenses)
 import Data.List as List (filter, groupBy, intercalate, intersperse, isSuffixOf, map, partition, sortBy)
@@ -261,7 +261,7 @@ installPackages createSections keyname repo changeFileList =
       updateIndexes results =
           do (pairLists :: [Either InstallResult [((Release, PackageIndex), B.Paragraph)]]) <-
                  mapM (uncurry buildInfo) (zip changeFileList results)
-             let sortedByIndex = sortBy compareIndex (concat (keepRight pairLists))
+             let sortedByIndex = sortBy compareIndex (concat (rights pairLists))
              let groupedByIndex = undistribute (groupBy (\ a b -> compareIndex a b == EQ) sortedByIndex)
              result <- addPackagesToIndexes groupedByIndex
              case result of
@@ -278,7 +278,7 @@ buildInfo changes Ok =
              case mrel of
                Just release ->
                    do (info :: [Either InstallResult B.Paragraph]) <- mapM (fileInfo changes) indexFiles
-                      case keepLeft info of
+                      case lefts info of
                         [] ->
                             let (pairs :: [([(Release, PackageIndex)], Either InstallResult B.Paragraph)]) = zip (indexLists release) info in
                             let (pairs' :: [([(Release, PackageIndex)], B.Paragraph)]) =
@@ -489,12 +489,6 @@ undistribute [] = []
 undistribute ([] : tail) = undistribute tail
 undistribute (((index, info) : items) : tail) =
     (index, info : List.map snd items) : undistribute tail
-
-keepRight :: [Either a b] -> [b]
-keepRight xs = catMaybes $ List.map (either (const Nothing) Just) xs
-
-keepLeft :: [Either a b] -> [a]
-keepLeft xs = catMaybes $ List.map (either Just (const Nothing)) xs
 
 addDebFields :: MonadInstall m => LocalRepository -> ChangesFile -> ChangedFileSpec -> Paragraph' Text -> m (Either InstallResult (Paragraph' Text))
 addDebFields repo changes file info =
