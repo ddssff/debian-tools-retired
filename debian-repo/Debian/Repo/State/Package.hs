@@ -29,7 +29,7 @@ import Data.Either (partitionEithers)
 import Data.Lens.Lazy (getL, modL)
 import Data.Lens.Template (makeLenses)
 import Data.List as List (filter, groupBy, intercalate, intersperse, isSuffixOf, map, partition, sortBy)
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Monoid ((<>), mconcat)
 import Data.Set as Set (difference, empty, fold, fromList, insert, map, member, null, Set, size, toAscList, toList, union, unions)
 import Data.Text as T (pack, Text, unpack)
@@ -81,7 +81,7 @@ class MonadRepos m => MonadInstall m where
 data InstallState
     = InstallState
       { _repository :: LocalRepository
-      , _live :: Set Text
+      , _live :: Maybe (Set Text)
       -- ^ All the files that are part of this repository - debs,
       -- original tarballs, index files, etc.
       , _releases :: [Release]
@@ -103,8 +103,7 @@ $(makeLenses [''InstallState])
 runInstall :: MonadRepos m => StateT InstallState m a -> LocalRepository -> Maybe PGPKey -> m (a, InstallState)
 runInstall task repo keyname = do
   releases <- findReleases repo
-  live <- findLive repo
-  (r, st) <- runStateT task (InstallState repo live releases empty)
+  (r, st) <- runStateT task (InstallState repo Nothing releases empty)
   mapM_ (\ key -> getRelease key >>= \ rel -> liftIO (writeRelease repo rel >>= signRelease keyname repo rel)) (Set.toList (getL modified st))
   return (r, st)
 
@@ -426,8 +425,10 @@ installFiles'' :: MonadInstall m => ChangesFile -> [InstallResult] -> m [Install
 installFiles'' changes results = do
   repo <- getL repository <$> getInstall
   result <- mapM (installFile changes) (changeFiles changes) >>= return . mergeResults
-  when (result == Ok) (modifyInstall (modL live (\ old -> foldr Set.insert old (List.map (T.pack . ((outsidePath (repoRoot repo)) </>) . poolDir' repo changes) (changeFiles changes)))))
+  when (result == Ok) (modifyInstall (modL live (Just . Set.union (paths repo) . fromMaybe empty)))
   return $ result : results
+    where
+      paths repo = Set.fromList $ List.map (T.pack . ((outsidePath (repoRoot repo)) </>) . poolDir' repo changes) (changeFiles changes)
 
 installFile :: MonadInstall m => ChangesFile -> ChangedFileSpec -> m InstallResult
 installFile changes file = do
@@ -439,7 +440,7 @@ installFile changes file = do
   let dst = dir </> changedFileName file
   installed <- liftIO $ doesFileExist dst
   available <- liftIO $ doesFileExist src
-  let indexed = Set.member (T.pack dst) live'
+  let indexed = maybe False (Set.member (T.pack dst)) live'
   case (available, indexed, installed) of
     (False, _, _) -> do                        -- Perhaps this file is about to be uploaded
       return (Failed [MissingFile src])
