@@ -12,11 +12,11 @@ module Debian.Repo.Repo
 
 import Control.Exception (throw)
 import Data.Char (isDigit)
+import Data.List (nub)
 import Data.Maybe (fromJust)
 import Data.Text (unpack)
 import Debian.Arch (Arch)
 import Debian.Repo.EnvPath (EnvPath(..))
-import Debian.Repo.Prelude (listIntersection)
 import Debian.Repo.Release (Release(releaseArchitectures))
 import Debian.URI (fileFromURI, fromURI', URI')
 import qualified Debian.UTF8 as Deb (decode)
@@ -76,4 +76,4 @@ repoKeyURI (Local path) = fromJust . parseURI $ "file://" ++ envPath path
 repoKeyURI (Remote uri) = fromURI' uri
 
 repoArchList :: Repo r => r -> [Arch]
-repoArchList repo = listIntersection (map releaseArchitectures (repoReleaseInfo repo))
+repoArchList repo = nub (concatMap releaseArchitectures (repoReleaseInfo repo))
