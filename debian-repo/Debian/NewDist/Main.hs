@@ -20,7 +20,7 @@ import Debian.Repo.PackageID (PackageID, makeBinaryPackageID)
 import Debian.Repo.PackageIndex (PackageIndex(PackageIndex))
 import Debian.Repo.Release (Release, parseArchitectures, releaseName, releaseAliases, releaseComponents, releaseArchitectures)
 import Debian.Repo.State (MonadRepos, runReposT)
-import Debian.Repo.State.Package (scanIncoming, deleteSourcePackages, deleteTrumped, deleteBinaryOrphans, deleteGarbage, InstallResult(Ok), explainError, resultToProblems, showErrors)
+import Debian.Repo.State.Package (scanIncoming, deleteSourcePackages, deleteTrumped, deleteBinaryOrphans, deleteGarbage, InstallResult(Ok), explainError, resultToProblems, showErrors, MonadInstall, evalInstall)
 import Debian.Repo.State.Release (findReleases, prepareRelease, writeRelease, signRelease, mergeReleases)
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
 import Extra.Email (sendEmails)
@@ -58,17 +58,18 @@ runFlags :: MonadRepos m => Params -> m ()
 runFlags flags =
     do createReleases flags
        repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
-       rels <- findReleases repo
-       _ <- liftIO (deletePackages (dryRun flags) repo rels flags keyname)
-       liftIO $ setRepositoryCompatibility repo
-       when (install flags) $ do
-         results <- scanIncoming False keyname repo
-         liftIO $ sendEmails senderAddr emailAddrs (map (email repo) results)
-         liftIO $ exitOnError results
-       when (expire flags)  $ liftIO (deleteTrumped (dryRun flags) keyname repo rels) >> return ()
-       when (binaryOrphans flags)  $ deleteBinaryOrphans (dryRun flags) keyname repo rels >> return ()
-       when (cleanUp flags) $ deleteGarbage repo >> return ()
-       when (signRepo flags) $ liftIO (mapM_ (\ rel -> writeRelease repo rel >>= signRelease keyname repo rel) rels)
+       evalInstall (do rels <- findReleases repo
+                       _ <- deletePackages (dryRun flags) rels flags keyname
+                       liftIO $ setRepositoryCompatibility repo
+                       when (install flags) $ do
+                         results <- scanIncoming False keyname repo
+                         liftIO $ sendEmails senderAddr emailAddrs (map (email repo) results)
+                         liftIO $ exitOnError results
+                       when (expire flags)  $ deleteTrumped (dryRun flags) keyname rels >> return ()
+                       when (binaryOrphans flags)  $ deleteBinaryOrphans (dryRun flags) keyname rels >> return ()
+                       when (cleanUp flags) $ deleteGarbage >> return ()
+                       when (signRepo flags) $ liftIO (mapM_ (\ rel -> writeRelease repo rel >>= signRelease keyname repo rel) rels))
+         repo keyname
     where
       emailAddrs :: [(String, String)]
       emailAddrs =
@@ -172,9 +173,9 @@ getReleases root' layout' dists section' archList' =
        requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
        return $ mergeReleases repo (existingReleases ++ requiredReleases)
 
-deletePackages :: Bool -> LocalRepository -> [Release] -> Params -> Maybe PGPKey -> IO [Release]
-deletePackages dry repo rels flags keyname =
-    deleteSourcePackages dry keyname repo toRemove
+deletePackages :: MonadInstall m => Bool -> [Release] -> Params -> Maybe PGPKey -> m [Release]
+deletePackages dry rels flags keyname =
+    deleteSourcePackages dry keyname toRemove
     where
       toRemove :: [(Release, PackageIndex, PackageID BinPkgName)]
       toRemove = map parsePackage $ removePackages flags
