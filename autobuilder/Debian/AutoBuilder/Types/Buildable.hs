@@ -188,14 +188,13 @@ prepareBuild _cache target =
                       (liftIO $ renameDirectory (dest ++ "/" ++ subdir debBuild) (dest ++ "/" ++ newdir))
              liftIO $ findBuildTree dest newdir
 
-      copyOrigTarball dest name ver src =
-          qPutStrLn ("forceLink " ++ src ++ " " ++ dest ++ "/" ++ name ++ "-" ++ ver ++ ".orig.tar" ++ takeExtension src) >>
-          forceLink src (dest ++ "/" ++ name ++ "_" ++ ver ++ ".orig.tar" ++ takeExtension src)
+      copyOrigTarball dest name ver src = forceLink src (dest ++ "/" ++ name ++ "_" ++ ver ++ ".orig.tar" ++ takeExtension src)
 
 -- |calls 'createSymbolicLink' but will remove the target and retry if
 -- 'createSymbolicLink' raises EEXIST.
 forceLink :: FilePath -> FilePath -> IO ()
 forceLink target linkName =
+    quieter 3 $ qPutStrLn ("forceLink " ++ target ++ " " ++ linkName) >>
     createLink target linkName `E.catch`
       (\ e -> if isAlreadyExistsError e 
               then do removeLink linkName

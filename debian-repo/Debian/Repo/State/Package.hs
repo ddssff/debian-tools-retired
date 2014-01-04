@@ -69,7 +69,7 @@ import System.IO ()
 import qualified System.Posix.Files as F (createLink, fileSize, getFileStatus)
 import System.Posix.Types (FileOffset)
 import System.Process (runInteractiveCommand, waitForProcess)
-import System.Process.Progress (ePutStrLn, qPutStr, qPutStrLn)
+import System.Process.Progress (ePutStrLn, qPutStr, qPutStrLn, quieter)
 import Text.PrettyPrint.ANSI.Leijen (cat, pretty, Pretty(..), text)
 import Text.Regex (matchRegex, mkRegex, splitRegex)
 
@@ -207,7 +207,7 @@ plural _ _ = ""
 -- process each to install the package into a local repository.
 scanIncoming :: MonadRepos m => Bool -> Maybe PGPKey -> LocalRepository -> m [(ChangesFile, InstallResult)]
 scanIncoming createSections keyname repo = do
-  qPutStrLn ("Uploading packages to " ++ outsidePath (repoRoot repo) </> "incoming")
+  quieter 1 $ qPutStrLn ("Uploading packages to " ++ outsidePath (repoRoot repo) </> "incoming")
   changes <- liftIO (findChangesFiles (outsidePath (repoRoot repo) </> "incoming"))
   case changes of
     [] -> qPutStrLn "Nothing to install."

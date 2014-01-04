@@ -333,7 +333,7 @@ updateLists :: (MonadOS m, MonadCatchIO m) => m NominalDiffTime
 updateLists =
     do root <-rootPath <$> access osRoot
        withProc $ quieter 0 $ liftIO $ do
-         qPutStrLn ($(symbol 'updateLists) <> ": updating OSImage " ++ root)
+         quieter 1 $ qPutStrLn ($(symbol 'updateLists) <> ": updating OSImage " ++ root)
          out <- useEnv root forceList (readProc update)
          _ <- case keepResult out of
                 [ExitFailure _] ->

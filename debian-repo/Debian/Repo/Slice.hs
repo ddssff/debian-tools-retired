@@ -28,7 +28,7 @@ import System.Directory (createDirectoryIfMissing, removeFile)
 import System.IO (hGetLine, stdin)
 import System.Process.Progress (ePutStr, ePutStrLn)
 import System.Unix.Directory (removeRecursiveSafely)
-import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat)
+import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), text, vcat)
 
 data Slice = Slice {sliceRepoKey :: RepoKey, sliceSource :: DebSource} deriving (Eq, Ord, Show)
 
@@ -45,6 +45,9 @@ instance Pretty SliceList where
 
 instance Pretty NamedSliceList where
     pretty = pretty . sliceList
+
+instance Pretty ReleaseName where
+    pretty = text . relName
 
 deriving instance Show SourceType
 deriving instance Show DebSource

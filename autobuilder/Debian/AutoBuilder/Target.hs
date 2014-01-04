@@ -773,12 +773,11 @@ useEnv' rootPath force action = quieter 0 $ useEnv rootPath force $ noisier 0 ac
 -- can compare the revision from the uploaded package with the current
 -- TLA revision to decide whether to build.
 setRevisionInfo :: Fingerprint -> ChangesFile -> IO ChangesFile
-setRevisionInfo fingerprint changes {- @(Changes dir name version arch fields files) -} =
-    (\ x -> qPutStrLn "Setting revision info" >> quieter 0 x) $
+setRevisionInfo fingerprint changes =
     case partition (isSuffixOf ".dsc" . changedFileName) (changeFiles changes) of
-      ([file], otherFiles) ->
-          do
-            let dscFilePath = changeDir changes ++ "/" ++ changedFileName file
+      ([file], otherFiles) -> do
+            quieter 1 $ qPutStrLn ("Setting revision field in " <> changedFileName file)
+            let dscFilePath = changeDir changes </> changedFileName file
             newDscFile <- parseControlFromFile dscFilePath >>= return . either (error . show) addField
             replaceFile dscFilePath (show (pretty newDscFile))
             md5 <- md5sum dscFilePath

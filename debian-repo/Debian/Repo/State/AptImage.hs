@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell #-}
 {-# OPTIONS -Wall -fno-warn-orphans #-}
 module Debian.Repo.State.AptImage
     ( withAptImage
@@ -20,6 +20,7 @@ import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.PackageID (PackageID(packageName), PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage(sourcePackageID))
+import Debian.Repo.Prelude (symbol)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), SliceList, SourcesChangedAction)
 import Debian.Repo.SourceTree (DebianBuildTree(debTree'), DebianSourceTree(tree'), DebianSourceTreeC(entry), findDebianBuildTrees, SourceTree(dir'))
 import Debian.Repo.State (AptKey, evalMonadApt, findAptKey, MonadRepos, putAptImage)
@@ -67,11 +68,11 @@ updateAptEnv = aptGetUpdate
 
 aptSourcePackages :: (MonadRepos m, MonadApt m) => m [SourcePackage]
 aptSourcePackages =
-    do qPutStrLn "AptImage.getSourcePackages"
-       root <- getL aptImageRoot <$> getApt
+    do root <- getL aptImageRoot <$> getApt
        arch <- getL aptImageArch <$> getApt
-       sources <- (sliceList . getL aptImageSources) <$> getApt
-       sourcePackagesFromSources root arch sources
+       sources <- getL aptImageSources <$> getApt
+       quieter 1 $ qPutStrLn ($(symbol 'aptSourcePackages) ++ " " ++ show (pretty (sliceListName sources)))
+       sourcePackagesFromSources root arch (sliceList sources)
 
 aptBinaryPackages :: (MonadRepos m, MonadApt m) => m [BinaryPackage]
 aptBinaryPackages =
