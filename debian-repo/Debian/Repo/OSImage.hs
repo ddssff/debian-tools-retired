@@ -29,6 +29,7 @@ module Debian.Repo.OSImage
     , _pbuilderBuild'
     , buildOS'
     , syncLocalPool
+    , osFlushPackageCache
     , syncOS'
     ) where
 
@@ -536,4 +537,12 @@ syncLocalPool =
        dist <- access osLocalMaster
        repo' <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) dist
        osLocalCopy ~= repo'
+       -- Presumably we are doing this because the pool changed, and
+       -- that invalidates the OS package lists.
+       osFlushPackageCache
        return ()
+
+osFlushPackageCache :: MonadOS m => m ()
+osFlushPackageCache = do
+    osSourcePackageCache ~= Nothing
+    osBinaryPackageCache ~= Nothing
