@@ -326,7 +326,7 @@ qError message = qPutStrLn message >> error message
 
 qBracket :: MonadIO m => m a -> String -> m a
 qBracket action message = do
-  v <- verbositry
+  v <- verbosity
   case v of
     n | n < 1 -> action
     1 -> do
