@@ -22,9 +22,9 @@ import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Release (ReleaseName(relName))
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
-import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildArchOfRoot, buildOS', createOSImage, localeGen, MonadOS, neuterEnv, osArch, osBaseDistro, osFullDistro, osLocalCopy, osLocalMaster, osRoot, syncLocalPool, syncOS', updateLists)
+import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildArchOfRoot, buildOS', createOSImage, localeGen, MonadOS, neuterEnv, osArch, osBaseDistro, osFullDistro, osLocalCopy, osLocalMaster, osRoot, syncLocalPool, syncOS', updateLists, osSourcePackageCache, osBinaryPackageCache)
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
-import Debian.Repo.Prelude (access, replaceFile)
+import Debian.Repo.Prelude (access, replaceFile, (~=))
 import Debian.Repo.Prelude.SSH (sshCopy)
 import Debian.Repo.Slice (NamedSliceList(sliceListName), Slice(sliceSource), SliceList(slices), SourcesChangedAction(SourcesChangedError), UpdateError(..))
 import Debian.Repo.State (evalMonadOS, findOSKey, MonadRepos, OSKey, putOSImage)
@@ -57,18 +57,30 @@ buildArchOfOS = do
       _ -> error $ "Failure computing build architecture of build env at " ++ root ++ ": " ++ show (a, b)
 
 osSourcePackages :: (MonadRepos m, MonadOS m) => m [SourcePackage]
-osSourcePackages =
-    do root <- access osRoot
-       arch <- access osArch
-       sources <- osFullDistro
-       sourcePackagesFromSources root arch sources
+osSourcePackages = do
+  mpkgs <- access osSourcePackageCache
+  maybe osSourcePackages' return mpkgs
+    where
+      osSourcePackages' = do
+        root <- access osRoot
+        arch <- access osArch
+        dist <- osFullDistro
+        pkgs <- sourcePackagesFromSources root arch dist
+        osSourcePackageCache ~= Just pkgs
+        return pkgs
 
 osBinaryPackages :: (MonadRepos m, MonadOS m) => m [BinaryPackage]
-osBinaryPackages =
-    do root <- access osRoot
-       arch <- access osArch
-       sources <- osFullDistro
-       binaryPackagesFromSources root arch sources
+osBinaryPackages = do
+  mpkgs <- access osBinaryPackageCache
+  maybe osBinaryPackages' return mpkgs
+    where
+      osBinaryPackages' = do
+        root <- access osRoot
+        arch <- access osArch
+        dist <- osFullDistro
+        pkgs <- binaryPackagesFromSources root arch dist
+        osBinaryPackageCache ~= Just pkgs
+        return pkgs
 
 -- |Find or create and update an OS image.
 prepareOS :: (MonadRepos m, MonadTop m) =>

@@ -9,6 +9,8 @@ module Debian.Repo.AptImage
     , aptImageRoot
     , aptImageArch
     , aptImageSources
+    , aptBinaryPackageCache
+    , aptSourcePackageCache
     , createAptImage
     , cacheRootDir
     , aptGetSource
@@ -27,6 +29,7 @@ import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
 import Debian.Relation (PkgName, SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(relName))
 import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
+import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Prelude (runProc, replaceFile, writeFileIfMissing)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName))
 import Debian.Repo.Top (distDir, dists, MonadTop)
@@ -42,6 +45,8 @@ data AptImage =
     AptImage { _aptImageRoot :: EnvRoot
              , _aptImageArch :: Arch
              , _aptImageSources :: NamedSliceList
+             , _aptSourcePackageCache :: Maybe [SourcePackage]
+             , _aptBinaryPackageCache :: Maybe [BinaryPackage]
              }
 
 $(makeLenses [''AptImage])
@@ -106,7 +111,9 @@ createAptImage sources = do
     arch <- buildArchOfRoot
     let apt = AptImage { _aptImageRoot = root
                        , _aptImageArch = arch
-                       , _aptImageSources = sources }
+                       , _aptImageSources = sources
+                       , _aptSourcePackageCache = Nothing
+                       , _aptBinaryPackageCache = Nothing }
 
     --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
     createDirectoryIfMissing True (rootPath root ++ "/var/lib/apt/lists/partial")

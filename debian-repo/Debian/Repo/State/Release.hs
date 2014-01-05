@@ -29,7 +29,7 @@ import qualified Debian.Repo.Prelude.Files as EF (maybeWriteFile, prepareSymboli
 import qualified Debian.Repo.Prelude.Time as ET (formatDebianDate)
 import Debian.Repo.Release (parseArchitectures, parseComponents, Release(..))
 import Debian.Repo.Repo (Repo)
-import Debian.Repo.State (MonadRepos, ReleaseKey, findRelease, putRelease)
+import Debian.Repo.State (MonadRepos, findRelease, putRelease)
 import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.FilePath ((</>))
 import System.Posix.Files (setFileMode)

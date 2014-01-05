@@ -10,12 +10,12 @@ module Debian.Repo.State.AptImage
 import Control.Applicative ((<$>))
 import Control.Monad.State (StateT)
 import Control.Monad.Trans (MonadIO(..), MonadTrans(lift))
-import Data.Lens.Lazy (getL)
+import Data.Lens.Lazy (getL, setL)
 import Data.Maybe (listToMaybe)
 import Debian.Changes (ChangeLogEntry(logVersion))
 import Debian.Relation (SrcPkgName(unSrcPkgName))
-import Debian.Release (ReleaseName(relName))
-import Debian.Repo.AptImage (aptDir, aptGetSource, aptGetUpdate, AptImage, aptImageArch, aptImageRoot, aptImageSources, cacheRootDir, createAptImage, MonadApt(..))
+import Debian.Release (ReleaseName)
+import Debian.Repo.AptImage (aptDir, aptGetSource, aptGetUpdate, AptImage, aptImageArch, aptImageRoot, aptImageSources, cacheRootDir, createAptImage, MonadApt(..), aptBinaryPackageCache, aptSourcePackageCache, modifyApt)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.PackageID (PackageID(packageName), PackageID(packageVersion))
@@ -29,7 +29,7 @@ import Debian.Repo.State.Slice (updateCacheSources)
 import Debian.Repo.Top (MonadTop)
 import Debian.Version (DebianVersion)
 import System.Directory (createDirectoryIfMissing)
-import System.Process.Progress (qPutStr, qPutStrLn, quieter)
+import System.Process.Progress (qPutStr, qPutStrLn)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
@@ -66,20 +66,39 @@ updateAptEnv :: (MonadRepos m, MonadApt m) => m ()
 updateAptEnv = aptGetUpdate
 
 aptSourcePackages :: (MonadRepos m, MonadApt m) => m [SourcePackage]
-aptSourcePackages =
-    do root <- getL aptImageRoot <$> getApt
-       arch <- getL aptImageArch <$> getApt
-       sources <- getL aptImageSources <$> getApt
-       -- quieter 1 $ qPutStrLn ($(symbol 'aptSourcePackages) ++ " " ++ show (pretty (sliceListName sources)))
-       sourcePackagesFromSources root arch (sliceList sources)
+aptSourcePackages = do
+  mpkgs <- getL aptSourcePackageCache <$> getApt
+  maybe aptSourcePackages' return mpkgs
+    where
+      aptSourcePackages' = do
+        root <- getL aptImageRoot <$> getApt
+        arch <- getL aptImageArch <$> getApt
+        sources <- getL aptImageSources <$> getApt
+        -- quieter 1 $ qPutStrLn ($(symbol 'aptSourcePackages) ++ " " ++ show (pretty (sliceListName sources)))
+        pkgs <- sourcePackagesFromSources root arch (sliceList sources)
+        modifyApt (setL aptSourcePackageCache (Just pkgs))
+        return pkgs
 
 aptBinaryPackages :: (MonadRepos m, MonadApt m) => m [BinaryPackage]
-aptBinaryPackages =
+aptBinaryPackages = do
+  mpkgs <- getL aptBinaryPackageCache <$> getApt
+  maybe aptBinaryPackages' return mpkgs
+    where
+      aptBinaryPackages' = do
+        root <- getL aptImageRoot <$> getApt
+        arch <- getL aptImageArch <$> getApt
+        sources <- getL aptImageSources <$> getApt
+        -- quieter 1 $ qPutStrLn ($(symbol 'aptBinaryPackages) ++ " " ++ show (pretty (sliceListName sources)))
+        pkgs <- binaryPackagesFromSources root arch (sliceList sources)
+        modifyApt (setL aptBinaryPackageCache (Just pkgs))
+        return pkgs
+{-
     do qPutStrLn "AptImage.getBinaryPackages"
        root <- getL aptImageRoot <$> getApt
        arch <- getL aptImageArch <$> getApt
        sources <- (sliceList . getL aptImageSources) <$> getApt
        binaryPackagesFromSources root arch sources
+-}
 
 data UpdateError
     = Changed ReleaseName FilePath SliceList SliceList

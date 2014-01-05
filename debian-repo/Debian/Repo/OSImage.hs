@@ -8,6 +8,8 @@ module Debian.Repo.OSImage
     , osLocalCopy
     , osRoot
     , osArch
+    , osSourcePackageCache
+    , osBinaryPackageCache
     , MonadOS
 
     , buildArchOfRoot
@@ -36,7 +38,7 @@ import Control.Exception (evaluate, SomeException)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, MonadCatchIO, throw, try)
 import Control.Monad.State (evalStateT, MonadState, StateT)
 import Control.Monad.Trans (liftIO, MonadIO)
-import qualified Data.ByteString.Lazy as L (ByteString, empty)
+import qualified Data.ByteString.Lazy as L (ByteString)
 import Data.Data (Data)
 import Data.Lens.Lazy (getL, setL)
 import Data.Lens.Template (makeLenses)
@@ -49,6 +51,7 @@ import Debian.Relation (ParseRelations(parseRelations), PkgName, Relations)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
 import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot, EnvRoot(rootPath), outsidePath)
 import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
+import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Prelude (access, (~=), rsync, runProc, readProc, symbol, sameInode, sameMd5sum, replaceFile, isSublistOf)
 import Debian.Repo.Repo (repoKey, repoURI)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(Slice, sliceRepoKey, sliceSource), SliceList, SliceList(..))
@@ -82,6 +85,8 @@ data OSImage
 	 -- inside this image are first uploaded to.
          , _osLocalCopy :: LocalRepository
 	 -- ^ A copy of osLocalMaster located inside the os root environment.
+         , _osSourcePackageCache :: Maybe [SourcePackage]
+         , _osBinaryPackageCache :: Maybe [BinaryPackage]
          }
 
 $(makeLenses [''OSImage])
@@ -406,7 +411,9 @@ createOSImage root distro repo =
                    , _osBaseDistro = distro
                    , _osArch = arch
                    , _osLocalMaster = repo
-                   , _osLocalCopy = copy }
+                   , _osLocalCopy = copy
+                   , _osSourcePackageCache = Nothing
+                   , _osBinaryPackageCache = Nothing }
        return os
 
 _pbuilderBuild' :: (MonadIO m, MonadTop m, Functor m) =>
@@ -435,7 +442,9 @@ _pbuilderBuild' root distro arch repo copy _extraEssential _omitEssential _extra
                    , _osBaseDistro = distro
                    , _osArch = arch
                    , _osLocalMaster = repo
-                   , _osLocalCopy = copy }
+                   , _osLocalCopy = copy
+                  , _osSourcePackageCache = Nothing
+                  , _osBinaryPackageCache = Nothing }
        let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
        -- Rewrite the sources.list with the local pool added.
        sources <- (show . pretty) <$> evalStateT osFullDistro os
@@ -483,7 +492,9 @@ buildOS' root distro arch repo copy include exclude components =
                   , _osBaseDistro = distro
                   , _osArch = arch
                   , _osLocalMaster = repo
-                  , _osLocalCopy = copy }
+                  , _osLocalCopy = copy
+                  , _osSourcePackageCache = Nothing
+                  , _osBinaryPackageCache = Nothing }
       let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
       -- Rewrite the sources.list with the local pool added.
       sources <- (show . pretty) <$> evalStateT osFullDistro os

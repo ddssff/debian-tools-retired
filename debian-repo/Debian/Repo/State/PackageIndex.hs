@@ -18,6 +18,7 @@ import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
+--import Debian.Repo.Prelude (symbol)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
 import Debian.Repo.Slice (binarySlices, Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices)
@@ -27,7 +28,8 @@ import Debian.URI (URI(uriScheme), uriToString')
 import Debian.Version (parseDebianVersion)
 import Network.URI (escapeURIString, URI(uriAuthority, uriPath), URIAuth(uriPort, uriRegName, uriUserInfo))
 import qualified System.IO as IO (hClose, IOMode(ReadMode), openBinaryFile)
-import System.IO.Unsafe (unsafeInterleaveIO)
+--import System.IO.Unsafe (unsafeInterleaveIO)
+--import System.Process.Progress (qPutStrLn, noisier)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- |Return a list of the index files that contain the packages of a
@@ -76,15 +78,15 @@ sourcePackagesFromSources root arch sources = do
 -- FIXME: assuming the index is part of the cache
 sourcePackagesOfIndex' :: MonadRepos m => EnvRoot -> Arch -> RepoKey -> Release -> PackageIndex -> m [SourcePackage]
 sourcePackagesOfIndex' root arch repo release index =
-    do -- state <- getApt
-       -- let cached = lookupSourcePackages path state <$> getApt
+    do -- noisier 1 $ qPutStrLn ($(symbol 'sourcePackagesOfIndex') ++ ": " ++ path)
        let suff = indexCacheFile arch repo release index
        let path = rootPath root ++ suff
-       -- cached <- (Map.lookup path . getL sourcePackageMap) <$> getRepos
-       -- status <- liftIO $ getFileStatus path `catch` (\ (_ :: IOError) -> error $ "Sources.list seems out of sync.  If a new release has been created you probably need to remove " ++ takeDirectory (rootPath root) ++ " and try again - sorry about that.")
-       paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
+       -- unsafeInterleaveIO makes the package index file reads
+       -- asynchronous, not sure what the performance implications
+       -- are.  Anyway, this is now only called on demand, so the
+       -- unsafeInterleaveIO is probably moot.
+       paragraphs <- liftIO $ {-unsafeInterleaveIO-} (readParagraphs path)
        let packages = List.map (toSourcePackage index) paragraphs
-       -- modifyRepos $ modL sourcePackageMap (Map.insert path (status, packages))
        return packages
 
 toSourcePackage :: PackageIndex -> B.Paragraph -> SourcePackage
@@ -148,13 +150,11 @@ binaryPackagesFromSources root arch sources = do
 -- FIXME: assuming the index is part of the cache
 binaryPackagesOfIndex' :: MonadRepos m => EnvRoot -> Arch -> RepoKey -> Release -> PackageIndex -> m [BinaryPackage]
 binaryPackagesOfIndex' root arch repo release index =
-    do let suff = indexCacheFile arch repo release index
+    do -- noisier 1 $ qPutStrLn ($(symbol 'sourcePackagesOfIndex') ++ ": " ++ path)
+       let suff = indexCacheFile arch repo release index
        let path = rootPath root ++ suff
-       -- cached <- (Map.lookup path . getL binaryPackageMap) <$> getRepos
-       -- status <- liftIO $ getFileStatus path
-       paragraphs <- liftIO $ unsafeInterleaveIO (readParagraphs path)
+       paragraphs <- liftIO $ {-unsafeInterleaveIO-} (readParagraphs path)
        let packages = List.map (toBinaryPackage release index) paragraphs
-       -- modifyRepos $ modL binaryPackageMap (Map.insert path (status, packages))
        return packages
 
 toBinaryPackage :: Release -> PackageIndex -> B.Paragraph -> BinaryPackage
