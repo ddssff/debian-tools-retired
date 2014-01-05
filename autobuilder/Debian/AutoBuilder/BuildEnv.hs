@@ -12,7 +12,7 @@ import qualified Debian.AutoBuilder.LocalRepo as Local (prepare)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(archList, buildRelease, cleanUp, components, excludePackages, flushDepends, flushPool, flushRoot, ifSourcesChanged, includePackages, optionalIncludePackages))
 import Debian.Release (ReleaseName, releaseName')
 import Debian.Repo.EnvPath (EnvRoot(rootPath), EnvRoot(EnvRoot))
-import Debian.Repo.OSImage (MonadOS, chrootEnv, osRoot)
+import Debian.Repo.OSImage (MonadOS, chrootEnv, osRoot, syncLocalPool)
 import Debian.Repo.LocalRepository (LocalRepository)
 import Debian.Repo.Prelude (access, checkRsyncExitCode, rsync)
 import Debian.Repo.Slice (NamedSliceList)
@@ -62,15 +62,9 @@ prepareDependOS params rel =
                 code <- evalMonadOS (access osRoot >>= \ cRoot -> liftIO (rsync ["-x"] (rootPath cRoot) (rootPath dRoot))) cleanOS
                 checkRsyncExitCode code
                 return ())
-       prepareOS dRoot
-                  rel
-                  localRepo
-                  False
-                  (P.ifSourcesChanged params)
-                  (P.includePackages params)
-                  (P.optionalIncludePackages params)
-                  (P.excludePackages params)
-                  (P.components params)
+       dependOS <- prepareOS dRoot rel localRepo False (P.ifSourcesChanged params) (P.includePackages params) (P.optionalIncludePackages params) (P.excludePackages params) (P.components params)
+       evalMonadOS syncLocalPool dependOS
+       return dependOS
 
 prepareBuildOS :: (MonadOS m, MonadTop m, MonadRepos m, Applicative m) => ReleaseName -> m OSKey
 prepareBuildOS rel = do

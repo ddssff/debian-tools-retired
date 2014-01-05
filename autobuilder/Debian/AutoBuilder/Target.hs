@@ -350,7 +350,6 @@ buildTarget ::
     Target ->
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
 buildTarget cache dependOS buildOS repo !target = do
-  evalMonadOS syncLocalPool dependOS
   -- Get the control file from the clean source and compute the
   -- build dependencies
   let debianControl = targetControl target
