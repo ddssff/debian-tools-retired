@@ -147,11 +147,11 @@ prepareBuild :: (MonadOS m, MonadIO m) => C.CacheRec -> T.Download -> m DebianBu
 prepareBuild _cache target =
     liftIO (try (findSourceTree (T.getTop target))) >>=
     either (\ (_ :: SomeException) ->
-                qPutStrLn ("Failed to find source tree in " ++ T.getTop target ++ ", trying build trees.") >>
+                quieter 1 (qPutStrLn ("Failed to find source tree in " ++ T.getTop target ++ ", trying build trees.")) >>
                 liftIO (findDebianBuildTrees (T.getTop target)) >>= \ trees ->
                     case trees of
                       [tree] ->
-                          qPutStrLn ("Found build tree in " ++ topdir' tree) >>
+                          quieter 1 (qPutStrLn ("Found build tree in " ++ topdir' tree)) >>
                           copyBuild tree
                       [] -> error $ "No debian source tree found in " ++ T.getTop target
                       _ -> error $ "Multiple debian source trees found in " ++ T.getTop target)
