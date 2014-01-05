@@ -26,7 +26,7 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Process (shell, showCommandForUser)
 import System.Process.Read (readProcessWithExitCode)
-import System.Process.Progress (runProcessQ, collectOutputs)
+import System.Process.Progress (collectOutputs)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.XML.HaXml (htmlprint)
 import Text.XML.HaXml.Types
@@ -204,7 +204,7 @@ findVersion package (Document _ _ (Elem _name _attrs content) _) =
 -- |Download and save the tarball, return its contents.
 download' :: (MonadRepos m, MonadTop m) => String -> String -> Version -> m B.ByteString
 download' server name version =
-    do (res, out, err, _) <- liftIO (runProcessQ (shell (downloadCommand server name version)) B.empty) >>= return . collectOutputs
+    do (res, out, err, _) <- liftIO (runProc (shell (downloadCommand server name version))) >>= return . collectOutputs
        tmp <- tmpDir
        tar <- tarball name version
        -- (res, out, err) <- runProcessWith
