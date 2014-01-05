@@ -160,8 +160,7 @@ prepareLocalRepository root layout =
 
 copyLocalRepo :: MonadIO m => EnvPath -> LocalRepository -> m LocalRepository
 copyLocalRepo dest repo =
-    do quieter 1 $ qPutStrLn ("Syncing local repository from " ++ src ++ " -> " ++ dst)
-       liftIO $ createDirectoryIfMissing True (outsidePath dest)
+    do liftIO $ createDirectoryIfMissing True (outsidePath dest)
        result <- liftIO $ rsync [] (outsidePath (repoRoot repo)) (outsidePath dest)
        case result of
          ExitSuccess -> return $ repo {repoRoot = dest}

@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, PackageImports, TupleSections #-}
+{-# LANGUAGE FlexibleContexts, PackageImports, TemplateHaskell, TupleSections #-}
 -- |Types that represent a "slice" of a repository, as defined by a
 -- list of DebSource.  This is called a slice because some sections
 -- may be omitted, and because different repositories may be combined
@@ -23,7 +23,7 @@ import Debian.Control.Text (decodeParagraph)
 import Debian.Release (parseReleaseName, parseSection')
 import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..))
 import Debian.Repo.LocalRepository (prepareLocalRepository)
-import Debian.Repo.Prelude (replaceFile)
+import Debian.Repo.Prelude (replaceFile, symbol)
 import Debian.Repo.Repo (repoKey)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..), SourcesChangedAction, doSourcesChangedAction)
 import Debian.Repo.State (MonadRepos, prepareRemoteRepository)
@@ -99,9 +99,7 @@ verifyDebSource chroot line =
 -- value of sourcesChangedAction.  (FIXME: Does this really work for MonadOS?)
 updateCacheSources :: (MonadRepos m, MonadTop m) => SourcesChangedAction -> NamedSliceList -> m ()
 updateCacheSources sourcesChangedAction baseSources = do
-  qPutStrLn "Updating cache sources"
   let rel = sliceListName baseSources
-  qPutStrLn $ "Updating cache sources for " <> show rel
   dir <- distDir rel
   sources <- sourcesPath rel
   distExists <- liftIO $ doesFileExist sources
@@ -109,7 +107,8 @@ updateCacheSources sourcesChangedAction baseSources = do
     True -> do
       fileSources <- liftIO (readFile sources) >>= verifySourcesList Nothing . parseSourcesList
       when (fileSources /= sliceList baseSources)
-           (liftIO $ doSourcesChangedAction dir sources baseSources fileSources sourcesChangedAction)
+           (qPutStrLn ($(symbol 'updateCacheSources) ++ " for " <> show rel) >>
+            liftIO (doSourcesChangedAction dir sources baseSources fileSources sourcesChangedAction))
     False -> do
       liftIO $ createDirectoryIfMissing True dir
       liftIO $ replaceFile sources (show (pretty baseSources))

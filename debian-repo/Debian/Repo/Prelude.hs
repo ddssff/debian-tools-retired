@@ -31,31 +31,24 @@ module Debian.Repo.Prelude
     , dropPrefix
     ) where
 
-import Control.Exception as E (catch, try, bracket)
-import Control.Monad (filterM, foldM)
 import Control.Monad.State (get, modify, MonadIO, MonadState)
 import qualified Data.ByteString.Lazy as L (empty)
-import qualified Data.ByteString.Lazy.Char8 as B (ByteString, readFile)
-import qualified Data.Digest.Pure.MD5 (md5)
+import qualified Data.ByteString.Lazy.Char8 as B (ByteString)
 import Data.Lens.Lazy (getL, Lens, modL)
-import Data.List (find, group, inits, intersect, isSuffixOf, sort, isPrefixOf)
+import Data.List (group, sort)
 import Data.List as List (map)
-import Debian.Repo.Prelude.Bool
-import Debian.Repo.Prelude.Files
-import Debian.Repo.Prelude.GPGSign
-import Debian.Repo.Prelude.List
-import Debian.Repo.Prelude.Misc
+import Debian.Repo.Prelude.Bool (cond)
+import Debian.Repo.Prelude.Files (getSubDirectories, maybeWriteFile, replaceFile, writeFileIfMissing)
+import Debian.Repo.Prelude.GPGSign (cd)
+import Debian.Repo.Prelude.List (cartesianProduct, dropPrefix, isSublistOf, listIntersection, partitionM)
+import Debian.Repo.Prelude.Misc (sameInode, sameMd5sum)
 import Language.Haskell.TH (Exp(LitE), Lit(StringL), Name, nameBase, nameModule, Q)
-import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory, getDirectoryContents, removeFile, setCurrentDirectory)
 import System.Exit (ExitCode(..))
-import System.FilePath (dropTrailingPathSeparator, splitFileName)
-import System.IO.Error (isDoesNotExistError)
-import System.Posix.Files (deviceID, fileID, getFileStatus, getSymbolicLinkStatus, isSymbolicLink)
+import System.FilePath (dropTrailingPathSeparator)
 import System.Process (CreateProcess, proc)
 import System.Process.Progress (ePutStrLn, keepResult, keepResult, runProcessF)
 import System.Process.Read.Chunks (Output)
 import System.Process.Read.Verbosity (quieter, runProcess)
-import System.Unix.Directory hiding (find)
 import Text.PrettyPrint.ANSI.Leijen (Doc, text)
 import Text.Printf (printf)
 

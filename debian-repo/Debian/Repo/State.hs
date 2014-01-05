@@ -171,8 +171,8 @@ findRelease repo dist = (Map.lookup (ReleaseKey (repoKey repo) dist) . getL rele
 
 getRelease :: MonadRepos m => ReleaseKey -> m Release
 getRelease key = do
-    Just rel <- (Map.lookup key . getL releaseMap) <$> getRepos
-    return rel
+  Just rel <- (Map.lookup key . getL releaseMap) <$> getRepos
+  return rel
 
 putRelease :: (Repo r, MonadRepos m) => r -> Release -> m ReleaseKey
 putRelease repo release = do

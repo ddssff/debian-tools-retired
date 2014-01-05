@@ -17,6 +17,7 @@ module Debian.Repo.State.Package
     , explainError
     , explainErrors
     , showErrors
+    , releaseKey
     ) where
 
 import Control.Applicative ((<$>))
@@ -58,7 +59,7 @@ import qualified Debian.Repo.Prelude as F (Pretty(..))
 import Debian.Repo.Prelude.GPGSign (PGPKey)
 import Debian.Repo.Repo (Repo, repoArchList, repoKey, repoKeyURI)
 import Debian.Repo.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
-import Debian.Repo.State (MonadRepos(getRepos, putRepos), getRelease, ReleaseKey)
+import Debian.Repo.State (MonadRepos(getRepos, putRepos), getRelease, ReleaseKey, putRelease)
 import Debian.Repo.State.Release (findReleases, prepareRelease, writeRelease, signRelease)
 import Debian.URI (fileFromURIStrict)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
@@ -139,6 +140,11 @@ instance Show Problem where
     show (MissingFile path) = "MissingFile " ++ path
     show (BadChecksum path a b) = "BadChecksum " ++ path ++ " " ++ show a ++ " " ++ show b
     show (OtherProblem s) = "OtherProblem " ++ show s
+
+releaseKey :: MonadInstall m => Release -> m ReleaseKey
+releaseKey release = do
+  repo <- getL repository <$> getInstall
+  putRelease repo release
 
 mergeResults :: [InstallResult] -> InstallResult
 mergeResults results =

@@ -46,11 +46,10 @@ prepareAptImage :: (MonadTop m, MonadRepos m) =>
               -> NamedSliceList		-- The sources.list
               -> m AptKey		-- The resulting environment
 prepareAptImage sourcesChangedAction sources = do
-  qPutStrLn ("Preparing apt-get environment for " ++ show (relName (sliceListName sources)))
-  quieter 0 $ do
-    root <- cacheRootDir (sliceListName sources)
-    mkey <- findAptKey root
-    maybe (prepareAptImage' sourcesChangedAction sources) return mkey
+  quieter 1 $ qPutStrLn ("Preparing apt-get environment for " ++ show (relName (sliceListName sources)))
+  root <- cacheRootDir (sliceListName sources)
+  mkey <- findAptKey root
+  maybe (prepareAptImage' sourcesChangedAction sources) return mkey
 
 prepareAptImage' :: (MonadTop m, MonadRepos m) => SourcesChangedAction -> NamedSliceList -> m AptKey
 prepareAptImage' sourcesChangedAction sources =
@@ -71,7 +70,7 @@ aptSourcePackages =
     do root <- getL aptImageRoot <$> getApt
        arch <- getL aptImageArch <$> getApt
        sources <- getL aptImageSources <$> getApt
-       quieter 1 $ qPutStrLn ($(symbol 'aptSourcePackages) ++ " " ++ show (pretty (sliceListName sources)))
+       -- quieter 1 $ qPutStrLn ($(symbol 'aptSourcePackages) ++ " " ++ show (pretty (sliceListName sources)))
        sourcePackagesFromSources root arch (sliceList sources)
 
 aptBinaryPackages :: (MonadRepos m, MonadApt m) => m [BinaryPackage]

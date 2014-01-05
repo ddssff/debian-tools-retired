@@ -72,7 +72,7 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
 import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
-import System.Process.Progress (collectOutputs, ePutStr, ePutStrLn, keepResult, keepResult, keepStdout, mergeToStdout, noisier, qPutStrLn, quieter)
+import System.Process.Progress (collectOutputs, ePutStr, ePutStrLn, keepResult, keepResult, keepStdout, mergeToStdout, noisier, qPutStr, qPutStrLn, quieter)
 import System.Process.Read (readCreateProcess)
 import System.Unix.Chroot (useEnv)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -324,6 +324,13 @@ limit n s = if length s > n + 3 then take n s ++ "..." else s
 qError :: MonadIO m => String -> m b
 qError message = qPutStrLn message >> error message
 
+qBracket :: MonadIO m => m a -> String -> m a
+qBracket action message = do
+  qPutStr (message <> "...")
+  result <- action
+  qPutStrLn "done."
+  return result
+
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
     (MonadRepos m, MonadTop m, MonadApt m) =>
@@ -334,25 +341,24 @@ buildTarget ::
     Target ->
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
 buildTarget cache dependOS buildOS repo !target = do
-  quieter 0 $ evalMonadOS syncLocalPool dependOS
+  evalMonadOS syncLocalPool dependOS
   -- Get the control file from the clean source and compute the
   -- build dependencies
   let debianControl = targetControl target
   arch <- evalMonadOS buildArchOfOS dependOS
-  solns <- evalMonadOS (buildDepSolutions arch (map BinPkgName (P.preferred (P.params cache))) debianControl) dependOS
+  soln <- evalMonadOS (buildDepSolution arch (map BinPkgName (P.preferred (P.params cache))) debianControl) dependOS `qBracket` $(symbol 'buildDepSolution)
   -- let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) dependOS globalBuildDeps debianControl
-  case solns of
+  case soln of
         Failure excuses -> qError $ intercalate "\n  " ("Couldn't satisfy build dependencies" : excuses)
-        Success [] -> qError "Internal error 4"
-        Success ((_count, sourceDependencies) : _) ->
+        Success packages ->
             do -- Get the newest available version of a source package,
                -- along with its status, either Indep or All
                (releaseControlInfo, releaseStatus, _message) <- evalMonadOS (getReleaseControlInfo target) dependOS
                let repoVersion = fmap (packageVersion . sourcePackageID) releaseControlInfo
                    oldFingerprint = packageFingerprint releaseControlInfo
                -- Get the changelog entry from the clean source
-               let newFingerprint = targetFingerprint target sourceDependencies
-               newVersion <- evalMonadOS (computeNewVersion cache target) dependOS
+               let newFingerprint = targetFingerprint target packages
+               newVersion <- evalMonadOS (computeNewVersion cache target releaseControlInfo releaseStatus) dependOS
                let decision = buildDecision cache target oldFingerprint newFingerprint releaseStatus
                ePutStrLn ("Build decision: " ++ show decision)
                -- quieter (const 0) $ qPutStrLn ("newVersion: " ++ show (fmap prettyDebianVersion newVersion))
@@ -374,13 +380,13 @@ buildTarget cache dependOS buildOS repo !target = do
 -- | Build a package and upload it to the local repository.
 buildPackage :: (MonadRepos m, MonadTop m) =>
                 P.CacheRec -> OSKey -> OSKey -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
-buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !target status repo =
-    checkDryRun >>
-    prepareBuildTree cache dependOS buildOS newFingerprint target >>= \ tree ->
-    logEntry tree >>
-    noisier 0 (evalMonadOS (build tree) buildOS) >>=
-    find >>=
-    doLocalUpload
+buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !target status repo = do
+  checkDryRun
+  source <- prepareBuildTree cache dependOS buildOS newFingerprint target
+  logEntry source
+  result <- noisier 0 $ evalMonadOS (build source) buildOS
+  result' <- find result
+  doLocalUpload result'
     where
       sourceLog = entry . cleanSource $ target
       checkDryRun = when (P.dryRun (P.params cache))
@@ -424,7 +430,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              let ver = maybe [] (\ v -> [("CABALDEBIAN", Just (show ["--deb-version", show (prettyDebianVersion v)]))]) newVersion
              let env = ver ++ P.setEnv (P.params cache)
              let action = buildDebs (P.noClean (P.params cache)) False env buildTree status
-             elapsed <- T.buildWrapper (download (tgt target)) action
+             elapsed <- noisier 2 $ T.buildWrapper (download (tgt target)) action
              return (buildTree, elapsed)
 
       find (buildTree, elapsed) = liftIO (findChanges buildTree) >>= \ changesFile -> return (changesFile, elapsed)
@@ -508,6 +514,7 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
 -- architecture are available.
 getReleaseControlInfo :: (MonadOS m, MonadRepos m) => Target -> m (Maybe SourcePackage, SourcePackageStatus, String)
 getReleaseControlInfo target = do
+  quieter 1 $ qPutStrLn $(symbol 'getReleaseControlInfo)
   sourcePackages' <- (sortBy compareVersion . sortSourcePackages [packageName]) <$> osSourcePackages
   binaryPackages' <- sortBinaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages') <$> osBinaryPackages
   let sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
@@ -583,9 +590,8 @@ data Status = Complete | Missing [BinPkgName]
 -- |Compute a new version number for a package by adding a vendor tag
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
-computeNewVersion :: (MonadApt m, MonadRepos m, MonadOS m) => P.CacheRec -> Target -> m (Failing DebianVersion)
-computeNewVersion cache target = do
-  (releaseControlInfo, _releaseStatus, _message) <- getReleaseControlInfo target
+computeNewVersion :: (MonadApt m, MonadRepos m, MonadOS m) => P.CacheRec -> Target -> Maybe SourcePackage -> SourcePackageStatus -> m (Failing DebianVersion)
+computeNewVersion cache target releaseControlInfo releaseStatus = do
   let current = if buildTrumped then Nothing else releaseControlInfo
       currentVersion = maybe Nothing (Just . parseDebianVersion . T.unpack) (maybe Nothing (fieldValue "Version" . sourceParagraph) current)
       checkVersion :: DebianVersion -> Failing DebianVersion
@@ -634,6 +640,17 @@ computeNewVersion cache target = do
       -- version in this dist.  The new version must be newer
       -- than this.
       buildTrumped = elem (targetName target) (P.buildTrumped (P.params cache))
+
+-- | Return the first build dependency solution if it can be computed.
+-- The actual list could be arbitrarily long, this prevents the caller
+-- from trying to look at it.
+buildDepSolution :: (MonadOS m, MonadIO m, MonadRepos m) => Arch -> [BinPkgName] -> Control' T.Text -> m (Failing [BinaryPackage])
+buildDepSolution arch preferred debianControl = do
+  solns <- buildDepSolutions arch preferred debianControl
+  return $ case solns of
+             Success [] -> Failure [$(symbol 'buildDepSolution) ++ ": Internal error 4"]
+             Success ((_count, deps) : _) -> Success deps
+             Failure x -> Failure x
 
 -- FIXME: Most of this code should move into Debian.Repo.Dependencies
 buildDepSolutions :: (MonadOS m, MonadIO m, MonadRepos m) => Arch -> [BinPkgName] -> Control' T.Text -> m (Failing [(Int, [BinaryPackage])])
@@ -754,7 +771,7 @@ installDependencies source extra sourceFingerprint =
            pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
            aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
            command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
-       qPutStrLn $ "Installing build dependencies into " ++ root
+       quieter 1 $ qPutStrLn $ $(symbol 'installDependencies) ++ " into " ++ root
        (code, out, _, _) <- withProc (liftIO $ useEnv' root forceList $ readProc (shell command)) >>=
                             return . collectOutputs . mergeToStdout
        case code of
