@@ -657,9 +657,9 @@ buildDepSolution :: (MonadOS m, MonadIO m, MonadRepos m) => Arch -> [BinPkgName]
 buildDepSolution arch preferred debianControl = do
   solns <- buildDepSolutions arch preferred debianControl
   return $ case solns of
-             Success [] -> Failure [$(symbol 'buildDepSolution) ++ ": Internal error 4"]
              Success ((_count, deps) : _) -> Success deps
              Failure x -> Failure x
+             _ -> Failure [$(symbol 'buildDepSolution) ++ ": Internal error 4"]
 
 -- FIXME: Most of this code should move into Debian.Repo.Dependencies
 buildDepSolutions :: (MonadOS m, MonadIO m, MonadRepos m) => Arch -> [BinPkgName] -> Control' T.Text -> m (Failing [(Int, [BinaryPackage])])
