@@ -326,10 +326,19 @@ qError message = qPutStrLn message >> error message
 
 qBracket :: MonadIO m => m a -> String -> m a
 qBracket action message = do
-  qPutStr (message <> "...")
-  result <- action
-  qPutStrLn "done."
-  return result
+  v <- verbositry
+  case v of
+    n | n < 1 -> action
+    1 -> do
+      qPutStr (message <> "...")
+      result <- quieter 1 action
+      qPutStrLn "done."
+      return result
+    n -> do
+      qPutStrLn message
+      result <- quieter 1 action
+      qPutStrLn (message ++ "...done.")
+      return result
 
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
@@ -430,7 +439,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              let ver = maybe [] (\ v -> [("CABALDEBIAN", Just (show ["--deb-version", show (prettyDebianVersion v)]))]) newVersion
              let env = ver ++ P.setEnv (P.params cache)
              let action = buildDebs (P.noClean (P.params cache)) False env buildTree status
-             elapsed <- noisier 2 $ T.buildWrapper (download (tgt target)) action
+             elapsed <- noisier 3 $ T.buildWrapper (download (tgt target)) action
              return (buildTree, elapsed)
 
       find (buildTree, elapsed) = liftIO (findChanges buildTree) >>= \ changesFile -> return (changesFile, elapsed)
