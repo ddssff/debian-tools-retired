@@ -1,7 +1,6 @@
 -- | Install packages to and delete packages from a local repository.
 {-# LANGUAGE BangPatterns, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell, TupleSections #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-name-shadowing #-}
--- |Install binary packages into and delete binary packages from a repository.
 module Debian.Repo.State.Package
     ( MonadInstall
     , evalInstall
