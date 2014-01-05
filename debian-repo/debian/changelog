@@ -1,3 +1,9 @@
+haskell-debian-repo (5.53) unstable; urgency=low
+
+  * Add a monad for managing local repository modifications (MonadInstall)
+
+ -- David Fox <dsf@seereason.com>  Sun, 05 Jan 2014 06:31:35 -0800
+
 haskell-debian-repo (5.52) unstable; urgency=low
 
   * Fix for release file writing bug
