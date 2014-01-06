@@ -10,8 +10,7 @@ Maintainer:         David Fox <dsf@seereason.com>
 Category:           System
 Build-type:         Simple
 Cabal-version:      >=1.6
-Extra-source-files:
-  README.md, changelog
+Extra-source-files: changelog
 
 source-repository head
   Type:             darcs
