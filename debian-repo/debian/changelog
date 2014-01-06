@@ -1,3 +1,10 @@
+haskell-debian-repo (5.53.1) unstable; urgency=low
+
+  * When apt-get update throws an error in an AptImage, remove and
+    recreate the AptImage root directory.
+
+ -- David Fox <dsf@seereason.com>  Mon, 06 Jan 2014 13:00:00 -0800
+
 haskell-debian-repo (5.53) unstable; urgency=low
 
   * Add a monad for managing local repository modifications (MonadInstall)
