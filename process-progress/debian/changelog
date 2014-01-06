@@ -1,3 +1,11 @@
+haskell-process-progress (0.9) unstable; urgency=low
+
+  * Now $VERBOSITY<=0 means the qPutStr and qPutStrLn functions don't
+    generate output, one or greater and they do.
+  * Add qBracket
+
+ -- David Fox <dsf@seereason.com>  Mon, 06 Jan 2014 13:25:29 -0800
+
 haskell-process-progress (0.8) unstable; urgency=low
 
   * Move the NFData ExitCode instance here from debian-repo

@@ -15,6 +15,7 @@ module System.Process.Read.Verbosity
     , qPutStrLn
     , qMessage
     , qMessageLn
+    , qBracket
     ) where
 
 import Control.Monad (when)
@@ -36,7 +37,9 @@ withModifiedVerbosity :: MonadIO m => (Int -> Int) -> m a -> m a
 withModifiedVerbosity f action =
     verbosity >>= \ v ->
     liftIO (modifyEnv "VERBOSITY" (const (Just (show (f v))))) >>
+    -- ePutStr ("[" ++ show (f v) ++ "]") >>
     action >>= \ result ->
+    -- ePutStr ("[" ++ show v ++ "]") >>
     liftIO (modifyEnv "VERBOSITY" (const (Just (show v)))) >>
     return result
 
@@ -68,13 +71,29 @@ runProcessF prefixes p input = liftIO $
       _ -> runProcessVF p input
 
 qPutStrLn :: MonadIO m => String -> m ()
-qPutStrLn s = verbosity >>= \ v -> when (v >= 0) (ePutStrLn s)
+qPutStrLn s = verbosity >>= \ v -> when (v > 0) (ePutStrLn s)
 
 qPutStr :: MonadIO m => String -> m ()
-qPutStr s = verbosity >>= \ v -> when (v >= 0) (ePutStr s)
+qPutStr s = verbosity >>= \ v -> when (v > 0) (ePutStr s)
 
 qMessage :: MonadIO m => String -> a -> m a
 qMessage s x = qPutStr s >> return x
 
 qMessageLn :: MonadIO m => String -> a -> m a
 qMessageLn s x = qPutStrLn s >> return x
+
+qBracket :: MonadIO m => String -> m a -> m a
+qBracket message action = do
+  v <- verbosity
+  case v of
+    n | n < 1 -> action
+    1 -> do
+      qPutStr (message ++ "...")
+      result <- quieter 1 action
+      qPutStrLn "done."
+      return result
+    n -> do
+      qPutStrLn message
+      result <- quieter 1 action
+      qPutStrLn (message ++ "...done.")
+      return result
