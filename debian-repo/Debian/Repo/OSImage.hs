@@ -528,9 +528,11 @@ buildOS' root distro arch repo copy include exclude components =
                "rm -rf " ++ woot,
                "mv " ++ wootNew ++ " " ++ woot]
 
--- |Use rsync to synchronize the pool of locally built packages from
--- outside the build environment to the location inside the environment
--- where apt can see and install the packages.
+-- | Use rsync to synchronize the pool of locally built packages from
+-- outside the build environment to the location inside the
+-- environment where apt can see and install the packages.  On the
+-- assumption that we are doing this because the pool changed, we also
+-- flush the cached package lists.
 syncLocalPool :: (MonadIO m, MonadOS m) => m ()
 syncLocalPool =
     do root <- access osRoot

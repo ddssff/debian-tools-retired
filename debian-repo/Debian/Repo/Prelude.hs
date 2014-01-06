@@ -1,9 +1,6 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, OverloadedStrings,
              PackageImports, ScopedTypeVariables, TemplateHaskell, TypeSynonymInstances, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
--- |AptIO is an instance of the RWS monad used to manage the global
--- state and output style parameters of clients of the Apt library,
--- such as the autobuilder.
 module Debian.Repo.Prelude
     ( countTasks
     , nub'
@@ -17,7 +14,7 @@ module Debian.Repo.Prelude
     , checkRsyncExitCode
     , Pretty(..)
     , partitionM
-    , maybeWriteFile		-- writeFileUnlessSame
+    , maybeWriteFile
     , replaceFile
     , cond
     , listIntersection
