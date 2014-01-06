@@ -174,7 +174,6 @@ buildOS :: (MonadRepos m, MonadTop m) =>
          -> [String]
          -> m OSKey
 buildOS root distro arch repo copy include exclude components =
-    noisier 0 $
     do os <- buildOS' root distro arch repo copy include exclude components
        key <- putOSImage os
        evalMonadOS updateOS key

@@ -44,7 +44,7 @@ main =
        flags <- case getOpt Permute (map option optSpecs) args of
                   (o, _n, []) -> return $ foldl (flip id) params o
                   (_, _, errs) -> error (concat errs ++ usageInfo "Usage:" (map option optSpecs))
-       quieter 0 (qPutStrLn ("Flags:\n  " ++ (show flags)))
+       qPutStrLn ("Flags:\n  " ++ (show flags))
        let lockPath = rootParam flags </> "newdist.lock"
        liftIO $ createDirectoryIfMissing True (rootParam flags)
        case printVersion flags of

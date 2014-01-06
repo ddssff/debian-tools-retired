@@ -18,7 +18,7 @@ import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
---import Debian.Repo.Prelude (symbol)
+import Debian.Repo.Prelude (symbol)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
 import Debian.Repo.Slice (binarySlices, Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices)
@@ -29,7 +29,7 @@ import Debian.Version (parseDebianVersion)
 import Network.URI (escapeURIString, URI(uriAuthority, uriPath), URIAuth(uriPort, uriRegName, uriUserInfo))
 import qualified System.IO as IO (hClose, IOMode(ReadMode), openBinaryFile)
 --import System.IO.Unsafe (unsafeInterleaveIO)
---import System.Process.Progress (qPutStrLn, noisier)
+import System.Process.Progress (qBracket, quieter)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- |Return a list of the index files that contain the packages of a
@@ -73,21 +73,22 @@ instance Show UpdateError where
 sourcePackagesFromSources :: MonadRepos m => EnvRoot -> Arch -> SliceList -> m [SourcePackage]
 sourcePackagesFromSources root arch sources = do
   indexes <- mapM (sliceIndexes arch) (slices . sourceSlices $ sources) >>= return . concat
-  mapM (\ (repo, rel, index) -> sourcePackagesOfIndex' root arch repo rel index) indexes >>= return . concat
+  mapM (\ (repo, rel, index) -> sourcePackagesOfIndex root arch repo rel index) indexes >>= return . concat
 
 -- FIXME: assuming the index is part of the cache
-sourcePackagesOfIndex' :: MonadRepos m => EnvRoot -> Arch -> RepoKey -> Release -> PackageIndex -> m [SourcePackage]
-sourcePackagesOfIndex' root arch repo release index =
-    do -- noisier 1 $ qPutStrLn ($(symbol 'sourcePackagesOfIndex') ++ ": " ++ path)
-       let suff = indexCacheFile arch repo release index
-       let path = rootPath root ++ suff
-       -- unsafeInterleaveIO makes the package index file reads
+sourcePackagesOfIndex :: MonadRepos m => EnvRoot -> Arch -> RepoKey -> Release -> PackageIndex -> m [SourcePackage]
+sourcePackagesOfIndex root arch repo release index =
+    quieter 2 $ qBracket ($(symbol 'sourcePackagesOfIndex) ++ " " ++ path) $
+    do -- unsafeInterleaveIO makes the package index file reads
        -- asynchronous, not sure what the performance implications
        -- are.  Anyway, this is now only called on demand, so the
        -- unsafeInterleaveIO is probably moot.
        paragraphs <- liftIO $ {-unsafeInterleaveIO-} (readParagraphs path)
        let packages = List.map (toSourcePackage index) paragraphs
        return packages
+     where
+       path = rootPath root ++ suff
+       suff = indexCacheFile arch repo release index
 
 toSourcePackage :: PackageIndex -> B.Paragraph -> SourcePackage
 toSourcePackage index package =
@@ -145,23 +146,24 @@ parseSourceParagraph p =
 binaryPackagesFromSources :: MonadRepos m => EnvRoot -> Arch -> SliceList -> m [BinaryPackage]
 binaryPackagesFromSources root arch sources = do
   indexes <- mapM (sliceIndexes arch) (slices . binarySlices $ sources) >>= return . concat
-  mapM (\ (repo, rel, index) -> binaryPackagesOfIndex' root arch repo rel index) indexes >>= return . concat
+  mapM (\ (repo, rel, index) -> binaryPackagesOfIndex root arch repo rel index) indexes >>= return . concat
 
 -- FIXME: assuming the index is part of the cache
-binaryPackagesOfIndex' :: MonadRepos m => EnvRoot -> Arch -> RepoKey -> Release -> PackageIndex -> m [BinaryPackage]
-binaryPackagesOfIndex' root arch repo release index =
-    do -- noisier 1 $ qPutStrLn ($(symbol 'sourcePackagesOfIndex') ++ ": " ++ path)
-       let suff = indexCacheFile arch repo release index
-       let path = rootPath root ++ suff
-       paragraphs <- liftIO $ {-unsafeInterleaveIO-} (readParagraphs path)
+binaryPackagesOfIndex :: MonadRepos m => EnvRoot -> Arch -> RepoKey -> Release -> PackageIndex -> m [BinaryPackage]
+binaryPackagesOfIndex root arch repo release index =
+    quieter 2 $ qBracket ($(symbol 'binaryPackagesOfIndex) ++ ": " ++ path) $
+    do paragraphs <- liftIO $ {-unsafeInterleaveIO-} (readParagraphs path)
        let packages = List.map (toBinaryPackage release index) paragraphs
        return packages
+    where
+       suff = indexCacheFile arch repo release index
+       path = rootPath root ++ suff
 
 toBinaryPackage :: Release -> PackageIndex -> B.Paragraph -> BinaryPackage
 toBinaryPackage release index p =
     case (B.fieldValue "Package" p, B.fieldValue "Version" p) of
       (Just name, Just version) ->
-          BinaryPackage 
+          BinaryPackage
           { packageID =
                 makeBinaryPackageID (T.unpack name) (parseDebianVersion (T.unpack version))
           , packageInfo = p

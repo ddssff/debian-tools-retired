@@ -56,7 +56,7 @@ import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import qualified System.IO as IO
 import System.Process (proc)
-import System.Process.Progress (Output, timeTask, defaultVerbosity, withModifiedVerbosity, quieter, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
+import System.Process.Progress (Output, timeTask, defaultVerbosity, withModifiedVerbosity, quieter, withModifiedVerbosity, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -114,9 +114,9 @@ doParameterSet init results params =
         | any isFailure results ->
             return results
       _ ->
-          noisier (P.verbosity params)
+          withModifiedVerbosity (const (P.verbosity params))
             (do top <- askTop
-                withLock (top </> "lockfile") (quieter 0 (P.buildCache params) >>= runParameterSet init))
+                withLock (top </> "lockfile") (P.buildCache params >>= runParameterSet init))
             `IO.catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
           (\ result -> return (result : results))
     where

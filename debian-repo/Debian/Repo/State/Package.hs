@@ -214,7 +214,7 @@ plural _ _ = ""
 -- process each to install the package into a local repository.
 scanIncoming :: MonadRepos m => Bool -> Maybe PGPKey -> LocalRepository -> m [(ChangesFile, InstallResult)]
 scanIncoming createSections keyname repo = do
-  quieter 1 $ qPutStrLn ("Uploading packages to " ++ outsidePath (repoRoot repo) </> "incoming")
+  qPutStrLn ("Uploading packages to " ++ outsidePath (repoRoot repo) </> "incoming")
   changes <- liftIO (findChangesFiles (outsidePath (repoRoot repo) </> "incoming"))
   case changes of
     [] -> qPutStrLn "Nothing to install."

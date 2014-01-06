@@ -296,7 +296,7 @@ restoreFile os (file, mustExist) =
 buildEssential :: (MonadOS m, MonadIO m) => m Relations
 buildEssential =
     access osRoot >>= \ root ->
-    liftIO $ quieter 0 $ do
+    liftIO $ do
       -- qPutStrLn "Computing build essentials"
       essential <-
           readFile (rootPath root ++ "/usr/share/build-essential/essential-packages-list") >>=
@@ -335,8 +335,8 @@ prefixes = Just (" 1> ", " 2> ")
 updateLists :: (MonadOS m, MonadCatchIO m) => m NominalDiffTime
 updateLists =
     do root <-rootPath <$> access osRoot
-       withProc $ quieter 0 $ liftIO $ do
-         quieter 1 $ qPutStrLn ($(symbol 'updateLists) <> ": updating OSImage " ++ root)
+       withProc $ liftIO $ do
+         qPutStrLn ($(symbol 'updateLists) <> ": updating OSImage " ++ root)
          out <- useEnv root forceList (readProc update)
          _ <- case keepResult out of
                 [ExitFailure _] ->
@@ -477,7 +477,6 @@ buildOS' :: (MonadIO m, MonadTop m, Functor m) =>
          -> [String]
          -> m OSImage
 buildOS' root distro arch repo copy include exclude components =
-    noisier 0 $
     do
       ePutStr (unlines [ "Creating clean build environment (" ++ relName (sliceListName distro) ++ ")"
                        , "  root: " ++ show root

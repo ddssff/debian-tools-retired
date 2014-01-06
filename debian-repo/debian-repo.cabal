@@ -34,7 +34,7 @@ Library
 
   Build-Depends:
         ansi-wl-pprint, base, bytestring, Cabal, containers, data-lens, data-lens-template, deepseq, directory, filepath, MonadCatchIO-mtl,
-        mtl, old-time, old-locale, network, parsec >= 3, process, process-listlike >= 0.6, process-progress >= 0.8, pureMD5,
+        mtl, old-time, old-locale, network, parsec >= 3, process, process-listlike >= 0.6, process-progress >= 0.9, pureMD5,
         regex-compat, regex-tdfa, template-haskell, text, time, unix,
         Unixutils >= 1.51, bzlib, zlib, HaXml, MIME, applicative-extras, utf8-string
   Exposed-modules:

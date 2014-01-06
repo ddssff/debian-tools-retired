@@ -83,7 +83,7 @@ aptSourcePackages = do
         root <- getL aptImageRoot <$> getApt
         arch <- getL aptImageArch <$> getApt
         sources <- getL aptImageSources <$> getApt
-        -- quieter 1 $ qPutStrLn ($(symbol 'aptSourcePackages) ++ " " ++ show (pretty (sliceListName sources)))
+        -- qPutStrLn ($(symbol 'aptSourcePackages) ++ " " ++ show (pretty (sliceListName sources)))
         pkgs <- sourcePackagesFromSources root arch (sliceList sources)
         modifyApt (setL aptSourcePackageCache (Just pkgs))
         return pkgs
@@ -97,7 +97,7 @@ aptBinaryPackages = do
         root <- getL aptImageRoot <$> getApt
         arch <- getL aptImageArch <$> getApt
         sources <- getL aptImageSources <$> getApt
-        -- quieter 1 $ qPutStrLn ($(symbol 'aptBinaryPackages) ++ " " ++ show (pretty (sliceListName sources)))
+        -- qPutStrLn ($(symbol 'aptBinaryPackages) ++ " " ++ show (pretty (sliceListName sources)))
         pkgs <- binaryPackagesFromSources root arch (sliceList sources)
         modifyApt (setL aptBinaryPackageCache (Just pkgs))
         return pkgs

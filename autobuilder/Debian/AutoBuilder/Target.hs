@@ -72,7 +72,7 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
 import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
-import System.Process.Progress (collectOutputs, ePutStr, ePutStrLn, keepResult, keepResult, keepStdout, mergeToStdout, verbosity, noisier, qPutStr, qPutStrLn, quieter)
+import System.Process.Progress (collectOutputs, ePutStr, ePutStrLn, keepResult, keepResult, keepStdout, mergeToStdout, verbosity, noisier, qPutStr, qPutStrLn, quieter, qBracket)
 import System.Process.Read (readCreateProcess)
 import System.Unix.Chroot (useEnv)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -123,12 +123,12 @@ prepareTargets cache globalBuildDeps targetSpecs =
       prepare :: (MonadOS m, MonadRepos m) => Int -> (Int, Buildable) -> m (Either SomeException Target)
       prepare count (index, tgt) =
           do qPutStrLn (printf "[%2d of %2d] %s in %s" index count (P.unTargetName (T.handle $ download $ tgt)) (T.getTop $ download $ tgt))
-             quieter 0 (try (prepareTarget cache globalBuildDeps tgt) >>=
-                             either (\ (e :: SomeException) ->
-                                         ePutStrLn (printf "[%2d of %2d] - could not prepare %s: %s"
-                                                           index count (show (T.method (download tgt))) (show e)) >>
-                                         return (Left e))
-                                    (return . Right))
+             try (prepareTarget cache globalBuildDeps tgt) >>=
+                 either (\ (e :: SomeException) ->
+                             ePutStrLn (printf "[%2d of %2d] - could not prepare %s: %s"
+                                               index count (show (T.method (download tgt))) (show e)) >>
+                             return (Left e))
+                        (return . Right)
 
 {-
 partitionFailing :: [Failing a] -> ([[String]], [a])
@@ -169,7 +169,7 @@ buildLoop cache localRepo dependOS buildOS !targets =
           ePutStrLn "\nComputing ready targets..." >>
           case readyTargets cache (goals (Set.toList unbuilt)) (Set.toList unbuilt) of
             [] -> return failed
-            triples -> do noisier 0 $ qPutStrLn (makeTable triples)
+            triples -> do ePutStrLn (makeTable triples)
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
                           loop2 (Set.difference unbuilt ready) failed triples
       loop2 :: (MonadRepos m, MonadApt m, MonadTop m) =>
@@ -324,22 +324,6 @@ limit n s = if length s > n + 3 then take n s ++ "..." else s
 qError :: MonadIO m => String -> m b
 qError message = qPutStrLn message >> error message
 
-qBracket :: MonadIO m => m a -> String -> m a
-qBracket action message = do
-  v <- verbosity
-  case v of
-    n | n < 1 -> action
-    1 -> do
-      qPutStr (message <> "...")
-      result <- quieter 1 action
-      qPutStrLn "done."
-      return result
-    n -> do
-      qPutStrLn message
-      result <- quieter 1 action
-      qPutStrLn (message ++ "...done.")
-      return result
-
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
     (MonadRepos m, MonadTop m, MonadApt m) =>
@@ -354,7 +338,7 @@ buildTarget cache dependOS buildOS repo !target = do
   -- build dependencies
   let debianControl = targetControl target
   arch <- evalMonadOS buildArchOfOS dependOS
-  soln <- evalMonadOS (buildDepSolution arch (map BinPkgName (P.preferred (P.params cache))) debianControl) dependOS `qBracket` $(symbol 'buildDepSolution)
+  soln <- qBracket $(symbol 'buildDepSolution) (evalMonadOS (buildDepSolution arch (map BinPkgName (P.preferred (P.params cache))) debianControl) dependOS)
   -- let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) dependOS globalBuildDeps debianControl
   case soln of
         Failure excuses -> qError $ intercalate "\n  " ("Couldn't satisfy build dependencies" : excuses)
@@ -369,8 +353,8 @@ buildTarget cache dependOS buildOS repo !target = do
                newVersion <- evalMonadOS (computeNewVersion cache target releaseControlInfo releaseStatus) dependOS
                let decision = buildDecision cache target oldFingerprint newFingerprint releaseStatus
                ePutStrLn ("Build decision: " ++ show decision)
-               -- quieter (const 0) $ qPutStrLn ("newVersion: " ++ show (fmap prettyDebianVersion newVersion))
-               -- quieter (const 0) $ qPutStrLn ("Release status: " ++ show releaseStatus)
+               -- qPutStrLn ("newVersion: " ++ show (fmap prettyDebianVersion newVersion))
+               -- qPutStrLn ("Release status: " ++ show releaseStatus)
                case newVersion of
                  Failure messages -> qError (intercalate "\n  " ("Failure computing new version number:" : messages))
                  Success version ->
@@ -392,7 +376,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
   checkDryRun
   source <- prepareBuildTree cache dependOS buildOS newFingerprint target
   logEntry source
-  result <- noisier 0 $ evalMonadOS (build source) buildOS
+  result <- evalMonadOS (build source) buildOS
   result' <- find result
   doLocalUpload result'
     where
@@ -438,7 +422,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              let ver = maybe [] (\ v -> [("CABALDEBIAN", Just (show ["--deb-version", show (prettyDebianVersion v)]))]) newVersion
              let env = ver ++ P.setEnv (P.params cache)
              let action = buildDebs (P.noClean (P.params cache)) False env buildTree status
-             elapsed <- noisier 3 $ T.buildWrapper (download (tgt target)) action
+             elapsed <- T.buildWrapper (download (tgt target)) action
              return (buildTree, elapsed)
 
       find (buildTree, elapsed) = liftIO (findChanges buildTree) >>= \ changesFile -> return (changesFile, elapsed)
@@ -522,7 +506,7 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
 -- architecture are available.
 getReleaseControlInfo :: (MonadOS m, MonadRepos m) => Target -> m (Maybe SourcePackage, SourcePackageStatus, String)
 getReleaseControlInfo target = do
-  quieter 1 $ qPutStrLn $(symbol 'getReleaseControlInfo)
+  qPutStrLn $(symbol 'getReleaseControlInfo)
   sourcePackages' <- (sortBy compareVersion . sortSourcePackages [packageName]) <$> osSourcePackages
   binaryPackages' <- sortBinaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages') <$> osBinaryPackages
   let sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
@@ -716,8 +700,7 @@ lookupAll a (_ : pairs) = lookupAll a pairs
 updateChangesFile :: NominalDiffTime -> ChangesFile -> IO ChangesFile
 updateChangesFile elapsed changes = do
   qPutStrLn "Updating changes file"
-  quieter 0 $ do
-      let (Paragraph fields) = changeInfo changes
+  do  let (Paragraph fields) = changeInfo changes
 {-    autobuilderVersion <- processOutput "dpkg -s autobuilder | sed -n 's/^Version: //p'" >>=
                             return . either (const Nothing) Just >>=
                             return . maybe Nothing (listToMaybe . lines) -}
@@ -758,7 +741,7 @@ downloadDependencies source extra sourceFingerprint =
            command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
            aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True --download-only " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
        -- qPutStrLn "Downloading build dependencies"
-       quieter 0 $ qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)
+       qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)
        qPutStrLn ("Downloading build dependencies into " ++ root)
        (code, out, _, _) <- liftIO (useEnv' root forceList (readProc (shell command)) >>= return . collectOutputs . mergeToStdout)
        let out' = decode out
@@ -779,8 +762,8 @@ installDependencies source extra sourceFingerprint =
            pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
            aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
            command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
-       quieter 1 $ qPutStrLn $ $(symbol 'installDependencies) ++ " into " ++ root
-       (code, out, _, _) <- withProc (liftIO $ useEnv' root forceList $ readProc (shell command)) >>=
+       qPutStrLn $ $(symbol 'installDependencies) ++ " into " ++ root
+       (code, out, _, _) <- withProc (liftIO $ useEnv' root forceList $ noisier 1 $ readProc (shell command)) >>=
                             return . collectOutputs . mergeToStdout
        case code of
          [ExitSuccess] -> return out
@@ -789,7 +772,7 @@ installDependencies source extra sourceFingerprint =
 
 -- | This should probably be what the real useEnv does.
 useEnv' :: FilePath -> (a -> IO a) -> IO a -> IO a
-useEnv' rootPath force action = quieter 0 $ useEnv rootPath force $ noisier 0 action
+useEnv' rootPath force action = quieter 1 $ useEnv rootPath force $ noisier 1 action
 
 -- |Set a "Revision" line in the .dsc file, and update the .changes
 -- file to reflect the .dsc file's new md5sum.  By using our newdist
@@ -801,7 +784,7 @@ setRevisionInfo :: Fingerprint -> ChangesFile -> IO ChangesFile
 setRevisionInfo fingerprint changes =
     case partition (isSuffixOf ".dsc" . changedFileName) (changeFiles changes) of
       ([file], otherFiles) -> do
-            quieter 1 $ qPutStrLn ("Setting revision field in " <> changedFileName file)
+            qPutStrLn ("Setting revision field in " <> changedFileName file)
             let dscFilePath = changeDir changes </> changedFileName file
             newDscFile <- parseControlFromFile dscFilePath >>= return . either (error . show) addField
             replaceFile dscFilePath (show (pretty newDscFile))

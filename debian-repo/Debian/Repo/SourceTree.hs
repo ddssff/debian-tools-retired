@@ -101,7 +101,7 @@ buildDebs noClean _twice setEnv buildTree status =
       env0 <- liftIO getEnvironment
       -- Set LOGNAME so dpkg-buildpackage doesn't die when it fails to
       -- get the original user's login information
-      let run cmd = timeTask . useEnv root forceList . noisier 3 $
+      let run cmd = timeTask . useEnv root forceList $
                     runProc (cmd {env = Just (modEnv (("LOGNAME", Just "root") : setEnv) env0),
                                   cwd = dropPrefix root path})
       _ <- liftIO $ run (proc "chmod" ["ugo+x", "debian/rules"])
@@ -109,7 +109,7 @@ buildDebs noClean _twice setEnv buildTree status =
                                                        case status of Indep _ -> ["-B"]; _ -> [],
                                                        if noSecretKey then ["-us", "-uc"] else [],
                                                        if noClean then ["-nc"] else []])
-      (result, elapsed) <- liftIO $ run buildCmd
+      (result, elapsed) <- liftIO . noisier 4 $ run buildCmd
       case keepResult result of
         (ExitFailure n : _) -> fail $ "*** FAILURE: " ++ showCmd (cmdspec buildCmd) ++ " -> " ++ show n
         _ -> return elapsed

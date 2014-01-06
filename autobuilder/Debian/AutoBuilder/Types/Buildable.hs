@@ -129,7 +129,7 @@ targetName = T.handle . download . tgt
 -- DebianBuildTree. 
 prepareTarget :: (MonadOS m, MonadIO m) => C.CacheRec -> Relations -> Buildable -> m Target
 prepareTarget cache globalBuildDeps source =
-    quieter 0 $ prepareBuild cache (download source) >>= \ tree ->
+    prepareBuild cache (download source) >>= \ tree ->
     liftIO (getTargetDependencyInfo globalBuildDeps tree) >>=
     failing (\ msgs -> error (intercalate "\n  " ("Failure obtaining dependency information:" : msgs)))
             (\ deps -> return $ Target { tgt = source, cleanSource = tree, targetDepends = deps })
@@ -194,7 +194,7 @@ prepareBuild _cache target =
 -- 'createSymbolicLink' raises EEXIST.
 forceLink :: FilePath -> FilePath -> IO ()
 forceLink target linkName =
-    quieter 3 $ qPutStrLn ("forceLink " ++ target ++ " " ++ linkName) >>
+    quieter 1 $ qPutStrLn ("forceLink " ++ target ++ " " ++ linkName) >>
     createLink target linkName `E.catch`
       (\ e -> if isAlreadyExistsError e 
               then do removeLink linkName
