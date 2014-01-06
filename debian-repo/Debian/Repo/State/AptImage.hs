@@ -8,6 +8,8 @@ module Debian.Repo.State.AptImage
     ) where
 
 import Control.Applicative ((<$>))
+import Control.Exception (SomeException)
+import Control.Monad.CatchIO (MonadCatchIO, catch)
 import Control.Monad.State (StateT)
 import Control.Monad.Trans (MonadIO(..), MonadTrans(lift))
 import Data.Lens.Lazy (getL, setL)
@@ -41,23 +43,30 @@ withAptImage :: (MonadRepos m, MonadTop m) => SourcesChangedAction -> NamedSlice
 withAptImage sourcesChangedAction sources action = prepareAptImage sourcesChangedAction sources >>= evalMonadApt action
 
 -- |Create a skeletal enviroment sufficient to run apt-get.
-prepareAptImage :: (MonadTop m, MonadRepos m) =>
+prepareAptImage :: forall m. (MonadTop m, MonadRepos m) =>
                  SourcesChangedAction	-- What to do if environment already exists and sources.list is different
               -> NamedSliceList		-- The sources.list
               -> m AptKey		-- The resulting environment
 prepareAptImage sourcesChangedAction sources = do
-  root <- cacheRootDir (sliceListName sources)
-  mkey <- findAptKey root
+  mkey <- findAptKey =<< cacheRootDir (sliceListName sources)
   maybe (prepareAptImage' sourcesChangedAction sources) return mkey
 
-prepareAptImage' :: (MonadTop m, MonadRepos m) => SourcesChangedAction -> NamedSliceList -> m AptKey
-prepareAptImage' sourcesChangedAction sources =
-    cacheRootDir (sliceListName sources) >>= \ root ->
-    findAptKey root >>=
-    maybe (qPutStrLn ($(symbol 'prepareAptImage) ++ ": " ++ (show . pretty . sliceListName $ sources)) >>
-           createAptImage sources >>= putAptImage >>= \ key ->
-           evalMonadApt (updateCacheSources sourcesChangedAction sources >> updateAptEnv) key >>
-           return key) return
+prepareAptImage' :: forall m. (MonadCatchIO m, MonadTop m, MonadRepos m) => SourcesChangedAction -> NamedSliceList -> m AptKey
+prepareAptImage' sourcesChangedAction sources = do
+  mkey <- findAptKey =<< cacheRootDir (sliceListName sources)
+  maybe (prepareAptImage'' `catch` handle) return mkey
+    where
+      handle :: SomeException -> m AptKey
+      handle e = do
+        qPutStrLn ("Exception preparing " ++ (show . pretty . sliceListName $ sources) ++ ": " ++ show e)
+        removeAptImage
+        prepareAptImage''
+      prepareAptImage'' = do
+        qPutStrLn ($(symbol 'prepareAptImage) ++ ": " ++ (show . pretty . sliceListName $ sources))
+        key <- putAptImage =<< createAptImage sources
+        evalMonadApt (updateCacheSources sourcesChangedAction sources >> aptGetUpdate) key
+        return key
+      removeAptImage = cacheRootDir (sliceListName sources) >>= liftIO . removeRecursiveSafely . rootPath
 
 -- |Run apt-get update and then retrieve all the packages referenced
 -- by the sources.list.  The source packages are sorted so that
