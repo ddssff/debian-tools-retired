@@ -9,7 +9,7 @@ import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Compression.GZip as Z
 import Control.Exception (SomeException, throw)
 import Control.Monad (when)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
+import Control.Monad.Catch (catch)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.List (isPrefixOf, isSuffixOf, intercalate, nub, sort, tails)
@@ -140,7 +140,7 @@ downloadCached server name version =
          True -> (liftIO (B.readFile path) >>=
                   return . validate >>=
                   maybe (download' server name version) return)
-                   `IO.catch` (\ (e :: SomeException) ->
+                   `catch` (\ (e :: SomeException) ->
                                      let msg = "Failure reading " ++ path ++ ": " ++ show e in
                                      liftIO (hPutStrLn stderr msg >>
                                              hPutStrLn stderr ("Removing " ++ path) >>

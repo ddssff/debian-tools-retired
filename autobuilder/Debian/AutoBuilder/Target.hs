@@ -15,7 +15,7 @@ import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
 import Control.Arrow (second)
 import Control.Exception (AsyncException(UserInterrupt), evaluate, fromException, SomeException, throw, toException)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO, catch, try)
+import Control.Monad.Catch (MonadCatch, catch, try)
 import Control.Monad.RWS (liftIO, MonadIO, when)
 import qualified Data.ByteString.Char8 as B (concat)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, concat, empty, toChunks, unpack)
@@ -186,7 +186,7 @@ buildLoop cache localRepo dependOS buildOS !targets =
              -- Build one target.
              result <- if Set.member (targetName target) (P.discard (P.params cache))
                        then return (Failure ["--discard option set"])
-                       else (Success <$> buildTarget cache dependOS buildOS localRepo target) `IO.catch` handleBuildException
+                       else (Success <$> buildTarget cache dependOS buildOS localRepo target) `catch` handleBuildException
              failing -- On failure the target and its dependencies get
                      -- added to failed.
                      (\ errs ->
@@ -388,7 +388,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
           case P.noClean (P.params cache) of
             False -> liftIO (maybeAddLogEntry buildTree newVersion)
             True -> return ()
-      build :: forall m. (MonadOS m, MonadRepos m, MonadCatchIO m) =>
+      build :: forall m. (MonadOS m, MonadRepos m, MonadCatch m) =>
                DebianBuildTree -> m (DebianBuildTree, NominalDiffTime)
       build buildTree =
           do -- The --commit flag does not appear until dpkg-dev-1.16.1,
@@ -755,7 +755,7 @@ pathBelow root path =
     where message = "Expected a path below " ++ root ++ ", saw " ++ path
 
 -- |Install the package's build dependencies.
-installDependencies :: (MonadOS m, MonadCatchIO m) => DebianBuildTree -> [String] -> Fingerprint -> m L.ByteString
+installDependencies :: (MonadOS m, MonadCatch m, MonadIO m) => DebianBuildTree -> [String] -> Fingerprint -> m L.ByteString
 installDependencies source extra sourceFingerprint =
     do root <- rootPath <$> access osRoot
        let path = pathBelow root (topdir source)
@@ -811,7 +811,7 @@ setRevisionInfo fingerprint changes =
 -- | Run a checksum command on a file, return the resulting checksum as text.
 doChecksum :: String -> (String -> String) -> FilePath -> IO (Failing String)
 doChecksum cmd f path =
-    doChecksum' `IO.catch` (\ (e :: IOError) -> return (Failure ["Error running " ++ cmd'' ++ ": " ++ show e]))
+    doChecksum' `catch` (\ (e :: IOError) -> return (Failure ["Error running " ++ cmd'' ++ ": " ++ show e]))
     where
       doChecksum' =
           do result <- readProcessWithExitCode cmd' [path] ""

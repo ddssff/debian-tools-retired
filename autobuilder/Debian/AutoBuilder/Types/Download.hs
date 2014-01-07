@@ -7,7 +7,8 @@ module Debian.AutoBuilder.Types.Download
     , flags
     ) where
 
-import Control.Monad.CatchIO (MonadCatchIO)
+import Control.Monad.Catch (MonadCatch)
+import Control.Monad.Trans (MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString)
 import Data.Time (NominalDiffTime)
 import Data.Version (Version)
@@ -32,7 +33,7 @@ data Download
       , cleanTarget :: FilePath -> IO ([Output L.ByteString], NominalDiffTime)
       -- ^ Clean version control info out of a target after it has
       -- been moved to the given location.
-      , buildWrapper :: forall m. (MonadOS m, MonadCatchIO m) => m NominalDiffTime -> m NominalDiffTime
+      , buildWrapper :: forall m. (MonadOS m, MonadCatch m, MonadIO m) => m NominalDiffTime -> m NominalDiffTime
       -- ^ Modify the build process in some way - currently only the
       -- proc target modifies this by mounting and then unmounting /proc.
       }

@@ -9,8 +9,6 @@ Build-Depends: debhelper (>= 7.0)
                , ghc-prof
                , libghc-cabal-dev | ghc
                , libghc-cabal-prof | ghc-prof
-               , libghc-data-lens-dev
-               , libghc-data-lens-prof
                , libghc-extra-dev
                , libghc-extra-prof
                , libghc-hunit-dev
@@ -21,8 +19,6 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-listlike-prof (>= 4.0)
                , libghc-mime-dev (>= 1.1)
                , libghc-mime-prof (>= 1.1)
-               , libghc-monadcatchio-mtl-dev
-               , libghc-monadcatchio-mtl-prof
                , libghc-unixutils-dev (>= 1.51)
                , libghc-unixutils-prof (>= 1.51)
                , libghc-ansi-wl-pprint-dev
@@ -35,16 +31,22 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-bytestring-prof | ghc-prof
                , libghc-bzlib-dev
                , libghc-bzlib-prof
-               , libghc-cabal-debian-dev (>= 4)
-               , libghc-cabal-debian-prof (>= 4)
+               , libghc-cabal-debian-dev (>= 4.0.2)
+               , libghc-cabal-debian-prof (>= 4.0.2)
                , libghc-containers-dev | ghc
                , libghc-containers-prof | ghc-prof
+               , libghc-data-lens-dev
+               , libghc-data-lens-prof
+               , libghc-data-lens-template-dev
+               , libghc-data-lens-template-prof
                , libghc-debian-dev (>= 3.78)
                , libghc-debian-prof (>= 3.78)
-               , libghc-debian-repo-dev (>= 5.42)
-               , libghc-debian-repo-prof (>= 5.42)
+               , libghc-deepseq-dev | ghc
+               , libghc-deepseq-prof | ghc-prof
                , libghc-directory-dev | ghc
                , libghc-directory-prof | ghc-prof
+               , libghc-exceptions-dev
+               , libghc-exceptions-prof
                , libghc-file-embed-dev
                , libghc-file-embed-prof
                , libghc-filepath-dev | ghc
@@ -95,24 +97,25 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-zlib-prof
 Build-Depends-Indep: ghc-doc
                      , libghc-cabal-doc | ghc-doc
-                     , libghc-data-lens-doc
                      , libghc-extra-doc
                      , libghc-hunit-doc
                      , libghc-haxml-doc (>= 1:1.22.5)
                      , libghc-listlike-doc (>= 4.0)
                      , libghc-mime-doc (>= 1.1)
-                     , libghc-monadcatchio-mtl-doc
                      , libghc-unixutils-doc (>= 1.51)
                      , libghc-ansi-wl-pprint-doc
                      , libghc-applicative-extras-doc (>= 0.1.8)
                      , libghc-base-doc | ghc-doc
                      , libghc-bytestring-doc | ghc-doc
                      , libghc-bzlib-doc
-                     , libghc-cabal-debian-doc (>= 4)
+                     , libghc-cabal-debian-doc (>= 4.0.2)
                      , libghc-containers-doc | ghc-doc
+                     , libghc-data-lens-doc
+                     , libghc-data-lens-template-doc
                      , libghc-debian-doc (>= 3.78)
-                     , libghc-debian-repo-doc (>= 5.42)
+                     , libghc-deepseq-doc | ghc-doc
                      , libghc-directory-doc | ghc-doc
+                     , libghc-exceptions-doc
                      , libghc-file-embed-doc
                      , libghc-filepath-doc | ghc-doc
                      , libghc-happstack-util-doc
@@ -124,7 +127,7 @@ Build-Depends-Indep: ghc-doc
                      , libghc-parsec3-doc (>= 3) | libghc-parsec2-doc (<< 3)
                      , libghc-process-doc | ghc-doc
                      , libghc-process-listlike-doc (>= 0.6)
-                     , libghc-process-progress-doc (>= 0.5)
+                     , libghc-process-progress-doc (>= 0.6)
                      , libghc-puremd5-doc
                      , libghc-regex-compat-doc
                      , libghc-regex-posix-doc

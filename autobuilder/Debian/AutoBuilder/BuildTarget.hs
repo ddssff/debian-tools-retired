@@ -4,7 +4,7 @@ module Debian.AutoBuilder.BuildTarget
     , targetDocumentation
     ) where
 
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO)
+import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (intersperse)
 import qualified Debian.AutoBuilder.BuildTarget.Apt as Apt
@@ -38,7 +38,7 @@ import System.FilePath ((</>))
 import System.Process.Progress (qPutStrLn)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
-retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatchIO m) =>
+retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
             DebT IO () -> C.CacheRec -> P.Packages -> m Download
 retrieve defaultAtoms cache target =
      case P.spec target of

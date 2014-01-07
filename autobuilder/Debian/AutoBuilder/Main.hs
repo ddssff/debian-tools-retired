@@ -11,7 +11,7 @@ import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
 import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException, try)
 import Control.Monad(foldM, when)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
+import Control.Monad.Catch (catch, throwM)
 import Control.Monad.State (MonadIO(liftIO), get)
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
@@ -96,7 +96,7 @@ main init myParams =
               where p result [] = result
                     p (fs, ss) (Failure f : more) = p (f : fs, ss) more
                     p (fs, ss) (Success s : more) = p (fs, s : ss) more
-          handle (e :: SomeException) = IO.hPutStrLn IO.stderr ("Exception: " ++ show e) >> throw e
+          handle (e :: SomeException) = IO.hPutStrLn IO.stderr ("Exception: " ++ show e) >> throwM e
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
@@ -117,7 +117,7 @@ doParameterSet init results params =
           withModifiedVerbosity (const (P.verbosity params))
             (do top <- askTop
                 withLock (top </> "lockfile") (P.buildCache params >>= runParameterSet init))
-            `IO.catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
+            `catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
           (\ result -> return (result : results))
     where
       badForceBuild = difference (fromList (P.forceBuild params)) allTargetNames
@@ -162,7 +162,7 @@ runParameterSet init cache =
       qPutStrLn "Retrieving all source code:\n"
       retrieved <-
           countTasks' (map (\ (target :: P.Packages) ->
-                                (show (P.spec target), (Right <$> evalMonadOS (retrieve init cache target) buildOS) `IO.catch` handleRetrieveException target))
+                                (show (P.spec target), (Right <$> evalMonadOS (retrieve init cache target) buildOS) `catch` handleRetrieveException target))
                            (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
       (failures, targets) <- mapM (either (return . Left) (\ download -> liftIO (try (asBuildable download)) >>= return. either (\ (e :: SomeException) -> Left (show e)) Right)) retrieved >>= return . partitionEithers
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
@@ -281,7 +281,7 @@ handleRetrieveException :: MonadReposCached m => P.Packages -> SomeException -> 
 handleRetrieveException target e =
           case (fromException (toException e) :: Maybe AsyncException) of
             Just UserInterrupt ->
-                throw e -- break out of loop
+                throwM e -- break out of loop
             _ -> let message = ("Failure retrieving " ++ show (P.spec target) ++ ":\n  " ++ show e) in
                  liftIO (IO.hPutStrLn IO.stderr message) >> return (Left message)
 
