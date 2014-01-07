@@ -1,3 +1,9 @@
+haskell-debian-repo (5.55) unstable; urgency=low
+
+  * Make signing the repository newdist default behavior.
+
+ -- David Fox <dsf@seereason.com>  Tue, 07 Jan 2014 08:02:48 -0800
+
 haskell-debian-repo (5.54) unstable; urgency=low
 
   * Use the exceptions library instead of MonadCatchIO-mtl

@@ -63,7 +63,7 @@ initialParams =
     , rejectRevision = Nothing
     , printVersion = False
     , layout = Pool
-    , signRepo = False
+    , signRepo = True
     , architectures = Nothing
     , keyName = Nothing
     }
