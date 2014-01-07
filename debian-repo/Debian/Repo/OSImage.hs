@@ -36,7 +36,7 @@ module Debian.Repo.OSImage
 import Control.Applicative ((<$>))
 import Control.DeepSeq (force)
 import Control.Exception (evaluate, SomeException)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, MonadCatchIO, throw, try)
+import Control.Monad.Catch (bracket, MonadCatch, throwM, try)
 import Control.Monad.State (evalStateT, MonadState, StateT)
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString)
@@ -332,7 +332,7 @@ prefixes = Just (" 1> ", " 2> ")
 
 -- | Run @apt-get update@ and @apt-get dist-upgrade@.  If @update@
 -- fails, run @dpkg --configure -a@ before running @dist-upgrade@.
-updateLists :: (MonadOS m, MonadCatchIO m) => m NominalDiffTime
+updateLists :: (MonadOS m, MonadIO m, MonadCatch m) => m NominalDiffTime
 updateLists =
     do root <-rootPath <$> access osRoot
        withProc $ liftIO $ do
@@ -354,7 +354,7 @@ stripDist :: FilePath -> FilePath
 stripDist path = maybe path (\ n -> drop (n + 7) path) (isSublistOf "/dists/" path)
 
 -- | Do an IO task in the build environment with /proc mounted.
-withProc :: forall m c. (MonadOS m, MonadCatchIO m) => m c -> m c
+withProc :: forall m c. (MonadOS m, MonadIO m, MonadCatch m) => m c -> m c
 withProc task =
     do root <- rootPath <$> access osRoot
        let dir = root </> "proc"
@@ -367,7 +367,7 @@ withProc task =
        bracket pre post task'
 
 -- | Do an IO task in the build environment with /proc mounted.
-withTmp :: forall m c. (MonadOS m, MonadCatchIO m) => m c -> m c
+withTmp :: forall m c. (MonadOS m, MonadIO m, MonadCatch m) => m c -> m c
 withTmp task =
     do root <- rootPath <$> access osRoot
        let dir = root </> "tmp"
@@ -376,7 +376,7 @@ withTmp task =
            post :: String -> m String
            post _ = liftIO $ readProcess "umount" [dir] ""
            task' :: String -> m c
-           task' _ = try task >>= either (\ (e :: SomeException) -> throw e) return
+           task' _ = try task >>= either (\ (e :: SomeException) -> throwM e) return
        bracket pre post task'
 
 -- | Run an apt-get command in a particular directory with a

@@ -9,7 +9,7 @@ module Debian.Repo.State.AptImage
 
 import Control.Applicative ((<$>))
 import Control.Exception (SomeException)
-import Control.Monad.CatchIO (MonadCatchIO, catch)
+import Control.Monad.Catch (MonadCatch, catch)
 import Control.Monad.State (StateT)
 import Control.Monad.Trans (MonadIO(..), MonadTrans(lift))
 import Data.Lens.Lazy (getL, setL)
@@ -51,7 +51,7 @@ prepareAptImage sourcesChangedAction sources = do
   mkey <- findAptKey =<< cacheRootDir (sliceListName sources)
   maybe (prepareAptImage' sourcesChangedAction sources) return mkey
 
-prepareAptImage' :: forall m. (MonadCatchIO m, MonadTop m, MonadRepos m) => SourcesChangedAction -> NamedSliceList -> m AptKey
+prepareAptImage' :: forall m. (MonadCatch m, MonadTop m, MonadRepos m) => SourcesChangedAction -> NamedSliceList -> m AptKey
 prepareAptImage' sourcesChangedAction sources = do
   mkey <- findAptKey =<< cacheRootDir (sliceListName sources)
   maybe (prepareAptImage'' `catch` handle) return mkey

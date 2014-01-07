@@ -13,8 +13,6 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-haxml-prof
                , libghc-mime-dev
                , libghc-mime-prof
-               , libghc-monadcatchio-mtl-dev
-               , libghc-monadcatchio-mtl-prof
                , libghc-unixutils-dev (>= 1.51)
                , libghc-unixutils-prof (>= 1.51)
                , libghc-ansi-wl-pprint-dev
@@ -33,12 +31,14 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-data-lens-prof
                , libghc-data-lens-template-dev
                , libghc-data-lens-template-prof
-               , libghc-debian-dev (>= 3.78)
-               , libghc-debian-prof (>= 3.78)
+               , libghc-debian-dev (>= 3.80)
+               , libghc-debian-prof (>= 3.80)
                , libghc-deepseq-dev | ghc
                , libghc-deepseq-prof | ghc-prof
                , libghc-directory-dev | ghc
                , libghc-directory-prof | ghc-prof
+               , libghc-exceptions-dev
+               , libghc-exceptions-prof
                , libghc-filepath-dev | ghc
                , libghc-filepath-prof | ghc-prof
                , libghc-mtl-dev
@@ -55,8 +55,8 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-process-prof | ghc-prof
                , libghc-process-listlike-dev (>= 0.6)
                , libghc-process-listlike-prof (>= 0.6)
-               , libghc-process-progress-dev (>= 0.6)
-               , libghc-process-progress-prof (>= 0.6)
+               , libghc-process-progress-dev (>= 0.9)
+               , libghc-process-progress-prof (>= 0.9)
                , libghc-puremd5-dev
                , libghc-puremd5-prof
                , libghc-regex-compat-dev
@@ -79,7 +79,6 @@ Build-Depends-Indep: ghc-doc
                      , libghc-cabal-doc | ghc-doc
                      , libghc-haxml-doc
                      , libghc-mime-doc
-                     , libghc-monadcatchio-mtl-doc
                      , libghc-unixutils-doc (>= 1.51)
                      , libghc-ansi-wl-pprint-doc
                      , libghc-applicative-extras-doc
@@ -89,9 +88,10 @@ Build-Depends-Indep: ghc-doc
                      , libghc-containers-doc | ghc-doc
                      , libghc-data-lens-doc
                      , libghc-data-lens-template-doc
-                     , libghc-debian-doc (>= 3.78)
+                     , libghc-debian-doc (>= 3.80)
                      , libghc-deepseq-doc | ghc-doc
                      , libghc-directory-doc | ghc-doc
+                     , libghc-exceptions-doc
                      , libghc-filepath-doc | ghc-doc
                      , libghc-mtl-doc
                      , libghc-network-doc
@@ -100,7 +100,7 @@ Build-Depends-Indep: ghc-doc
                      , libghc-parsec3-doc (>= 3)
                      , libghc-process-doc | ghc-doc
                      , libghc-process-listlike-doc (>= 0.6)
-                     , libghc-process-progress-doc (>= 0.6)
+                     , libghc-process-progress-doc (>= 0.9)
                      , libghc-puremd5-doc
                      , libghc-regex-compat-doc
                      , libghc-regex-tdfa-doc

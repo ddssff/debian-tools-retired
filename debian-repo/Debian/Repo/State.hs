@@ -42,7 +42,7 @@ import Control.Applicative ((<$>))
 import Control.Applicative.Error (maybeRead)
 import Control.Exception (SomeException)
 import Control.Monad (unless)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, MonadCatchIO)
+import Control.Monad.Catch (bracket, catch, MonadCatch)
 import Control.Monad.State (MonadIO(..), MonadState(get, put), MonadTrans(..), StateT(runStateT))
 import Data.Lens.Lazy (getL, modL, setL)
 import Data.Lens.Template (makeLenses)
@@ -71,14 +71,14 @@ instance Eq FileStatus where
     a == b = compare a b == EQ
 
 -- | A monad to support the IO requirements of the autobuilder.
-class (MonadCatchIO m, Functor m) => MonadRepos m where
+class (MonadCatch m, MonadIO m, Functor m) => MonadRepos m where
     getRepos :: m ReposState
     putRepos :: ReposState -> m ()
 
 modifyRepos :: MonadRepos m => (ReposState -> ReposState) -> m ()
 modifyRepos f = getRepos >>= putRepos . f
 
-instance (Monad m, Functor m, MonadCatchIO m) => MonadRepos (StateT ReposState m) where
+instance (MonadIO m, Functor m, MonadCatch m) => MonadRepos (StateT ReposState m) where
     getRepos = get
     putRepos = put
 
@@ -139,7 +139,7 @@ putOSImage repo = do
   return key
 
 -- | Run MonadOS and update the osImageMap with the modified value
-evalMonadOS :: (MonadRepos m, Functor m) => StateT OSImage m a -> OSKey -> m a
+evalMonadOS :: MonadRepos m => StateT OSImage m a -> OSKey -> m a
 evalMonadOS task (OSKey key) = do
   Just os <- findOS key
   (a, os') <- runStateT task os
@@ -159,7 +159,7 @@ putAptImage repo = do
   return key
 
 -- | Run MonadOS and update the osImageMap with the modified value
-evalMonadApt :: (MonadRepos m, Functor m) => StateT AptImage m a -> AptKey -> m a
+evalMonadApt :: MonadRepos m => StateT AptImage m a -> AptKey -> m a
 evalMonadApt task (AptKey key) = do
   Just apt <- findApt key
   (a, apt') <- runStateT task apt
@@ -240,19 +240,19 @@ foldRepository f g key =
 
 -- | Like @MonadRepos@, but is also an instance of MonadTop and tries to
 -- load and save a list of cached repositories from @top/repoCache@.
-class (MonadRepos m, MonadTop m, MonadCatchIO m, Functor m) => MonadReposCached m
+class (MonadRepos m, MonadTop m, MonadCatch m) => MonadReposCached m
 
 type ReposCachedT m = TopT (StateT ReposState m)
 
--- instance (MonadRepos m, MonadTop m, MonadCatchIO m, Functor m) => MonadReposCached m
-instance (MonadCatchIO m, Functor m) => MonadReposCached (ReposCachedT m)
-instance (MonadCatchIO m, Functor m) => MonadRepos (ReposCachedT m) where
+-- instance (MonadRepos m, MonadTop m, MonadCatch m, Functor m) => MonadReposCached m
+instance (MonadCatch m, MonadIO m, Functor m) => MonadReposCached (ReposCachedT m)
+instance (MonadCatch m, MonadIO m, Functor m) => MonadRepos (ReposCachedT m) where
     getRepos = lift get
     putRepos = lift . put
 
 -- | To run a DebT we bracket an action with commands to load and save
 -- the repository list.
-runReposCachedT :: (MonadCatchIO m, Functor m) => FilePath -> ReposCachedT m a -> m a
+runReposCachedT :: (MonadIO m, MonadCatch m, Functor m) => FilePath -> ReposCachedT m a -> m a
 runReposCachedT top action = runReposT $ runTopT top $ bracket loadRepoCache (\ r -> saveRepoCache >> return r) (\ () -> action)
 
 -- | Load the value of the repo cache map from a file as a substitute for
@@ -283,7 +283,7 @@ saveRepoCache =
              live <- getL repoMap <$> getRepos
              repoCache <- liftIO $ loadCache path
              let merged = Map.union live repoCache
-             liftIO (F.removeLink path `IO.catch` (\e -> unless (isDoesNotExistError e) (ioError e)) >>
+             liftIO (F.removeLink path `catch` (\e -> unless (isDoesNotExistError e) (ioError e)) >>
                      writeFile path (show . Map.toList $ merged))
              return ()
           where
@@ -291,5 +291,5 @@ saveRepoCache =
             -- isRemote (uri, _) = uriScheme uri /= "file:"
             loadCache :: FilePath -> IO (Map.Map URI' RemoteRepository)
             loadCache path =
-                readFile path `IO.catch` (\ (_ :: SomeException) -> return "[]") >>=
+                readFile path `catch` (\ (_ :: SomeException) -> return "[]") >>=
                 return . Map.fromList . fromMaybe [] . maybeRead
