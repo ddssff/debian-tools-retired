@@ -1,3 +1,9 @@
+haskell-debian-repo (5.54) unstable; urgency=low
+
+  * Use the exceptions library instead of MonadCatchIO-mtl
+
+ -- David Fox <dsf@seereason.com>  Tue, 07 Jan 2014 06:50:30 -0800
+
 haskell-debian-repo (5.53.1) unstable; urgency=low
 
   * When apt-get update throws an error in an AptImage, remove and
