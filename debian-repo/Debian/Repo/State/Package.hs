@@ -75,7 +75,7 @@ import System.Process.Progress (ePutStrLn, qPutStr, qPutStrLn, quieter)
 import Text.PrettyPrint.ANSI.Leijen (cat, pretty, Pretty(..), text)
 import Text.Regex (matchRegex, mkRegex, splitRegex)
 
--- | A monad for installing or deleting packages from the releases in a repository.
+-- | A monad for installing or deleting a repository's packages
 class MonadRepos m => MonadInstall m where
     getInstall :: m InstallState
     putInstall :: InstallState -> m ()
@@ -125,9 +125,25 @@ data Problem
     = NoSuchRelease ReleaseName
     | NoSuchSection ReleaseName [Section]
     | ShortFile FilePath FileOffset FileOffset
+    -- ^ A file in the incoming directory is shorter than its entry
+    -- in the .changes file indicates - maybe it is still uploading?
     | LongFile FilePath FileOffset FileOffset
-    | MissingFile FilePath
+    -- ^ A file in the incoming directory is longer than its entry
+    -- in the .changes file indicates.  Maybe it is left over from a
+    -- previous failed upload, or a concurrent upload from somewhere
+    -- else.  (That should not be permitted to happen, the .changes
+    -- file should be a lock for uploads of that package/version.)
+    | MissingFromIncoming FilePath
+    -- ^ A file listed in the .changes file is missing from incoming.
+    | MissingFromPool FilePath
+    -- ^ A file listed in an index file is not in the pool
     | BadChecksum FilePath String String
+    -- ^ A file which is listed in the .changes file exists in incoming
+    -- and is the right length but its checksum is wrong.
+    | InvalidControlInfo FilePath String
+    -- ^ Badly formatted control file
+    | DuplicatePackage BinaryPackage
+    -- ^ A package in incoming has the same ID as a package already in the index
     | OtherProblem String
     deriving (Eq)
 
@@ -136,8 +152,10 @@ instance Show Problem where
     show (NoSuchSection rel sect) = "NoSuchSection " ++ releaseName' rel ++ " " ++ show (List.map sectionName' sect)
     show (ShortFile path a b) = "ShortFile " ++ path ++ " " ++ show a ++ " " ++ show b
     show (LongFile path a b) = "LongFile " ++ path ++ " " ++ show a ++ " " ++ show b
-    show (MissingFile path) = "MissingFile " ++ path
+    show (MissingFromIncoming path) = "MissingFromIncoming " ++ path
+    show (MissingFromPool path) = "MissingFromPool " ++ path
     show (BadChecksum path a b) = "BadChecksum " ++ path ++ " " ++ show a ++ " " ++ show b
+    show (DuplicatePackage p) = "DuplicatePackage " ++ show (packageID p)
     show (OtherProblem s) = "OtherProblem " ++ show s
 
 releaseKey :: MonadInstall m => Release -> m ReleaseKey
@@ -342,6 +360,7 @@ reject file = do
   root <- repoRoot . getL repository <$> getInstall
   return $ outsidePath root </> "reject" </> changedFileName file
 
+-- | Get information about one of the (.deb or .dsc) files listed in a .changes file.
 fileInfo :: MonadInstall m => ChangesFile -> ChangedFileSpec -> m (Either InstallResult B.Paragraph)
 fileInfo changes file = do
   repo <- getL repository <$> getInstall
@@ -353,12 +372,15 @@ fileInfo changes file = do
                          dir <- incoming
                          control <-
                              case isSuffixOf ".deb" . changedFileName $ file of
+                               -- Extract the control information from a .deb
                                True -> getDebControl
+                               -- This is the .dsc file, parse it
                                False -> liftIO $ S.parseControlFromFile (dir </> changedFileName file) >>= return . either (Left . show) Right
                          case control of
-                           Left message -> return . Left . Rejected $ [OtherProblem message]
+                           -- The control file should contain one paragraph
                            Right (S.Control [info]) -> return (Right info)
-                           Right (S.Control _) -> return . Left . Rejected $ [OtherProblem "Invalid control file"]
+                           Left message -> return . Left . Rejected $ [InvalidControlInfo (dir </> changedFileName file) message]
+                           Right (S.Control _) -> return . Left . Rejected $ [InvalidControlInfo (dir </> changedFileName file) "Expected one paragraph"]
                   addFields :: MonadInstall m => LocalRepository -> (Either InstallResult B.Paragraph) -> m (Either InstallResult B.Paragraph)
                   addFields _ (Left result) = return $ Left result
                   addFields repo (Right info) =
@@ -436,6 +458,7 @@ installFiles'' changes results = do
     where
       paths repo = Set.fromList $ List.map (T.pack . ((outsidePath (repoRoot repo)) </>) . poolDir' repo changes) (changeFiles changes)
 
+-- | Move one file into the repository
 installFile :: MonadInstall m => ChangesFile -> ChangedFileSpec -> m InstallResult
 installFile changes file = do
   repo <- getL repository <$> getInstall
@@ -446,10 +469,10 @@ installFile changes file = do
   let dst = dir </> changedFileName file
   installed <- liftIO $ doesFileExist dst
   available <- liftIO $ doesFileExist src
-  let indexed = maybe False (Set.member (T.pack dst)) live'
+  let indexed = maybe False (Set.member (T.pack dst)) live' -- Is the file already part of the repository?
   case (available, indexed, installed) of
     (False, _, _) -> do                        -- Perhaps this file is about to be uploaded
-      return (Failed [MissingFile src])
+      return (Failed [MissingFromIncoming src])
     (True, False, False) -> do         -- This just needs to be installed
       liftIO (createDirectoryIfMissing True dir)
       liftIO (F.createLink src dst)
@@ -459,8 +482,10 @@ installFile changes file = do
       liftIO (removeFile dst)
       liftIO (F.createLink src dst)
       return Ok
-    (True, True, False) -> do          -- Apparantly the repository is damaged.
-      return (Failed [OtherProblem $ ("Missing from repository: " ++ dst)])
+    (True, True, False) -> do
+      -- The repository is damaged - the file is listed in the index
+      -- but it does not exist at that location.
+      return (Failed [MissingFromPool dst])
     (True, True, True) -> do           -- Further inspection is required
       installedSize <- liftIO $ F.getFileStatus dst >>= return . F.fileSize
       installedMD5sum <- liftIO $ L.readFile dst >>= return . show . md5
@@ -555,21 +580,21 @@ moveFile src dst =
 addPackagesToIndexes :: MonadInstall m => [((Release, PackageIndex), [B.Paragraph])] -> m InstallResult
 addPackagesToIndexes pairs =
     do repo <- getL repository <$> getInstall
-       oldPackageLists <- mapM (\ (release, index) -> getPackages_ release index) (List.map fst pairs)
+       oldPackageLists <- mapM (uncurry getPackages_) indexKeys
        case partitionEithers oldPackageLists of
          -- No errors
          ([], oldPackageLists') ->
-             do let (indexMemberFns :: [BinaryPackage -> Bool]) = List.map indexMemberFn oldPackageLists'
-                    newPackageLists = List.map (\ ((release, index), info) -> List.map (toBinaryPackage_ release index) info) pairs
+             do let newPackageLists = List.map (\ ((release, index), info) -> List.map (toBinaryPackage_ release index) info) pairs
                 -- if none of the new packages are already in the index, add them
-                case concat (List.map (uncurry filter) (zip indexMemberFns newPackageLists)) of
-                  [] -> do mapM_ (updateIndex repo) (zip3 indexes oldPackageLists' newPackageLists)
+                case concat (List.map (\ (oldList, newList) -> filter (\ new -> any (== (packageID new)) (List.map packageID oldList)) newList) (zip oldPackageLists' newPackageLists)) of
+
+                  [] -> do mapM_ (updateIndex repo) (zip3 indexKeys oldPackageLists' newPackageLists)
                            return Ok
-                  dupes -> return $ Failed [OtherProblem ("Duplicate packages: " ++ intercalate " " (List.map (show . prettyBinaryPackage) dupes))]
+                  dupes -> return $ Failed (List.map DuplicatePackage dupes)
          (bad, _) -> return $ Failed (List.map (OtherProblem . show) bad)
     where
       updateIndex repo ((release, index), oldPackages, newPackages) = liftIO $ putPackages_ repo release index (oldPackages ++ newPackages)
-      indexes = List.map fst pairs
+      indexKeys = List.map fst pairs
       indexMemberFn :: [BinaryPackage] -> BinaryPackage -> Bool
       indexMemberFn packages package = any (== (packageID package)) (List.map packageID packages)
 
