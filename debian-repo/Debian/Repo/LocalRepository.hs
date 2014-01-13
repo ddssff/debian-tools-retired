@@ -27,6 +27,8 @@ import Debian.Arch (Arch, parseArch)
 import Debian.Changes (ChangedFileSpec(changedFileName, changedFileSection), ChangesFile(changeDir, changeFiles, changeInfo, changePackage, changeRelease, changeVersion))
 import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(parseControlFromFile), fieldValue)
 import qualified Debian.Control.Text as T (fieldValue)
+import Debian.Pretty (Pretty, pretty, text)
+import qualified Debian.Pretty as F (Pretty(..))
 import Debian.Relation (BinPkgName(..))
 import Debian.Release (parseReleaseName, ReleaseName(..), releaseName', Section, sectionName', SubSection(section))
 import Debian.Repo.Changes (changeKey, changePath, findChangesFiles)
@@ -34,7 +36,6 @@ import Debian.Repo.Dependencies (readSimpleRelation)
 import Debian.Repo.EnvPath (EnvPath(envPath), outsidePath)
 import Debian.Repo.PackageID (PackageID)
 import Debian.Repo.Prelude (rsync, maybeWriteFile, replaceFile, cond, partitionM)
-import qualified Debian.Repo.Prelude as F (Pretty(..))
 import Debian.Repo.Prelude.SSH (sshVerify)
 import Debian.Repo.Release (parseReleaseFile, Release)
 import Debian.Repo.Repo (compatibilityFile, libraryCompatibilityLevel, Repo(..), RepoKey(..))
@@ -47,7 +48,6 @@ import System.FilePath ((</>), splitFileName)
 import qualified System.Posix.Files as F (createLink, fileMode, getFileStatus, getSymbolicLinkStatus, isSymbolicLink, readSymbolicLink, removeLink, setFileMode)
 import System.Process (readProcessWithExitCode, shell, showCommandForUser)
 import System.Process.Progress (foldOutputsL, Output, qPutStrLn, quieter, runProcessV, timeTask)
-import Text.PrettyPrint.ANSI.Leijen (Pretty, pretty, text)
 import Text.Regex (matchRegex, mkRegex)
 
 data LocalRepository
@@ -59,7 +59,8 @@ data LocalRepository
 
 instance F.Pretty LocalRepository where
     pretty (LocalRepository root _ _) =
-        text $ show $ URI { uriScheme = "file:"
+        pretty $ show $
+                      URI { uriScheme = "file:"
                           , uriAuthority = Nothing
                           , uriPath = envPath root
                           , uriQuery = ""

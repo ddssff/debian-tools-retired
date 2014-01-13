@@ -15,6 +15,7 @@ import Control.Monad.Trans (MonadIO(..), MonadTrans(lift))
 import Data.Lens.Lazy (getL, setL)
 import Data.Maybe (listToMaybe)
 import Debian.Changes (ChangeLogEntry(logVersion))
+import Debian.Pretty (pretty)
 import Debian.Relation (SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName)
 import Debian.Repo.AptImage (aptDir, aptGetSource, aptGetUpdate, AptImage, aptImageArch, aptImageRoot, aptImageSources, cacheRootDir, createAptImage, MonadApt(..), aptBinaryPackageCache, aptSourcePackageCache, modifyApt)
@@ -33,7 +34,6 @@ import Debian.Version (DebianVersion)
 import System.Directory (createDirectoryIfMissing)
 import System.Process.Progress (qPutStr, qPutStrLn)
 import System.Unix.Directory (removeRecursiveSafely)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 instance MonadApt m => MonadApt (StateT OSImage m) where
     getApt = lift getApt

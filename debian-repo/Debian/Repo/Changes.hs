@@ -23,12 +23,12 @@ import Data.Text (pack, Text, unpack)
 import Debian.Arch (Arch, parseArch, prettyArch)
 import Debian.Changes (ChangedFileSpec(..), ChangesFile(..), changesFileName, parseChanges)
 import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(parseControlFromFile), fieldValue, modifyField, Paragraph'(..))
+import Debian.Pretty (pretty)
 import Debian.Release (parseReleaseName, parseSection)
 import Debian.Repo.Prelude (replaceFile)
 import Debian.URI ()
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import System.Directory (getDirectoryContents)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Regex (matchRegex, matchRegexAll, mkRegex)
 
 findChangesFiles :: FilePath -> IO [ChangesFile]

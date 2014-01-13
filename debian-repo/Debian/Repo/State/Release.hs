@@ -20,6 +20,7 @@ import Data.Text as T (intercalate, pack, Text)
 import Data.Time (getCurrentTime)
 import Debian.Arch (Arch(..), prettyArch)
 import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(parseControlFromFile), Field'(Field), fieldValue, Paragraph'(..))
+import Debian.Pretty (pretty)
 import Debian.Release (ReleaseName, releaseName', Section, sectionName')
 import Debian.Repo.EnvPath (outsidePath)
 import qualified Debian.Repo.Prelude.GPGSign as EG (cd, PGPKey, pgpSignFiles)
@@ -36,7 +37,6 @@ import System.Posix.Files (setFileMode)
 import qualified System.Posix.Files as F (fileSize, getFileStatus)
 import System.Process.Progress (qPutStrLn)
 import System.Unix.Directory (removeRecursiveSafely)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | Remove all the packages from the repository and then re-create
 -- the empty releases.

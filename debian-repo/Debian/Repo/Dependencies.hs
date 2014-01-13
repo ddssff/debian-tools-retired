@@ -4,7 +4,7 @@
 -- complete on real-world inputs.
 --
 -- Author: David Fox <dsf@seereason.com>
-{-# LANGUAGE PackageImports, ScopedTypeVariables, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables, ScopedTypeVariables #-}
 {-# OPTIONS -Werror -fwarn-missing-signatures #-}
 module Debian.Repo.Dependencies
     ( simplifyRelations
@@ -25,12 +25,12 @@ import qualified Data.Set as Set (Set, singleton, toList, union)
 import Debian.Arch (Arch(Source, Binary), ArchCPU(..))
 import Debian.Control ()
 import qualified Debian.Control.Text as S ()
+import Debian.Pretty (Doc, pretty, text)
 import Debian.Relation (ArchitectureReq(..), BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(..))
 import Debian.Repo.PackageID (PackageID(PackageID, packageName, packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, packageID, pProvides)
 import Debian.Repo.Prelude (cartesianProduct)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
-import Text.PrettyPrint.ANSI.Leijen (Doc, pretty, text)
 
 type Excuse = String
 

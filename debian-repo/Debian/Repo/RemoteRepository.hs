@@ -4,11 +4,10 @@ module Debian.Repo.RemoteRepository
     ( RemoteRepository(..)
     ) where
 
-import qualified Debian.Repo.Prelude as F (Pretty(..))
+import qualified Debian.Pretty as F (Pretty(..))
 import Debian.Repo.Release (Release)
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey(Remote))
 import Debian.URI (fromURI', URI')
-import Text.PrettyPrint.ANSI.Leijen (text)
 
 data RemoteRepository
     = RemoteRepository URI' [Release]
@@ -20,7 +19,7 @@ instance Repo RemoteRepository where
 
 -- | URI has a bogus show function, which we are using here.
 instance F.Pretty URI' where
-    pretty = text . show . fromURI'
+    pretty = F.pretty . show . fromURI'
 
 instance F.Pretty RemoteRepository where
     pretty (RemoteRepository s _) = F.pretty s

@@ -20,6 +20,7 @@ module Debian.Repo.Slice
 import Control.Exception (Exception)
 import Data.Data (Data)
 import Data.Typeable (Typeable)
+import Debian.Pretty (Pretty(pretty), vcat)
 import Debian.Release (ReleaseName(relName))
 import Debian.Repo.Prelude (replaceFile)
 import Debian.Repo.Repo (RepoKey)
@@ -28,7 +29,6 @@ import System.Directory (createDirectoryIfMissing, removeFile)
 import System.IO (hGetLine, stdin)
 import System.Process.Progress (ePutStr, ePutStrLn)
 import System.Unix.Directory (removeRecursiveSafely)
-import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), text, vcat)
 
 data Slice = Slice {sliceRepoKey :: RepoKey, sliceSource :: DebSource} deriving (Eq, Ord, Show)
 
@@ -47,7 +47,7 @@ instance Pretty NamedSliceList where
     pretty = pretty . sliceList
 
 instance Pretty ReleaseName where
-    pretty = text . relName
+    pretty = pretty . relName
 
 deriving instance Show SourceType
 deriving instance Show DebSource

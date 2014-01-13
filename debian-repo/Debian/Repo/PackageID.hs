@@ -10,10 +10,10 @@ module Debian.Repo.PackageID
     , makeSourcePackageID
     ) where
 
+import Debian.Pretty ((<>), Doc, Pretty(pretty))
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import qualified Debian.Relation as B (PkgName)
 import Debian.Version (DebianVersion, prettyDebianVersion)
-import Text.PrettyPrint.ANSI.Leijen ((<>), Doc, Pretty(pretty), text)
 
 data PackageID n
     = PackageID
@@ -22,7 +22,7 @@ data PackageID n
       } deriving (Eq, Ord, Show)
 
 prettyPackageID :: B.PkgName n => PackageID n -> Doc
-prettyPackageID p = pretty (packageName p) <> text "-" <> prettyDebianVersion (packageVersion p)
+prettyPackageID p = pretty (packageName p) <> pretty "-" <> prettyDebianVersion (packageVersion p)
 
 makeBinaryPackageID :: String -> DebianVersion -> PackageID BinPkgName
 makeBinaryPackageID n v = PackageID (BinPkgName n) v

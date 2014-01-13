@@ -28,6 +28,7 @@ import Data.Text.IO as T (readFile)
 import Data.Time (NominalDiffTime)
 import Debian.Changes (ChangeLogEntry(..), ChangesFile(..), parseEntries)
 import Debian.Control.Text (Control, Control'(Control), ControlFunctions(parseControl), Field'(Comment), Paragraph'(..))
+import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName)
 import Debian.Repo.Changes (findChangesFiles)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
@@ -42,7 +43,6 @@ import System.IO (hGetContents, IOMode(ReadMode), withFile)
 import System.Process (CmdSpec(..), CreateProcess(cwd, env, cmdspec), proc, readProcessWithExitCode, showCommandForUser)
 import System.Process.Progress (keepResult, timeTask, noisier)
 import System.Unix.Chroot (useEnv)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- |Any directory containing source code.
 class SourceTreeC t where

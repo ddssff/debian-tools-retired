@@ -26,6 +26,7 @@ import Data.Lens.Lazy (getL)
 import Data.Lens.Template (makeLenses)
 import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
+import Debian.Pretty (pretty)
 import Debian.Relation (PkgName, SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(relName))
 import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
@@ -39,7 +40,6 @@ import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>))
 import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 data AptImage =
     AptImage { _aptImageRoot :: EnvRoot

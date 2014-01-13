@@ -18,6 +18,7 @@ import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
 import Data.Lens.Lazy (getL)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
+import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Release (ReleaseName(relName))
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
@@ -42,7 +43,6 @@ import System.Process (readProcessWithExitCode, shell)
 import System.Process.Progress (ePutStrLn, oneResult, readProcessChunks)
 import System.Unix.Chroot (useEnv)
 import System.Unix.Directory (removeRecursiveSafely)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 buildArchOfOS :: (MonadIO m, MonadOS m) => m Arch
 buildArchOfOS = do

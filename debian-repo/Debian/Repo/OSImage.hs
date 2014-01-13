@@ -48,6 +48,7 @@ import Data.Monoid ((<>))
 import Data.Time (NominalDiffTime)
 import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
+import Debian.Pretty (pretty)
 import Debian.Relation (ParseRelations(parseRelations), PkgName, Relations)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
 import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot, EnvRoot(rootPath), outsidePath)
@@ -69,7 +70,6 @@ import System.Process.Progress (collectOutputs, doOutput, ePutStr, ePutStrLn, fo
 import System.Unix.Chroot (useEnv)
 import System.Unix.Directory (removeRecursiveSafely)
 import System.Unix.Mount (umountBelow)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Regex (matchRegex, mkRegex)
 
 -- |This type represents an OS image located at osRoot built from a

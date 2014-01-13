@@ -12,7 +12,6 @@ module Debian.Repo.Prelude
     , readProc
     , rsync
     , checkRsyncExitCode
-    , Pretty(..)
     , partitionM
     , maybeWriteFile
     , replaceFile
@@ -46,7 +45,6 @@ import System.Process (CreateProcess, proc)
 import System.Process.Progress (ePutStrLn, keepResult, keepResult, runProcessF)
 import System.Process.Read.Chunks (Output)
 import System.Process.Read.Verbosity (quieter, runProcess)
-import Text.PrettyPrint.ANSI.Leijen (Doc, text)
 import Text.Printf (printf)
 
 -- | Perform a list of tasks with log messages.
@@ -125,11 +123,3 @@ checkRsyncExitCode (ExitFailure n) =
       30 -> error "rsync: Timeout in data send/receive"
       35 -> error "rsync: Timeout waiting for daemon connection"
       _ -> error $ "rsync: Unexpected failure " ++ show n
-
--- | This is a private Pretty class that doesn't have built-in instances
--- for tuples or lists or anything else.
-class Pretty a where
-    pretty :: a -> Doc
-
-instance Pretty a => Pretty [a] where
-  pretty = text . show .map pretty

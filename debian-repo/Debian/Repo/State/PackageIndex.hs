@@ -13,6 +13,7 @@ import qualified Data.Text as T (Text, unpack)
 import Debian.Arch (Arch, Arch(..), prettyArch)
 import Debian.Control (ControlFunctions(stripWS), formatParagraph)
 import qualified Debian.Control.Text as B (Control'(Control), ControlFunctions(lookupP), ControlFunctions(parseControlFromHandle), Field, Field'(Field), fieldValue, Paragraph)
+import Debian.Pretty (pretty)
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
@@ -30,7 +31,6 @@ import Network.URI (escapeURIString, URI(uriAuthority, uriPath), URIAuth(uriPort
 import qualified System.IO as IO (hClose, IOMode(ReadMode), openBinaryFile)
 --import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Process.Progress (qBracket, quieter)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- |Return a list of the index files that contain the packages of a
 -- slice.

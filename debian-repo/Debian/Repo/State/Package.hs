@@ -43,6 +43,8 @@ import Debian.Changes (ChangedFileSpec(..), ChangesFile(..), changesFileName)
 import Debian.Control (ControlFunctions(stripWS), formatControl, formatParagraph, Paragraph')
 import qualified Debian.Control.Text as B (appendFields, Control, Control'(Control), ControlFunctions(lookupP), ControlFunctions(parseControlFromHandle), Field, Field'(Field), fieldValue, modifyField, Paragraph, raiseFields, renameField)
 import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(parseControlFromFile))
+import Debian.Pretty (cat, pretty, Pretty(..), text)
+import qualified Debian.Pretty as F (Pretty(..))
 import Debian.Relation (BinPkgName, PkgName)
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (parseSection', ReleaseName, releaseName', Section(..), sectionName, sectionName', SubSection(section))
@@ -54,7 +56,6 @@ import Debian.Repo.PackageIndex (binaryIndexes, BinaryPackage(packageID, package
 import Debian.Repo.Prelude (nub')
 import Debian.Repo.Prelude.Files (writeAndZipFileWithBackup)
 import Debian.Repo.Prelude.Misc (listDiff)
-import qualified Debian.Repo.Prelude as F (Pretty(..))
 import Debian.Repo.Prelude.GPGSign (PGPKey)
 import Debian.Repo.Repo (Repo, repoArchList, repoKey, repoKeyURI)
 import Debian.Repo.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
@@ -72,7 +73,6 @@ import qualified System.Posix.Files as F (createLink, fileSize, getFileStatus)
 import System.Posix.Types (FileOffset)
 import System.Process (runInteractiveCommand, waitForProcess)
 import System.Process.Progress (ePutStrLn, qPutStr, qPutStrLn, quieter)
-import Text.PrettyPrint.ANSI.Leijen (cat, pretty, Pretty(..), text)
 import Text.Regex (matchRegex, mkRegex, splitRegex)
 
 -- | A monad for installing or deleting a repository's packages
@@ -633,7 +633,7 @@ findLive = do
       architectures releases = nub' . List.map releaseArchitectures $ releases
 
 instance (F.Pretty r, Repo r) => F.Pretty (r, Release, PackageIndex) where
-    pretty (repo, r, i) = text $
+    pretty (repo, r, i) = pretty $
         intercalate "/" [show (F.pretty repo),
                          "dist",
 		         (releaseName' . releaseName $ r),
@@ -641,7 +641,7 @@ instance (F.Pretty r, Repo r) => F.Pretty (r, Release, PackageIndex) where
                          show (prettyArch (packageIndexArch i))]
 
 instance F.Pretty (Release, PackageIndex) where
-    pretty (r, i) = text $
+    pretty (r, i) = pretty $
         intercalate "/" [(releaseName' . releaseName $ r),
 		         show (F.pretty (packageIndexComponent i)),
                          show (prettyArch (packageIndexArch i))]
@@ -650,13 +650,10 @@ instance (F.Pretty r, Repo r) => F.Pretty (r, Release) where
     pretty (repo, r) = cat [F.pretty repo, text " ", F.pretty r]
 
 instance F.Pretty Release where
-    pretty r = text $ intercalate " " (releaseName' (releaseName r) : List.map (show . F.pretty) (releaseComponents r))
-
-instance F.Pretty Section where
-    pretty (Section s) = text s
+    pretty r = pretty $ intercalate " " (releaseName' (releaseName r) : List.map (show . F.pretty) (releaseComponents r))
 
 instance F.Pretty (Release, PackageIndex, PackageID BinPkgName) where
-    pretty (r, i, b) = text $
+    pretty (r, i, b) = pretty $
         intercalate "/" [(releaseName' . releaseName $ r),
 		         show (F.pretty (packageIndexComponent i)),
                          show (prettyArch (packageIndexArch i)),
