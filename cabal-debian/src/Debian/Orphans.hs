@@ -1,16 +1,16 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, StandaloneDeriving #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Debian.Orphans where
 
 import Data.Function (on)
 import Data.Generics (Data, Typeable)
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, intersperse)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
-import Data.Text (Text, unpack)
 import Data.Version (Version(..), showVersion)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Control (Field'(..))
+import Debian.Pretty (Pretty(pretty), text, cat, empty)
 import Debian.Relation (Relation(..), VersionReq(..), ArchitectureReq(..),
                         BinPkgName(..), SrcPkgName(..))
 import Debian.Version (DebianVersion)
@@ -20,7 +20,6 @@ import Distribution.PackageDescription (PackageDescription(package), Executable(
 import Distribution.Simple.Compiler (Compiler(..))
 import Distribution.Version (VersionRange(..), foldVersionRange')
 import Language.Haskell.Extension (Extension(..), KnownExtension(..), Language(..))
-import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), text)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..))
 
 deriving instance Typeable Compiler
@@ -50,9 +49,6 @@ instance Ord Executable where
 
 instance Ord PackageDescription where
     compare = compare `on` package
-
-instance Pretty Text where
-    pretty = text . unpack
 
 {-
 instance Show (Control' String) where
@@ -121,7 +117,7 @@ instance Pretty License where
     pretty OtherLicense = text "Non-distributable"
     pretty MIT = text "MIT"
     pretty (UnknownLicense _) = text "Unknown"
-    pretty x = text (show x)
+    pretty x = pretty (show x)
 
 deriving instance Data NameAddr
 deriving instance Typeable NameAddr
@@ -131,8 +127,15 @@ deriving instance Read NameAddr
 -- changelog entry, it *must* have a name followed by an email address
 -- in angle brackets.
 instance Pretty NameAddr where
-    pretty x = text (fromMaybe (nameAddr_addr x) (nameAddr_name x) ++ " <" ++ nameAddr_addr x ++ ">")
+    pretty x = pretty (fromMaybe (nameAddr_addr x) (nameAddr_name x) ++ " <" ++ nameAddr_addr x ++ ">")
     -- pretty x = text (maybe (nameAddr_addr x) (\ n -> n ++ " <" ++ nameAddr_addr x ++ ">") (nameAddr_name x))
+
+instance Pretty [NameAddr] where
+    pretty = cat . intersperse (text ", ") . map pretty
+
+instance Pretty (Maybe NameAddr) where
+    pretty Nothing = empty
+    pretty (Just x) = pretty x
 
 deriving instance Show (Field' String)
 
@@ -152,7 +155,14 @@ instance Pretty VersionRange where
           range
 
 instance Pretty Version where
-    pretty = text . showVersion
+    pretty = pretty . showVersion
 
 instance Pretty DebianVersion where
-    pretty = text . show
+    pretty = pretty . show
+
+instance Pretty (Maybe SrcPkgName) where
+    pretty Nothing = empty
+    pretty (Just x) = pretty x
+
+instance Pretty Bool where
+    pretty = pretty . show

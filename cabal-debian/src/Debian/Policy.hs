@@ -1,6 +1,6 @@
 -- | Code pulled out of cabal-debian that straightforwardly implements
 -- parts of the Debian policy manual, or other bits of Linux standards.
-{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings #-}
 module Debian.Policy
     ( -- * Paths
       databaseDirectory
@@ -45,6 +45,7 @@ import Data.Maybe (mapMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text, pack, unpack, strip)
 import Debian.Debianize.Prelude (read')
+import Debian.Pretty (Pretty(pretty), text, empty)
 import Debian.Relation (BinPkgName)
 import Debian.Version (DebianVersion, parseDebianVersion, version)
 import System.Environment (getEnvironment)
@@ -52,7 +53,6 @@ import System.FilePath ((</>))
 import System.Process (readProcess)
 import Text.Parsec (parse)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..), address)
-import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), text)
 
 databaseDirectory :: BinPkgName -> String
 databaseDirectory x = "/srv" </> show (pretty x)
@@ -105,8 +105,8 @@ getDebhelperCompatLevel =
 data StandardsVersion = StandardsVersion Int Int Int (Maybe Int) deriving (Eq, Ord, Show, Data, Typeable)
 
 instance Pretty StandardsVersion where
-    pretty (StandardsVersion a b c (Just d)) = text $ show a <> "." <> show b <> "." <> show c <> "." <> show d
-    pretty (StandardsVersion a b c Nothing) = text $ show a <> "." <> show b <> "." <> show c
+    pretty (StandardsVersion a b c (Just d)) = pretty (show a) <> text "." <> pretty (show b) <> text "." <> pretty (show c) <> text "." <> pretty (show d)
+    pretty (StandardsVersion a b c Nothing) = pretty (show a) <> text "." <> pretty (show b) <> text "." <> pretty (show c)
 
 -- | Assumes debian-policy is installed
 getDebianStandardsVersion :: IO (Maybe StandardsVersion)
@@ -159,7 +159,7 @@ readPriority s =
       x -> error $ "Invalid priority string: " ++ show x
 
 instance Pretty PackagePriority where
-    pretty = text . map toLower . show
+    pretty = pretty . map toLower . show
 
 -- | The architectures for which a binary deb can be built.
 data PackageArchitectures
@@ -171,7 +171,11 @@ data PackageArchitectures
 instance Pretty PackageArchitectures where
     pretty All = text "all"
     pretty Any = text "any"
-    pretty (Names xs) = text $ intercalate " " xs
+    pretty (Names xs) = pretty $ intercalate " " xs
+
+instance Pretty (Maybe PackageArchitectures) where
+    pretty Nothing = empty
+    pretty (Just x) = pretty x
 
 parsePackageArchitectures :: String -> PackageArchitectures
 parsePackageArchitectures "all" = All
@@ -193,8 +197,8 @@ readSection s =
       (a, _) -> MainSection a
 
 instance Pretty Section where
-    pretty (MainSection sec) = text sec
-    pretty (AreaSection area sec) = pretty area <> text ("/" <> sec)
+    pretty (MainSection sec) = pretty sec
+    pretty (AreaSection area sec) = pretty area <> text "/" <> pretty sec
 
 -- Is this really all that is allowed here?  Doesn't Ubuntu have different areas?
 data Area

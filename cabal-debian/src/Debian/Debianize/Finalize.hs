@@ -40,6 +40,7 @@ import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
 import Debian.Policy (getDebhelperCompatLevel, haskellMaintainer, PackageArchitectures(Any, All), PackagePriority(Optional), Section(..))
+import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName, BinPkgName(BinPkgName), Relation, Relation(Rel), Relations)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(EEQ, GRE, LTE, SGR, SLT))
 import Debian.Release (parseReleaseName)
@@ -56,7 +57,6 @@ import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((<.>), (</>), makeRelative, splitFileName, takeDirectory, takeFileName)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Process (readProcessWithExitCode)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | Given an Atoms value, get any additional configuration
 -- information from the environment, read the cabal package

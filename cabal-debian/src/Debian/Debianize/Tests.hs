@@ -16,7 +16,7 @@ import qualified Data.Map as Map (elems, Map, toList)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), mconcat, mempty)
 import Data.Set as Set (fromList, singleton, union)
-import qualified Data.Text as T (intercalate, lines, pack, split, Text, unlines)
+import Data.Text as Text (intercalate, lines, split, Text, unlines)
 import Data.Version (Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.DebianName (mapCabal, splitCabal)
@@ -31,6 +31,7 @@ import Debian.Debianize.Types.Atoms as T
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S
 import Debian.Policy (databaseDirectory, PackageArchitectures(All), PackagePriority(Extra), parseMaintainer, Section(MainSection), SourceFormat(Native3), StandardsVersion(..), getDebhelperCompatLevel, getDebianStandardsVersion)
+import Debian.Pretty (pretty, Pretty, text, Doc)
 import Debian.Relation (BinPkgName(..), Relation(..), SrcPkgName(..), VersionReq(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Version (parseDebianVersion, buildDebianVersion)
@@ -42,7 +43,6 @@ import System.FilePath ((</>))
 import System.Process (readProcessWithExitCode)
 import Test.HUnit hiding ((~?=))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..))
-import Text.PrettyPrint.ANSI.Leijen (pretty, Pretty, text)
 
 -- | A suitable defaultAtoms value for the debian repository.
 defaultAtoms :: Monad m => DebT m ()
@@ -108,7 +108,7 @@ test1 label =
           execDebM
             (do defaultAtoms
                 newDebianization log (Just 9) (Just (StandardsVersion 3 9 3 (Just 1)))
-                rulesHead %= (const (Just (T.unlines $
+                rulesHead %= (const (Just (Text.unlines $
                                                 [ "#!/usr/bin/make -f"
                                                 , ""
                                                 , "include /usr/share/cdbs/1/rules/debhelper.mk"
@@ -153,7 +153,7 @@ test2 label =
           execDebM
             (do defaultAtoms
                 newDebianization log (Just 9) (Just (StandardsVersion 3 9 3 (Just 1)))
-                rulesHead %= (const (Just (T.unlines $
+                rulesHead %= (const (Just (Text.unlines $
                                                 ["#!/usr/bin/make -f",
                                                  "",
                                                  "include /usr/share/cdbs/1/rules/debhelper.mk",
@@ -174,15 +174,16 @@ test2 label =
                               logVersion = Debian.Version.parseDebianVersion ("2.6.2" :: String),
                               logDists = [ReleaseName {relName = "unstable"}],
                               logUrgency = "low",
-                              logComments = unlines ["  * Fix a bug constructing the destination pathnames that was dropping",
-                                                     "    files that were supposed to be installed into packages."],
+                              logComments = Prelude.unlines ["  * Fix a bug constructing the destination pathnames that was dropping",
+                                                             "    files that were supposed to be installed into packages."],
                               logWho = "David Fox <dsf@seereason.com>",
                               logDate = "Thu, 20 Dec 2012 06:49:25 -0800"}]
 
 testEntry :: ChangeLogEntry
 testEntry =
     either (error "Error in test changelog entry") fst
-           (parseEntry (unlines [ "haskell-cabal-debian (2.6.2) unstable; urgency=low"
+           (parseEntry (Prelude.unlines
+                                [ "haskell-cabal-debian (2.6.2) unstable; urgency=low"
                                 , ""
                                 , "  * Fix a bug constructing the destination pathnames that was dropping"
                                 , "    files that were supposed to be installed into packages."
@@ -203,7 +204,7 @@ test3 label =
             (do defaultAtoms
                 newDebianization log (Just 7) (Just (StandardsVersion 3 9 4 Nothing))
                 T.sourceFormat ~= Just Native3
-                T.rulesHead ~= Just (T.pack (unlines ["#!/usr/bin/make -f",
+                T.rulesHead ~= Just (Text.unlines  ["#!/usr/bin/make -f",
                                                     "# -*- makefile -*-",
                                                     "",
                                                     "# Uncomment this to turn on verbose mode.",
@@ -246,7 +247,7 @@ test3 label =
                                                     "\tdh clean",
                                                     "\trm -f $(manpages)",
                                                     "",
-                                                    ""]))
+                                                    ""])
                 T.compat ~= Just 7
                 T.copyright ~= Just "This package was debianized by John Goerzen <jgoerzen@complete.org> on\nWed,  6 Oct 2004 09:46:14 -0500.\n\nCopyright information removed from this test data.\n\n"
                 T.source ~= Just (SrcPkgName {unSrcPkgName = "haskell-devscripts"})
@@ -262,7 +263,7 @@ test3 label =
                 T.binaryArchitectures (BinPkgName "haskell-devscripts") ~= Just All
                 T.debianDescription (BinPkgName "haskell-devscripts") ~=
                    Just
-                     (T.intercalate "\n" ["Tools to help Debian developers build Haskell packages",
+                     (intercalate "\n"   ["Tools to help Debian developers build Haskell packages",
                                           " This package provides a collection of scripts to help build Haskell",
                                           " packages for Debian.  Unlike haskell-utils, this package is not",
                                           " expected to be installed on the machines of end users.",
@@ -393,10 +394,10 @@ test4 label =
       fixRules =
           makeRulesHead >>= \ rh -> T.rulesHead %= (\ mt -> (Just . f) (fromMaybe rh mt))
           where
-            f t = T.unlines $ concat $
+            f t = Text.unlines $ concat $
                   map (\ line -> if line == "include /usr/share/cdbs/1/rules/debhelper.mk"
-                                 then ["DEB_SETUP_GHC_CONFIGURE_ARGS = -fbackups", "", line] :: [T.Text]
-                                 else [line] :: [T.Text]) (T.lines t)
+                                 then ["DEB_SETUP_GHC_CONFIGURE_ARGS = -fbackups", "", line] :: [Text]
+                                 else [line] :: [Text]) (Text.lines t)
 {-
           mapAtoms f deb
           where
@@ -481,18 +482,18 @@ test5 label =
              mapM_ (\ b -> T.depends b %= \ deps -> deps ++ [[anyrel (BinPkgName "markdown")]])
                    [(BinPkgName "creativeprompts-production"), (BinPkgName "creativeprompts-development")]
              T.debianDescription (BinPkgName "creativeprompts-development") ~=
-                   Just (T.intercalate "\n" [ "Configuration for running the creativeprompts.com server"
+                   Just (intercalate "\n" [ "Configuration for running the creativeprompts.com server"
                                             , "  Testing version of the blog server, runs on port"
                                             , "  8000 with HTML validation turned on." ])
              T.debianDescription (BinPkgName "creativeprompts-data") ~=
-                   Just (T.intercalate "\n" [ "creativeprompts.com data files"
+                   Just (intercalate "\n" [ "creativeprompts.com data files"
                                             , "  Static data files for creativeprompts.com"])
              T.debianDescription (BinPkgName "creativeprompts-production") ~=
-                   Just (T.intercalate "\n" [ "Configuration for running the creativeprompts.com server"
+                   Just (intercalate "\n" [ "Configuration for running the creativeprompts.com server"
                                             , "  Production version of the blog server, runs on port"
                                             , "  9021 with HTML validation turned off." ])
              T.debianDescription (BinPkgName "creativeprompts-backups") ~=
-                   Just (T.intercalate "\n" [ "backup program for creativeprompts.com"
+                   Just (intercalate "\n" [ "backup program for creativeprompts.com"
                                             , "  Install this somewhere other than creativeprompts.com to run automated"
                                             , "  backups of the database."])
              T.binaryArchitectures (BinPkgName "creativeprompts-production") ~= Just All
@@ -661,22 +662,23 @@ diffDebianizations old new =
     where
       isUnchanged (Unchanged _ _) = True
       isUnchanged _ = False
-      prettyChange (Unchanged p _) = text ("Unchanged: " <> p <> "\n")
-      prettyChange (Deleted p _) = text ("Deleted: " <> p <> "\n")
+      prettyChange :: Change FilePath Text -> Doc
+      prettyChange (Unchanged p _) = text "Unchanged: " <> pretty p <> text "\n"
+      prettyChange (Deleted p _) = text "Deleted: " <> pretty p <> text "\n"
       prettyChange (Created p b) =
-          text ("Created: " <> p <> "\n") <>
+          text "Created: " <> pretty p <> text "\n" <>
           prettyDiff ("old" </> p) ("new" </> p)
                      -- We use split here instead of lines so we can
                      -- detect whether the file has a final newline
                      -- character.
-                     (contextDiff 2 mempty (T.split (== '\n') b))
+                     (contextDiff 2 mempty (split (== '\n') b))
       prettyChange (Modified p a b) =
-          text ("Modified: " <> p<> "\n") <>
+          text "Modified: " <> pretty p <> text "\n" <>
           prettyDiff ("old" </> p) ("new" </> p)
                      -- We use split here instead of lines so we can
                      -- detect whether the file has a final newline
                      -- character.
-                     (contextDiff 2 (T.split (== '\n') a) (T.split (== '\n') b))
+                     (contextDiff 2 (split (== '\n') a) (split (== '\n') b))
 
 sortBinaryDebs :: DebT IO ()
 sortBinaryDebs = T.binaryPackages %= sortBy (compare `on` getL B.package)

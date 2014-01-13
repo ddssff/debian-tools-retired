@@ -22,12 +22,12 @@ import Debian.Debianize.Prelude (showDeps')
 import qualified Debian.Debianize.Types.Atoms as T
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S
+import Debian.Pretty (pretty)
 import Debian.Relation (Relations, BinPkgName(BinPkgName))
 import Distribution.License (License(AllRightsReserved))
 import Prelude hiding (init, unlines, writeFile, log)
 --import System.Directory (getCurrentDirectory)
 import System.FilePath ((</>))
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 type FilesT m = WriterT [(FilePath, Text)] (DebT m)
 

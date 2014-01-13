@@ -27,6 +27,7 @@ import Debian.Debianize.Prelude ((!), buildDebVersionMap, cond, DebMap, debOfFil
 import Debian.Debianize.Types (Top)
 import qualified Debian.Debianize.Types.Atoms as T
 import Debian.Orphans ()
+import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName(BinPkgName), Relation, Relations)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), ParseRelations(parseRelations), Relation(Rel), Relations, VersionReq(GRE))
 import Distribution.Package (Dependency(..), PackageName(PackageName))
@@ -37,7 +38,6 @@ import Distribution.Text (display)
 import Prelude hiding (unlines)
 import System.Directory (doesDirectoryExist, getDirectoryContents)
 import System.FilePath ((</>))
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | Expand the contents of the .substvars file for a library package.
 -- Each cabal package corresponds to a directory <name>-<version>,

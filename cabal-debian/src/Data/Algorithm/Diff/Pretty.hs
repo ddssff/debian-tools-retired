@@ -1,10 +1,11 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Data.Algorithm.Diff.Pretty
     ( prettyDiff
     ) where
 
 import Data.Algorithm.Diff (Diff(..))
 import Data.Monoid (mconcat, (<>))
-import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), Doc, text, empty)
+import Debian.Pretty (Pretty(pretty), Doc, text, empty)
 
 -- | Format the output of 'contextDiff' to look approximately like the
 -- output of the unix diff command.

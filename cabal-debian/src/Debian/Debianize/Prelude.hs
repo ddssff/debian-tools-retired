@@ -63,6 +63,7 @@ import Data.Text as Text (Text, unpack, lines)
 import Data.Text.IO (hGetContents)
 import Debian.Control (parseControl, lookupP, Field'(Field), unControl, stripWS)
 import Debian.Orphans ()
+import Debian.Pretty (Pretty(pretty), text)
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Debian.Version.String (parseDebianVersion)
 import qualified Debian.Relation as D
@@ -75,7 +76,6 @@ import System.FilePath ((</>), dropExtension)
 import System.IO (IOMode (ReadMode), withFile, openFile, hSetBinaryMode)
 import System.IO.Error (isDoesNotExistError, catchIOError)
 import System.Process (readProcessWithExitCode, showCommandForUser)
-import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), text)
 
 curry3 :: ((a, b, c) -> d) -> a -> b -> c -> d
 curry3 f a b c = f (a, b, c)
@@ -188,12 +188,12 @@ readFileMaybe path = (Just <$> readFile' path) `catchIOError` (\ _ -> return Not
 -- Would like to call pretty instead of D.prettyRelations, but the
 -- Pretty instance for [a] doesn't work for us.
 showDeps :: [[D.Relation]] -> String
-showDeps = show . D.prettyRelations
+showDeps = show . pretty
 
 -- The extra space after prefix' is here for historical reasons(?)
 showDeps' :: [a] -> [[D.Relation]] -> String
 showDeps' prefix xss =
-    intercalate  ("\n" ++ prefix' ++ " ") . Prelude.lines . show . D.prettyRelations $ xss
+    intercalate  ("\n" ++ prefix' ++ " ") . Prelude.lines . show . pretty $ xss
     where prefix' = List.map (\ _ -> ' ') prefix
 
 -- | From Darcs.Utils - set the working directory and run an IO operation.
@@ -348,7 +348,7 @@ fromSingleton e multiple s =
       xs -> multiple xs
 
 instance Pretty PackageIdentifier where
-    pretty p = pretty (pkgName p) <> text "-" <> pretty (pkgVersion p)
+    pretty p = pretty (pkgName p) <> pretty "-" <> pretty (pkgVersion p)
 
 instance Pretty PackageName where
-    pretty (PackageName s) = text s
+    pretty (PackageName s) = pretty s

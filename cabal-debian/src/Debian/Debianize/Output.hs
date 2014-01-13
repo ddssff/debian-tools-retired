@@ -34,13 +34,13 @@ import Debian.Debianize.Prelude (indent, replaceFile, withCurrentDirectory, zipM
 import qualified Debian.Debianize.Types as T
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (package)
 import qualified Debian.Debianize.Types.SourceDebDescription as S (source)
+import Debian.Pretty (Pretty(pretty))
 import Prelude hiding (unlines, writeFile, (.))
 import System.Directory (createDirectoryIfMissing, doesFileExist, getPermissions, Permissions(executable), setPermissions)
 import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>), takeDirectory)
 import System.Process (readProcessWithExitCode)
-import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 -- | Run the script in @debian/Debianize.hs@ with the given command
 -- line arguments.  Returns @True@ if the script exists and succeeds.
@@ -125,7 +125,7 @@ validateDebianization old new =
     case () of
       _ | oldVersion /= newVersion -> throw (userError ("Version mismatch, expected " ++ show (pretty oldVersion) ++ ", found " ++ show (pretty newVersion)))
         | oldSource /= newSource -> throw (userError ("Source mismatch, expected " ++ show (pretty oldSource) ++ ", found " ++ show (pretty newSource)))
-        | oldPackages /= newPackages -> throw (userError ("Package mismatch, expected " ++ show (pretty oldPackages) ++ ", found " ++ show (pretty newPackages)))
+        | oldPackages /= newPackages -> throw (userError ("Package mismatch, expected " ++ show (map pretty oldPackages) ++ ", found " ++ show (map pretty newPackages)))
         | True -> ()
     where
       oldVersion = logVersion (head (unChangeLog (fromMaybe (error "Missing changelog") (getL T.changelog old))))

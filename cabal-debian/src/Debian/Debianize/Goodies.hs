@@ -32,6 +32,7 @@ import qualified Debian.Debianize.Types as T
 import qualified Debian.Debianize.Types.Atoms as T
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import Debian.Orphans ()
+import Debian.Pretty (Pretty(pretty))
 import Debian.Policy (apacheLogDirectory, apacheErrorLog, apacheAccessLog, databaseDirectory, serverAppLog, serverAccessLog)
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel))
 import Distribution.Package (PackageIdentifier(..), PackageName(PackageName))
@@ -39,7 +40,6 @@ import Distribution.PackageDescription as Cabal (PackageDescription(package, syn
 import Distribution.Text (display)
 import Prelude hiding (writeFile, init, unlines, log, map)
 import System.FilePath ((</>))
-import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty))
 
 showCommand :: String -> [String] -> String
 showCommand cmd args =
