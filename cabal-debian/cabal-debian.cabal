@@ -134,8 +134,14 @@ Description:
  complex packaging issues.  For documentation of the executable run
  @cabal-debian --help@, for documentation of the library API follow
  the link to the @Debian.Debianize@ module below.
+
 Flag tests
   Description: enable the unit test executable (disabled by default because it has a lot of wacky dependencies.)
+  Default: False
+  Manual: True
+
+flag local-debian
+  Description: Link directly to the source of the debian library
   Default: False
   Manual: True
 
@@ -153,7 +159,6 @@ Library
    containers,
    data-lens,
    data-lens-template,
-   debian >= 3.71,
    Diff,
    directory,
    filepath,
@@ -196,6 +201,11 @@ Library
    Debian.Debianize.VersionSplits
  Other-Modules:
    Debian.Orphans
+ if flag(local-debian)
+   Hs-Source-Dirs: ., ../../haskell-debian
+   Build-Depends: regex-compat, bytestring, process-listlike, network, old-locale, time
+ else
+   Build-depends: debian >= 3.81
 
 Executable cabal-debian
  Hs-Source-Dirs: src
@@ -223,6 +233,11 @@ Executable cabal-debian
    text,
    unix,
    utf8-string
+ if flag(local-debian)
+   Hs-Source-Dirs: ., ../../haskell-debian
+   Build-Depends: regex-compat, bytestring, process-listlike, network, old-locale, time
+ else
+   Build-Depends: debian >= 3.81
 
 Executable cabal-debian-tests
  Hs-Source-Dirs: src
@@ -251,3 +266,8 @@ Executable cabal-debian-tests
    text,
    unix,
    utf8-string
+ if flag(local-debian)
+   Hs-Source-Dirs: ., ../../haskell-debian
+   Build-Depends: regex-compat, bytestring, process-listlike, network, old-locale, time
+ else
+   Build-depends: debian >= 3.81
