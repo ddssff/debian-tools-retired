@@ -11,7 +11,7 @@ import Data.Text (pack)
 import Debian.Arch (Arch(Binary, Source), ArchCPU(..), ArchOS(..), prettyArch)
 import Debian.Changes (ChangesFile(..))
 import Debian.Config (option)
-import Debian.NewDist.Options (Params(install, rootParam, printVersion, layout, dryRun, binaryOrphans, cleanUp, signRepo, notifyEmail, senderEmail, keyName, aliases, sections, architectures, releases, expire, removePackages), homeParams, optSpecs)
+import Debian.NewDist.Options (Params(install, rootParam, printVersion, layout, dryRun, binaryOrphans, cleanUp, sign, notifyEmail, senderEmail, keyName, aliases, sections, architectures, releases, expire, removePackages), homeParams, optSpecs)
 import Debian.NewDist.Version (myVersion)
 import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName)
@@ -26,7 +26,7 @@ import Debian.Repo.Prelude.Lock (withLock)
 import Debian.Repo.Release (Release, parseArchitectures, releaseName, releaseAliases, releaseComponents, releaseArchitectures)
 import Debian.Repo.State (MonadRepos, runReposT)
 import Debian.Repo.State.Package (scanIncoming, deleteSourcePackages, deleteTrumped, deleteBinaryOrphans, deleteGarbage, InstallResult(Ok), explainError, resultToProblems, showErrors, MonadInstall, evalInstall)
-import Debian.Repo.State.Release (findReleases, prepareRelease, writeRelease, signRelease, mergeReleases)
+import Debian.Repo.State.Release (findReleases, prepareRelease, writeRelease, signRepo, mergeReleases)
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
 import Prelude hiding (putStr, putStrLn, putChar)
 import System.Console.GetOpt (ArgOrder(Permute), getOpt, usageInfo)
@@ -69,7 +69,7 @@ runFlags flags =
                        when (expire flags)  $ deleteTrumped (dryRun flags) keyname rels >> return ()
                        when (binaryOrphans flags)  $ deleteBinaryOrphans (dryRun flags) keyname rels >> return ()
                        when (cleanUp flags) $ deleteGarbage >> return ()
-                       when (signRepo flags) $ liftIO (mapM_ (\ rel -> writeRelease repo rel >>= signRelease keyname repo rel) rels))
+                       when (sign flags) $ liftIO (mapM_ (\ rel -> writeRelease repo rel >>= signRepo keyname repo) rels))
          repo keyname
     where
       emailAddrs :: [(String, String)]
@@ -90,7 +90,7 @@ runFlags flags =
               body = concat (map (lines . explainError) (resultToProblems e)) in
           (subject, body)
       keyname =
-          case (keyName flags, signRepo flags) of
+          case (keyName flags, sign flags) of
             (Just "none", _) -> Nothing
             (_, False) -> Nothing
             (Nothing, True) -> Just {-Debian.Repo.Prelude.GPGSign.-}Default

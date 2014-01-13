@@ -60,7 +60,7 @@ import Debian.Repo.Prelude.GPGSign (PGPKey)
 import Debian.Repo.Repo (Repo, repoArchList, repoKey, repoKeyURI)
 import Debian.Repo.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
 import Debian.Repo.State (MonadRepos(getRepos, putRepos), getRelease, ReleaseKey, putRelease)
-import Debian.Repo.State.Release (findReleases, prepareRelease, writeRelease, signRelease)
+import Debian.Repo.State.Release (findReleases, prepareRelease, writeRelease, signRepo)
 import Debian.URI (fileFromURIStrict)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.Version.Text ()
@@ -106,7 +106,7 @@ runInstall :: MonadRepos m => StateT InstallState m a -> LocalRepository -> Mayb
 runInstall task repo keyname = do
   releases <- findReleases repo
   (r, st) <- runStateT task (InstallState repo Nothing releases empty)
-  mapM_ (\ key -> getRelease key >>= \ rel -> liftIO (writeRelease repo rel >>= signRelease keyname repo rel)) (Set.toList (getL modified st))
+  mapM_ (\ key -> getRelease key >>= \ rel -> liftIO (writeRelease repo rel >>= signRepo keyname repo)) (Set.toList (getL modified st))
   return (r, st)
 
 evalInstall :: MonadRepos m => StateT InstallState m a -> LocalRepository -> Maybe PGPKey -> m a
@@ -272,7 +272,7 @@ installPackages createSections keyname repo changeFileList =
                (do mapM_ (uncurry (finish (repoRoot repo) (maybe Flat id (repoLayout repo)))) (zip changeFileList results'')
                    let releaseNames = nub' (List.map changeRelease changeFileList)
                    releases' <- catMaybes <$> mapM findRelease' releaseNames
-                   mapM_ (\ rel -> liftIO $ writeRelease repo rel >>= signRelease keyname repo rel) releases')
+                   mapM_ (\ rel -> liftIO $ writeRelease repo rel >>= signRepo keyname repo) releases')
           return results'')
       repo
       keyname
@@ -861,7 +861,7 @@ deleteSourcePackages dry keyname packages =
         repo <- getL repository <$> getInstall
         case dry of
           True -> ePutStrLn ("dry run: not changing " ++ show index)
-          False -> liftIO $ putIndex (repoRoot repo) release index entries >> writeRelease repo release >>= signRelease keyname repo release
+          False -> liftIO $ putIndex (repoRoot repo) release index entries >> writeRelease repo release >>= signRepo keyname repo
         return release
       putIndex :: EnvPath -> Release -> PackageIndex -> [BinaryPackage] -> IO (Either [String] ())
       putIndex root release index packages =
@@ -902,7 +902,7 @@ deleteBinaryPackages dry keyname blacklist = do
           do repo <- getL repository <$> getInstall
              case dry of
                True -> ePutStrLn ("dry run: not changing " ++ show index)
-               False -> liftIO $ putIndex (repoRoot repo) release index entries >> writeRelease repo release >>= signRelease keyname repo release
+               False -> liftIO $ putIndex (repoRoot repo) release index entries >> writeRelease repo release >>= signRepo keyname repo
              return release
       putIndex :: EnvPath -> Release -> PackageIndex -> [BinaryPackage] -> IO (Either [String] ())
       putIndex root release index packages =

@@ -36,7 +36,7 @@ data Params
       , rejectRevision :: Maybe String
       , printVersion :: Bool
       , layout :: Layout
-      , signRepo :: Bool
+      , sign :: Bool
       , architectures :: Maybe String
       , keyName :: Maybe String -- "Name of the pgp key with which to sign the repository."
       } deriving Show
@@ -63,7 +63,7 @@ initialParams =
     , rejectRevision = Nothing
     , printVersion = False
     , layout = Pool
-    , signRepo = True
+    , sign = True
     , architectures = Nothing
     , keyName = Nothing
     }
@@ -116,9 +116,9 @@ optSpecs =
                  "Print the version string and exit"
     , Param [] ["layout"] ["Layout"] (ReqArg (\ s p -> p {layout = read s}) (intercalate " or " (map show ([minBound .. maxBound] :: [Layout])) ++ ", default " ++ show (layout initialParams)))
                  "Specify a default layout"
-    , Param [] ["no-sign"] ["No-Sign"] (NoArg (\ p -> p {signRepo = False}))
+    , Param [] ["no-sign"] ["No-Sign"] (NoArg (\ p -> p {sign = False}))
                  "Do not attempt to cryptographically sign the repository, even if something changed."
-    , Param [] ["sign"] ["Sign"] (NoArg (\ p -> p {signRepo = True}))
+    , Param [] ["sign"] ["Sign"] (NoArg (\ p -> p {sign = True}))
                  "Cryptographically sign the repository, even if nothing changed."
     , Param [] ["architectures"] ["Architectures"] (ReqArg (\ s p -> p {architectures = Just s}) "ARCH,ARCH,...")
                  ""
