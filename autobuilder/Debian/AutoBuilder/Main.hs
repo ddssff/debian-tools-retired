@@ -30,6 +30,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (DebT)
+import Debian.Pretty (pretty)
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.OSImage (MonadOS, osLocalMaster, osLocalCopy, osBaseDistro)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
@@ -59,7 +60,6 @@ import System.Process (proc)
 import System.Process.Progress (Output, timeTask, defaultVerbosity, withModifiedVerbosity, quieter, withModifiedVerbosity, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 main :: DebT IO () -> (FilePath -> String -> P.ParamRec) -> IO ()
 main init myParams =

@@ -20,6 +20,7 @@ import Debian.AutoBuilder.Target (decode)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (ChangeLogEntry(..), parseEntries, parseEntry)
+import Debian.Pretty (pretty)
 import Debian.Repo (DebianSourceTreeC(debdir), SourceTreeC(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub, MonadRepos, MonadTop, runProc, readProc)
 import Debian.Version
 import Extra.Files (replaceFile)
@@ -29,7 +30,6 @@ import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
 import System.Process (shell)
 import System.Process.Progress (collectOutputs, mergeToStderr, qPutStrLn, quieter)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 import Text.Regex
 
 qMessage s x = qPutStrLn s >> return x

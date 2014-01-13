@@ -17,7 +17,8 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
-import Debian.Relation (prettyRelations)
+import Debian.Pretty (pretty)
+import Debian.Relation ()
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.State (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub)
@@ -120,7 +121,7 @@ asCabalFlags :: P.PackageFlag -> [String]
 asCabalFlags (P.Maintainer s) = ["--maintainer", s]
 asCabalFlags (P.BuildDep s) = ["--build-dep", s]
 asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
-asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ show (prettyRelations d)]
+asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ show (pretty d)]
 asCabalFlags (P.DebVersion s) = ["--deb-version", s]
 asCabalFlags (P.Revision s) = ["--revision", s]
 asCabalFlags (P.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]

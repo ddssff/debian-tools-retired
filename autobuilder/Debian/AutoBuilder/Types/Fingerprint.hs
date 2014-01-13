@@ -26,6 +26,7 @@ import Debian.Changes (logVersion)
 import Debian.Control (lookupP, unControl, stripWS)
 import qualified Debian.Control.String as S
 import qualified Debian.GenBuildDeps as G
+import Debian.Pretty (pretty)
 import Debian.Relation (Relation(Rel), BinPkgName(..))
 import Debian.Repo.Dependencies (prettySimpleRelation, readSimpleRelation, showSimpleRelation)
 import Debian.Repo.SourceTree (DebianSourceTreeC(entry), SourcePackageStatus(..))
@@ -34,7 +35,6 @@ import Debian.Repo.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Debian.VersionPolicy(dropTag, parseTag)
 import Extra.Misc(columns)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 -- | This type represents a package's fingerprint, (formerly its
 -- revision string,) which includes three pieces of information: how

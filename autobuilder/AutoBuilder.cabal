@@ -37,25 +37,8 @@ flag local-debian
 
 Library
 
-  if flag(local-debian-repo)
-    Build-Depends: deepseq, data-lens, data-lens-template
-    if flag(local-debian)
-      Hs-Source-Dirs: ., ../../haskell-debian, ../debian-repo
-    else
-      Build-Depends: debian >= 3.78
-      Hs-Source-Dirs: ., ../debian-repo
-  else
-    Build-Depends: debian-repo >= 5.50, debian >= 3.78
-
-  if flag(local-cabal-debian)
-    Hs-Source-Dirs: ., ../cabal-debian/src
-    Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff, set-extra
-  else
-    Build-Depends: cabal-debian >= 4.0.2
-
   Build-Depends:
-        ansi-wl-pprint
-      , applicative-extras >= 0.1.8
+        applicative-extras >= 0.1.8
       , base
       , bytestring
       , bzlib
@@ -127,16 +110,39 @@ Library
     Debian.AutoBuilder.Version
     Paths_AutoBuilder
 
+  if flag(local-debian-repo)
+    Build-Depends: deepseq, data-lens, data-lens-template
+    if flag(local-debian)
+      Hs-Source-Dirs: ., ../../haskell-debian, ../debian-repo
+    else
+      Build-Depends: debian >= 3.81
+      Hs-Source-Dirs: ., ../debian-repo
+  else
+    Build-Depends: debian-repo >= 5.50, debian >= 3.81
+
+  if flag(local-cabal-debian)
+    Hs-Source-Dirs: ., ../cabal-debian/src
+    Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff, set-extra
+  else
+    Build-Depends: cabal-debian >= 4.0.2
+
 Executable autobuilder-tests
   Main-Is: Test/Test.hs
   ghc-options: -O2 -threaded -Wall
   Build-Depends: HUnit
+
+  if flag(local-debian-repo)
+    Build-Depends: deepseq, data-lens, data-lens-template
+    if flag(local-debian)
+      Hs-Source-Dirs: ., ../../haskell-debian, ../debian-repo
+    else
+      Build-Depends: debian >= 3.81
+      Hs-Source-Dirs: ., ../debian-repo
+  else
+    Build-Depends: debian-repo >= 5.50, debian >= 3.81
+
   if flag(local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src
-    Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff
+    Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff, set-extra
   else
     Build-Depends: cabal-debian >= 4.0.2
-  if flag(local-debian-repo)
-    Hs-Source-Dirs: ., ../debian-repo
-  else
-    Build-Depends: debian-repo

@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 module Debian.AutoBuilder.Types.ParamRec
     ( ParamRec(..)
     , Strictness(..)
@@ -14,6 +15,7 @@ import Data.Map as Map (Map, insertWith, elems, empty)
 import Data.Set as Set (Set, insert, empty, fold, member)
 import Debian.Arch (Arch)
 import Debian.AutoBuilder.Types.Packages (Packages(Packages, Package, NoPackage, name, list, group), TargetName(TargetName))
+import Debian.Pretty (Pretty(pretty), vcat)
 import Debian.Release (ReleaseName )
 import Debian.Repo.Slice (SourcesChangedAction)
 import Debian.Sources (DebSource)
@@ -21,7 +23,6 @@ import Debian.Version ( DebianVersion, prettyDebianVersion )
 import Debian.URI ( URI )
 import Prelude hiding (map)
 import System.Console.GetOpt
-import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat)
 
 -- |An instance of 'ParamClass' contains the configuration parameters
 -- for a run of the autobuilder.  Among other things, it defined a set
@@ -273,7 +274,7 @@ data Strictness
 -- value of this type.  Once all the command line arguments have been
 -- analyzed, this is transformed into a set of targets, which can be
 -- used to implement the ParamClass "targets" method.
--- 
+--
 -- We allow some redundancy here by keeping a set of names even while
 -- the allTargets flag is set so we can verify that the user never
 -- supplies bogus target names.
@@ -282,6 +283,9 @@ data TargetSpec
        { allTargets :: Bool
        , targetNames :: Set.Set TargetName }
      deriving Show
+
+instance Pretty (String, [DebSource]) where
+    pretty (name, ss) = pretty $ show $ (pretty name, map pretty ss)
 
 -- |Output a (somewhat) readable representation of the parameter set.
 prettyPrint :: ParamRec -> String
