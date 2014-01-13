@@ -1,5 +1,5 @@
 -- | A repository located on localhost
-{-# LANGUAGE FlexibleInstances, PackageImports, StandaloneDeriving, ScopedTypeVariables, TemplateHaskell, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, StandaloneDeriving, ScopedTypeVariables, TemplateHaskell, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.LocalRepository
     ( LocalRepository(..)
@@ -30,14 +30,14 @@ import qualified Debian.Control.Text as T (fieldValue)
 import Debian.Pretty (Pretty, pretty, text)
 import qualified Debian.Pretty as F (Pretty(..))
 import Debian.Relation (BinPkgName(..))
-import Debian.Release (parseReleaseName, ReleaseName(..), releaseName', Section, sectionName', SubSection(section))
+import Debian.Release (parseReleaseName, ReleaseName(..), releaseName', Section(..), sectionName', SubSection(section))
 import Debian.Repo.Changes (changeKey, changePath, findChangesFiles)
 import Debian.Repo.Dependencies (readSimpleRelation)
 import Debian.Repo.EnvPath (EnvPath(envPath), outsidePath)
 import Debian.Repo.PackageID (PackageID)
 import Debian.Repo.Prelude (rsync, maybeWriteFile, replaceFile, cond, partitionM)
 import Debian.Repo.Prelude.SSH (sshVerify)
-import Debian.Repo.Release (parseReleaseFile, Release)
+import Debian.Repo.Release (parseReleaseFile, Release(..), parseArchitectures)
 import Debian.Repo.Repo (compatibilityFile, libraryCompatibilityLevel, Repo(..), RepoKey(..))
 import Debian.URI (URI(uriAuthority, uriPath), URIAuth(uriPort, uriRegName, uriUserInfo), uriToString')
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
@@ -96,7 +96,7 @@ poolDir' repo changes file =
       Nothing -> error "No 'Source' field in .changes file"
       Just source -> poolDir repo (section . changedFileSection $ file) (unpack source)
 
-readLocalRepo :: MonadIO m => EnvPath -> Maybe Layout -> m LocalRepository
+readLocalRepo :: MonadIO m => EnvPath -> Maybe Layout -> m (Maybe LocalRepository)
 readLocalRepo root layout =
     do names <- liftIO (getDirectoryContents distDir) >>= return . filter (\ x -> not . elem x $ [".", ".."])
        (links, dists) <- partitionM (liftIO . isSymLink . (distDir </>)) names
@@ -105,11 +105,11 @@ readLocalRepo root layout =
        let distGroups = groupBy fstEq . sort $ aliasPairs
        let aliases = map (checkAliases  . partition (uncurry (==))) distGroups
        releaseInfo <- mapM (liftIO . getReleaseInfo) aliases
-       -- qPutStrLn ("LocalRepository releaseInfo " ++ show root ++ ": " ++ show releaseInfo)
-       let repo = LocalRepository { repoRoot = root
-                                  , repoLayout = layout
-                                  , repoReleaseInfoLocal = releaseInfo }
-       return repo
+       case releaseInfo of
+         [] -> return Nothing
+         _ -> return $ Just $ LocalRepository { repoRoot = root
+                                              , repoLayout = layout
+                                              , repoReleaseInfoLocal = releaseInfo }
     where
       fstEq (a, _) (b, _) = a == b
       checkAliases :: ([(String, String)], [(String, String)]) -> (ReleaseName, [ReleaseName])
@@ -141,7 +141,7 @@ prepareLocalRepository root layout =
                     Just Pool -> [("pool", 0o40755), ("installed", 0o40755)]
                     Just Flat -> []
                     Nothing -> [])
-       readLocalRepo root layout'
+       readLocalRepo root layout' >>= maybe (makeLocalRepo root layout') return
     where
       initDir (name, mode) =
           do let path = outsidePath root </> name
@@ -153,6 +153,15 @@ prepareLocalRepository root layout =
           getSymbolicLinkStatus (root </> "dists" </> name) >>= return . not . isSymbolicLink
       hasReleaseFile root name =
           doesFileExist (root </> "dists" </> name </> "Release") -}
+
+makeLocalRepo :: MonadIO m => EnvPath -> Maybe Layout -> m LocalRepository
+makeLocalRepo root layout =
+    return $ LocalRepository { repoRoot = root
+                             , repoLayout = layout
+                             , repoReleaseInfoLocal = [Release { releaseName = ReleaseName "precise-seereason"
+                                                               , releaseAliases = []
+                                                               , releaseArchitectures = parseArchitectures "amd64, i386"
+                                                               , releaseComponents = [Section "main"] }] }
 
 -- |Change the root directory of a repository.  FIXME: This should
 -- also sync the repository to ensure consistency.

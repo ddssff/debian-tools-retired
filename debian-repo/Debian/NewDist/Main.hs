@@ -6,6 +6,7 @@ module Main where
 import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import Data.Maybe (catMaybes)
+import Data.Set (Set, fromList)
 import Data.Text (pack)
 import Debian.Arch (Arch(Binary, Source), ArchCPU(..), ArchOS(..), prettyArch)
 import Debian.Changes (ChangesFile(..))
@@ -104,7 +105,7 @@ createReleases :: MonadRepos m => Params -> m ()
 createReleases flags =
     do repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
        rels <- findReleases repo
-       mapM_ (createRelease repo (archList flags)) (map parseReleaseName . releases $ flags)
+       mapM_ (createRelease repo (archSet flags)) (map parseReleaseName . releases $ flags)
        mapM_ (createAlias repo) (aliases flags)
        mapM_ (createSectionOfRelease repo rels) (sections flags)
     where
@@ -127,13 +128,13 @@ createReleases flags =
 root :: Params -> EnvPath
 root flags = EnvPath (EnvRoot "") (rootParam flags)
 
-archList :: Params -> [Arch]
-archList flags = maybe defaultArchitectures (parseArchitectures . pack) $ architectures flags
+archSet :: Params -> Set Arch
+archSet flags = maybe defaultArchitectures (parseArchitectures . pack) $ architectures flags
 
-defaultArchitectures :: [Arch]
-defaultArchitectures = [Binary (ArchOS "linux") (ArchCPU "i386"), Binary (ArchOS "linux") (ArchCPU "amd64")]
+defaultArchitectures :: Set Arch
+defaultArchitectures = fromList [Binary (ArchOS "linux") (ArchCPU "i386"), Binary (ArchOS "linux") (ArchCPU "amd64")]
 
-createRelease :: MonadRepos m => LocalRepository -> [Arch] -> ReleaseName -> m Release
+createRelease :: MonadRepos m => LocalRepository -> Set Arch -> ReleaseName -> m Release
 createRelease repo archList' name =
     do rels <- findReleases repo
        case filter (\ release -> elem name (releaseName release : releaseAliases release)) rels of
@@ -166,11 +167,11 @@ exitOnError _ = return ()
 -- |Return the list of releases in the repository at root, creating
 -- the ones in the dists list with the given components and
 -- architectures.
-getReleases :: MonadRepos m => EnvPath -> Maybe Layout -> [ReleaseName] -> [Section] -> [Arch] -> m Release
-getReleases root' layout' dists section' archList' =
+getReleases :: MonadRepos m => EnvPath -> Maybe Layout -> [ReleaseName] -> [Section] -> Set Arch -> m Release
+getReleases root' layout' dists section' archSet' =
     do repo <- prepareLocalRepository root' layout'
        existingReleases <- findReleases repo
-       requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archList') dists
+       requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archSet') dists
        return $ mergeReleases repo (existingReleases ++ requiredReleases)
 
 deletePackages :: MonadInstall m => Bool -> [Release] -> Params -> Maybe PGPKey -> m [Release]

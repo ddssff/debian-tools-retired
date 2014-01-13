@@ -8,6 +8,7 @@ module Debian.AutoBuilder.LocalRepo
 
 import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
+import Data.Set (Set)
 import Debian.Arch (Arch)
 import Debian.Release (ReleaseName, releaseName', parseSection')
 import Debian.Repo.EnvPath (rootEnvPath)
@@ -25,10 +26,10 @@ subDir = "localpools"
 poolDir :: MonadTop m => ReleaseName -> m FilePath
 poolDir rel = askTop >>= \ top -> return $ top </> subDir </> releaseName' rel
 
-prepare :: (MonadRepos m, MonadTop m) => Bool -> ReleaseName -> [Arch] -> m LocalRepository
-prepare flush rel archlist =
+prepare :: (MonadRepos m, MonadTop m) => Bool -> ReleaseName -> Set Arch -> m LocalRepository
+prepare flush rel archset =
     do localRepo <- poolDir rel
        when flush (liftIO (removeRecursiveSafely localRepo))
        repo <- prepareLocalRepository (rootEnvPath localRepo) Nothing
-       prepareRelease repo rel [] [parseSection' "main"] archlist
+       prepareRelease repo rel [] [parseSection' "main"] archset
        return repo
