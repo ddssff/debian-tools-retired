@@ -28,8 +28,9 @@ module Debian.Repo.PackageIndex
     , sortBinaryPackages
     ) where
 
-import Data.List (sortBy)
+import Data.List as List (sortBy, map, filter)
 import Data.Monoid ((<>))
+import Data.Set as Set (map, filter, toList, unions)
 import Data.Text (Text)
 import Debian.Arch (Arch(..), ArchOS(..), ArchCPU(..), prettyArch)
 import qualified Debian.Control.Text as T
@@ -156,27 +157,27 @@ releaseDir :: Release -> String
 releaseDir release = "dists" </> (releaseName' . releaseName $ release)
 
 packageIndexPaths :: Release -> [FilePath]
-packageIndexPaths release = map (packageIndexPath release) . packageIndexes $ release
+packageIndexPaths release = List.map (packageIndexPath release) . packageIndexes $ release
 
 packageIndexDirs :: Release -> [FilePath]
-packageIndexDirs release = map (packageIndexDir release) . packageIndexes $ release
+packageIndexDirs release = List.map (packageIndexDir release) . packageIndexes $ release
 
 packageIndexes :: Release -> [PackageIndex]
 packageIndexes release = sourceIndexes release ++ binaryIndexes release
 
 sourceIndexes :: Release -> [PackageIndex]
 sourceIndexes release =
-    map componentIndex (releaseComponents $ release)
+    List.map componentIndex (releaseComponents $ release)
     where componentIndex component = PackageIndex { packageIndexComponent = component
                                                   , packageIndexArch = Source }
 
 binaryIndexes :: Release -> [PackageIndex]
 binaryIndexes release =
-    concat . map componentIndexes $ (releaseComponents release)
+    toList . unions . List.map componentIndexes $ releaseComponents release
     where
       --componentIndexes :: Section -> [PackageIndex]
       componentIndexes component =
-          map archIndex (filter (/= Source) (releaseArchitectures release))
+          Set.map archIndex (Set.filter (/= Source) (releaseArchitectures release))
           where
             --archIndex :: Arch -> PackageIndex
             archIndex arch = PackageIndex { packageIndexComponent = component
@@ -189,7 +190,7 @@ sortSourcePackages names pkgs =
     where
       filterNames :: [SourcePackage] -> [SourcePackage]
       filterNames packages =
-          filter (flip elem names . packageName . sourcePackageID) packages
+          List.filter (flip elem names . packageName . sourcePackageID) packages
       cmp p1 p2 =
           compare v2 v1		-- Flip args to get newest first
           where
@@ -202,7 +203,7 @@ sortBinaryPackages names pkgs =
     where
       filterNames :: [BinaryPackage] -> [BinaryPackage]
       filterNames packages =
-          filter (flip elem names . packageName . packageID) packages
+          List.filter (flip elem names . packageName . packageID) packages
       cmp p1 p2 =
           compare v2 v1		-- Flip args to get newest first
           where

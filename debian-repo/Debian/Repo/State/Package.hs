@@ -33,7 +33,7 @@ import Data.Lens.Template (makeLenses)
 import Data.List as List (filter, groupBy, intercalate, intersperse, isSuffixOf, map, partition, sortBy)
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Monoid ((<>), mconcat)
-import Data.Set as Set (difference, empty, fold, fromList, insert, map, member, null, Set, size, toAscList, toList, union, unions)
+import Data.Set as Set (difference, empty, fold, fromList, insert, map, member, null, Set, size, toAscList, toList, union, unions, singleton)
 import Data.Text as T (pack, Text, unpack)
 import qualified Data.Text as T (concat)
 import Data.Text.Encoding (encodeUtf8)
@@ -303,18 +303,18 @@ buildInfo changes Ok =
                    do (info :: [Either InstallResult B.Paragraph]) <- mapM (fileInfo changes) indexFiles
                       case lefts info of
                         [] ->
-                            let (pairs :: [([(Release, PackageIndex)], Either InstallResult B.Paragraph)]) = zip (indexLists release) info in
-                            let (pairs' :: [([(Release, PackageIndex)], B.Paragraph)]) =
+                            let (pairs :: [(Set (Release, PackageIndex), Either InstallResult B.Paragraph)]) = zip (indexLists release) info in
+                            let (pairs' :: [(Set (Release, PackageIndex), B.Paragraph)]) =
                                     catMaybes $ List.map (\ (a, b) -> either (const Nothing) (\ b' -> Just (a, b')) b) pairs in
                             let (pairs'' :: [((Release, PackageIndex), B.Paragraph)]) = concat (List.map distribute pairs') in
                             return (Right pairs'')
                         results -> return (Left (mergeResults results))
                Nothing -> return . Left . Failed $ [NoSuchRelease (changeRelease changes)]
           where
-            indexLists :: Release -> [[(Release, PackageIndex)]]
+            indexLists :: Release -> [Set (Release, PackageIndex)]
             indexLists release = List.map (indexes release) indexFiles
-            indexes :: Release -> ChangedFileSpec -> [(Release, PackageIndex)]
-            indexes release file = List.map (\ arch -> (release, PackageIndex (section . changedFileSection $ file) arch)) (archList release changes file)
+            indexes :: Release -> ChangedFileSpec -> Set (Release, PackageIndex)
+            indexes release file = Set.map (\ arch -> (release, PackageIndex (section . changedFileSection $ file) arch)) (archSet release changes file)
             indexFiles = dsc ++ debs
             (debs :: [ChangedFileSpec]) = filter f files
                 where (f :: ChangedFileSpec -> Bool) = (isSuffixOf ".deb" . changedFileName)
@@ -501,17 +501,17 @@ installFile changes file = do
                 (GT, _) -> Rejected [LongFile dst (changedFileSize file) installedSize]
       return status
 
-archList :: Release -> ChangesFile -> ChangedFileSpec -> [Arch]
-archList release changes file =
+archSet :: Release -> ChangesFile -> ChangedFileSpec -> Set Arch
+archSet release changes file =
     case () of
       _ | isSuffixOf "_all.deb" name -> releaseArchitectures release
-      _ | isSuffixOf ".deb" name -> [changeArch changes]
-      _ | isSuffixOf ".udeb" name -> []
-      _ -> [Source]
+      _ | isSuffixOf ".deb" name -> singleton (changeArch changes)
+      _ | isSuffixOf ".udeb" name -> empty
+      _ -> singleton Source
     where name = changedFileName file
 
-distribute :: ([a], b) -> [(a, b)]
-distribute (ilist, p) = List.map (\ i -> (i, p)) ilist
+distribute :: (Set a, b) -> [(a, b)]
+distribute (iset, p) = List.map (\ i -> (i, p)) (toList iset)
 
 undistribute :: [[(a, b)]] -> [(a, [b])]
 -- undistribute pairss = Map.toList (Map.fromListWith (++) (map (\ (a, b) -> (a, [b])) (concat pairss)))
@@ -624,13 +624,13 @@ findLive = do
       changesFileNames releases package =
           List.map (\ arch -> intercalate "_" [show (pretty (packageName . sourcePackageID $ package)),
                                                show (prettyDebianVersion . packageVersion . sourcePackageID $ package),
-                                               show (prettyArch arch)] ++ ".changes") (nub' (concat (architectures releases)))
+                                               show (prettyArch arch)] ++ ".changes") (toList (architectures releases))
       uploadFilePaths root releases package = Set.map ((outsidePath root ++ "/") ++) . uploadFileNames releases $ package
       uploadFileNames releases package =
           Set.map (\ arch -> intercalate "_" [show (pretty (packageName . sourcePackageID $ package)),
                                               show (prettyDebianVersion . packageVersion . sourcePackageID $ package),
-                                              show (prettyArch arch)] ++ ".upload") (Set.fromList (concat (architectures releases)))
-      architectures releases = nub' . List.map releaseArchitectures $ releases
+                                              show (prettyArch arch)] ++ ".upload") (architectures releases)
+      architectures releases = unions . List.map releaseArchitectures $ releases
 
 instance (F.Pretty r, Repo r) => F.Pretty (r, Release, PackageIndex) where
     pretty (repo, r, i) = pretty $
@@ -719,7 +719,7 @@ deleteBinaryOrphans dry keyname releases =
                         Set.fromList (concatMap f sps)
                         where
                           f (r, i, p) = concatMap (g r i) (sourcePackageBinaryIDs_ p)
-                          g r i p' = List.map (h r i p') (releaseArchitectures r)
+                          g r i p' = List.map (h r i p') (toList (releaseArchitectures r))
                           h r i p' a = (r, i {packageIndexArch = a}, p')
 {-
                         Set.fromList (concatMap (\ (r, i, p) -> Set.fromList (concatMap (\ bid -> map (\ a -> (r, i {packageindexArch = a}, bid)) (releaseArchitectures r)) (sourcePackageBinaryIDs p)) in

@@ -15,6 +15,7 @@ import Control.Exception (ErrorCall(ErrorCall), Exception(toException), SomeExce
 import Control.Monad.Trans (liftIO)
 import Data.List (intercalate)
 import Data.Maybe (catMaybes)
+import Data.Set (Set, fromList)
 import Data.Text (Text, unpack)
 import qualified Data.Text as T (Text, unpack)
 import qualified Data.Text.IO as T (readFile)
@@ -46,7 +47,9 @@ instance Show Source where
 -- dists/releasename.
 data Release = Release { releaseName :: ReleaseName
                        , releaseAliases :: [ReleaseName]
-                       , releaseArchitectures :: [Arch] -- ^ e.g. amd64, i386, arm, etc
+                       , releaseArchitectures :: Set Arch
+                       -- ^ e.g. amd64, i386, arm, etc, the set of architectures for this release - when a binary
+                       -- package has architecture "all" or a source package has architecture "any" it means this.
                        , releaseComponents :: [Section] -- ^ Typically main, contrib, non-free
                        } deriving (Eq, Ord, Read, Show)
 
@@ -83,9 +86,9 @@ makeReleaseInfo file@(File {text = Success info}) dist aliases =
                   , releaseComponents = parseComponents compList }
       _ -> error $ "Missing Architectures or Components field in Release file " ++ show (path file)
 
-parseArchitectures :: Text -> [Arch]
+parseArchitectures :: Text -> Set Arch
 parseArchitectures archList =
-    map parseArch . splitRegex re . unpack $ archList
+    fromList . map parseArch . splitRegex re . unpack $ archList
     where
       re = mkRegex "[ ,]+"
 

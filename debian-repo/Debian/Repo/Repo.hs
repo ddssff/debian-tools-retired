@@ -12,8 +12,8 @@ module Debian.Repo.Repo
 
 import Control.Exception (throw)
 import Data.Char (isDigit)
-import Data.List (nub)
 import Data.Maybe (fromJust)
+import Data.Set (Set, unions)
 import Data.Text (unpack)
 import Debian.Arch (Arch)
 import Debian.Repo.EnvPath (EnvPath(..))
@@ -75,5 +75,5 @@ repoKeyURI :: RepoKey -> URI
 repoKeyURI (Local path) = fromJust . parseURI $ "file://" ++ envPath path
 repoKeyURI (Remote uri) = fromURI' uri
 
-repoArchList :: Repo r => r -> [Arch]
-repoArchList repo = nub (concatMap releaseArchitectures (repoReleaseInfo repo))
+repoArchList :: Repo r => r -> Set Arch
+repoArchList = unions . map releaseArchitectures . repoReleaseInfo

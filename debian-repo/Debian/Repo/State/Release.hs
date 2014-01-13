@@ -16,6 +16,7 @@ import Data.Digest.Pure.MD5 (md5)
 import Data.List as List (group, intercalate, sort)
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
+import Data.Set (Set, toList, unions)
 import Data.Text as T (intercalate, pack, Text)
 import Data.Time (getCurrentTime)
 import Debian.Arch (Arch(..), prettyArch)
@@ -56,8 +57,8 @@ prepareRelease' :: MonadRepos m => LocalRepository -> Release -> m Release
 prepareRelease' repo rel = prepareRelease repo (releaseName rel) (releaseAliases rel) (releaseComponents rel) (releaseArchitectures rel)
 
 -- | Find or create a (local) release.
-prepareRelease :: MonadRepos m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> [Arch] -> m Release
-prepareRelease repo dist aliases sections archList =
+prepareRelease :: MonadRepos m => LocalRepository -> ReleaseName -> [ReleaseName] -> [Section] -> Set Arch -> m Release
+prepareRelease repo dist aliases sections archSet =
     -- vPutStrLn 0 ("prepareRelease " ++ name ++ ": " ++ show repo ++ " sections " ++ show sections) >>
     findRelease repo dist >>= maybe prepare (const prepare) -- return -- JAS - otherwise --create-section does not do anything
     where
@@ -67,7 +68,7 @@ prepareRelease repo dist aliases sections archList =
 	     let release = Release { releaseName = dist
                                    , releaseAliases = aliases
                                    , releaseComponents = sections
-                                   , releaseArchitectures = archList }
+                                   , releaseArchitectures = archSet }
              -- vPutStrLn 0 ("packageIndexList: " ++ show (packageIndexList release))
              _ <- mapM (initIndex (outsidePath root) release) (packageIndexes release)
              mapM_ (initAlias (outsidePath root) dist) aliases
@@ -148,7 +149,7 @@ writeRelease repo release =
                                      S.Field ("Suite", " " <> (pack . releaseName' . releaseName $ release)),
                                      S.Field ("Codename", " " <> (pack . releaseName' . releaseName $ release)),
                                      S.Field ("Date", " " <> pack timestamp),
-                                     S.Field ("Architectures", " " <> (T.intercalate " " . map (pack . show . prettyArch) . releaseArchitectures $ release)),
+                                     S.Field ("Architectures", " " <> (T.intercalate " " . map (pack . show . pretty) . toList . releaseArchitectures $ release)),
                                      S.Field ("Components", " " <> (T.intercalate " " . map (pack . sectionName') . releaseComponents $ release)),
                                      S.Field ("Description", " SeeReason Internal Use - Not Released"),
                                      S.Field ("Md5Sum", "\n" <> pack checksums)] :: S.Paragraph' Text
@@ -176,7 +177,7 @@ mergeReleases _repo releases =
     where
       aliases = map head . List.group . sort . concat . map releaseAliases $ releases
       components = map head . group . sort . concat . map releaseComponents $ releases
-      architectures = map head . group . sort . concat . map releaseArchitectures $ releases
+      architectures = unions . map releaseArchitectures $ releases
 
 -- | Find all the releases in a repository.
 findReleases :: MonadRepos m => LocalRepository -> m [Release]
