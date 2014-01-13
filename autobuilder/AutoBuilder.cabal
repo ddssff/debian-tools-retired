@@ -49,7 +49,7 @@ Library
 
   if flag(local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src
-    Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff
+    Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff, set-extra
   else
     Build-Depends: cabal-debian >= 4.0.2
 
