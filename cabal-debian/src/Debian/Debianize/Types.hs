@@ -118,26 +118,16 @@ module Debian.Debianize.Types
 
 import Control.Category ((.))
 import Data.Generics (Typeable)
-import Data.Lens.Lazy (Lens, lens, iso, getL)
-import Data.Map as Map (Map)
-import Data.Monoid (Monoid(..))
+import Data.Lens.Lazy (Lens, iso, getL)
 import Data.Set as Set (Set)
 import Data.Text (Text)
-import Data.Version (Version)
-import Debian.Changes (ChangeLog)
 import Debian.Debianize.Prelude (maybeLens, listElemLens)
 import Debian.Debianize.Types.Atoms
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S
-import Debian.Debianize.VersionSplits (VersionSplits)
 import Debian.Orphans ()
-import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat, StandardsVersion)
+import Debian.Policy (PackageArchitectures, PackagePriority, Section, StandardsVersion)
 import Debian.Relation (BinPkgName, Relations, SrcPkgName)
-import Debian.Version (DebianVersion)
-import Distribution.License (License)
-import Distribution.Package (PackageName)
-import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
-import Distribution.Simple.Compiler (CompilerId)
 import Prelude hiding (init, init, log, log, unlines, (.))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 

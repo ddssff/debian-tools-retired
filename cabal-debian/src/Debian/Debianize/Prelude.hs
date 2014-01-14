@@ -63,7 +63,7 @@ import Data.Text as Text (Text, unpack, lines)
 import Data.Text.IO (hGetContents)
 import Debian.Control (parseControl, lookupP, Field'(Field), unControl, stripWS)
 import Debian.Orphans ()
-import Debian.Pretty (Pretty(pretty), text)
+import Debian.Pretty (Pretty(pretty))
 import Debian.Version (DebianVersion, prettyDebianVersion)
 import Debian.Version.String (parseDebianVersion)
 import qualified Debian.Relation as D
