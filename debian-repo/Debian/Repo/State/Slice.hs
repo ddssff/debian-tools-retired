@@ -22,12 +22,12 @@ import Debian.Control (Control'(Control), ControlFunctions(parseControl), fieldV
 import Debian.Control.Text (decodeParagraph)
 import Debian.Pretty (pretty)
 import Debian.Release (parseReleaseName, parseSection')
-import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..))
+import Debian.Repo.EnvPath (EnvPath(..), EnvRoot(..), outsidePath)
 import Debian.Repo.Prelude (replaceFile, symbol)
 import Debian.Repo.Repo (repoKey)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(..), SourcesChangedAction, doSourcesChangedAction)
 import Debian.Repo.State (MonadRepos)
-import Debian.Repo.State.Repository (prepareLocalRepository, prepareRemoteRepository)
+import Debian.Repo.State.Repository (readLocalRepository, prepareRemoteRepository)
 import Debian.Repo.Top (MonadTop, distDir, sourcesPath)
 import Debian.Sources (DebSource(..), SourceType(Deb, DebSrc), parseSourcesList)
 import Debian.URI (dirFromURI, fileFromURI)
@@ -90,7 +90,7 @@ verifySourcesList chroot list =
 verifyDebSource :: MonadRepos m => Maybe EnvRoot -> DebSource -> m Slice
 verifyDebSource chroot line =
     case uriScheme (sourceUri line) of
-      "file:" -> prepareLocalRepository (EnvPath chroot' (uriPath (sourceUri line))) Nothing >>= \ repo' -> return $ Slice {sliceRepoKey = repoKey repo', sliceSource = line}
+      "file:" -> let path = EnvPath chroot' (uriPath (sourceUri line)) in readLocalRepository path Nothing >>= maybe (error $ "No repository at " ++ show (outsidePath path)) (\ repo' -> return $ Slice {sliceRepoKey = repoKey repo', sliceSource = line})
       _ -> prepareRemoteRepository (sourceUri line) >>= \ repo' -> return $ Slice {sliceRepoKey = repoKey repo', sliceSource = line}
     where
       chroot' = fromMaybe (EnvRoot "") chroot

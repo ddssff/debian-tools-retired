@@ -25,14 +25,14 @@ import Debian.Pretty (pretty)
 import Debian.Release (ReleaseName, releaseName', Section, sectionName')
 import Debian.Repo.EnvPath (outsidePath)
 import qualified Debian.Repo.Prelude.GPGSign as EG (cd, PGPKey, pgpSignFiles)
-import Debian.Repo.LocalRepository (LocalRepository, repoLayout, repoReleaseInfoLocal, repoRoot)
+import Debian.Repo.LocalRepository (LocalRepository, repoReleaseInfoLocal, repoRoot)
 import Debian.Repo.PackageIndex (PackageIndex(packageIndexArch, packageIndexComponent), packageIndexDir, packageIndexes, packageIndexName, releaseDir)
 import qualified Debian.Repo.Prelude.Files as EF (maybeWriteFile, prepareSymbolicLink, writeAndZipFile)
 import qualified Debian.Repo.Prelude.Time as ET (formatDebianDate)
 import Debian.Repo.Release (parseArchitectures, parseComponents, Release(..))
 import Debian.Repo.Repo (Repo)
 import Debian.Repo.State (MonadRepos, findRelease, putRelease)
-import Debian.Repo.State.Repository (prepareLocalRepository)
+import Debian.Repo.State.Repository (repairLocalRepository)
 import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.FilePath ((</>))
 import System.Posix.Files (setFileMode)
@@ -45,11 +45,10 @@ import System.Unix.Directory (removeRecursiveSafely)
 flushLocalRepository :: MonadRepos m => LocalRepository -> m LocalRepository
 flushLocalRepository r =
     do liftIO $ removeRecursiveSafely (outsidePath (repoRoot r))
-       r' <- prepareLocalRepository root (repoLayout r)
+       r' <- repairLocalRepository r
        mapM_ (prepareRelease' r') releases
-       prepareLocalRepository root (repoLayout r')
+       repairLocalRepository r'
     where
-      root = repoRoot r
       releases = repoReleaseInfoLocal r
 
 -- The return value might not be the same as the input due to cached
@@ -76,7 +75,7 @@ prepareRelease repo dist aliases sections archSet =
              _ <- liftIO (writeRelease repo release)
 	     -- This ought to be identical to repo, but the layout should be
              -- something rather than Nothing.
-             repo' <- prepareLocalRepository root (repoLayout repo)
+             repo' <- repairLocalRepository repo
              --vPutStrLn 0 $ "prepareRelease: prepareLocalRepository -> " ++ show repo'
              putRelease repo' release
              return release

@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE OverloadedStrings, TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
 -- | Replacement for debpool.
 module Main where
@@ -15,19 +15,19 @@ import Debian.NewDist.Options (Params(install, rootParam, printVersion, layout, 
 import Debian.NewDist.Version (myVersion)
 import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName)
-import Debian.Release (ReleaseName, releaseName', parseReleaseName, Section, parseSection')
-import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), envPath)
+import Debian.Release (ReleaseName(ReleaseName), releaseName', parseReleaseName, Section, parseSection')
+import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot), envPath, outsidePath)
 import Debian.Repo.LocalRepository (LocalRepository, Layout, repoRoot, setRepositoryCompatibility)
 import Debian.Repo.PackageID (PackageID, makeBinaryPackageID)
 import Debian.Repo.PackageIndex (PackageIndex(PackageIndex))
 import Extra.Email (sendEmails)
 import Debian.Repo.Prelude.GPGSign (PGPKey(Default, Key))
 import Debian.Repo.Prelude.Lock (withLock)
-import Debian.Repo.Release (Release, parseArchitectures, releaseName, releaseAliases, releaseComponents, releaseArchitectures)
+import Debian.Repo.Release (Release(..), parseArchitectures, parseComponents, releaseName, releaseAliases, releaseComponents, releaseArchitectures)
 import Debian.Repo.State (MonadRepos, runReposT)
 import Debian.Repo.State.Package (scanIncoming, deleteSourcePackages, deleteTrumped, deleteBinaryOrphans, deleteGarbage, InstallResult(Ok), explainError, resultToProblems, showErrors, MonadInstall, evalInstall)
 import Debian.Repo.State.Release (findReleases, prepareRelease, writeRelease, signRepo, mergeReleases)
-import Debian.Repo.State.Repository (prepareLocalRepository)
+import Debian.Repo.State.Repository (readLocalRepository, prepareLocalRepository)
 import Debian.Version (parseDebianVersion, prettyDebianVersion)
 import Prelude hiding (putStr, putStrLn, putChar)
 import System.Console.GetOpt (ArgOrder(Permute), getOpt, usageInfo)
@@ -59,7 +59,7 @@ main =
 runFlags :: MonadRepos m => Params -> m ()
 runFlags flags =
     do createReleases flags
-       repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
+       repo <- readLocalRepository (root flags) (Just . layout $ flags) >>= maybe (error $ "Invalid repository location: " ++ show (outsidePath (root flags))) return
        evalInstall (do rels <- findReleases repo
                        _ <- deletePackages (dryRun flags) rels flags keyname
                        liftIO $ setRepositoryCompatibility repo
@@ -104,8 +104,16 @@ runFlags flags =
 -- line flags exist.
 createReleases :: MonadRepos m => Params -> m ()
 createReleases flags =
-    do repo <- prepareLocalRepository (root flags) (Just . layout $ flags)
+    do let defaultReleases = map (\ name -> Release { releaseName = ReleaseName name
+                                                    , releaseAliases = []
+                                                    , releaseArchitectures = archSet flags
+                                                    , releaseComponents = defaultComponents }) (releases flags)
+       repo <- case defaultReleases of
+                 [] -> readLocalRepository (root flags) (Just . layout $ flags) >>=
+                       maybe (error $ "Invalid repository location: " ++ show (outsidePath (root flags))) return
+                 _ -> prepareLocalRepository (root flags) (Just . layout $ flags) defaultReleases
        rels <- findReleases repo
+       -- This might already be done
        mapM_ (createRelease repo (archSet flags)) (map parseReleaseName . releases $ flags)
        mapM_ (createAlias repo) (aliases flags)
        mapM_ (createSectionOfRelease repo rels) (sections flags)
@@ -135,6 +143,9 @@ archSet flags = maybe defaultArchitectures (parseArchitectures . pack) $ archite
 defaultArchitectures :: Set Arch
 defaultArchitectures = fromList [Binary (ArchOS "linux") (ArchCPU "i386"), Binary (ArchOS "linux") (ArchCPU "amd64")]
 
+defaultComponents :: [Section]
+defaultComponents = parseComponents "main"
+
 createRelease :: MonadRepos m => LocalRepository -> Set Arch -> ReleaseName -> m Release
 createRelease repo archList' name =
     do rels <- findReleases repo
@@ -150,7 +161,7 @@ createAlias repo arg =
           do rels <- findReleases repo
              case filter ((==) (parseReleaseName rel) . releaseName) rels of
                [] -> error $ "Attempt to create alias in non-existant release: " ++ rel
-               [release] -> 
+               [release] ->
                    case elem (parseReleaseName alias) (releaseAliases release) of
                      False -> prepareRelease repo (parseReleaseName rel) (releaseAliases release ++ [parseReleaseName alias])
                                (releaseComponents release) (releaseArchitectures release)
@@ -170,7 +181,7 @@ exitOnError _ = return ()
 -- architectures.
 getReleases :: MonadRepos m => EnvPath -> Maybe Layout -> [ReleaseName] -> [Section] -> Set Arch -> m Release
 getReleases root' layout' dists section' archSet' =
-    do repo <- prepareLocalRepository root' layout'
+    do repo <- readLocalRepository root' layout' >>= maybe (error $ "Invalid repository location: " ++ show (outsidePath root')) return
        existingReleases <- findReleases repo
        requiredReleases <- mapM (\ dist -> prepareRelease repo dist [] section' archSet') dists
        return $ mergeReleases repo (existingReleases ++ requiredReleases)

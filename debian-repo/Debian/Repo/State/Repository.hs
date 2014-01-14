@@ -2,8 +2,11 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, StandaloneDeriving, ScopedTypeVariables, TemplateHaskell, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.State.Repository
-    ( prepareLocalRepository
+    ( readLocalRepository
+    , prepareLocalRepository
+    , prepareLocalRepository'
     , prepareRemoteRepository
+    , repairLocalRepository
     , foldRepository
     ) where
 
@@ -28,25 +31,26 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 import qualified System.Posix.Files as F (fileMode, getFileStatus, setFileMode)
 import Text.Regex (matchRegex, mkRegex)
 
--- | Create or verify the existance of the directories which will hold
--- a repository on the local machine.  Verify the index files for each of
--- its existing releases.
-prepareLocalRepository :: MonadIO m => EnvPath -> Maybe Layout -> m LocalRepository
-prepareLocalRepository root layout =
-    do mapM_ (liftIO . initDir)
-                 [(".", 0o40755),
-                  ("dists", 0o40755),
-                  ("incoming", 0o41755),
-                  ("removed", 0o40750),
-                  ("reject", 0o40750)]
-       layout' <- liftIO (computeLayout (outsidePath root)) >>= return . maybe layout Just
-                  -- >>= return . maybe (maybe (error "No layout specified for new repository") id layout) id
-       mapM_ (liftIO . initDir)
-                 (case layout' of
-                    Just Pool -> [("pool", 0o40755), ("installed", 0o40755)]
-                    Just Flat -> []
-                    Nothing -> [])
-       readLocalRepo root layout' >>= maybe (makeLocalRepo root layout') return
+repairLocalRepository :: MonadIO m => LocalRepository -> m LocalRepository
+repairLocalRepository r = prepareLocalRepository (repoRoot r) (repoLayout r) (repoReleaseInfoLocal r)
+
+createLocalRepository :: MonadIO m => EnvPath -> Maybe Layout -> m (Maybe Layout)
+createLocalRepository root layout = do
+  mapM_ (liftIO . initDir)
+            [(".", 0o40755),
+             ("dists", 0o40755),
+             ("incoming", 0o41755),
+             ("removed", 0o40750),
+             ("reject", 0o40750)]
+  -- If repo exists compute its actual layout
+  layout' <- liftIO (computeLayout (outsidePath root)) >>= return . maybe layout Just
+  -- >>= return . maybe (maybe (error "No layout specified for new repository") id layout) id
+  mapM_ (liftIO . initDir)
+            (case layout' of
+               Just Pool -> [("pool", 0o40755), ("installed", 0o40755)]
+               Just Flat -> []
+               Nothing -> [])
+  return layout'
     where
       initDir (name, mode) =
           do let path = outsidePath root </> name
@@ -54,19 +58,29 @@ prepareLocalRepository root layout =
                      mapM_ (\ f -> createDirectoryIfMissing True f)
              actualMode <- F.getFileStatus path >>= return . F.fileMode
              when (mode /= actualMode) (F.setFileMode path mode)
-{-      notSymbolicLink root name =
-          getSymbolicLinkStatus (root </> "dists" </> name) >>= return . not . isSymbolicLink
-      hasReleaseFile root name =
-          doesFileExist (root </> "dists" </> name </> "Release") -}
 
-makeLocalRepo :: MonadIO m => EnvPath -> Maybe Layout -> m LocalRepository
-makeLocalRepo root layout =
-    return $ LocalRepository { repoRoot = root
-                             , repoLayout = layout
-                             , repoReleaseInfoLocal = [Release { releaseName = ReleaseName "precise-seereason"
-                                                               , releaseAliases = []
-                                                               , releaseArchitectures = parseArchitectures "amd64, i386"
-                                                               , releaseComponents = [Section "main"] }] }
+readLocalRepository :: MonadIO m => EnvPath -> Maybe Layout -> m (Maybe LocalRepository)
+readLocalRepository root layout = createLocalRepository root layout >>= readLocalRepo root
+
+-- | Create or verify the existance of the directories which will hold
+-- a repository on the local machine.  Verify the index files for each of
+-- its existing releases.
+prepareLocalRepository :: MonadIO m => EnvPath -> Maybe Layout -> [Release] -> m LocalRepository
+prepareLocalRepository root layout releases =
+    readLocalRepository root layout >>= maybe (return $ makeLocalRepo root layout releases) return
+
+prepareLocalRepository' :: MonadIO m => EnvPath -> Maybe Layout -> m LocalRepository
+prepareLocalRepository' root layout =
+    prepareLocalRepository root layout [Release { releaseName = ReleaseName "precise-seereason"
+                                                , releaseAliases = []
+                                                , releaseArchitectures = parseArchitectures "amd64, i386"
+                                                , releaseComponents = [Section "main"] }]
+
+makeLocalRepo :: EnvPath -> Maybe Layout -> [Release] -> LocalRepository
+makeLocalRepo root layout releases =
+    LocalRepository { repoRoot = root
+                    , repoLayout = layout
+                    , repoReleaseInfoLocal = releases }
 
 -- |Try to determine a repository's layout.
 computeLayout :: FilePath -> IO (Maybe Layout)
@@ -110,9 +124,9 @@ loadRemoteRepository uri =
 foldRepository :: MonadRepos m => (LocalRepository -> m a) -> (RemoteRepository -> m a) -> RepoKey -> m a
 foldRepository f g key =
     case key of
-      Local path -> prepareLocalRepository path Nothing >>= f
+      Local path -> readLocalRepository path Nothing >>= maybe (error $ "No repository at " ++ show path) f
       Remote uri' ->
           let uri = fromURI' uri' in
           case uriScheme uri of
-            "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= f
+            "file:" -> prepareLocalRepository' (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= f
             _ -> prepareRemoteRepository uri >>= g

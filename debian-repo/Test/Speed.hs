@@ -24,7 +24,7 @@ import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
 import Debian.Repo.PackageIndex (binaryIndexes, BinaryPackage(..), PackageIndex(packageIndexArch), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), sourceIndexes, SourcePackage(..))
 import Debian.Repo.Release (Release)
 import Debian.Repo.Repo (Repo, repoURI)
-import Debian.Repo.State.Repository (prepareLocalRepository)
+import Debian.Repo.State.Repository (readLocalRepository)
 import Debian.Repo.Top (runTopT)
 import Debian.Version (parseDebianVersion)
 import GHC.IO.Exception (IOErrorType(UserError), IOException)
@@ -50,7 +50,7 @@ root = rootEnvPath root'
 -- | How long does it take to parse the files in a repository?
 main :: IO ()
 main = runReposT $ runTopT root' $ quieter (- 3) $
-    do repo <- prepareLocalRepository root (Just Pool)
+    do Just repo <- readLocalRepository root (Just Pool)
        releases <- findReleases repo
        sources <- mapM (liftIO . releaseSourcePackages . (repo,)) releases >>= return . Set.unions
        binaries <- mapM (liftIO . releaseBinaryPackages . (repo,)) releases >>= return . Set.unions
