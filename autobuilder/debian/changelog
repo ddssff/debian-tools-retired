@@ -1,3 +1,10 @@
+autobuilder (6.59) unstable; urgency=low
+
+  * Changes for debian-3.81
+  * Make sure we give new local repostories the correct architecture list
+
+ -- David Fox <dsf@seereason.com>  Tue, 14 Jan 2014 08:36:19 -0800
+
 autobuilder (6.58) unstable; urgency=low
 
   * Use the exceptions package instead of MonadCatchIO-mtl

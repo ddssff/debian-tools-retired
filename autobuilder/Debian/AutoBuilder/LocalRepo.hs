@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | Code pertaining to the local repository created to hold newly
 -- built packages before uploading them to a remote repository.
 module Debian.AutoBuilder.LocalRepo
@@ -12,9 +13,11 @@ import Data.Set (Set)
 import Debian.Arch (Arch)
 import Debian.Release (ReleaseName, releaseName', parseSection')
 import Debian.Repo.EnvPath (rootEnvPath)
-import Debian.Repo.LocalRepository (LocalRepository, prepareLocalRepository)
+import Debian.Repo.LocalRepository (LocalRepository)
+import Debian.Repo.Release (Release(..), parseComponents)
 import Debian.Repo.State (MonadRepos)
 import Debian.Repo.State.Release (prepareRelease)
+import Debian.Repo.State.Repository (prepareLocalRepository)
 import Debian.Repo.Top (MonadTop(askTop))
 import System.FilePath ((</>))
 import System.Unix.Directory(removeRecursiveSafely)
@@ -30,6 +33,12 @@ prepare :: (MonadRepos m, MonadTop m) => Bool -> ReleaseName -> Set Arch -> m Lo
 prepare flush rel archset =
     do localRepo <- poolDir rel
        when flush (liftIO (removeRecursiveSafely localRepo))
-       repo <- prepareLocalRepository (rootEnvPath localRepo) Nothing
-       prepareRelease repo rel [] [parseSection' "main"] archset
+       repo <- prepareLocalRepository (rootEnvPath localRepo) Nothing [defaultRelease]
+       prepareRelease repo rel [] [parseSection' "main"] archset -- May be redundant now
        return repo
+    where
+      defaultRelease = Release { releaseName = rel
+                               , releaseAliases = []
+                               , releaseArchitectures = archset
+                               , releaseComponents = parseComponents "main" }
+

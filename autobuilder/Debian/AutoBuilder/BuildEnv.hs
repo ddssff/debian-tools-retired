@@ -9,7 +9,7 @@ import Control.Applicative (Applicative, (<$>), (<*>))
 import Control.Monad (when)
 import Control.Monad.State (MonadIO(liftIO), get)
 import qualified Debian.AutoBuilder.LocalRepo as Local (prepare)
-import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(archList, buildRelease, cleanUp, components, excludePackages, flushDepends, flushPool, flushRoot, ifSourcesChanged, includePackages, optionalIncludePackages))
+import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(archSet, buildRelease, cleanUp, components, excludePackages, flushDepends, flushPool, flushRoot, ifSourcesChanged, includePackages, optionalIncludePackages))
 import Debian.Release (ReleaseName, releaseName')
 import Debian.Repo.EnvPath (EnvRoot(rootPath), EnvRoot(EnvRoot))
 import Debian.Repo.OSImage (MonadOS, chrootEnv, osRoot, syncLocalPool)
@@ -52,8 +52,8 @@ prepareCleanOS params rel localRepo =
 
 prepareDependOS :: (MonadRepos m, MonadTop m) => P.ParamRec -> NamedSliceList -> m OSKey
 prepareDependOS params rel =
-    do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archList params)
-       -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archList params)
+    do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archSet params)
+       -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archSet params)
        when (P.cleanUp params) (evalInstall deleteGarbage localRepo Nothing)
        dRoot <- dependRoot (P.buildRelease params)
        exists <- liftIO $ doesDirectoryExist (rootPath dRoot)

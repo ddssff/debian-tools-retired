@@ -217,7 +217,7 @@ data ParamRec =
     -- suffixes like @0seereason3~hardy5@ rather than
     -- @0seereason3~hardy-seereason5@ (the latter would be an illegal
     -- due to the dash.)
-    , archList :: [Arch]
+    , archSet :: Set Arch
     -- ^ The list of architectures to prepare the repository to accept.
     , newDistProgram :: String
     -- ^ Use given executable as the newdist program, the program that
@@ -328,7 +328,7 @@ prettyPrint x =
             , "releaseAliases=" ++ take 120 (show (releaseAliases x))
             , "flushRoot=" ++ take 120 (show (flushRoot x))
             , "cleanUp=" ++ take 120 (show (cleanUp x))
-            , "archList=" ++ take 120 (show (archList x))
+            , "archSet" ++ take 120 (show (archSet x))
             , "flushPool=" ++ take 120 (show (flushPool x))
             , "doUpload=" ++ take 120 (show (doUpload x))
             , "doNewDist=" ++ take 120 (show (doNewDist x))
