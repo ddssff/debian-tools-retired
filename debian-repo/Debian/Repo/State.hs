@@ -10,6 +10,7 @@ module Debian.Repo.State
     , modifyRepos
     , runReposT
 
+    , repoMap
     , releaseMap
     -- , sourcePackageMap
     -- , binaryPackageMap
@@ -31,9 +32,6 @@ module Debian.Repo.State
     , putRelease
     , getRelease
 
-    , prepareRemoteRepository
-    , foldRepository
-
     , MonadReposCached
     , runReposCachedT
     ) where
@@ -50,16 +48,14 @@ import Data.Map as Map (empty, fromList, insert, lookup, Map, toList, union)
 import Data.Maybe (fromMaybe)
 import Debian.Release (ReleaseName)
 import Debian.Repo.AptImage (AptImage, aptImageRoot)
-import Debian.Repo.EnvPath (EnvPath(EnvPath), EnvRoot(EnvRoot))
-import Debian.Repo.LocalRepository (LocalRepository, prepareLocalRepository)
+import Debian.Repo.EnvPath (EnvRoot)
 import Debian.Repo.OSImage (OSImage, osRoot)
-import Debian.Repo.Release (getReleaseInfoRemote, Release(releaseName))
-import Debian.Repo.RemoteRepository (RemoteRepository, RemoteRepository(RemoteRepository))
+import Debian.Repo.Release (Release(releaseName))
+import Debian.Repo.RemoteRepository (RemoteRepository)
 import Debian.Repo.Repo (Repo, repoKey, RepoKey(..))
 import Debian.Repo.Top (MonadTop, runTopT, sub, TopT)
-import Debian.URI (fromURI', toURI', URI(uriPath, uriScheme), URI')
+import Debian.URI (URI')
 import System.IO.Error (isDoesNotExistError)
-import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix.Files (deviceID, fileID, FileStatus, modificationTime)
 import qualified System.Posix.Files as F (removeLink)
 import System.Process.Progress (qPutStrLn)
@@ -179,40 +175,6 @@ putRelease repo release = do
     let key = ReleaseKey (repoKey repo) (releaseName release)
     modifyRepos $ modL releaseMap (Map.insert key release)
     return key
-
-prepareRemoteRepository :: MonadRepos m => URI -> m RemoteRepository
-prepareRemoteRepository uri =
-    do mp <- getL repoMap <$> getRepos
-       maybe (loadRemoteRepository (toURI' uri)) return $ Map.lookup (toURI' uri) mp
-
--- |To create a RemoteRepo we must query it to find out the
--- names, sections, and supported architectures of its releases.
-loadRemoteRepository :: MonadRepos m => URI' -> m RemoteRepository
-loadRemoteRepository uri =
-    do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . fromURI' $ uri
-       let repo = RemoteRepository uri releaseInfo
-       getRepos >>= putRepos . modL repoMap (Map.insert uri repo)
-       return repo
-
--- foldRepository :: forall m r a. MonadState ReposState m => (r -> m a) -> RepoKey -> m a
--- foldRepository f key =
---     case key of
---       Local path -> prepareLocalRepository path Nothing >>= f
---       Remote uri' ->
---           let uri = fromURI' uri' in
---           case uriScheme uri of
---             "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= f
---             _ -> prepareRemoteRepository uri >>= f
-
-foldRepository :: MonadRepos m => (LocalRepository -> m a) -> (RemoteRepository -> m a) -> RepoKey -> m a
-foldRepository f g key =
-    case key of
-      Local path -> prepareLocalRepository path Nothing >>= f
-      Remote uri' ->
-          let uri = fromURI' uri' in
-          case uriScheme uri of
-            "file:" -> prepareLocalRepository (EnvPath (EnvRoot "") (uriPath uri)) Nothing >>= f
-            _ -> prepareRemoteRepository uri >>= g
 
 --instance Read URI where
 --    readsPrec _ s = [(fromJust (parseURI s), "")]

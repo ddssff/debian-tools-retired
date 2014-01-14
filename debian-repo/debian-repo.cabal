@@ -68,6 +68,7 @@ Library
         Debian.Repo.State.Package,
         Debian.Repo.State.PackageIndex,
         Debian.Repo.State.Release,
+        Debian.Repo.State.Repository,
         Debian.Repo.State.Slice,
         Debian.Repo.Top,
         Debian.VersionPolicy

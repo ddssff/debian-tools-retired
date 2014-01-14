@@ -6,7 +6,6 @@ module Debian.Repo.LocalRepository
     , Layout(..)
     , poolDir'
     , readLocalRepo
-    , prepareLocalRepository
     , copyLocalRepo -- repoCD
     , setRepositoryCompatibility
     , verifyUploadURI
@@ -15,11 +14,9 @@ module Debian.Repo.LocalRepository
     ) where
 
 import Control.Applicative.Error (Failing(Success, Failure))
-import Control.Monad (filterM, when)
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString, empty)
 import Data.List (groupBy, isPrefixOf, isSuffixOf, partition, sort, sortBy)
-import Data.Maybe (catMaybes)
 import qualified Data.Set as Set (fromList, member)
 import Data.Text as T (unpack)
 import Data.Time (NominalDiffTime)
@@ -27,7 +24,7 @@ import Debian.Arch (Arch, parseArch)
 import Debian.Changes (ChangedFileSpec(changedFileName, changedFileSection), ChangesFile(changeDir, changeFiles, changeInfo, changePackage, changeRelease, changeVersion))
 import qualified Debian.Control.Text as S (Control'(Control), ControlFunctions(parseControlFromFile), fieldValue)
 import qualified Debian.Control.Text as T (fieldValue)
-import Debian.Pretty (Pretty, pretty, text)
+import Debian.Pretty (Pretty(pretty))
 import qualified Debian.Pretty as F (Pretty(..))
 import Debian.Relation (BinPkgName(..))
 import Debian.Release (parseReleaseName, ReleaseName(..), releaseName', Section(..), sectionName', SubSection(section))
@@ -35,19 +32,19 @@ import Debian.Repo.Changes (changeKey, changePath, findChangesFiles)
 import Debian.Repo.Dependencies (readSimpleRelation)
 import Debian.Repo.EnvPath (EnvPath(envPath), outsidePath)
 import Debian.Repo.PackageID (PackageID)
-import Debian.Repo.Prelude (rsync, maybeWriteFile, replaceFile, cond, partitionM)
+import Debian.Repo.Prelude (cond, maybeWriteFile, partitionM, replaceFile, rsync)
 import Debian.Repo.Prelude.SSH (sshVerify)
-import Debian.Repo.Release (parseReleaseFile, Release(..), parseArchitectures)
+import Debian.Repo.Release (parseReleaseFile, Release)
 import Debian.Repo.Repo (compatibilityFile, libraryCompatibilityLevel, Repo(..), RepoKey(..))
 import Debian.URI (URI(uriAuthority, uriPath), URIAuth(uriPort, uriRegName, uriUserInfo), uriToString')
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Network.URI (URI(..))
-import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getDirectoryContents)
+import System.Directory (createDirectoryIfMissing, doesFileExist, getDirectoryContents)
 import System.Exit (ExitCode(ExitFailure), ExitCode(ExitSuccess))
 import System.FilePath ((</>), splitFileName)
-import qualified System.Posix.Files as F (createLink, fileMode, getFileStatus, getSymbolicLinkStatus, isSymbolicLink, readSymbolicLink, removeLink, setFileMode)
+import qualified System.Posix.Files as F (createLink, getSymbolicLinkStatus, isSymbolicLink, readSymbolicLink, removeLink)
 import System.Process (readProcessWithExitCode, shell, showCommandForUser)
-import System.Process.Progress (foldOutputsL, Output, qPutStrLn, quieter, runProcessV, timeTask)
+import System.Process.Progress (foldOutputsL, Output, qPutStrLn, runProcessV, timeTask)
 import Text.Regex (matchRegex, mkRegex)
 
 data LocalRepository
@@ -123,46 +120,6 @@ readLocalRepo root layout =
 isSymLink :: FilePath -> IO Bool
 isSymLink path = F.getSymbolicLinkStatus path >>= return . F.isSymbolicLink
 
--- | Create or verify the existance of the directories which will hold
--- a repository on the local machine.  Verify the index files for each of
--- its existing releases.
-prepareLocalRepository :: MonadIO m => EnvPath -> Maybe Layout -> m LocalRepository
-prepareLocalRepository root layout =
-    do mapM_ (liftIO . initDir)
-                 [(".", 0o40755),
-                  ("dists", 0o40755),
-                  ("incoming", 0o41755),
-                  ("removed", 0o40750),
-                  ("reject", 0o40750)]
-       layout' <- liftIO (computeLayout (outsidePath root)) >>= return . maybe layout Just
-                  -- >>= return . maybe (maybe (error "No layout specified for new repository") id layout) id
-       mapM_ (liftIO . initDir)
-                 (case layout' of
-                    Just Pool -> [("pool", 0o40755), ("installed", 0o40755)]
-                    Just Flat -> []
-                    Nothing -> [])
-       readLocalRepo root layout' >>= maybe (makeLocalRepo root layout') return
-    where
-      initDir (name, mode) =
-          do let path = outsidePath root </> name
-             filterM (\ f -> doesDirectoryExist f >>= return . not) [path] >>=
-                     mapM_ (\ f -> createDirectoryIfMissing True f)
-             actualMode <- F.getFileStatus path >>= return . F.fileMode
-             when (mode /= actualMode) (F.setFileMode path mode)
-{-      notSymbolicLink root name =
-          getSymbolicLinkStatus (root </> "dists" </> name) >>= return . not . isSymbolicLink
-      hasReleaseFile root name =
-          doesFileExist (root </> "dists" </> name </> "Release") -}
-
-makeLocalRepo :: MonadIO m => EnvPath -> Maybe Layout -> m LocalRepository
-makeLocalRepo root layout =
-    return $ LocalRepository { repoRoot = root
-                             , repoLayout = layout
-                             , repoReleaseInfoLocal = [Release { releaseName = ReleaseName "precise-seereason"
-                                                               , releaseAliases = []
-                                                               , releaseArchitectures = parseArchitectures "amd64, i386"
-                                                               , releaseComponents = [Section "main"] }] }
-
 -- |Change the root directory of a repository.  FIXME: This should
 -- also sync the repository to ensure consistency.
 -- repoCD :: EnvPath -> LocalRepository -> LocalRepository
@@ -178,21 +135,6 @@ copyLocalRepo dest repo =
     where
       src = outsidePath (repoRoot repo)
       dst = outsidePath dest
-
--- |Try to determine a repository's layout.
-computeLayout :: FilePath -> IO (Maybe Layout)
-computeLayout root =
-    do
-      -- If there are already .dsc files in the root directory
-      -- the repository layout is Flat.
-      isFlat <- getDirectoryContents root >>= return . (/= []) . catMaybes . map (matchRegex (mkRegex "\\.dsc$"))
-      -- If the pool directory already exists the repository layout is
-      -- Pool.
-      isPool <- doesDirectoryExist (root ++ "/pool")
-      case (isFlat, isPool) of
-        (True, _) -> return (Just Flat)
-        (False, True) -> return (Just Pool)
-        _ -> return Nothing
 
 -- | Create or update the compatibility level file for a repository.
 setRepositoryCompatibility :: LocalRepository -> IO ()
