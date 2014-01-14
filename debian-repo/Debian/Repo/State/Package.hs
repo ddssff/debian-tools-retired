@@ -156,6 +156,7 @@ instance Show Problem where
     show (MissingFromPool path) = "MissingFromPool " ++ path
     show (BadChecksum path a b) = "BadChecksum " ++ path ++ " " ++ show a ++ " " ++ show b
     show (DuplicatePackage p) = "DuplicatePackage " ++ show (packageID p)
+    show (InvalidControlInfo path a) = "InvalidControlInfo " ++ path ++ " " ++ show a
     show (OtherProblem s) = "OtherProblem " ++ show s
 
 releaseKey :: MonadInstall m => Release -> m ReleaseKey
