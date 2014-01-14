@@ -1,3 +1,10 @@
+haskell-cabal-debian (4.0.5) unstable; urgency=low
+
+  * Changes for debian-3.81 - use the pretty printer in Debian.Pretty
+    instead of ansi-wl-pprint.
+
+ -- David Fox <dsf@seereason.com>  Tue, 14 Jan 2014 05:02:59 -0800
+
 haskell-cabal-debian (4.0.4) unstable; urgency=low
 
   * Restore the test data, the problem I had with long filenames
