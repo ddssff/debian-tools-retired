@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, StandaloneDeriving #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, StandaloneDeriving, CPP #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Debian.Orphans where
 
@@ -24,17 +24,23 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr(..))
 
 deriving instance Typeable Compiler
 deriving instance Typeable CompilerId
+
+#if !MIN_VERSION_Cabal(1,18,0)
 deriving instance Typeable CompilerFlavor
 deriving instance Typeable Language
 deriving instance Typeable Extension
 deriving instance Typeable KnownExtension
+#endif
 
+deriving instance Data Compiler
+deriving instance Data CompilerId
+
+#if !MIN_VERSION_Cabal(1,18,0)
 deriving instance Data Extension
 deriving instance Data KnownExtension
 deriving instance Data Language
-deriving instance Data Compiler
-deriving instance Data CompilerId
 deriving instance Data CompilerFlavor
+#endif
 
 deriving instance Ord Language
 deriving instance Ord KnownExtension
@@ -101,9 +107,11 @@ instance Pretty BinPkgName where
     pretty (BinPkgName x) = pretty x
 -}
 
+#if !MIN_VERSION_Cabal(1,18,0)
 deriving instance Typeable License
 deriving instance Data Version
 deriving instance Data License
+#endif
 
 -- Convert from license to RPM-friendly description.  The strings are
 -- taken from TagsCheck.py in the rpmlint distribution.

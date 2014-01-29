@@ -1,3 +1,9 @@
+haskell-cabal-debian (4.0.6) unstable; urgency=low
+
+  * Ifdef out duplicate instances for Cabal-1.18.0 - thanks to Tom Nielsen.
+
+ -- David Fox <dsf@seereason.com>  Tue, 28 Jan 2014 17:10:48 -0800
+
 haskell-cabal-debian (4.0.5) unstable; urgency=low
 
   * Changes for debian-3.81 - use the pretty printer in Debian.Pretty
