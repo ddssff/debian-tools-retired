@@ -1,3 +1,11 @@
+haskell-cabal-debian (4.1) unstable; urgency=low
+
+  * Remove build dependency on ansi-wl-pprint.
+  * Split module Debian.Debianize.BuildDependencies out of
+    Debian.Debianize.Finalize
+
+ -- David Fox <dsf@seereason.com>  Sun, 02 Feb 2014 07:37:03 -0800
+
 haskell-cabal-debian (4.0.6) unstable; urgency=low
 
   * Ifdef out duplicate instances for Cabal-1.18.0 - thanks to Tom Nielsen.
