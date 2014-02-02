@@ -1,4 +1,4 @@
-haskell-cabal-debian (4.1) unstable; urgency=low
+haskell-cabal-debian (4.1.1) unstable; urgency=low
 
   * Remove build dependency on ansi-wl-pprint.
   * Split module Debian.Debianize.BuildDependencies out of

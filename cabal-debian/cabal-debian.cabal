@@ -1,5 +1,5 @@
 Name:           cabal-debian
-Version:        4.1
+Version:        4.1.1
 License:        BSD3
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>
@@ -243,7 +243,6 @@ Executable cabal-debian-tests
  Main-is: Debian/Debianize/Tests.hs
  ghc-options: -threaded -Wall -O2
  Build-Depends:
-   ansi-wl-pprint,
    base,
    Cabal,
    containers,
