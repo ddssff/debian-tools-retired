@@ -65,7 +65,6 @@ module Debian.Debianize.Types
     , debianDescription
     , essential
 
-    , relations
     , depends
     , recommends
     , suggests
@@ -136,9 +135,12 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 -- file, for a debian package it would contain the debian directory.
 newtype Top = Top {unTop :: FilePath} deriving (Eq, Ord, Show, Typeable)
 
+-- | Not exported - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Package>
 binaryDebDescription :: BinPkgName -> Lens Atoms B.BinaryDebDescription
 binaryDebDescription b = maybeLens (B.newBinaryDebDescription b) (iso id id) . listElemLens ((== b) . getL B.package) . S.binaryPackages . control
 
+-- | Lens onto one of several 'B.PackageType' values of which we have
+-- specific knowledge how to package.
 packageType :: BinPkgName -> Lens Atoms (Maybe B.PackageType)
 packageType b = B.packageType . binaryDebDescription b
 
@@ -146,49 +148,53 @@ packageType b = B.packageType . binaryDebDescription b
 debianDescription :: BinPkgName -> Lens Atoms (Maybe Text)
 debianDescription b = B.description . binaryDebDescription b
 
+-- | <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Essential>
 essential :: BinPkgName -> Lens Atoms (Maybe Bool)
 essential b = B.essential . binaryDebDescription b
 
+-- | <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
 relations :: BinPkgName -> Lens Atoms B.PackageRelations
 relations b = B.relations . binaryDebDescription b
 
--- | The Depends: relations for each binary deb.
+-- | The Depends: relations for each binary deb - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
 depends :: BinPkgName -> Lens Atoms Relations
 depends b = B.depends . B.relations . binaryDebDescription b
 
--- | The Recommends: relations for each binary deb.
+-- | The Recommends: relations for each binary deb - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
 recommends :: BinPkgName -> Lens Atoms Relations
 recommends b = B.recommends . B.relations . binaryDebDescription b
 
--- | The Suggests: relations for each binary deb.
+-- | The Suggests: relations for each binary deb - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
 suggests :: BinPkgName -> Lens Atoms Relations
 suggests b = B.suggests . B.relations . binaryDebDescription b
 
--- | The Pre-Depends: relations for each binary deb.
+-- | The Pre-Depends: relations for each binary deb - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
 preDepends :: BinPkgName -> Lens Atoms Relations
 preDepends b = B.preDepends . B.relations . binaryDebDescription b
 
--- | The Breaks: relations for each binary deb.
+-- | The Breaks: relations for each binary deb - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
 breaks :: BinPkgName -> Lens Atoms Relations
 breaks b = B.breaks . B.relations . binaryDebDescription b
 
--- | The Conflicts: relations for each binary deb.
+-- | The Conflicts: relations for each binary deb - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
 conflicts :: BinPkgName -> Lens Atoms Relations
 conflicts b = B.conflicts . B.relations . binaryDebDescription b
 
--- | The Provides: relations for each binary deb.
+-- | The Provides: relations for each binary deb - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
 provides :: BinPkgName -> Lens Atoms Relations
 provides b = B.provides . B.relations . binaryDebDescription b
 
--- | The Replaces: relations for each binary deb.
+-- | The Replaces: relations for each binary deb - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
 replaces :: BinPkgName -> Lens Atoms Relations
 replaces b = B.replaces . B.relations . binaryDebDescription b
 
+-- | THe Built-Using: relations for each binary deb - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
 builtUsing :: BinPkgName -> Lens Atoms Relations
 builtUsing b = B.builtUsing . B.relations . binaryDebDescription b
 
 -- | Maintainer field.  Overrides any value found in the cabal file, or
 -- in the DEBIANMAINTAINER environment variable.
+-- <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Maintainer>
 maintainer :: Lens Atoms (Maybe NameAddr)
 maintainer = S.maintainer . control
 
@@ -196,7 +202,7 @@ maintainer = S.maintainer . control
 binaryArchitectures :: BinPkgName -> Lens Atoms (Maybe PackageArchitectures)
 binaryArchitectures b = B.architecture . binaryDebDescription b
 
--- | The source package priority
+-- | The source package priority - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Priority>
 sourcePriority :: Lens Atoms (Maybe PackagePriority)
 sourcePriority = S.priority . control
 
@@ -204,7 +210,7 @@ sourcePriority = S.priority . control
 binaryPriority :: BinPkgName -> Lens Atoms (Maybe PackagePriority)
 binaryPriority b = B.binaryPriority . binaryDebDescription b
 
--- | The source package's section assignment
+-- | The source package's section assignment - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Section>
 sourceSection :: Lens Atoms (Maybe Section)
 sourceSection = S.section . control
 
@@ -214,40 +220,51 @@ binarySection b = B.binarySection . binaryDebDescription b
 
 -- * Debian dependency info
 
+-- | <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Source>
 source :: Lens Atoms (Maybe SrcPkgName)
 source = S.source . control
 
+-- | <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Changed-By>
 changedBy :: Lens Atoms (Maybe NameAddr)
 changedBy = S.changedBy . control
 
+-- | <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Uploaders>
 uploaders :: Lens Atoms ([NameAddr])
 uploaders = S.uploaders . control
 
+-- | Obsolete - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-DM-Upload-Allowed>
 dmUploadAllowed :: Lens Atoms (Bool)
 dmUploadAllowed = S.dmUploadAllowed . control
 
--- | The @Standards-Version@ field of the @debian/control@ file
+-- | The @Standards-Version@ field of the @debian/control@ file - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Standards-Version>
 standardsVersion :: Lens Atoms (Maybe StandardsVersion)
 standardsVersion = S.standardsVersion . control
 
+-- | <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Homepage>
 homepage :: Lens Atoms (Maybe Text)
 homepage = S.homepage . control
 
+-- | Version control system field - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-VCS-fields>
 vcsFields :: Lens Atoms (Set S.VersionControlSpec)
 vcsFields = S.vcsFields . control
 
+-- | User defined fields - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.7>
 xFields :: Lens Atoms (Set S.XField)
 xFields = S.xFields . control
 
+-- | <http://www.debian.org/doc/debian-policy/ch-relationships.html#s-sourcebinarydeps>
 buildDepends :: Lens Atoms Relations
 buildDepends = S.buildDepends . control
 
+-- | <http://www.debian.org/doc/debian-policy/ch-relationships.html#s-sourcebinarydeps>
 buildDependsIndep :: Lens Atoms Relations
 buildDependsIndep = S.buildDependsIndep . control
 
+-- | <http://www.debian.org/doc/debian-policy/ch-relationships.html#s-sourcebinarydeps>
 buildConflicts :: Lens Atoms Relations
 buildConflicts = S.buildConflicts . control
 
+-- | <http://www.debian.org/doc/debian-policy/ch-relationships.html#s-sourcebinarydeps>
 buildConflictsIndep :: Lens Atoms Relations
 buildConflictsIndep = S.buildConflictsIndep . control
 
