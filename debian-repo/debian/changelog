@@ -1,3 +1,11 @@
+haskell-debian-repo (5.56) unstable; urgency=low
+
+  * Move the BuildDecision type into Debian.Repo.SourceTree so we
+    can use it to determine the flags to dpkg-buildpackage - if the
+    decision is Arch we do a binary only build in buildDebs.
+
+ -- David Fox <dsf@seereason.com>  Sun, 02 Feb 2014 09:42:22 -0800
+
 haskell-debian-repo (5.55) unstable; urgency=low
 
   * Make signing the repository newdist default behavior.

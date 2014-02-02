@@ -12,6 +12,7 @@ module Debian.Repo.SourceTree
     , findOneDebianBuildTree
     , findOrigTarball
     , origTarballPath
+    , BuildDecision(..)
     , SourcePackageStatus (Indep, All, None)
     , DebianBuildTree (debTree', topdir')
     , DebianSourceTree(tree', control')
@@ -92,9 +93,24 @@ explainSourcePackageStatus All = "All architecture dependent files for the curre
 explainSourcePackageStatus (Indep missing) = "Some or all architecture-dependent files for the current build architecture are missing: " ++ show missing
 explainSourcePackageStatus None = "This version of the package is not present."
 
+-- |Represents a decision whether to build a package, with a text juststification.
+data BuildDecision
+    = Yes String
+    | No String
+    | Arch String	-- Needs a -B build, architecture dependent files only
+    | Auto String	-- Needs a 'automated' rebuild, with a generated version number and log entry
+    | Error String	-- A fatal condition was encountered - e.g. a build dependency became older since last build
+
+instance Show BuildDecision where
+    show (Yes reason) = "Yes - " ++ reason
+    show (No reason) = "No - " ++ reason
+    show (Arch reason) = "Yes - " ++ reason
+    show (Auto reason) = "Yes - " ++ reason
+    show (Error reason) = "Error - " ++ reason
+
 -- | Run dpkg-buildpackage in a build tree.
-buildDebs :: (DebianBuildTreeC t, MonadOS m, MonadIO m) => Bool -> Bool -> [(String, Maybe String)] -> t -> SourcePackageStatus -> m NominalDiffTime
-buildDebs noClean _twice setEnv buildTree status =
+buildDebs :: (DebianBuildTreeC t, MonadOS m, MonadIO m) => Bool -> Bool -> [(String, Maybe String)] -> t -> BuildDecision -> m NominalDiffTime
+buildDebs noClean _twice setEnv buildTree decision =
     do
       root <- rootPath <$> access osRoot
       noSecretKey <- liftIO $ getEnv "HOME" >>= return . (++ "/.gnupg") >>= doesDirectoryExist >>= return . not
@@ -106,7 +122,7 @@ buildDebs noClean _twice setEnv buildTree status =
                                   cwd = dropPrefix root path})
       _ <- liftIO $ run (proc "chmod" ["ugo+x", "debian/rules"])
       let buildCmd = proc "dpkg-buildpackage" (concat [["-sa"],
-                                                       case status of Indep _ -> ["-B"]; _ -> [],
+                                                       case decision of Arch _ -> ["-B"]; _ -> [],
                                                        if noSecretKey then ["-us", "-uc"] else [],
                                                        if noClean then ["-nc"] else []])
       (result, elapsed) <- liftIO . noisier 4 $ run buildCmd

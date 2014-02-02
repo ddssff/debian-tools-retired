@@ -7,7 +7,6 @@ module Debian.AutoBuilder.Types.Fingerprint
     , showDependencies
     , showDependencies'
     , targetFingerprint
-    , BuildDecision(..)
     , buildDecision
     ) where
 
@@ -29,7 +28,7 @@ import qualified Debian.GenBuildDeps as G
 import Debian.Pretty (pretty)
 import Debian.Relation (Relation(Rel), BinPkgName(..))
 import Debian.Repo.Dependencies (prettySimpleRelation, readSimpleRelation, showSimpleRelation)
-import Debian.Repo.SourceTree (DebianSourceTreeC(entry), SourcePackageStatus(..))
+import Debian.Repo.SourceTree (DebianSourceTreeC(entry), SourcePackageStatus(..), BuildDecision(..))
 import Debian.Repo.PackageID (PackageID(PackageID, packageName, packageVersion))
 import Debian.Repo.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageID))
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
@@ -130,21 +129,6 @@ makeVersion :: BinaryPackage -> PackageID BinPkgName
 makeVersion package =
     PackageID { packageName = packageName (packageID package)
               , packageVersion = packageVersion (packageID package) }
-
--- |Represents a decision whether to build a package, with a text juststification.
-data BuildDecision
-    = Yes String
-    | No String
-    | Arch String	-- Needs a -B build, architecture dependent files only
-    | Auto String	-- Needs a 'automated' rebuild, with a generated version number and log entry
-    | Error String	-- A fatal condition was encountered - e.g. a build dependency became older since last build
-
-instance Show BuildDecision where
-    show (Yes reason) = "Yes - " ++ reason
-    show (No reason) = "No - " ++ reason
-    show (Arch reason) = "Yes - " ++ reason
-    show (Auto reason) = "Yes - " ++ reason
-    show (Error reason) = "Error - " ++ reason
 
 -- |Decide whether to build a package.  We will build if the revision
 -- is different from the revision of the uploaded source, or if any of

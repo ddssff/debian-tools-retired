@@ -1,3 +1,13 @@
+autobuilder (6.60) unstable; urgency=low
+
+  * Fix bug in build decision - use the build decision to decide whether
+    to do an arch only or a sourceful build, not the current release
+    status.  Even if the current release status of a package is Arch (only
+    binary packages missing) we still want a sourceful build if the build
+    decision is Yes rather than Arch.
+
+ -- David Fox <dsf@seereason.com>  Sun, 02 Feb 2014 09:45:49 -0800
+
 autobuilder (6.59) unstable; urgency=low
 
   * Changes for debian-3.81

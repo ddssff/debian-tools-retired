@@ -33,7 +33,7 @@ import qualified Debian.AutoBuilder.Params as P (baseRelease, isDevelopmentRelea
 import Debian.AutoBuilder.Types.Buildable (Buildable(..), debianSourcePackageName, failing, prepareTarget, relaxDepends, Target(tgt, cleanSource, targetDepends), targetControl, targetName, targetRelaxed)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
 import qualified Debian.AutoBuilder.Types.Download as T (Download(buildWrapper, getTop, logText), flags, handle, method)
-import Debian.AutoBuilder.Types.Fingerprint (buildDecision, BuildDecision(..), dependencyChanges, Fingerprint, packageFingerprint, showDependencies', showFingerprint, targetFingerprint)
+import Debian.AutoBuilder.Types.Fingerprint (buildDecision, dependencyChanges, Fingerprint, packageFingerprint, showDependencies', showFingerprint, targetFingerprint)
 import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, packageCount, PackageFlag(UDeb), Packages, TargetName(unTargetName))
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(autobuilderEmail, buildDepends, buildRelease, buildTrumped, discard, doNotChangeVersion, dryRun, extraReleaseTag, goals, noClean, oldVendorTags, preferred, releaseAliases, setEnv, strictness, vendorTag), Strictness(Lax))
 import qualified Debian.AutoBuilder.Version as V (autoBuilderVersion)
@@ -55,7 +55,7 @@ import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
 import Debian.Repo.Prelude (symbol, access, runProc, readProc)
-import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..))
+import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..), BuildDecision(..))
 import Debian.Repo.State (MonadRepos, evalMonadOS, OSKey)
 import Debian.Repo.State.AptImage (aptSourcePackages)
 import Debian.Repo.State.OSImage (osSourcePackages, osBinaryPackages, updateOS, syncOS, buildArchOfOS)
@@ -366,13 +366,13 @@ buildTarget cache dependOS buildOS repo !target = do
                      case decision of
                        Error message -> qError ("Failure making build decision: " ++ message)
                        No _ -> return Nothing
-                       _ ->  buildPackage cache dependOS buildOS buildVersion oldFingerprint newFingerprint target releaseStatus repo >>=
+                       _ ->  buildPackage cache dependOS buildOS buildVersion oldFingerprint newFingerprint target decision repo >>=
                              return . Just
 
 -- | Build a package and upload it to the local repository.
 buildPackage :: (MonadRepos m, MonadTop m) =>
-                P.CacheRec -> OSKey -> OSKey -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> SourcePackageStatus -> LocalRepository -> m LocalRepository
-buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !target status repo = do
+                P.CacheRec -> OSKey -> OSKey -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> BuildDecision -> LocalRepository -> m LocalRepository
+buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !target decision repo = do
   checkDryRun
   source <- prepareBuildTree cache dependOS buildOS newFingerprint target
   logEntry source
@@ -421,7 +421,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              -- to set the exact version number.
              let ver = maybe [] (\ v -> [("CABALDEBIAN", Just (show ["--deb-version", show (prettyDebianVersion v)]))]) newVersion
              let env = ver ++ P.setEnv (P.params cache)
-             let action = buildDebs (P.noClean (P.params cache)) False env buildTree status
+             let action = buildDebs (P.noClean (P.params cache)) False env buildTree decision
              elapsed <- T.buildWrapper (download (tgt target)) action
              return (buildTree, elapsed)
 
