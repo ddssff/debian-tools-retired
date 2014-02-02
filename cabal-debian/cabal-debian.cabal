@@ -212,7 +212,6 @@ Executable cabal-debian
  Main-is: CabalDebian.hs
  ghc-options: -threaded -Wall -O2
  Build-Depends:
-   ansi-wl-pprint,
    base,
    Cabal,
    containers,
