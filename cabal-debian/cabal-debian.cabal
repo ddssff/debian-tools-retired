@@ -179,6 +179,7 @@ Library
    Debian.Debianize
    Debian.Policy
    Distribution.Version.Invert
+   Debian.Debianize.BuildDependencies
    Debian.Debianize.Bundled
    Debian.Debianize.Changelog
    Debian.Debianize.DebianName
