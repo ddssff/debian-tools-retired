@@ -140,6 +140,9 @@ partitionFailing xs =
       loop (Failure f : more) (fs, xs) = loop more (f : fs, xs)
 -}
 
+-- | (ready, blocked, unknown)
+type ReadyTarget = (Target, [Target], [Target])
+
 -- | Build a set of targets.  When a target build is successful it
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
@@ -175,7 +178,7 @@ buildLoop cache localRepo dependOS buildOS !targets =
       loop2 :: (MonadRepos m, MonadApt m, MonadTop m) =>
                Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
             -> Set.Set Target -- failed: Targets which either failed to build or were blocked by a target that failed to build
-            -> [(Target, [Target], [Target])] -- ready: the list of known buildable targets
+            -> [ReadyTarget] -- ready: the list of known buildable targets
             -> m (Set.Set Target)
       loop2 unbuilt failed [] =
           -- Out of ready targets, re-do the dependency computation
@@ -226,7 +229,7 @@ buildLoop cache localRepo dependOS buildOS !targets =
       --indent s = setStyle (addPrefix stderr s)
       --debugStyle = setStyle (cond Debian.IO.dryRun Debian.IO.realRun (P.debug params))
 
-makeTable :: [(Target, [Target], [Target])] -> String
+makeTable :: [ReadyTarget] -> String
 makeTable triples =
     unlines . map (intercalate " ") . columns $ goalsLine ++ [[""]] ++ readyLines
     where
@@ -253,7 +256,7 @@ makeTable triples =
 -- from the target set, and repeat until all targets are built.  We
 -- can build a graph of the "has build dependency" relation and find
 -- any node that has no inbound arcs and (maybe) build that.
-readyTargets :: P.CacheRec -> [Target] -> [Target] -> [(Target, [Target], [Target])]
+readyTargets :: P.CacheRec -> [Target] -> [Target] -> [ReadyTarget]
 readyTargets _ [] _ = []
 readyTargets cache goals targets =
     -- q12 "Choosing next target" $
@@ -265,7 +268,7 @@ readyTargets cache goals targets =
       info ->
           case sortBy (compareReady goals) . G.readyTriples $ info of
             [] -> []
-            triples -> triples
+            ready -> ready
     where
       -- We choose the next target using the relaxed dependency set
       depends :: Target -> Target -> Ordering
@@ -276,7 +279,7 @@ readyTargets cache goals targets =
       -- packages.  If there are goal targets but none of them are
       -- ready to build or directly block
       -- targets include a goal as readyamongoals none of the
-      compareReady :: [Target] -> (Target, [Target], [Target]) ->  (Target, [Target], [Target]) -> Ordering
+      compareReady :: [Target] -> ReadyTarget ->  ReadyTarget -> Ordering
       compareReady goals' (aReady, aBlocked, _) (bReady, bBlocked, _) =
           -- Prefer targets which include a goal
           case compare (length bGoals) (length aGoals) of
