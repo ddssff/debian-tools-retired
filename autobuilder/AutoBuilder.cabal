@@ -103,6 +103,7 @@ Library
     Debian.AutoBuilder.Target,
     Debian.AutoBuilder.Types.Buildable
     Debian.AutoBuilder.Types.CacheRec
+    Debian.AutoBuilder.Types.DefaultParams
     Debian.AutoBuilder.Types.Download
     Debian.AutoBuilder.Types.Fingerprint
     Debian.AutoBuilder.Types.Packages,
