@@ -1,3 +1,10 @@
+haskell-debian-repo (5.57) unstable; urgency=low
+
+  * Bug fix: we weren't reverse sorting the package versions before
+    choosing the newest.
+
+ -- David Fox <dsf@seereason.com>  Tue, 11 Feb 2014 10:22:23 -0800
+
 haskell-debian-repo (5.56) unstable; urgency=low
 
   * Move the BuildDecision type into Debian.Repo.SourceTree so we

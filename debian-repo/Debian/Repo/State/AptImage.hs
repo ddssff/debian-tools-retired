@@ -13,6 +13,7 @@ import Control.Monad.Catch (MonadCatch, catch)
 import Control.Monad.State (StateT)
 import Control.Monad.Trans (MonadIO(..), MonadTrans(lift))
 import Data.Lens.Lazy (getL, setL)
+import Data.List (sort)
 import Data.Maybe (listToMaybe)
 import Debian.Changes (ChangeLogEntry(logVersion))
 import Debian.Pretty (pretty)
@@ -152,8 +153,10 @@ prepareSource package version =
                   [tree] -> return tree
                   _ -> fail $ "apt-get source failed (2): trees=" ++ show (map (dir' . tree' . debTree') trees)
 
+-- | Find the most recent version of a source package.
 latestVersion :: (MonadRepos m, MonadApt m) => SrcPkgName -> Maybe DebianVersion -> m (Maybe DebianVersion)
-latestVersion package version = do
+latestVersion package exact = do
   pkgs <- aptSourcePackages
-  let newest = (listToMaybe . map (packageVersion . sourcePackageID) . filter ((== package) . packageName . sourcePackageID)) $ pkgs
-  return $ maybe newest Just version
+  let versions = map (packageVersion . sourcePackageID) $ filter ((== package) . packageName . sourcePackageID) $ pkgs
+      newest = listToMaybe $ reverse $ sort $ versions
+  return $ maybe newest Just exact
