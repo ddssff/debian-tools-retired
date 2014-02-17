@@ -341,7 +341,7 @@ buildTarget cache dependOS buildOS repo !target = do
   -- build dependencies
   let debianControl = targetControl target
   arch <- evalMonadOS buildArchOfOS dependOS
-  soln <- qBracket $(symbol 'buildDepSolution) (evalMonadOS (buildDepSolution arch (map BinPkgName (P.preferred (P.params cache))) debianControl) dependOS)
+  soln <- evalMonadOS (buildDepSolution arch (map BinPkgName (P.preferred (P.params cache))) debianControl) dependOS
   -- let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) dependOS globalBuildDeps debianControl
   case soln of
         Failure excuses -> qError $ intercalate "\n  " ("Couldn't satisfy build dependencies" : excuses)
@@ -509,7 +509,6 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
 -- architecture are available.
 getReleaseControlInfo :: (MonadOS m, MonadRepos m) => Target -> m (Maybe SourcePackage, SourcePackageStatus, String)
 getReleaseControlInfo target = do
-  qPutStrLn $(symbol 'getReleaseControlInfo)
   sourcePackages' <- (sortBy compareVersion . sortSourcePackages [packageName]) <$> osSourcePackages
   binaryPackages' <- sortBinaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages') <$> osBinaryPackages
   let sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
