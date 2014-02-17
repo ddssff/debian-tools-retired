@@ -22,4 +22,4 @@ CONFIGFILE=$CONFIGDIR/autobuilder.hs
     echo "  darcs get http://seereason.com/autobuilder-config $CONFIGDIR"
     exit 1
 }
-cd $CONFIGDIR && sudo HOME=${HOME} runhaskell -i${HERE}:${HERE}/dist-ghc/build/autogen:${HERE}/../cabal-debian/src:${HERE}/../debian-repo:${HERE}/../process-progress autobuilder.hs $*
+cd $CONFIGDIR && sudo HOME=${HOME} runhaskell -DMIN_VERSION_Cabal\(x,y,z\)=0 -i${HERE}:${HERE}/dist-ghc/build/autogen:${HERE}/../cabal-debian/src:${HERE}/../debian-repo:${HERE}/../process-progress autobuilder.hs $*
