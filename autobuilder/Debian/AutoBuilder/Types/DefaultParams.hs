@@ -127,6 +127,14 @@ defaultBaseRelease myBuildRelease = baseReleaseName myBuildRelease
 defaultDebianMirrorHost = "ftp.debian.org"
 defaultUbuntuMirrorHost = "us.archive.ubuntu.com/ubuntu"
 
+-- This URI is the address of the remote repository to which packages
+-- will be uploaded after a run with no failures, when the myDoUpload
+-- flag is true.  Packages are uploaded to the directory created by
+-- appending '/incoming' to this URI.  This is distinct from the
+-- local repository, where each packages is uploaded immediately after
+-- it is built for use as build dependencies of other packages during
+-- the same run.
+--
 defaultUploadURI :: String -> String -> Maybe  URI
 defaultUploadURI myBuildRelease myUploadURIPrefix =
     parseURI (if isPrivateRelease myBuildRelease then myPrivateUploadURI else myPublicUploadURI)
@@ -134,6 +142,10 @@ defaultUploadURI myBuildRelease myUploadURIPrefix =
       myPrivateUploadURI = myUploadURIPrefix </> "deb-private" </> releaseRepoName myBuildRelease
       myPublicUploadURI = myUploadURIPrefix </> "deb" </> releaseRepoName myBuildRelease
 
+-- An alternate url for the same repository the upload-uri points to,
+-- used for downloading packages that have already been installed
+-- there.
+--
 defaultBuildURI :: String -> String -> String -> Maybe URI
 defaultBuildURI myBuildRelease myBuildURIPrefix myUploadURIPrefix =
     parseURI uriString
@@ -142,6 +154,10 @@ defaultBuildURI myBuildRelease myBuildURIPrefix myUploadURIPrefix =
       myUploadBuildURI = myUploadURIPrefix </> "deb-private" </> releaseRepoName myBuildRelease
       myPublicBuildURI = myBuildURIPrefix </> releaseRepoName myBuildRelease
 
+-- Build a map assigning names to text for every sources.list we might
+-- use.  These names can be used in Apt targets.  It is also assumed
+-- that we can use any base release or build release name to look up a
+-- sources.list.
 defaultSources :: String -> String -> String -> String -> String -> [(String, [DebSource])]
 defaultSources myBuildRelease myUploadURIPrefix myPublicURIPrefix debianMirrorHost ubuntuMirrorHost =
     List.map releaseSources
