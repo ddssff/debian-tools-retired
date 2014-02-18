@@ -230,6 +230,11 @@ patch NoPackage _ = NoPackage
 rename :: Packages -> TargetName -> Packages
 rename p s = p {name = s}
 
+mapSpec :: (RetrieveMethod -> RetrieveMethod) -> Packages -> Packages
+mapSpec f p@(Package {spec = x}) = p {spec = f x}
+mapSpec f NoPackage = NoPackage
+mapSpec f p@(Packages {list = xs}) = p {list = map (mapSpec f) xs}
+
 cd :: Packages -> FilePath -> Packages
 cd p path = p {spec = Cd path (spec p)}
 
@@ -277,7 +282,7 @@ hg :: String -> String -> Packages
 hg name path = method name (Hg path)
 
 proc :: Packages -> Packages
-proc p = p {spec = Proc (spec p)}
+proc = mapSpec Proc
 
 quilt :: RetrieveMethod -> Packages -> Packages
 quilt patchdir p = p {spec = Quilt (spec p) patchdir}
