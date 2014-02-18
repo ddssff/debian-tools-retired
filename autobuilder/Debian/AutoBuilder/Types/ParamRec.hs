@@ -340,6 +340,7 @@ prettyPrint x =
             --, "ifSourcesChanged=" ++ take 120 (show (ifSourcesChanged x))
             , "doSSHExport=" ++ take 120 (show (doSSHExport x))
             , "autobuilderEmail=" ++ take 120 (show (autobuilderEmail x))
+            , "ghcVersion=" ++ take 120 (show (ghcVersion x))
             --, "baseRelease sources=\n" ++ show (lookup (sliceName (baseRelease x)) (sources x))
             ]
 

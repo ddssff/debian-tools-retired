@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wall -fno-warn-missing-signatures #-}
 module Debian.AutoBuilder.Types.DefaultParams
     ( defaultParams
     ) where
@@ -7,7 +7,7 @@ import Data.List as List (isSuffixOf, map)
 import Data.Maybe
 import Data.Set as Set (empty, fromList)
 import Debian.Arch (Arch(Binary), ArchCPU(ArchCPU), ArchOS(ArchOS))
-import Debian.AutoBuilder.Types.Packages (Packages(NoPackage), TargetName(TargetName))
+import Debian.AutoBuilder.Types.Packages (Packages(NoPackage))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..), Strictness(..), TargetSpec(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo (SourcesChangedAction(SourcesChangedError))

@@ -30,7 +30,9 @@ ghcBuiltIns :: CompilerId -> Bundled
 ghcBuiltIns (CompilerId GHC compilerVersion) =
     case Map.lookup compilerVersion
              (Map.fromList (map (\ (cmp, ver, lst) -> (ver, (cmp, ver, lst)))
-                            [ (GHC, Version [7,6,3] [], ghc763BuiltIns)
+                            [ (GHC, Version [7,8,20140130] [], ghc781BuiltIns)
+                            , (GHC, Version [7,8,1] [], ghc781BuiltIns)
+                            , (GHC, Version [7,6,3] [], ghc763BuiltIns)
                             , (GHC, Version [7,6,2] [], ghc762BuiltIns)
                             , (GHC, Version [7,6,1] [], ghc761BuiltIns)
                             , (GHC, Version [7,6,1,20121207] [], ghc761BuiltIns)
@@ -61,6 +63,44 @@ ghcBuiltIn compiler package =
 
 v :: String -> [Int] -> PackageIdentifier
 v n x = PackageIdentifier (PackageName n) (Version x [])
+
+ghc781BuiltIns :: [PackageIdentifier]
+ghc781BuiltIns = [
+    v "array" [0,5,0,0],
+    v "base" [4,7,0,0],
+    v "binary" [0,7,1,0],
+    v "bin-package-db" [0,0,0,0],
+    v "bytestring" [0,10,4,0],
+    v "Cabal" [1,18,1,3],
+    v "containers" [0,5,4,0],
+    v "deepseq" [1,3,0,2],
+    v "directory" [1,2,0,2],
+    v "filepath" [1,3,0,2],
+    v "ghc" [7,8,1],
+    v "ghc-prim" [0,3,1,0],
+    v "haskeline" [0,7,1,2],
+    v "haskell2010" [1,1,1,1],
+    v "haskell98" [2,0,0,3],
+    v "hoopl" [3,10,0,0],
+    v "hpc" [0,6,0,1],
+    v "integer-gmp" [0,5,1,0],
+    v "integer-simple" [0,1,1,0],
+    v "old-locale" [1,0,0,6],
+    v "old-time" [1,1,0,2],
+    v "parallel" [3,2,0,4],
+    v "pretty" [1,1,1,1],
+    v "primitive" [0,5,2,0],
+    v "process" [1,2,0,0],
+    v "random" [1,0,1,1],
+    v "stm" [2,4,2,1],
+    v "template-haskell" [2,9,0,0],
+    v "terminfo" [0,4,0,0],
+    v "time" [1,4,1],
+    v "transformers" [0,3,0,0],
+    v "unix" [2,7,0,0],
+    v "vector" [0,10,9,1],
+    v "xhtml" [3000,2,1]
+    ]
 
 ghc763BuiltIns :: [PackageIdentifier]
 ghc763BuiltIns = [
