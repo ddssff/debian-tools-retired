@@ -9,7 +9,6 @@ module Debian.Debianize.Types
 
     -- * Cabal package info
     , packageDescription
-    , compiler
 
     -- * Repository info
     , execMap

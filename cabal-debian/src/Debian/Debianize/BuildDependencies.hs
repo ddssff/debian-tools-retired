@@ -14,11 +14,11 @@ import Data.Map as Map (lookup, Map)
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Set as Set (singleton)
 import qualified Data.Set as Set (member)
-import Data.Version (showVersion, Version)
+import Data.Version (showVersion, Version(Version))
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.DebianName (mkPkgName, mkPkgName')
 import Debian.Debianize.Monad as Monad (Atoms, DebT)
-import qualified Debian.Debianize.Types as T (buildDepends, buildDependsIndep, compiler, debianNameMap, epochMap, execMap, extraLibMap, missingDependencies, noDocumentationLibrary, noProfilingLibrary)
+import qualified Debian.Debianize.Types as T (buildDepends, buildDependsIndep, compilerVersion, debianNameMap, epochMap, execMap, extraLibMap, missingDependencies, noDocumentationLibrary, noProfilingLibrary)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (PackageType(Development, Documentation, Profiling))
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
@@ -29,6 +29,7 @@ import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(
 import Distribution.PackageDescription (PackageDescription)
 import Distribution.PackageDescription as Cabal (allBuildInfo, BuildInfo(..), BuildInfo(buildTools, extraLibs, pkgconfigDepends), Executable(..))
 import qualified Distribution.PackageDescription as Cabal (PackageDescription(buildDepends, executables, package))
+import Distribution.Simple.Compiler
 import Distribution.Version (anyVersion, asVersionIntervals, earlierVersion, foldVersionRange', fromVersionIntervals, intersectVersionRanges, isNoVersion, laterVersion, orEarlierVersion, orLaterVersion, toVersionIntervals, unionVersionRanges, VersionRange, withinVersion)
 import Distribution.Version.Invert (invertVersionRange)
 import Prelude hiding (init, log, map, unlines, unlines, writeFile)
@@ -189,7 +190,15 @@ anyrel' x = [D.Rel x Nothing Nothing]
 -- so we will return just an OrRelation.
 dependencies :: Monad m => B.PackageType -> PackageName -> VersionRange -> DebT m Relations
 dependencies typ name cabalRange =
-    do atoms <- get
+    do comp <- access T.compilerVersion
+       -- It would be better to see if the version built into the
+       -- compiler is newer than the uploaded version.  For now,
+       -- libraries built into the new 7.8 compiler must trump
+       -- uploaded packages because they were all built with 7.6.3.
+       let preferCompiler = case comp of
+                              Just (CompilerId _ (Version (7 : 8 : _) _)) -> True
+                              _ -> False
+       atoms <- get
        -- Compute a list of alternative debian dependencies for
        -- satisfying a cabal dependency.  The only caveat is that
        -- we may need to distribute any "and" dependencies implied
@@ -199,10 +208,10 @@ dependencies typ name cabalRange =
                     Nothing -> [(mkPkgName name typ, cabalRange')]
                     -- If there are splits create a list of (debian package name, VersionRange) pairs
                     Just splits' -> List.map (\ (n, r) -> (mkPkgName' n typ, r)) (packageRangesFromVersionSplits splits')
-       mapM convert alts >>= mapM (doBundled typ name) . convert' . canonical . Or . catMaybes
+       mapM (convert name) alts >>= mapM (doBundled preferCompiler typ name) . convert' . canonical . Or . catMaybes
     where
-      convert :: Monad m => (BinPkgName, VersionRange) -> DebT m (Maybe (Rels Relation))
-      convert (dname, range) =
+      convert :: Monad m => PackageName -> (BinPkgName, VersionRange) -> DebT m (Maybe (Rels Relation))
+      convert name (dname, range) =
           case isNoVersion range''' of
             True -> return Nothing
             False ->
@@ -252,12 +261,19 @@ dependencies typ name cabalRange =
 -- compiler a substitute for that package.  If we were to
 -- specify the virtual package (e.g. libghc-base-dev) we would
 -- have to make sure not to specify a version number.
-doBundled :: Monad m => B.PackageType -> PackageName -> [D.Relation] -> DebT m [D.Relation]
-doBundled typ name rels =
-    do comp <- access T.compiler >>= return . fromMaybe (error "no Compiler value")
+doBundled :: Monad m =>
+             Bool
+          -> B.PackageType
+          -> PackageName
+          -> [D.Relation]
+          -> DebT m [D.Relation]
+doBundled preferCompiler typ name rels =
+    do comp <- access T.compilerVersion >>= return . fromMaybe (error "no Compiler value")
        case ghcBuiltIn comp name of
-         True -> return $ rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
-         False -> return rels
+         -- If preferCompiler is set generate "ghc | libghc-foo-dev" instead of "libghc-foo-dev | ghc"
+         Just v | preferCompiler -> return $ [D.Rel (compilerPackageName typ) Nothing Nothing] ++ rels
+         Just _ -> return $ rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
+         Nothing -> return rels
     where
       compilerPackageName B.Documentation = D.BinPkgName "ghc-doc"
       compilerPackageName B.Profiling = D.BinPkgName "ghc-prof"

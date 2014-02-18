@@ -12,6 +12,8 @@ import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadCatch, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (isSuffixOf)
+import Data.Maybe (fromMaybe)
+import Data.Version (parseVersion)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -23,6 +25,7 @@ import Debian.Repo.Prelude (rsync)
 import Debian.Repo.State (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub)
 import Distribution.Verbosity (normal)
+import Distribution.Compiler
 import Distribution.Package (PackageIdentifier(..))
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
@@ -30,6 +33,7 @@ import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurr
 import System.Environment (withArgs)
 import System.FilePath ((</>), takeFileName)
 import System.Process.Progress (verbosity)
+import Text.ParserCombinators.ReadP (readP_to_S)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
@@ -91,9 +95,12 @@ autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do -- This will be false if the package has no debian/Debianize.hs script
        done <- collectPackageFlags cache pflags >>= runDebianizeScript
+       let ver = fromMaybe (error "autobuilderCabal: no ghc version specified, use --ghc-version") (P.ghcVersion (P.params cache))
+           ver' = head (filter (null . snd) (readP_to_S parseVersion ver))
+           atoms = newAtoms (CompilerId GHC (fst ver'))
        when (not done) (withArgs [] (Cabal.evalDebT (debianization (Top ".") defaultAtoms (applyPackageFlags pflags) >>
                                                      writeDebianization (Top "."))
-                                                    newAtoms))
+                                                    atoms))
 
 applyPackageFlags :: [P.PackageFlag] -> DebT IO ()
 applyPackageFlags flags = mapM_ applyPackageFlag flags

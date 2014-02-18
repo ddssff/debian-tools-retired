@@ -53,13 +53,13 @@ ghcBuiltIns (CompilerId GHC compilerVersion) =
       Just x -> x
 ghcBuiltIns _ = error "ghcBuiltIns: Only GHC is supported"
 
-ghcBuiltIn :: CompilerId -> PackageName -> Bool
+ghcBuiltIn :: CompilerId -> PackageName -> Maybe Version
 ghcBuiltIn compiler package =
-    Data.Set.member
-        package
-        (Data.Set.fromList
-             (let {- (Just (_, _, xs)) = unsafePerformIO (ghc6BuiltIns compiler) -}
-                  (_, _, xs) = ghcBuiltIns compiler in map pkgName xs))
+    let packageIds = filter (\ p -> pkgName p == package) (let (_, _, xs) = ghcBuiltIns compiler in xs) in
+    case packageIds of
+      [] -> Nothing
+      [p] -> Just (pkgVersion p)
+      ps -> error $ "Multiple versions of " ++ show package ++ " built into " ++ show compiler ++ ": " ++ show ps
 
 v :: String -> [Int] -> PackageIdentifier
 v n x = PackageIdentifier (PackageName n) (Version x [])
@@ -91,7 +91,6 @@ ghc781BuiltIns = [
     v "pretty" [1,1,1,1],
     v "primitive" [0,5,2,0],
     v "process" [1,2,0,0],
-    v "random" [1,0,1,1],
     v "stm" [2,4,2,1],
     v "template-haskell" [2,9,0,0],
     v "terminfo" [0,4,0,0],

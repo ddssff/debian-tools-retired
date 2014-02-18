@@ -51,7 +51,7 @@ data Atoms
       -- ^ If present, don't generate the << dependency when we see a cabal
       -- equals dependency.  (The implementation of this was somehow lost.)
       -- FIXME: make this Bool or Maybe Bool
-      , compilerVersion_ :: Maybe Version
+      , compilerVersion_ :: Maybe CompilerId
       -- ^ Specify the version number of the GHC compiler in the build
       -- environment.  The default is to assume that version is the same
       -- as the one in the environment where cabal-debian is running.
@@ -204,17 +204,15 @@ data Atoms
       -- reason to use this is because we don't yet know the name of the dev library package.
       , packageDescription_ :: Maybe PackageDescription
       -- ^ The result of reading a cabal configuration file.
-      , compiler_ :: Maybe CompilerId
-      -- ^ The compiler value from cabal
       } deriving (Eq, Show)
 
-newAtoms :: Atoms
-newAtoms
+newAtoms :: CompilerId -> Atoms
+newAtoms cid
     = Atoms
       { noDocumentationLibrary_ = mempty
       , noProfilingLibrary_ = mempty
       , omitLTDeps_ = mempty
-      , compilerVersion_ = Nothing
+      , compilerVersion_ = Just cid
       , buildDir_ = mempty
       , flags_ = defaultFlags
       , debianNameMap_ = mempty
@@ -269,7 +267,6 @@ newAtoms
       , backups_ = mempty
       , extraDevDeps_ = mempty
       , packageDescription_ = Nothing
-      , compiler_ = Nothing
       }
 
 -- | This record supplies information about the task we want done -
@@ -377,7 +374,7 @@ warning :: Lens Atoms (Set Text)
 warning = lens warning_ (\ a b -> b {warning_ = a})
 
 -- | Set the compiler version, this is used when loading the cabal file to
-compilerVersion :: Lens Atoms (Maybe Version)
+compilerVersion :: Lens Atoms (Maybe CompilerId)
 compilerVersion = lens compilerVersion_ (\ b a -> a {compilerVersion_ = b})
 
 -- | The build directory.  This can be set by an argument to the @Setup@ script.
@@ -403,10 +400,6 @@ cabalFlagAssignments = lens cabalFlagAssignments_ (\ a b -> b {cabalFlagAssignme
 -- | The result of loading a .cabal file
 packageDescription :: Lens Atoms (Maybe PackageDescription)
 packageDescription = lens packageDescription_ (\ a b -> b {packageDescription_ = a})
-
--- | Another result of loading a .cabal file
-compiler :: Lens Atoms (Maybe CompilerId)
-compiler = lens compiler_ (\ a b -> b {compiler_ = a})
 
 -- | Map from cabal version number ranges to debian package names.  This is a
 -- result of the fact that only one version of a debian package can be

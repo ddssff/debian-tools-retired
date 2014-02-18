@@ -20,7 +20,7 @@ import Control.Monad.State (get, lift)
 import Control.Monad.Trans (MonadIO)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
-import Data.Lens.Lazy (getL)
+import Data.Lens.Lazy (getL, access)
 import Data.Map as Map (elems, toList)
 import Data.Maybe (fromMaybe)
 import Data.Text as Text (split, Text, unpack)
@@ -69,13 +69,14 @@ runDebianizeScript args =
 doDebianizeAction :: Top -> DebT IO ()
 doDebianizeAction top =
     do new <- get
+       cid <- access T.compilerVersion >>= return . fromMaybe (error "doDebianizeAction: No compiler version")
        case () of
          _ | getL T.validate new ->
-               do inputDebianization top
+               do inputDebianization top cid
                   old <- get
                   return $ validateDebianization old new
          _ | getL T.dryRun new ->
-               do inputDebianization top
+               do inputDebianization top cid
                   old <- get
                   diff <- lift $ compareDebianization old new
                   lift $ putStr ("Debianization (dry run):\n" ++ diff)

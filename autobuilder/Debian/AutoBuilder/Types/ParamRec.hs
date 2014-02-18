@@ -357,7 +357,9 @@ optSpecs =
     , Option ['q'] ["quiet"] (NoArg (Right (\ p -> p {verbosity = verbosity p - 1})))
       "Decrease progress reporting. Can be used multiple times."
     , Option [] ["show-params"] (NoArg (Right (\ p -> p {showParams = True})))
-      "Display the parameter set" 
+      "Display the parameter set"
+    , Option [] ["ghc-version"] (ReqArg (\ s -> Right (\ p -> p {ghcVersion = Just s})) "VERSION")
+      "Specify the version of GHC which is or will be installed in the build environment"
     , Option [] ["flush-repo-cache"] (NoArg (Right (\ p -> p {useRepoCache = False})))
       (unlines [ "Ignore the existing cached information about the remote repositories,"
                , "instead rebuild it from scratch and save the new result" ])
