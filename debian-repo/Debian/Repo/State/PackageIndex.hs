@@ -79,7 +79,7 @@ sourcePackagesFromSources root arch sources = do
 -- FIXME: assuming the index is part of the cache
 sourcePackagesOfIndex :: MonadRepos m => EnvRoot -> Arch -> RepoKey -> Release -> PackageIndex -> m [SourcePackage]
 sourcePackagesOfIndex root arch repo release index =
-    quieter 2 $ qBracket ($(symbol 'sourcePackagesOfIndex) ++ " " ++ path) $
+    -- quieter 2 $ qBracket ($(symbol 'sourcePackagesOfIndex) ++ " " ++ path) $
     do -- unsafeInterleaveIO makes the package index file reads
        -- asynchronous, not sure what the performance implications
        -- are.  Anyway, this is now only called on demand, so the
@@ -152,7 +152,7 @@ binaryPackagesFromSources root arch sources = do
 -- FIXME: assuming the index is part of the cache
 binaryPackagesOfIndex :: MonadRepos m => EnvRoot -> Arch -> RepoKey -> Release -> PackageIndex -> m [BinaryPackage]
 binaryPackagesOfIndex root arch repo release index =
-    quieter 2 $ qBracket ($(symbol 'binaryPackagesOfIndex) ++ ": " ++ path) $
+    -- quieter 2 $ qBracket ($(symbol 'binaryPackagesOfIndex) ++ ": " ++ path) $
     do paragraphs <- liftIO $ {-unsafeInterleaveIO-} (readParagraphs path)
        let packages = List.map (toBinaryPackage release index) paragraphs
        return packages

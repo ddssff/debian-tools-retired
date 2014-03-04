@@ -35,12 +35,12 @@ noisier n action = withModifiedVerbosity (\ v -> v + n) action
 
 withModifiedVerbosity :: MonadIO m => (Int -> Int) -> m a -> m a
 withModifiedVerbosity f action =
-    verbosity >>= \ v ->
-    liftIO (modifyEnv "VERBOSITY" (const (Just (show (f v))))) >>
+    verbosity >>= \ v0 ->
+    liftIO (modifyEnv "VERBOSITY" (const (Just (show (f v0))))) >>
     -- ePutStr ("[" ++ show (f v) ++ "]") >>
     action >>= \ result ->
     -- ePutStr ("[" ++ show v ++ "]") >>
-    liftIO (modifyEnv "VERBOSITY" (const (Just (show v)))) >>
+    liftIO (modifyEnv "VERBOSITY" (const (Just (show v0)))) >>
     return result
 
 defaultVerbosity :: Int

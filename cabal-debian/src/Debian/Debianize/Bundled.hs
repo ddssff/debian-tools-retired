@@ -30,7 +30,8 @@ ghcBuiltIns :: CompilerId -> Bundled
 ghcBuiltIns (CompilerId GHC compilerVersion) =
     case Map.lookup compilerVersion
              (Map.fromList (map (\ (cmp, ver, lst) -> (ver, (cmp, ver, lst)))
-                            [ (GHC, Version [7,8,20140130] [], ghc781BuiltIns)
+                            [ (GHC, Version [7,8,20140228] [], ghc781BuiltIns)
+                            , (GHC, Version [7,8,20140130] [], ghc781BuiltIns)
                             , (GHC, Version [7,8,1] [], ghc781BuiltIns)
                             , (GHC, Version [7,6,3] [], ghc763BuiltIns)
                             , (GHC, Version [7,6,2] [], ghc762BuiltIns)
@@ -76,7 +77,7 @@ ghc781BuiltIns = [
     v "deepseq" [1,3,0,2],
     v "directory" [1,2,0,2],
     v "filepath" [1,3,0,2],
-    v "ghc" [7,8,1],
+    v "ghc" [7,8,20140130],
     v "ghc-prim" [0,3,1,0],
     v "haskeline" [0,7,1,2],
     v "haskell2010" [1,1,1,1],
@@ -89,16 +90,13 @@ ghc781BuiltIns = [
     v "old-time" [1,1,0,2],
     v "parallel" [3,2,0,4],
     v "pretty" [1,1,1,1],
-    v "primitive" [0,5,2,0],
     v "process" [1,2,0,0],
     v "stm" [2,4,2,1],
     v "template-haskell" [2,9,0,0],
     v "terminfo" [0,4,0,0],
     v "time" [1,4,1],
     v "transformers" [0,3,0,0],
-    v "unix" [2,7,0,0],
-    v "vector" [0,10,9,1],
-    v "xhtml" [3000,2,1]
+    v "unix" [2,7,0,0]
     ]
 
 ghc763BuiltIns :: [PackageIdentifier]
