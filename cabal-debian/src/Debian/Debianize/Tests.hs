@@ -35,6 +35,7 @@ import Debian.Pretty (pretty, Pretty, text, Doc)
 import Debian.Relation (BinPkgName(..), Relation(..), SrcPkgName(..), VersionReq(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Version (parseDebianVersion, buildDebianVersion)
+import Distribution.Simple.Compiler (CompilerId(CompilerId), CompilerFlavor(GHC))
 import Distribution.License (License(..))
 import Distribution.Package (PackageName(PackageName))
 import Prelude hiding (log)
@@ -76,19 +77,21 @@ newDebianization' level standards =
 tests :: Test
 tests = TestLabel "Debianization Tests" (TestList [-- 1 and 2 do not input a cabal package - we're not ready to
                                                    -- debianize without a cabal package.
-                                                   {- test1 "test1",
-                                                   test2 "test2", -}
-                                                   test3 "test3",
-                                                   test4 "test4 - test-data/clckwrks-dot-com",
-                                                   test5 "test5 - test-data/creativeprompts",
+                                                   {- test1 cid "test1",
+                                                   test2 cid "test2", -}
+                                                   test3 cid "test3",
+                                                   test4 cid "test4 - test-data/clckwrks-dot-com",
+                                                   test5 cid "test5 - test-data/creativeprompts",
                                                    test6 "test6 - test-data/artvaluereport2",
                                                    test7 "test7 - debian/Debianize.hs",
-                                                   test8 "test8 - test-data/artvaluereport-data",
-                                                   test9 "test9 - test-data/alex",
-                                                   test10 "test10 - test-data/archive"])
+                                                   test8 cid "test8 - test-data/artvaluereport-data",
+                                                   test9 cid "test9 - test-data/alex",
+                                                   test10 cid "test10 - test-data/archive"])
+    where
+      cid = CompilerId GHC (Version [7,6,3] [])
 
-test1 :: String -> Test
-test1 label =
+test1 :: CompilerId -> String -> Test
+test1 cid label =
     TestLabel label $
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion :: IO (Maybe StandardsVersion)
@@ -99,7 +102,7 @@ test1 label =
                               license ~= Just BSD3
                               -- inputCabalization top
                               finalizeDebianization')
-                          newAtoms
+                          (newAtoms cid)
                  diff <- diffDebianizations testDeb1 deb
                  assertEqual label [] diff)
     where
@@ -124,7 +127,7 @@ test1 label =
                                        [Rel (BinPkgName "ghc") Nothing Nothing],
                                        [Rel (BinPkgName "ghc-prof") Nothing Nothing]])
                 T.buildDependsIndep %= (++ [[Rel (BinPkgName "ghc-doc") Nothing Nothing]]))
-            newAtoms
+            (newAtoms cid)
       log = ChangeLog [Entry { logPackage = "haskell-cabal-debian"
                              , logVersion = buildDebianVersion Nothing "2.6.2" Nothing
                              , logDists = [ReleaseName {relName = "unstable"}]
@@ -133,8 +136,8 @@ test1 label =
                              , logWho = "David Fox <dsf@seereason.com>"
                              , logDate = "Thu, 20 Dec 2012 06:49:25 -0800" }]
 
-test2 :: String -> Test
-test2 label =
+test2 :: CompilerId -> String -> Test
+test2 cid label =
     TestLabel label $
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion
@@ -145,7 +148,7 @@ test2 label =
                               license ~= Just BSD3
                               -- inputCabalization top
                               finalizeDebianization')
-                          newAtoms
+                          (newAtoms cid)
                  diff <- diffDebianizations expect deb
                  assertEqual label [] diff)
     where
@@ -169,7 +172,7 @@ test2 label =
                                        [Rel (BinPkgName "ghc") Nothing Nothing],
                                        [Rel (BinPkgName "ghc-prof") Nothing Nothing]])
                 T.buildDependsIndep %= (++ [[Rel (BinPkgName "ghc-doc") Nothing Nothing]]))
-            newAtoms
+            (newAtoms cid)
       log = ChangeLog [Entry {logPackage = "haskell-cabal-debian",
                               logVersion = Debian.Version.parseDebianVersion ("2.6.2" :: String),
                               logDists = [ReleaseName {relName = "unstable"}],
@@ -190,11 +193,11 @@ testEntry =
                                 , ""
                                 , " -- David Fox <dsf@seereason.com>  Thu, 20 Dec 2012 06:49:25 -0800" ]))
 
-test3 :: String -> Test
-test3 label =
+test3 :: CompilerId -> String -> Test
+test3 cid label =
     TestLabel label $
     TestCase (do let top = Top "test-data/haskell-devscripts"
-                 deb <- execDebT (inputDebianization top) T.newAtoms
+                 deb <- execDebT (inputDebianization top cid) (T.newAtoms cid)
                  diff <- diffDebianizations testDeb2 deb
                  assertEqual label [] diff)
     where
@@ -333,7 +336,7 @@ test3 label =
                                                                                             , B.builtUsing = [] }}]})
 -}
                                                                                             )
-            T.newAtoms
+            (T.newAtoms cid)
       log = ChangeLog [Entry { logPackage = "haskell-devscripts"
                              , logVersion = Debian.Version.parseDebianVersion ("0.8.13" :: String)
                              , logDists = [ReleaseName {relName = "experimental"}]
@@ -349,14 +352,14 @@ test3 label =
                              , logWho = "Joachim Breitner <nomeata@debian.org>"
                              , logDate = "Sat, 04 Feb 2012 10:50:33 +0100"}]
 
-test4 :: String -> Test
-test4 label =
+test4 :: CompilerId -> String -> Test
+test4 cid label =
     TestLabel label $
     TestCase (do let inTop = Top "test-data/clckwrks-dot-com/input"
                      outTop = Top "test-data/clckwrks-dot-com/output"
-                 old <- execDebT (inputDebianization outTop) T.newAtoms
+                 old <- execDebT (inputDebianization outTop cid) (T.newAtoms cid)
                  let log = getL T.changelog old
-                 new <- execDebT (debianization inTop defaultAtoms (customize log)) T.newAtoms
+                 new <- execDebT (debianization inTop defaultAtoms (customize log)) (T.newAtoms cid)
                  diff <- diffDebianizations old ({-copyFirstLogEntry old-} new)
                  assertEqual label [] diff)
     where
@@ -459,15 +462,15 @@ test4 label =
 anyrel :: BinPkgName -> Relation
 anyrel b = Rel b Nothing Nothing
 
-test5 :: String -> Test
-test5 label =
+test5 :: CompilerId -> String -> Test
+test5 cid label =
     TestLabel label $
     TestCase (do let inTop = (Top "test-data/creativeprompts/input")
                      outTop = (Top "test-data/creativeprompts/output")
-                 old <- execDebT (inputDebianization outTop) newAtoms
+                 old <- execDebT (inputDebianization outTop cid) (newAtoms cid)
                  let standards = getL T.standardsVersion old
                      level = getL T.compat old
-                 new <- execDebT (debianization inTop defaultAtoms (customize old level standards)) newAtoms
+                 new <- execDebT (debianization inTop defaultAtoms (customize old level standards)) (newAtoms cid)
                  diff <- diffDebianizations old new
                  assertEqual label [] diff)
     where
@@ -555,14 +558,14 @@ test7 label =
     TestCase (do new <- readProcessWithExitCode "runhaskell" ["-isrc", "debian/Debianize.hs"] ""
                  assertEqual label (ExitSuccess, "", "Ignored: ./debian/cabal-debian.1\nIgnored: ./debian/cabal-debian.manpages\n") new)
 
-test8 :: String -> Test
-test8 label =
+test8 :: CompilerId -> String -> Test
+test8 cid label =
     TestLabel label $
     TestCase ( do let inTop = Top "test-data/artvaluereport-data/input"
                       outTop = Top "test-data/artvaluereport-data/output"
-                  old <- execDebT (inputDebianization outTop) newAtoms
-                  log <- evalDebT (inputChangeLog inTop >> access T.changelog) newAtoms
-                  new <- execDebT (debianization inTop defaultAtoms (customize log)) newAtoms
+                  old <- execDebT (inputDebianization outTop cid) (newAtoms cid)
+                  log <- evalDebT (inputChangeLog inTop >> access T.changelog) (newAtoms cid)
+                  new <- execDebT (debianization inTop defaultAtoms (customize log)) (newAtoms cid)
                   diff <- diffDebianizations old new
                   assertEqual label [] diff
              )
@@ -575,14 +578,14 @@ test8 label =
              T.changelog ~= Just log
              newDebianization' (Just 7) (Just (StandardsVersion 3 9 3 Nothing))
 
-test9 :: String -> Test
-test9 label =
+test9 :: CompilerId -> String -> Test
+test9 cid label =
     TestLabel label $
     TestCase (do let inTop = Top "test-data/alex/input"
                      outTop = Top "test-data/alex/output"
-                 old <- execDebT (inputDebianization outTop) newAtoms
+                 old <- execDebT (inputDebianization outTop cid) (newAtoms cid)
                  let Just (ChangeLog (entry : _)) = getL T.changelog old
-                 new <- execDebT (debianization inTop defaultAtoms customize >> copyChangelogDate (logDate entry)) newAtoms
+                 new <- execDebT (debianization inTop defaultAtoms customize >> copyChangelogDate (logDate entry)) (newAtoms cid)
                  diff <- diffDebianizations old new
                  assertEqual label [] diff)
     where
@@ -611,14 +614,14 @@ test9 label =
              -- Bootstrap dependency
              T.buildDepends %= (++ [[Rel (BinPkgName "alex") Nothing Nothing]])
 
-test10 :: String -> Test
-test10 label =
+test10 :: CompilerId -> String -> Test
+test10 cid label =
     TestLabel label $
     TestCase (do let inTop = Top "test-data/archive/input"
                      outTop = Top "test-data/archive/output"
-                 old <- execDebT (inputDebianization outTop) newAtoms
+                 old <- execDebT (inputDebianization outTop cid) (newAtoms cid)
                  let Just (ChangeLog (entry : _)) = getL T.changelog old
-                 new <- execDebT (debianization inTop defaultAtoms customize >> copyChangelogDate (logDate entry)) newAtoms
+                 new <- execDebT (debianization inTop defaultAtoms customize >> copyChangelogDate (logDate entry)) (newAtoms cid)
                  diff <- diffDebianizations old new
                  assertEqual label [] diff)
     where

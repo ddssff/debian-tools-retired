@@ -32,7 +32,7 @@ cabalDebianMain init =
     -- This picks up the options required to decide what action we are
     -- taking.  Much of this will be repeated in the call to debianize.
     evalDebT (init >> compileEnvironmentArgs >> compileCommandlineArgs >>
-              get >>= return . getL debAction >>= finish) newAtoms
+              get >>= return . getL debAction >>= finish) (newAtoms cid)
     where
       finish (SubstVar debType) = substvars top debType
       finish Debianize = debianization top (return ()) (return ()) >> doDebianizeAction top
@@ -50,3 +50,4 @@ cabalDebianMain init =
                              , "using a revision control system to revert the package to a known state before running."
                              , "The following additional options are available:" ]
           lift $ putStrLn (usageInfo info options)
+      cid = error "Compiler version not set - use --ghc-version"
