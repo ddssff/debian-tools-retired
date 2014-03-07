@@ -15,6 +15,9 @@ import Debian.Relation (Relation(..), VersionReq(..), ArchitectureReq(..),
                         BinPkgName(..), SrcPkgName(..))
 import Debian.Version (DebianVersion)
 import Distribution.Compiler (CompilerId(..))
+#if !MIN_VERSION_Cabal(1,18,0)
+import Distribution.Compiler (CompilerFlavor(..))
+#endif
 import Distribution.License (License(..))
 import Distribution.PackageDescription (PackageDescription(package), Executable(..))
 import Distribution.Simple.Compiler (Compiler(..))
