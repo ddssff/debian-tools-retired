@@ -1,6 +1,6 @@
 import Debian.Changes (ChangeLog)
 import Debian.Debianize (DebT, evalDebT, debianization, writeDebianization, newAtoms, inputChangeLog,
-                         seereasonDefaultAtoms, changelog, license, copyright, depends, doExecutable,
+                         seereasonDefaultAtoms, changelog, license, copyright, depends, suggests, doExecutable,
                          sourceFormat, sourcePackageName, (~=), (%=), buildEnv,
                          InstallFile(InstallFile, destDir, destName, execName, sourceDir), Top(Top))
 import Debian.Policy (SourceFormat(Native3))
@@ -35,7 +35,8 @@ customize =
              , [[Rel (BinPkgName "build-essential") Nothing Nothing]]
              , [[Rel (BinPkgName "quilt") Nothing Nothing]]
              , [[Rel (BinPkgName "curl") Nothing Nothing]]
-             , [[Rel (BinPkgName "debian-archive-keyring") Nothing Nothing]]
-             , [[Rel (BinPkgName "seereason-keyring") Nothing Nothing]]
+             , [[Rel (BinPkgName "debian-archive-keyring") Nothing Nothing]] ]
+       mapM_ (\ rs -> suggests (BinPkgName "autobuilder") %= (++ rs))
+             [ [[Rel (BinPkgName "seereason-keyring") Nothing Nothing]]
              , [[Rel (BinPkgName "ubuntu-keyring") Nothing Nothing]] ]
        doExecutable (BinPkgName "autobuilder") (InstallFile {execName = "autobuilder", sourceDir = Just ".", destDir = Nothing, destName = "autobuilder"})
