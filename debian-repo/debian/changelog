@@ -1,3 +1,13 @@
+haskell-debian-repo (5.58) unstable; urgency=low
+
+  * Sync the local pool into the build environment before trying to verify
+    the sources.list, otherwise the verify function may fail.
+  * Disable /sbin/initctl in the build environment so we don't start any
+    services, and so we don't die trying to start a service.
+  * Create the directory to hold the source tree before rsyncing to it.
+
+ -- David Fox <dsf@seereason.com>  Thu, 06 Mar 2014 16:33:20 -0800
+
 haskell-debian-repo (5.57) unstable; urgency=low
 
   * Bug fix: we weren't reverse sorting the package versions before
