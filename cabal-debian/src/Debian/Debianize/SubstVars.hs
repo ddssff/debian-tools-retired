@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, TupleSections, TypeSynonymInstances #-}
+{-# LANGUAGE CPP, ScopedTypeVariables, TupleSections, TypeSynonymInstances #-}
 {-# OPTIONS -Wall -fno-warn-name-shadowing #-}
 
 -- | Support for generating Debianization from Cabal data.
@@ -30,7 +30,12 @@ import Debian.Orphans ()
 import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName(BinPkgName), Relation, Relations)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), ParseRelations(parseRelations), Relation(Rel), Relations, VersionReq(GRE))
+#if MIN_VERSION_Cabal(1,18,0)
 import Distribution.Compiler (buildCompilerId)
+#else
+import Data.Version
+import Distribution.Compiler
+#endif
 import Distribution.Package (Dependency(..), PackageName(PackageName))
 import Distribution.PackageDescription as Cabal (allBuildInfo, buildTools, extraLibs, PackageDescription(..), pkgconfigDepends)
 import Distribution.Simple.Utils (die)
@@ -38,6 +43,11 @@ import Distribution.Text (display)
 import Prelude hiding (unlines)
 import System.Directory (doesDirectoryExist, getDirectoryContents)
 import System.FilePath ((</>))
+
+#if !MIN_VERSION_Cabal(1,18,0)
+buildCompilerId :: CompilerId
+buildCompilerId = CompilerId GHC (Version [7,6,3] [])
+#endif
 
 -- | Expand the contents of the .substvars file for a library package.
 -- Each cabal package corresponds to a directory <name>-<version>,
