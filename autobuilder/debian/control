@@ -165,10 +165,8 @@ Depends: ${shlibs:Depends}
          , quilt
          , curl
          , debian-archive-keyring
-         , seereason-keyring
-         , ubuntu-keyring
 Recommends: ${haskell:Recommends}
-Suggests: ${haskell:Suggests}
+Suggests: ${haskell:Suggests}, ubuntu-keyring, seereason-keyring
 Conflicts: ${haskell:Conflicts}
 Provides: ${haskell:Provides}
 Replaces: ${haskell:Replaces}
