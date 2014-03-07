@@ -37,7 +37,7 @@ import qualified Debian.Debianize.Types.BinaryDebDescription as B (BinaryDebDesc
 import Debian.Orphans ()
 import Debian.Policy (getDebhelperCompatLevel, haskellMaintainer, PackageArchitectures(Any, All), PackagePriority(Optional), Section(..))
 import Debian.Pretty (pretty)
-import Debian.Relation (BinPkgName, BinPkgName(BinPkgName), Relation, Relation(Rel), Relations)
+import Debian.Relation (BinPkgName, BinPkgName(BinPkgName), Relation(Rel), Relations)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..))
 import Debian.Release (parseReleaseName)
 import Debian.Time (getCurrentLocalRFC822Time)
@@ -81,7 +81,7 @@ finalizeDebianization' =
 -- this function is not idempotent.  (Exported for use in unit tests.)
 -- FIXME: we should be able to run this without a PackageDescription, change
 --        paramter type to Maybe PackageDescription and propagate down thru code
-finalizeDebianization  :: (Monad m, Functor m) => String -> Maybe Int -> DebT m ()
+finalizeDebianization  :: (MonadIO m, Functor m) => String -> Maybe Int -> DebT m ()
 finalizeDebianization date debhelperCompat =
     do addExtraLibDependencies
        Just pkgDesc <- access T.packageDescription
@@ -219,7 +219,7 @@ addExtraLibDependencies =
       devDep :: Map String Relations -> String -> Relations
       devDep libMap cab = maybe [[Rel (BinPkgName ("lib" ++ cab ++ "-dev")) Nothing Nothing]] id (Map.lookup cab libMap)
 
-putBuildDeps :: Monad m => PackageDescription -> DebT m ()
+putBuildDeps :: MonadIO m => PackageDescription -> DebT m ()
 putBuildDeps pkgDesc =
     do deps <- debianBuildDeps pkgDesc
        depsIndep <- debianBuildDepsIndep pkgDesc

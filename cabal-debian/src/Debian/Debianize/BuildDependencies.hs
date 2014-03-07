@@ -6,6 +6,7 @@ module Debian.Debianize.BuildDependencies
     ) where
 
 import Control.Monad.State (MonadState(get))
+import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Char (isSpace)
 import Data.Function (on)
 import Data.Lens.Lazy (access, getL)
@@ -17,8 +18,9 @@ import qualified Data.Set as Set (member)
 import Data.Version (showVersion, Version(Version))
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.DebianName (mkPkgName, mkPkgName')
+import Debian.Debianize.Input (ghcVersion')
 import Debian.Debianize.Monad as Monad (Atoms, DebT)
-import qualified Debian.Debianize.Types as T (buildDepends, buildDependsIndep, compilerVersion, debianNameMap, epochMap, execMap, extraLibMap, missingDependencies, noDocumentationLibrary, noProfilingLibrary)
+import qualified Debian.Debianize.Types as T (buildDepends, buildDependsIndep, debianNameMap, epochMap, execMap, extraLibMap, missingDependencies, noDocumentationLibrary, noProfilingLibrary, buildEnv)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (PackageType(Development, Documentation, Profiling))
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
@@ -75,7 +77,7 @@ allBuildDepends buildDepends' buildTools' pkgconfigDepends' extraLibs' =
 
 -- The haskell-cdbs package contains the hlibrary.mk file with
 -- the rules for building haskell packages.
-debianBuildDeps :: Monad m => PackageDescription -> DebT m D.Relations
+debianBuildDeps :: MonadIO m => PackageDescription -> DebT m D.Relations
 debianBuildDeps pkgDesc =
     do deb <- get
        cDeps <- cabalDeps
@@ -98,7 +100,7 @@ debianBuildDeps pkgDesc =
                           (concatMap extraLibs . allBuildInfo $ pkgDesc)
              mapM buildDependencies (List.filter (not . selfDependency (Cabal.package pkgDesc)) deps) >>= return . concat
 
-debianBuildDepsIndep :: Monad m => PackageDescription -> DebT m D.Relations
+debianBuildDepsIndep :: MonadIO m => PackageDescription -> DebT m D.Relations
 debianBuildDepsIndep pkgDesc =
     do doc <- get >>= return . (/= singleton True) . getL T.noDocumentationLibrary
        bDeps <- get >>= return . getL T.buildDependsIndep
@@ -128,14 +130,14 @@ debianBuildDepsIndep pkgDesc =
 -- | The documentation dependencies for a package include the
 -- documentation package for any libraries which are build
 -- dependencies, so we have access to all the cross references.
-docDependencies :: Monad m => Dependency_ -> DebT m D.Relations
+docDependencies :: MonadIO m => Dependency_ -> DebT m D.Relations
 docDependencies (BuildDepends (Dependency name ranges)) = dependencies B.Documentation name ranges
 docDependencies _ = return []
 
 -- | The Debian build dependencies for a package include the profiling
 -- libraries and the documentation packages, used for creating cross
 -- references.  Also the packages associated with extra libraries.
-buildDependencies :: Monad m => Dependency_ -> DebT m D.Relations
+buildDependencies :: MonadIO m => Dependency_ -> DebT m D.Relations
 buildDependencies (BuildDepends (Dependency name ranges)) =
     do dev <- dependencies B.Development name ranges
        prof <- dependencies B.Profiling name ranges
@@ -188,17 +190,9 @@ anyrel' x = [D.Rel x Nothing Nothing]
 -- | Turn a cabal dependency into debian dependencies.  The result
 -- needs to correspond to a single debian package to be installed,
 -- so we will return just an OrRelation.
-dependencies :: Monad m => B.PackageType -> PackageName -> VersionRange -> DebT m Relations
+dependencies :: MonadIO m => B.PackageType -> PackageName -> VersionRange -> DebT m Relations
 dependencies typ name cabalRange =
-    do comp <- access T.compilerVersion
-       -- It would be better to see if the version built into the
-       -- compiler is newer than the uploaded version.  For now,
-       -- libraries built into the new 7.8 compiler must trump
-       -- uploaded packages because they were all built with 7.6.3.
-       let preferCompiler = case comp of
-                              Just (CompilerId _ (Version (7 : 8 : _) _)) -> True
-                              _ -> False
-       atoms <- get
+    do atoms <- get
        -- Compute a list of alternative debian dependencies for
        -- satisfying a cabal dependency.  The only caveat is that
        -- we may need to distribute any "and" dependencies implied
@@ -208,7 +202,7 @@ dependencies typ name cabalRange =
                     Nothing -> [(mkPkgName name typ, cabalRange')]
                     -- If there are splits create a list of (debian package name, VersionRange) pairs
                     Just splits' -> List.map (\ (n, r) -> (mkPkgName' n typ, r)) (packageRangesFromVersionSplits splits')
-       mapM (convert name) alts >>= mapM (doBundled preferCompiler typ name) . convert' . canonical . Or . catMaybes
+       mapM (convert name) alts >>= mapM (doBundled typ name) . convert' . canonical . Or . catMaybes
     where
       convert :: Monad m => PackageName -> (BinPkgName, VersionRange) -> DebT m (Maybe (Rels Relation))
       convert name (dname, range) =
@@ -261,15 +255,24 @@ dependencies typ name cabalRange =
 -- compiler a substitute for that package.  If we were to
 -- specify the virtual package (e.g. libghc-base-dev) we would
 -- have to make sure not to specify a version number.
-doBundled :: Monad m =>
-             Bool
-          -> B.PackageType
+doBundled :: MonadIO m =>
+             B.PackageType
           -> PackageName
           -> [D.Relation]
           -> DebT m [D.Relation]
-doBundled preferCompiler typ name rels =
-    do comp <- access T.compilerVersion >>= return . fromMaybe (error "no Compiler value")
-       case ghcBuiltIn comp name of
+doBundled typ name rels =
+    do root <- access T.buildEnv
+       gver <- liftIO $ ghcVersion' root
+       pver <- ghcBuiltIn root name
+       -- Prefer the compiler to the library, if the compiler provides libghc-foo-dev
+       -- generate "ghc | libghc-foo-dev" rather than "libghc-foo-dev | ghc".  It would be
+       -- better to see if the version built into the compiler is newer than the uploaded
+       -- version.  For now, libraries built into the new 7.8 compiler must trump uploaded
+       -- packages because they were all built with 7.6.3.
+       let preferCompiler = case gver of
+                              Just (CompilerId GHC (Version (7 : 8 : _) _)) -> True
+                              _ -> False
+       case pver of
          -- If preferCompiler is set generate "ghc | libghc-foo-dev" instead of "libghc-foo-dev | ghc"
          Just v | preferCompiler -> return $ [D.Rel (compilerPackageName typ) Nothing Nothing] ++ rels
          Just _ -> return $ rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]

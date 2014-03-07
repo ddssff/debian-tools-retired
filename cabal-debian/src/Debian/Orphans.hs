@@ -14,7 +14,7 @@ import Debian.Pretty (Pretty(pretty), text, cat, empty)
 import Debian.Relation (Relation(..), VersionReq(..), ArchitectureReq(..),
                         BinPkgName(..), SrcPkgName(..))
 import Debian.Version (DebianVersion)
-import Distribution.Compiler (CompilerId(..), CompilerFlavor(..))
+import Distribution.Compiler (CompilerId(..))
 import Distribution.License (License(..))
 import Distribution.PackageDescription (PackageDescription(package), Executable(..))
 import Distribution.Simple.Compiler (Compiler(..))

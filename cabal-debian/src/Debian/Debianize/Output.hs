@@ -20,7 +20,7 @@ import Control.Monad.State (get, lift)
 import Control.Monad.Trans (MonadIO)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
-import Data.Lens.Lazy (getL, access)
+import Data.Lens.Lazy (getL)
 import Data.Map as Map (elems, toList)
 import Data.Maybe (fromMaybe)
 import Data.Text as Text (split, Text, unpack)
@@ -40,7 +40,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, getPermissions
 import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>), takeDirectory)
-import System.Process (readProcessWithExitCode)
+import System.Process (readProcessWithExitCode, showCommandForUser)
 
 -- | Run the script in @debian/Debianize.hs@ with the given command
 -- line arguments.  Returns @True@ if the script exists and succeeds.
@@ -57,26 +57,26 @@ runDebianizeScript args =
     case exists of
       False -> return False
       True ->
-          let autobuilderd = "-i.:" ++ home </> ".autobuilder.d" in
-          putEnvironmentArgs args >> readProcessWithExitCode "runhaskell" ([autobuilderd, "debian/Debianize.hs"] ++ args) "" >>= \ result ->
+          let autobuilderd = "-i.:" ++ home </> ".autobuilder.d"
+              args' = [autobuilderd, "debian/Debianize.hs"] ++ args in
+          putEnvironmentArgs args >> readProcessWithExitCode "runhaskell" args' "" >>= \ result ->
           case result of
             (ExitSuccess, _, _) -> return True
             (code, out, err) ->
-              error ("runDebianize failed with " ++ show code ++ ":\n stdout: " ++ show out ++"\n stderr: " ++ show err)
+              error ("runDebianizeScript: " ++ showCommandForUser "runhaskell" args' ++ " -> " ++ show code ++ "\n stdout: " ++ show out ++"\n stderr: " ++ show err)
 
 -- | Depending on the options in @atoms@, either validate, describe,
 -- or write the generated debianization.
 doDebianizeAction :: Top -> DebT IO ()
 doDebianizeAction top =
     do new <- get
-       cid <- access T.compilerVersion >>= return . fromMaybe (error "doDebianizeAction: No compiler version")
        case () of
          _ | getL T.validate new ->
-               do inputDebianization top cid
+               do inputDebianization top
                   old <- get
                   return $ validateDebianization old new
          _ | getL T.dryRun new ->
-               do inputDebianization top cid
+               do inputDebianization top
                   old <- get
                   diff <- lift $ compareDebianization old new
                   lift $ putStr ("Debianization (dry run):\n" ++ diff)

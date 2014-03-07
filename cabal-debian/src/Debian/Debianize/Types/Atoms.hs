@@ -20,7 +20,6 @@ import Data.Map as Map (Map)
 import Data.Monoid (Monoid(..))
 import Data.Set as Set (Set)
 import Data.Text (Text)
-import Data.Version (Version)
 import Debian.Changes (ChangeLog)
 import qualified Debian.Debianize.Types.SourceDebDescription as S
 import Debian.Debianize.VersionSplits (VersionSplits)
@@ -31,7 +30,6 @@ import Debian.Version (DebianVersion)
 import Distribution.License (License)
 import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
-import Distribution.Simple.Compiler (CompilerId)
 import Prelude hiding (init, init, log, log, unlines, (.))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
@@ -51,13 +49,6 @@ data Atoms
       -- ^ If present, don't generate the << dependency when we see a cabal
       -- equals dependency.  (The implementation of this was somehow lost.)
       -- FIXME: make this Bool or Maybe Bool
-      , compilerVersion_ :: Maybe CompilerId
-      -- ^ Specify the version number of the GHC compiler in the build
-      -- environment.  The default is to assume that version is the same
-      -- as the one in the environment where cabal-debian is running.
-      -- This is used to look up hard coded lists of packages bundled
-      -- with the compiler and their version numbers.  (This could
-      -- certainly be done in a more beautiful way.)
       , buildDir_ :: Set FilePath
       -- ^ The build directory used by cabal, typically dist/build when
       -- building manually or dist-ghc/build when building using GHC and
@@ -66,6 +57,12 @@ data Atoms
       -- the --builddir option of runhaskell Setup appends the "/build"
       -- to the value it receives, so, yes, try not to get confused.
       -- FIXME: make this FilePath or Maybe FilePath
+      , buildEnv_ :: FilePath
+      -- ^ Directory containing the build environment for which the
+      -- debianization will be generated.  This determines which
+      -- compiler will be available, which in turn determines which
+      -- basic libraries can be provided by the compiler.  This may be
+      -- set to /, but it must be set.
       , flags_ :: Flags
       -- ^ Information regarding mode of operation - verbosity, dry-run, usage, etc
       , debianNameMap_ :: Map PackageName VersionSplits
@@ -206,14 +203,14 @@ data Atoms
       -- ^ The result of reading a cabal configuration file.
       } deriving (Eq, Show)
 
-newAtoms :: CompilerId -> Atoms
-newAtoms cid
+newAtoms :: Atoms
+newAtoms
     = Atoms
       { noDocumentationLibrary_ = mempty
       , noProfilingLibrary_ = mempty
       , omitLTDeps_ = mempty
-      , compilerVersion_ = Just cid
       , buildDir_ = mempty
+      , buildEnv_ = ""
       , flags_ = defaultFlags
       , debianNameMap_ = mempty
       , control_ = S.newSourceDebDescription
@@ -373,10 +370,6 @@ flags = lens flags_ (\ b a -> a {flags_ = b})
 warning :: Lens Atoms (Set Text)
 warning = lens warning_ (\ a b -> b {warning_ = a})
 
--- | Set the compiler version, this is used when loading the cabal file to
-compilerVersion :: Lens Atoms (Maybe CompilerId)
-compilerVersion = lens compilerVersion_ (\ b a -> a {compilerVersion_ = b})
-
 -- | The build directory.  This can be set by an argument to the @Setup@ script.
 -- When @Setup@ is run manually it is just @dist@, when it is run by
 -- @dpkg-buildpackage@ the compiler name is appended, so it is typically
@@ -384,6 +377,9 @@ compilerVersion = lens compilerVersion_ (\ b a -> a {compilerVersion_ = b})
 -- the build results.
 buildDir :: Lens Atoms (Set FilePath)
 buildDir = lens buildDir_ (\ b a -> a {buildDir_ = b})
+
+buildEnv :: Lens Atoms FilePath
+buildEnv = lens buildEnv_ (\ b a -> a {buildEnv_ = b})
 
 -- | Map from cabal Extra-Lib names to debian binary package names.
 extraLibMap :: Lens Atoms (Map String Relations)

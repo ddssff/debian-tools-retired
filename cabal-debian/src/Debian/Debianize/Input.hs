@@ -5,8 +5,8 @@ module Debian.Debianize.Input
     ( inputDebianization
     , inputDebianizationFile
     , inputChangeLog
-    , inputCompiler
-    -- , inputCompiler'
+    , ghcVersion
+    , ghcVersion'
     , inputCabalization
     , inputCabalization'
     , inputMaintainer
@@ -16,6 +16,7 @@ module Debian.Debianize.Input
 import Debug.Trace (trace)
 
 import Control.Category ((.))
+import Control.DeepSeq (NFData, force)
 import Control.Exception (bracket)
 import Control.Monad (when, foldM, filterM)
 import Control.Monad.State (get, put)
@@ -26,7 +27,7 @@ import Data.Maybe (fromMaybe)
 import Data.Set as Set (Set, toList, fromList, insert, singleton)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
-import Data.Version (Version(..))
+import Data.Version (showVersion, Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(logWho), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import qualified Debian.Debianize.Types as T (maintainer)
@@ -37,38 +38,39 @@ import qualified Debian.Debianize.Types.SourceDebDescription as S
 import Debian.Debianize.Types.Atoms
     (newAtoms, control, warning, sourceFormat, watch, rulesHead, compat, packageDescription,
      license, licenseFile, copyright, changelog, installInit, postInst, postRm, preInst, preRm,
-     logrotateStanza, link, install, installDir, intermediateFiles, compilerVersion, cabalFlagAssignments, verbosity)
+     logrotateStanza, link, install, installDir, intermediateFiles, cabalFlagAssignments, verbosity)
 import Debian.Debianize.Monad (Atoms, DebT, execDebT)
 import Debian.Debianize.Prelude (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (~?=), (+=), (++=), (+++=))
-import Debian.Debianize.Types (Top(unTop))
+import Debian.Debianize.Types (Top(unTop), buildEnv)
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
+import Debian.Version (DebianVersion, parseDebianVersion)
+import Distribution.Compiler (CompilerId(CompilerId), CompilerFlavor(GHC))
 import Distribution.Package (Package(packageId), PackageIdentifier(..), PackageName(PackageName), Dependency)
 import qualified Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer, package, license, copyright {-, synopsis, description-}))
 import Distribution.PackageDescription as Cabal (PackageDescription, FlagName)
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.PackageDescription.Parse (readPackageDescription)
-import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), Compiler(..))
-import Distribution.Simple.Configure (configCompiler)
-import Distribution.Simple.Program (defaultProgramConfiguration)
 import Distribution.Simple.Utils (defaultPackageDesc, die, setupMessage)
 import Distribution.System (Platform(..), buildOS, buildArch)
 import Distribution.Verbosity (Verbosity)
 import Prelude hiding (readFile, lines, words, break, null, log, sum, (.))
-import System.Cmd (system)
-import System.Directory (doesFileExist)
+import qualified Prelude (lines)
+import System.Directory (doesFileExist, doesDirectoryExist)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeExtension, dropExtension)
 import System.Posix.Files (setFileCreationMask)
+import System.Process (readProcess, system)
 import System.IO.Error (catchIOError, tryIOError)
+import System.Unix.Chroot (useEnv)
 -- import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
-inputDebianization :: Top -> CompilerId -> DebT IO ()
-inputDebianization top cid =
+inputDebianization :: Top -> DebT IO ()
+inputDebianization top =
     do -- Erase any the existing information
-       put $ newAtoms cid
+       put newAtoms
        (ctl, _) <- inputSourceDebDescription top
        inputAtomsFromDirectory top
        control ~= ctl
@@ -268,10 +270,10 @@ readDir p line = installDir +++= (p, singleton (unpack line))
 inputCabalization :: MonadIO m => Top -> DebT m ()
 inputCabalization top =
     do vb <- access verbosity >>= return . intToVerbosity'
-       comp <- inputCompiler top
-       compilerVersion ~= Just comp
        flags <- access cabalFlagAssignments
-       ePkgDesc <- liftIO $ inputCabalization' top vb comp flags
+       root <- access buildEnv
+       mcid <- liftIO (ghcVersion' root)
+       ePkgDesc <- liftIO $ inputCabalization' top vb flags (fromMaybe (error $ "inputCabalization - invalid buildEnv: " ++ show root) mcid)
        either (\ deps -> error $ "Missing dependencies in cabal package at " ++ show (unTop top) ++ ": " ++ show deps)
               (\ pkgDesc -> do
                  packageDescription ~= Just pkgDesc
@@ -288,12 +290,12 @@ inputCabalization top =
                                   s -> Just (pack s)))
               ePkgDesc
 
-inputCabalization' :: Top -> Verbosity -> CompilerId -> Set (FlagName, Bool) -> IO (Either [Dependency] PackageDescription)
-inputCabalization' top vb compId flags =
+inputCabalization' :: Top -> Verbosity -> Set (FlagName, Bool) -> CompilerId -> IO (Either [Dependency] PackageDescription)
+inputCabalization' top vb flags cid =
     withCurrentDirectory (unTop top) $ do
          descPath <- defaultPackageDesc vb
          genPkgDesc <- readPackageDescription vb descPath
-         case finalizePackageDescription (toList flags) (const True) (Platform buildArch buildOS) compId [] genPkgDesc of
+         case finalizePackageDescription (toList flags) (const True) (Platform buildArch buildOS) cid [] genPkgDesc of
            Left deps -> return (Left deps)
            Right (pkgDesc, _) ->
                do bracket (setFileCreationMask 0o022) setFileCreationMask $ \ _ -> autoreconf vb pkgDesc
@@ -312,20 +314,32 @@ autoreconf verbose pkgDesc = do
               ExitSuccess -> return ()
               ExitFailure n -> die ("autoreconf failed with status " ++ show n)
 
-inputCompiler :: MonadIO m => Top -> DebT m CompilerId
-inputCompiler top =
-    do vb <- access verbosity >>= return . intToVerbosity'
-       mCompilerVersion <- access compilerVersion
-       liftIO $ inputCompiler' top vb mCompilerVersion
+-- | Use apt-cache to find the version number of the newest in a build environment.
+ghcVersion :: MonadIO m => FilePath -> m (Maybe DebianVersion)
+ghcVersion root = do
+  exists <- liftIO $ doesDirectoryExist root
+  when (not exists) (error $ "ghcVersion: no such environment: " ++ show root)
+  versions <- liftIO $ chroot root $ readProcess "apt-cache" ["showpkg", "ghc"] "" >>=
+                                     return . dropWhile (/= "Versions: ") . Prelude.lines
+  case versions of
+    (_ : versionLine : _) -> return . Just . parseDebianVersion . takeWhile (/= ' ') $ versionLine
+    _ -> return Nothing
 
--- | Read the compiler version specified by Cabal, optionally
--- changing the version number.
-inputCompiler' :: Top -> Verbosity -> Maybe CompilerId -> IO CompilerId
-inputCompiler' top vb mCompilerVersion =
-    withCurrentDirectory (unTop top) $ do
-      return $ case mCompilerVersion of
-                         Nothing -> error $ "Compiler version unknown, use --ghc-version flag"
-                         Just c -> c
+chroot :: NFData a => FilePath -> IO a -> IO a
+chroot "/" task = task
+chroot root task = useEnv root (return . force) task
+
+-- | Return a Data.Version.Version with the major and minor digits of the compiler version.
+ghcVersion' :: MonadIO m => FilePath -> m (Maybe CompilerId)
+ghcVersion' root = do
+  ghcVersion root >>= return . maybe Nothing (Just . cabVersion)
+    where
+      cabVersion :: DebianVersion -> CompilerId
+      cabVersion debVersion =
+          let (Version ds ts) = greatestLowerBound debVersion (map (\ d -> Version [d] []) [0..]) in
+          CompilerId GHC (greatestLowerBound debVersion (map (\ d -> Version (ds ++ [d]) ts) [0..]))
+      greatestLowerBound :: DebianVersion -> [Version] -> Version
+      greatestLowerBound b xs = last $ takeWhile (\ v -> parseDebianVersion (showVersion v) < b) xs
 
 -- | Try to compute a string for the the debian "Maintainer:" field using, in this order
 --    1. the maintainer explicitly specified using "Debian.Debianize.Monad.maintainer"

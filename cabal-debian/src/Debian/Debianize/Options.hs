@@ -11,11 +11,10 @@ import Control.Monad.State (lift)
 import Data.Char (toLower, isDigit, ord)
 import Data.Lens.Lazy (Lens)
 import Data.Set (singleton)
-import Data.Version (parseVersion)
 import Debian.Debianize.Goodies (doExecutable)
 import Debian.Debianize.Types
-    (verbosity, dryRun, debAction, compilerVersion, noDocumentationLibrary, noProfilingLibrary,
-     missingDependencies, sourcePackageName, cabalFlagAssignments, maintainer, buildDir, omitLTDeps,
+    (verbosity, dryRun, debAction, noDocumentationLibrary, noProfilingLibrary,
+     missingDependencies, sourcePackageName, cabalFlagAssignments, maintainer, buildDir, buildEnv, omitLTDeps,
      sourceFormat, buildDepends, buildDependsIndep, extraDevDeps, depends, conflicts, replaces, provides,
      extraLibMap, debVersion, revision, epochMap, execMap)
 import Debian.Debianize.Monad (DebT)
@@ -26,7 +25,6 @@ import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relations, Relation(..))
 import Debian.Relation.String (parseRelations)
 import Debian.Version (parseDebianVersion)
-import Distribution.Compiler
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
 import Prelude hiding (readFile, lines, null, log, sum)
@@ -35,7 +33,6 @@ import System.Environment (getArgs, getEnv)
 import System.FilePath ((</>), splitFileName)
 import System.IO.Error (tryIOError)
 import System.Posix.Env (setEnv)
-import Text.ParserCombinators.ReadP (readP_to_S)
 import Text.Regex.TDFA ((=~))
 
 compileArgs :: [String] -> DebT IO ()
@@ -76,13 +73,6 @@ options =
       Option "" ["executable"] (ReqArg (\ path -> executableOption path (\ bin e -> doExecutable bin e)) "SOURCEPATH or SOURCEPATH:DESTDIR")
              (unlines [ "Create an individual binary package to hold this executable.  Other executables "
                       , " and data files are gathered into a single utils package named 'haskell-packagename-utils'."]),
-      Option "" ["ghc-version"] (ReqArg (\ ver -> compilerVersion ~= Just (CompilerId GHC (last (map fst (readP_to_S parseVersion ver))))) "VERSION")
-             (unlines [ "Version of GHC in build environment.  Without this option it is assumed that"
-                      , "the version of GHC in the build environment is the same as the one in the"
-                      , "environment in which cabal-debian is running. (the usual case.)  The GHC"
-                      , "version is used to determine which packages are bundled with GHC - if a"
-                      , "package is bundled with GHC it is not necessary to add a build dependency for"
-                      , "that package to the debian/control file."]),
       Option "" ["disable-haddock"] (NoArg (noDocumentationLibrary ~= singleton True))
              (unlines [ "Don't generate API documentation packages, usually named"
                       , "libghc-packagename-doc.  Use this if your build is crashing due to a"
@@ -168,6 +158,11 @@ options =
                       , "run by haskell-devscripts.  The build subdirectory is added to match the"
                       , "behavior of the --builddir option in the Setup script."]),
 
+      Option "" ["buildenv"] (ReqArg (\ s -> buildEnv ~= s) "PATH")
+             (unlines [ "Directory containing the build environment for which the debianization will"
+                      , "be generated.  This determines which compiler will be available, which in turn"
+                      , "determines which basic libraries can be provided by the compiler.  This can be"
+                      , "set to /, but it must be set."]),
       Option "f" ["flags"] (ReqArg (\ fs -> mapM_ (cabalFlagAssignments +=) (flagList fs)) "FLAGS")
              (unlines [ "Flags to pass to the finalizePackageDescription function in"
                       , "Distribution.PackageDescription.Configuration when loading the cabal file."]),

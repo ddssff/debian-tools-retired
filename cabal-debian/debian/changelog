@@ -1,3 +1,10 @@
+haskell-cabal-debian (4.2) unstable; urgency=low
+
+  * Get the GHC compiler version from the build environment, which
+    now needs to be explicitly set.
+
+ -- David Fox <dsf@seereason.com>  Fri, 07 Mar 2014 10:58:37 -0800
+
 haskell-cabal-debian (4.1.1) unstable; urgency=low
 
   * Remove build dependency on ansi-wl-pprint.

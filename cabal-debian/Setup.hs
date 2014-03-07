@@ -4,7 +4,7 @@ import Control.Monad (when)
 import Distribution.Simple
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
 import Distribution.Simple.Program
-import System.Cmd
+import System.Process
 import System.Directory
 import System.Exit
 

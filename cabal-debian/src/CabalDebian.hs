@@ -6,7 +6,7 @@
 -- be accessed using the command line interface.
 
 import Control.Monad.State (get, lift)
-import Data.Lens.Lazy (getL)
+import Data.Lens.Lazy (getL, access)
 import Data.List as List (unlines)
 import Debian.Debianize.Details (debianDefaultAtoms)
 import Debian.Debianize.Finalize (debianization)
@@ -15,7 +15,7 @@ import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs,
 import Debian.Debianize.Output (doDebianizeAction)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types (Top(Top))
-import Debian.Debianize.Types.Atoms (DebAction(Debianize, SubstVar, Usage), debAction, newAtoms)
+import Debian.Debianize.Types.Atoms (DebAction(Debianize, SubstVar, Usage), debAction, newAtoms, buildEnv)
 import Prelude hiding (unlines, writeFile, init)
 import System.Console.GetOpt (usageInfo)
 import System.Environment (getProgName)
@@ -32,8 +32,11 @@ cabalDebianMain init =
     -- This picks up the options required to decide what action we are
     -- taking.  Much of this will be repeated in the call to debianize.
     evalDebT (init >> compileEnvironmentArgs >> compileCommandlineArgs >>
-              get >>= return . getL debAction >>= finish) (newAtoms cid)
+              testBuildEnv >>
+              get >>= return . getL debAction >>= finish) newAtoms
     where
+      testBuildEnv = access buildEnv >>= \ root -> if root == "" then error ("Invalid build environment: " ++ show root) else return ()
+
       finish (SubstVar debType) = substvars top debType
       finish Debianize = debianization top (return ()) (return ()) >> doDebianizeAction top
       finish Usage = do
@@ -50,4 +53,3 @@ cabalDebianMain init =
                              , "using a revision control system to revert the package to a known state before running."
                              , "The following additional options are available:" ]
           lift $ putStrLn (usageInfo info options)
-      cid = error "Compiler version not set - use --ghc-version"

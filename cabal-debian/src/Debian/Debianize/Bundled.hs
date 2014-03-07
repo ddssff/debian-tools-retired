@@ -6,14 +6,16 @@ module Debian.Debianize.Bundled
     ( ghcBuiltIn
     ) where
 
-import qualified Data.Map as Map
-import Data.Set (fromList, member)
+import Control.Monad.Trans (MonadIO)
+import Data.Function (on)
+import Data.List (sortBy)
 import Data.Version (Version(..))
+import Debian.Debianize.Input (ghcVersion')
 import Debian.Relation.ByteString()
 import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), {-PackageDB(GlobalPackageDB), compilerFlavor-})
 import Distribution.Package (PackageIdentifier(..), PackageName(..) {-, Dependency(..)-})
 
-type Bundled = (CompilerFlavor, Version, [PackageIdentifier])
+type Bundled = (Version, [PackageIdentifier])
 
 -- |Return a list of built in packages for the compiler in an environment.
 -- ghcBuiltIns :: FilePath -> IO [PackageIdentifier]
@@ -28,39 +30,46 @@ type Bundled = (CompilerFlavor, Version, [PackageIdentifier])
 
 ghcBuiltIns :: CompilerId -> Bundled
 ghcBuiltIns (CompilerId GHC compilerVersion) =
-    case Map.lookup compilerVersion
-             (Map.fromList (map (\ (cmp, ver, lst) -> (ver, (cmp, ver, lst)))
-                            [ (GHC, Version [7,8,20140228] [], ghc781BuiltIns)
-                            , (GHC, Version [7,8,20140130] [], ghc781BuiltIns)
-                            , (GHC, Version [7,8,1] [], ghc781BuiltIns)
-                            , (GHC, Version [7,6,3] [], ghc763BuiltIns)
-                            , (GHC, Version [7,6,2] [], ghc762BuiltIns)
-                            , (GHC, Version [7,6,1] [], ghc761BuiltIns)
-                            , (GHC, Version [7,6,1,20121207] [], ghc761BuiltIns)
-                            , (GHC, Version [7,4,1] [], ghc741BuiltIns)
-                            , (GHC, Version [7,4,0,20111219] [], ghc740BuiltIns)
-                            , (GHC, Version [7,4,0,20120108] [], ghc740BuiltIns)
-                            , (GHC, Version [7,2,2] [], ghc721BuiltIns)
-                            , (GHC, Version [7,2,1] [], ghc721BuiltIns)
-                            , (GHC, Version [7,0,4] [], ghc701BuiltIns)
-                            , (GHC, Version [7,0,3] [], ghc701BuiltIns)
-                            , (GHC, Version [7,0,1] [], ghc701BuiltIns)
-                            , (GHC, Version [6,8,3] [], ghc683BuiltIns)
-                            , (GHC, Version [6,8,2] [], ghc682BuiltIns)
-                            , (GHC, Version [6,8,1] [], ghc681BuiltIns)
-                            , (GHC, Version [6,6,1] [], ghc661BuiltIns)
-                            , (GHC, Version [6,6] [], ghc66BuiltIns) ])) of
-      Nothing -> error $ "cabal-debian: No bundled package list for ghc " ++ show compilerVersion
-      Just x -> x
+    case dropWhile (\ pr -> (fst pr < compilerVersion)) pairs of
+      [] -> error $ "cabal-debian: No bundled package list for ghc " ++ show compilerVersion
+      x : _ -> x
 ghcBuiltIns _ = error "ghcBuiltIns: Only GHC is supported"
 
-ghcBuiltIn :: CompilerId -> PackageName -> Maybe Version
-ghcBuiltIn compiler package =
-    let packageIds = filter (\ p -> pkgName p == package) (let (_, _, xs) = ghcBuiltIns compiler in xs) in
-    case packageIds of
-      [] -> Nothing
-      [p] -> Just (pkgVersion p)
-      ps -> error $ "Multiple versions of " ++ show package ++ " built into " ++ show compiler ++ ": " ++ show ps
+pairs :: [Bundled]
+pairs = sortBy
+          (compare `on` fst)
+          ([ (Version [7,8,20140228] [], ghc781BuiltIns)
+           , (Version [7,8,20140130] [], ghc781BuiltIns)
+           , (Version [7,8,1] [], ghc781BuiltIns)
+
+           , (Version [7,6,3] [], ghc763BuiltIns)
+           , (Version [7,6,2] [], ghc762BuiltIns)
+           , (Version [7,6,1] [], ghc761BuiltIns)
+           , (Version [7,6,1,20121207] [], ghc761BuiltIns)
+
+           , (Version [7,4,1] [], ghc741BuiltIns)
+           , (Version [7,4,0,20111219] [], ghc740BuiltIns)
+           , (Version [7,4,0,20120108] [], ghc740BuiltIns)
+           , (Version [7,2,2] [], ghc721BuiltIns)
+           , (Version [7,2,1] [], ghc721BuiltIns)
+           , (Version [7,0,4] [], ghc701BuiltIns)
+           , (Version [7,0,3] [], ghc701BuiltIns)
+           , (Version [7,0,1] [], ghc701BuiltIns)
+           , (Version [6,8,3] [], ghc683BuiltIns)
+           , (Version [6,8,2] [], ghc682BuiltIns)
+           , (Version [6,8,1] [], ghc681BuiltIns)
+           , (Version [6,6,1] [], ghc661BuiltIns)
+           , (Version [6,6] [], ghc66BuiltIns) ])
+
+ghcBuiltIn :: MonadIO m => FilePath -> PackageName -> m (Maybe Version)
+ghcBuiltIn root package = do
+  compiler <- ghcVersion' root >>= maybe (error $ "No GHC available in environment at " ++ show root) return
+  let (_, xs) = ghcBuiltIns compiler
+      packageIds = filter (\ p -> pkgName p == package) xs
+  case packageIds of
+    [] -> return Nothing
+    [p] -> return $ Just (pkgVersion p)
+    ps -> error $ "Multiple versions of " ++ show package ++ " built into " ++ show compiler ++ ": " ++ show ps
 
 v :: String -> [Int] -> PackageIdentifier
 v n x = PackageIdentifier (PackageName n) (Version x [])

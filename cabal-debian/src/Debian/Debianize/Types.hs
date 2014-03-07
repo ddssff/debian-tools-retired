@@ -39,11 +39,12 @@ module Debian.Debianize.Types
     , noDocumentationLibrary
     , utilsPackageNames
     , buildDir
+    , buildEnv
     , watch
 
     -- * Source Package Build Dependencies
     , omitLTDeps
-    , compilerVersion
+    -- , compilerVersion
 
     -- * Binary Package Info
     , binaryArchitectures

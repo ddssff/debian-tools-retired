@@ -21,7 +21,7 @@ import Data.Maybe (catMaybes, listToMaybe, fromMaybe)
 import qualified Data.Set as Set (member, Set)
 import Data.Text (pack)
 import Debian.Control (Control'(unControl), ControlFunctions(lookupP, parseControl, stripWS), Field'(Field))
-import Debian.Debianize.Input (inputCompiler, inputCabalization)
+import Debian.Debianize.Input (inputCabalization)
 import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.Prelude ((!), buildDebVersionMap, cond, DebMap, debOfFile, diffFile, dpkgFileMap, replaceFile, showDeps, modifyM)
 import Debian.Debianize.Types (Top)
@@ -30,9 +30,9 @@ import Debian.Orphans ()
 import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName(BinPkgName), Relation, Relations)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), ParseRelations(parseRelations), Relation(Rel), Relations, VersionReq(GRE))
+import Distribution.Compiler (buildCompilerId)
 import Distribution.Package (Dependency(..), PackageName(PackageName))
 import Distribution.PackageDescription as Cabal (allBuildInfo, buildTools, extraLibs, PackageDescription(..), pkgconfigDepends)
-import Distribution.Simple.Compiler (CompilerId(CompilerId))
 import Distribution.Simple.Utils (die)
 import Distribution.Text (display)
 import Prelude hiding (unlines)
@@ -55,8 +55,7 @@ substvars :: Top
 substvars top debType =
     do inputCabalization top
        debVersions <- lift buildDebVersionMap
-       comp <- inputCompiler top
-       modifyM (lift . libPaths comp debVersions)
+       modifyM (lift . libPaths debVersions)
        control <- lift $ readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
        substvars' debType control
 
@@ -116,17 +115,17 @@ substvars' debType control =
       bd = maybe "" (\ (Field (_a, b)) -> stripWS b) . lookupP "Build-Depends" . head . unControl $ control
       bdi = maybe "" (\ (Field (_a, b)) -> stripWS b) . lookupP "Build-Depends-Indep" . head . unControl $ control
 
-libPaths :: CompilerId -> DebMap -> T.Atoms -> IO T.Atoms
-libPaths compiler@(CompilerId comp _) debVersions atoms =
+libPaths :: DebMap -> T.Atoms -> IO T.Atoms
+libPaths debVersions atoms =
     do a <- getDirPaths "/usr/lib"
-       b <- getDirPaths ("/usr/lib/haskell-packages" </> display comp </> "lib")
+       b <- getDirPaths ("/usr/lib/haskell-packages" </> display buildCompilerId </> "lib")
        -- Build a map from names of installed debs to version numbers
-       dpkgFileMap >>= runReaderT (foldM (packageInfo' compiler debVersions) atoms (a ++ b))
+       dpkgFileMap >>= runReaderT (foldM (packageInfo' debVersions) atoms (a ++ b))
     where
       getDirPaths path = try (getDirectoryContents path) >>= return . map (\ x -> (path, x)) . either (\ (_ :: SomeException) -> []) id
 
-packageInfo' :: CompilerId ->  DebMap -> T.Atoms -> (FilePath, String) -> ReaderT (Map.Map FilePath (Set.Set D.BinPkgName)) IO T.Atoms
-packageInfo' compiler debVersions atoms (d, f) =
+packageInfo' :: DebMap -> T.Atoms -> (FilePath, String) -> ReaderT (Map.Map FilePath (Set.Set D.BinPkgName)) IO T.Atoms
+packageInfo' debVersions atoms (d, f) =
     case parseNameVersion f of
       Nothing -> return atoms
       Just (p, v) -> lift (doesDirectoryExist (d </> f </> cdir)) >>= cond (return atoms) (info (p, v))
@@ -135,7 +134,7 @@ packageInfo' compiler debVersions atoms (d, f) =
           case (break (== '-') (reverse s)) of
             (_a, "") -> Nothing
             (a, b) -> Just (reverse (tail b), reverse a)
-      cdir = display compiler
+      cdir = display buildCompilerId
       info (p, v) =
           do dev <- debOfFile ("^" ++ d </> p ++ "-" ++ v </> cdir </> "libHS" ++ p ++ "-" ++ v ++ ".a$")
              prof <- debOfFile ("^" ++ d </> p ++ "-" ++ v </> cdir </> "libHS" ++ p ++ "-" ++ v ++ "_p.a$")
