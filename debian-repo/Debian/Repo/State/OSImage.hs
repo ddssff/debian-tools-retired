@@ -187,9 +187,12 @@ updateOS = do
   root <- (rootPath . getL osRoot) <$> get
   liftIO $ createDirectoryIfMissing True (root </> "etc")
   liftIO $ readFile "/etc/resolv.conf" >>= writeFile (root </> "etc/resolv.conf")
-  verifySources
   liftIO $ prepareDevs root
   syncLocalPool
+  verifySources
+  -- Disable the starting of services in the changeroot
+  _ <- liftIO $ useEnv root (return . force) $ readProcessWithExitCode "dpkg-divert" ["--local", "--rename", "--add", "/sbin/initctl"] ""
+  _ <- liftIO $ useEnv root (return . force) $ readProcessWithExitCode "ln" ["-s", "/bin/true", "/sbin/initctl"] ""
   _elapsed <- updateLists
   code <- liftIO $ sshCopy root
   case code of
