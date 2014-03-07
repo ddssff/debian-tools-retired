@@ -269,7 +269,7 @@ instance SourceTreeC DebianBuildTree where
     copySourceTree build dest =
         copySource >>= copyTarball >>= return . moveBuild
         where
-          copySource = rsync [] (topdir' build) dest
+          copySource = createDirectoryIfMissing True dest >> rsync [] (topdir' build) dest
           -- copySource = DebianBuildTree <$> pure dest <*> pure (subdir' tree) <*> copySourceTree (debTree' tree) (dest </> subdir' tree)
           copyTarball (ExitFailure _) = error $ "Failed to copy source tree: " ++ topdir' build ++ " -> " ++ dest
           copyTarball ExitSuccess =
