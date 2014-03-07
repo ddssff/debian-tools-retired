@@ -31,7 +31,7 @@ import Debian.Debianize.Monad as Monad (DebT)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
 import Debian.Debianize.Prelude ((%=), (+++=), (+=), foldEmpty, fromEmpty, fromSingleton, (~=), (~?=))
 import Debian.Debianize.Types (Top)
-import qualified Debian.Debianize.Types as T (apacheSite, backups, binaryArchitectures, binaryPackages, binarySection, breaks, buildDepends, buildDependsIndep, buildDir, builtUsing, changelog, comments, compat, conflicts, debianDescription, debVersion, depends, epochMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installDir, installTo, intermediateFiles, license, link, maintainer, noDocumentationLibrary, noProfilingLibrary, packageDescription, packageType, preDepends, provides, recommends, replaces, revision, rulesFragments, serverInfo, source, sourcePackageName, sourcePriority, sourceSection, suggests, utilsPackageNames, verbosity, watch, website)
+import qualified Debian.Debianize.Types as T (apacheSite, backups, binaryArchitectures, binaryPackages, binarySection, breaks, buildDepends, buildDependsIndep, buildDir, builtUsing, changelog, comments, compat, conflicts, debianDescription, debVersion, depends, epochMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installDir, installTo, intermediateFiles, license, link, maintainer, noDocumentationLibrary, noProfilingLibrary, packageDescription, packageType, preDepends, provides, recommends, replaces, revision, rulesFragments, serverInfo, source, sourcePackageName, sourcePriority, sourceSection, suggests, utilsPackageNames, verbosity, watch, website, buildEnv)
 import qualified Debian.Debianize.Types.Atoms as A (InstallFile(execName, sourceDir), showAtoms)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (BinaryDebDescription, package, PackageType(Development, Documentation, Exec, Profiling, Source', Utilities))
 import Debian.Orphans ()
@@ -56,12 +56,12 @@ import System.FilePath ((<.>), (</>), makeRelative, splitFileName, takeDirectory
 -- computed from the cabal package description.)
 debianization :: Top -> DebT IO () -> DebT IO () -> DebT IO ()
 debianization top init customize =
-    do inputCabalization top
+    do compileEnvironmentArgs
+       compileCommandlineArgs
+       inputCabalization top
        inputChangeLog top
        inputMaintainer
        init
-       compileEnvironmentArgs
-       compileCommandlineArgs
        customize
        finalizeDebianization'
 

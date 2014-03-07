@@ -7,13 +7,17 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Monad (when)
 import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadCatch, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
+import Data.Lens.Lazy (setL)
 import Data.List (isSuffixOf)
 import Data.Maybe (fromMaybe)
 import Data.Version (parseVersion)
+import Debian.AutoBuilder.BuildEnv (cleanEnv)
+import Debian.AutoBuilder.Params (computeTopDir)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -21,9 +25,10 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Pretty (pretty)
 import Debian.Relation ()
+import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.State (MonadRepos)
-import Debian.Repo.Top (MonadTop, sub)
+import Debian.Repo.Top (MonadTop, sub, runTopT)
 import Distribution.Verbosity (normal)
 import Distribution.Compiler
 import Distribution.Package (PackageIdentifier(..))
@@ -84,23 +89,22 @@ autobuilderDebianize cache pflags currentDirectory =
 collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> IO [String]
 collectPackageFlags cache pflags =
     do v <- verbosity
-       return $ maybe [] (\ x -> ["--ghc-version", x]) ver ++
-                ["--verbose=" ++ show v] ++
+       return $ ["--verbose=" ++ show v] ++
                 concatMap asCabalFlags pflags
-    where
-      ver = P.ghcVersion (P.params cache)
 
 autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> DebT IO () -> IO ()
 autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
-    do -- This will be false if the package has no debian/Debianize.hs script
-       done <- collectPackageFlags cache pflags >>= runDebianizeScript
-       let ver = fromMaybe (error "autobuilderCabal: no ghc version specified, use --ghc-version") (P.ghcVersion (P.params cache))
-           ver' = head (filter (null . snd) (readP_to_S parseVersion ver))
-           atoms = newAtoms (CompilerId GHC (fst ver'))
+    do let rel = P.buildRelease $ P.params cache
+       top <- computeTopDir (P.params cache)
+       env <- runTopT top $ rootPath <$> (cleanEnv rel)
+       args <- collectPackageFlags cache pflags
+       let args' = ("--buildenv": env : args)
+       -- This will be false if the package has no debian/Debianize.hs script
+       done <- runDebianizeScript args'
        when (not done) (withArgs [] (Cabal.evalDebT (debianization (Top ".") defaultAtoms (applyPackageFlags pflags) >>
                                                      writeDebianization (Top "."))
-                                                    atoms))
+                                                    (setL buildEnv env newAtoms)))
 
 applyPackageFlags :: [P.PackageFlag] -> DebT IO ()
 applyPackageFlags flags = mapM_ applyPackageFlag flags

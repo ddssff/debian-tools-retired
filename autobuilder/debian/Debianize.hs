@@ -1,7 +1,7 @@
 import Debian.Changes (ChangeLog)
 import Debian.Debianize (DebT, evalDebT, debianization, writeDebianization, newAtoms, inputChangeLog,
                          seereasonDefaultAtoms, changelog, license, copyright, depends, doExecutable,
-                         sourceFormat, sourcePackageName, (~=), (%=),
+                         sourceFormat, sourcePackageName, (~=), (%=), buildEnv,
                          InstallFile(InstallFile, destDir, destName, execName, sourceDir), Top(Top))
 import Debian.Policy (SourceFormat(Native3))
 import Debian.Relation (BinPkgName(BinPkgName), Relation(Rel), SrcPkgName(SrcPkgName), VersionReq(EEQ))

@@ -3,6 +3,7 @@
 module Debian.AutoBuilder.BuildEnv
     ( prepareDependOS
     , prepareBuildOS
+    , cleanEnv
     ) where
 
 import Control.Applicative (Applicative, (<$>), (<*>))
