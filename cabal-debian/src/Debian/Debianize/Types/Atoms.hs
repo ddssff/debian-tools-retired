@@ -210,7 +210,7 @@ newAtoms
       , noProfilingLibrary_ = mempty
       , omitLTDeps_ = mempty
       , buildDir_ = mempty
-      , buildEnv_ = ""
+      , buildEnv_ = "/"
       , flags_ = defaultFlags
       , debianNameMap_ = mempty
       , control_ = S.newSourceDebDescription

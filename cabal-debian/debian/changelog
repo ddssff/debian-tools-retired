@@ -1,3 +1,11 @@
+haskell-cabal-debian (4.3) unstable; urgency=low
+
+  * Make the default value for buildEnv "/", this makes it normally look
+    at the version number of the ghc compiler installed in the root
+    environment.
+
+ -- David Fox <dsf@seereason.com>  Mon, 24 Mar 2014 06:01:49 -0700
+
 haskell-cabal-debian (4.2) unstable; urgency=low
 
   * Get the GHC compiler version from the build environment, which
