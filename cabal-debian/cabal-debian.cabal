@@ -140,10 +140,10 @@ Flag tests
   Default: False
   Manual: True
 
-flag local-debian
-  Description: Link directly to the source of the debian library
-  Default: False
-  Manual: True
+-- flag local-debian
+--   Description: Link directly to the source of the debian library
+--   Default: False
+--   Manual: True
 
 Source-Repository head
   type: darcs
@@ -203,11 +203,11 @@ Library
    Debian.Debianize.VersionSplits
  Other-Modules:
    Debian.Orphans
- if flag(local-debian)
-   Hs-Source-Dirs: ., ../../haskell-debian
-   Build-Depends: regex-compat, bytestring, process-listlike, network, old-locale, time
- else
-   Build-depends: debian >= 3.81
+--  if flag(local-debian)
+--    Hs-Source-Dirs: ., ../../haskell-debian
+--    Build-Depends: regex-compat, bytestring, process-listlike, network, old-locale, time
+--  else
+ Build-depends: debian >= 3.81
 
 Executable cabal-debian
  Hs-Source-Dirs: src
@@ -236,11 +236,11 @@ Executable cabal-debian
    unix,
    Unixutils,
    utf8-string
- if flag(local-debian)
-   Hs-Source-Dirs: ., ../../haskell-debian
-   Build-Depends: regex-compat, bytestring, process-listlike, network, old-locale, time
- else
-   Build-Depends: debian >= 3.81
+--  if flag(local-debian)
+--    Hs-Source-Dirs: ., ../../haskell-debian
+--    Build-Depends: regex-compat, bytestring, process-listlike, network, old-locale, time
+--  else
+ Build-Depends: debian >= 3.81
 
 Executable cabal-debian-tests
  Hs-Source-Dirs: src
@@ -270,8 +270,8 @@ Executable cabal-debian-tests
    unix,
    Unixutils,
    utf8-string
- if flag(local-debian)
-   Hs-Source-Dirs: ., ../../haskell-debian
-   Build-Depends: regex-compat, bytestring, process-listlike, network, old-locale, time
- else
-   Build-depends: debian >= 3.81
+--  if flag(local-debian)
+--    Hs-Source-Dirs: ., ../../haskell-debian
+--    Build-Depends: regex-compat, bytestring, process-listlike, network, old-locale, time
+--  else
+ Build-depends: debian >= 3.81
