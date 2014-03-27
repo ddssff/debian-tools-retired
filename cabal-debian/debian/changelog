@@ -1,3 +1,10 @@
+haskell-cabal-debian (4.3.1) unstable; urgency=low
+
+  * Safer default value for buildEnv - "/" instead of "".  This is
+    where we look for the GHC version number.
+
+ -- David Fox <dsf@seereason.com>  Thu, 27 Mar 2014 06:12:28 -0700
+
 haskell-cabal-debian (4.3) unstable; urgency=low
 
   * Make the default value for buildEnv "/", this makes it normally look
