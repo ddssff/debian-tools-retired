@@ -179,6 +179,9 @@ data PackageFlag
     -- appears in Extra-Libraries field of the cabal file) to the
     -- second argument (a debian binary package name) using the
     -- --map-dep flag of cabal-debian.
+    | SkipVersion String
+    -- ^ Do not build target until its debian version number is different
+    -- (presumably newer) than the one given here.
     | DebVersion String
     -- ^ The exact debian version number to insert into the changelog.
     -- An exception will be thrown if the version in the retrieved

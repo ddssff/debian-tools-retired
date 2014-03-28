@@ -13,7 +13,7 @@ module Debian.AutoBuilder.Types.Fingerprint
 import Control.Applicative.Error (maybeRead)
 import Data.List (intercalate, intersperse, find, partition, nub)
 import qualified Data.Map as Map
-import Data.Maybe(fromJust, isJust, isNothing)
+import Data.Maybe(fromJust, isJust, isNothing, mapMaybe)
 import qualified Data.Set as Set
 import Data.Text (unpack)
 import Debian.AutoBuilder.Types.Buildable (Target(tgt, cleanSource), Buildable(download), targetRelaxed, targetControl, relaxDepends)
@@ -143,6 +143,12 @@ buildDecision :: P.CacheRec
                                         -- are available, or none, or only the architecture independent.
               -> BuildDecision
 buildDecision cache target _ _ _ | elem (T.handle (download (tgt target))) (P.forceBuild (P.params cache)) = Yes "--force-build option is set"
+buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
+    | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe skipVersion . P.flags . T.package . download . tgt $ target) =
+        No ("SkipVersion specified for " ++ show (prettyDebianVersion sourceVersion))
+    where
+      skipVersion (P.SkipVersion s) = Just s
+      skipVersion _ = Nothing
 buildDecision _ _ NoFingerprint (Fingerprint _ (Just sourceVersion) _ _) _ =
     Yes ("Initial build of version " ++ show (prettyDebianVersion sourceVersion))
 buildDecision _ _ (Fingerprint oldMethod _ _ _) (Fingerprint newMethod _ _ _) _

@@ -1,3 +1,12 @@
+autobuilder (6.62) unstable; urgency=low
+
+  * Add SkipVersion to the PackageFlag type in
+    Debian.AutoBuilder.Types.Packages.  This is clearer than commenting
+    targets out and allows us to wait for a newer version of a package
+    and build it automatically when it arrives.
+
+ -- David Fox <dsf@seereason.com>  Fri, 28 Mar 2014 05:18:21 -0700
+
 autobuilder (6.61) unstable; urgency=low
 
   * Changes to send proper compiler version number to cabal-debian.
