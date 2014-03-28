@@ -125,7 +125,7 @@ Library
     Hs-Source-Dirs: ., ../cabal-debian/src
     Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff, set-extra
   else
-    Build-Depends: cabal-debian >= 4.0.2
+    Build-Depends: cabal-debian >= 4.3.2
 
 Executable autobuilder-tests
   Main-Is: Test/Test.hs
@@ -146,4 +146,4 @@ Executable autobuilder-tests
     Hs-Source-Dirs: ., ../cabal-debian/src
     Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff, set-extra
   else
-    Build-Depends: cabal-debian >= 4.0.2
+    Build-Depends: cabal-debian >= 4.3.2
