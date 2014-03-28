@@ -6,6 +6,7 @@ autobuilder (6.62) unstable; urgency=low
     and build it automatically when it arrives.
   * Add FailVersion, which is like SkipVersion but causes a package build
     failure, discarding the package and all the packages that depend on it.
+  * Add SkipPackage and FailPackage.
 
  -- David Fox <dsf@seereason.com>  Fri, 28 Mar 2014 05:18:21 -0700
 

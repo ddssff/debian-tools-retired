@@ -184,6 +184,10 @@ data PackageFlag
     -- (presumably newer) than the one given here.
     | FailVersion String
     -- ^ Like SkipVersion, but causes a package build failure when matched.
+    | SkipPackage
+    -- ^ SkipVersion for all versions
+    | FailPackage
+    -- ^ FailVersion for all versions
     | DebVersion String
     -- ^ The exact debian version number to insert into the changelog.
     -- An exception will be thrown if the version in the retrieved

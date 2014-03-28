@@ -155,6 +155,16 @@ buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
     where
       failVersion (P.FailVersion s) = Just s
       failVersion _ = Nothing
+buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
+    | any isSkipPackage (P.flags . T.package . download . tgt $ target) =
+        No ("SkipPackage specified")
+    where isSkipPackage P.SkipPackage = True
+          isSkipPackage _ = False
+buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
+    | any isFailPackage (P.flags . T.package . download . tgt $ target) =
+        Error ("FailPackage specified")
+    where isFailPackage P.FailPackage = True
+          isFailPackage _ = False
 buildDecision _ _ NoFingerprint (Fingerprint _ (Just sourceVersion) _ _) _ =
     Yes ("Initial build of version " ++ show (prettyDebianVersion sourceVersion))
 buildDecision _ _ (Fingerprint oldMethod _ _ _) (Fingerprint newMethod _ _ _) _
