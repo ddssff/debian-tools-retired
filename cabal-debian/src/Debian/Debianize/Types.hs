@@ -40,6 +40,7 @@ module Debian.Debianize.Types
     , utilsPackageNames
     , buildDir
     , buildEnv
+    , ghcVersion
     , watch
 
     -- * Source Package Build Dependencies

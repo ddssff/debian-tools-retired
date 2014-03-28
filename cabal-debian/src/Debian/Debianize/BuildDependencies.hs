@@ -6,7 +6,7 @@ module Debian.Debianize.BuildDependencies
     ) where
 
 import Control.Monad.State (MonadState(get))
-import Control.Monad.Trans (MonadIO, liftIO)
+import Control.Monad.Trans (MonadIO)
 import Data.Char (isSpace)
 import Data.Function (on)
 import Data.Lens.Lazy (access, getL)
@@ -18,9 +18,8 @@ import qualified Data.Set as Set (member)
 import Data.Version (showVersion, Version(Version))
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.DebianName (mkPkgName, mkPkgName')
-import Debian.Debianize.Input (ghcVersion')
 import Debian.Debianize.Monad as Monad (Atoms, DebT)
-import qualified Debian.Debianize.Types as T (buildDepends, buildDependsIndep, debianNameMap, epochMap, execMap, extraLibMap, missingDependencies, noDocumentationLibrary, noProfilingLibrary, buildEnv)
+import qualified Debian.Debianize.Types as T (buildDepends, buildDependsIndep, debianNameMap, epochMap, execMap, extraLibMap, missingDependencies, noDocumentationLibrary, noProfilingLibrary, ghcVersion)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (PackageType(Development, Documentation, Profiling))
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
@@ -202,10 +201,10 @@ dependencies typ name cabalRange =
                     Nothing -> [(mkPkgName name typ, cabalRange')]
                     -- If there are splits create a list of (debian package name, VersionRange) pairs
                     Just splits' -> List.map (\ (n, r) -> (mkPkgName' n typ, r)) (packageRangesFromVersionSplits splits')
-       mapM (convert name) alts >>= mapM (doBundled typ name) . convert' . canonical . Or . catMaybes
+       mapM convert alts >>= mapM (doBundled typ name) . convert' . canonical . Or . catMaybes
     where
-      convert :: Monad m => PackageName -> (BinPkgName, VersionRange) -> DebT m (Maybe (Rels Relation))
-      convert name (dname, range) =
+      convert :: Monad m => (BinPkgName, VersionRange) -> DebT m (Maybe (Rels Relation))
+      convert (dname, range) =
           case isNoVersion range''' of
             True -> return Nothing
             False ->
@@ -261,9 +260,10 @@ doBundled :: MonadIO m =>
           -> [D.Relation]
           -> DebT m [D.Relation]
 doBundled typ name rels =
-    do root <- access T.buildEnv
-       gver <- liftIO $ ghcVersion' root
-       pver <- ghcBuiltIn root name
+    do -- root <- access T.buildEnv
+       -- gver <- liftIO $ ghcVersion' root
+       gver <- access T.ghcVersion
+       pver <- ghcBuiltIn gver name
        -- Prefer the compiler to the library, if the compiler provides libghc-foo-dev
        -- generate "ghc | libghc-foo-dev" rather than "libghc-foo-dev | ghc".  It would be
        -- better to see if the version built into the compiler is newer than the uploaded
@@ -274,7 +274,7 @@ doBundled typ name rels =
                               _ -> False
        case pver of
          -- If preferCompiler is set generate "ghc | libghc-foo-dev" instead of "libghc-foo-dev | ghc"
-         Just v | preferCompiler -> return $ [D.Rel (compilerPackageName typ) Nothing Nothing] ++ rels
+         Just _ | preferCompiler -> return $ [D.Rel (compilerPackageName typ) Nothing Nothing] ++ rels
          Just _ -> return $ rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
          Nothing -> return rels
     where

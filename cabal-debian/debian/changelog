@@ -1,3 +1,11 @@
+haskell-cabal-debian (4.3.2) unstable; urgency=low
+
+  * Speed up debianization by computing the ghc version once when
+    we enter the DebT monad rather than repeatedly.  It is slow
+    because it needs to chroot.
+
+ -- David Fox <dsf@seereason.com>  Fri, 28 Mar 2014 13:03:57 -0700
+
 haskell-cabal-debian (4.3.1) unstable; urgency=low
 
   * Safer default value for buildEnv - "/" instead of "".  This is

@@ -9,8 +9,8 @@ module Debian.Debianize.Bundled
 import Control.Monad.Trans (MonadIO)
 import Data.Function (on)
 import Data.List (sortBy)
+import Data.Maybe (fromMaybe)
 import Data.Version (Version(..))
-import Debian.Debianize.Input (ghcVersion')
 import Debian.Relation.ByteString()
 import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), {-PackageDB(GlobalPackageDB), compilerFlavor-})
 import Distribution.Package (PackageIdentifier(..), PackageName(..) {-, Dependency(..)-})
@@ -61,9 +61,9 @@ pairs = sortBy
            , (Version [6,6,1] [], ghc661BuiltIns)
            , (Version [6,6] [], ghc66BuiltIns) ])
 
-ghcBuiltIn :: MonadIO m => FilePath -> PackageName -> m (Maybe Version)
-ghcBuiltIn root package = do
-  compiler <- ghcVersion' root >>= maybe (error $ "No GHC available in environment at " ++ show root) return
+ghcBuiltIn :: MonadIO m => Maybe CompilerId -> PackageName -> m (Maybe Version)
+ghcBuiltIn ghc package = do
+  let compiler = fromMaybe (error $ "No GHC available in environment") ghc
   let (_, xs) = ghcBuiltIns compiler
       packageIds = filter (\ p -> pkgName p == package) xs
   case packageIds of

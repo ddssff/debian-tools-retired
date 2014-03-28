@@ -30,6 +30,7 @@ import Debian.Version (DebianVersion)
 import Distribution.License (License)
 import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
+import Distribution.Simple.Compiler (CompilerId(..))
 import Prelude hiding (init, init, log, log, unlines, (.))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
@@ -201,6 +202,8 @@ data Atoms
       -- reason to use this is because we don't yet know the name of the dev library package.
       , packageDescription_ :: Maybe PackageDescription
       -- ^ The result of reading a cabal configuration file.
+      , ghcVersion_ :: Maybe CompilerId
+      -- ^ The version of ghc installed in the environment where we the package will be built
       } deriving (Eq, Show)
 
 newAtoms :: Atoms
@@ -264,6 +267,7 @@ newAtoms
       , backups_ = mempty
       , extraDevDeps_ = mempty
       , packageDescription_ = Nothing
+      , ghcVersion_ = Nothing
       }
 
 -- | This record supplies information about the task we want done -
@@ -380,6 +384,9 @@ buildDir = lens buildDir_ (\ b a -> a {buildDir_ = b})
 
 buildEnv :: Lens Atoms FilePath
 buildEnv = lens buildEnv_ (\ b a -> a {buildEnv_ = b})
+
+ghcVersion :: Lens Atoms (Maybe CompilerId)
+ghcVersion = lens ghcVersion_ (\ b a -> a {ghcVersion_ = b})
 
 -- | Map from cabal Extra-Lib names to debian binary package names.
 extraLibMap :: Lens Atoms (Map String Relations)
