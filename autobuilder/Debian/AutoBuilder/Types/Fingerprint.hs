@@ -149,6 +149,12 @@ buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
     where
       skipVersion (P.SkipVersion s) = Just s
       skipVersion _ = Nothing
+buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
+    | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe failVersion . P.flags . T.package . download . tgt $ target) =
+        Error ("FailVersion specified for " ++ show (prettyDebianVersion sourceVersion))
+    where
+      failVersion (P.FailVersion s) = Just s
+      failVersion _ = Nothing
 buildDecision _ _ NoFingerprint (Fingerprint _ (Just sourceVersion) _ _) _ =
     Yes ("Initial build of version " ++ show (prettyDebianVersion sourceVersion))
 buildDecision _ _ (Fingerprint oldMethod _ _ _) (Fingerprint newMethod _ _ _) _

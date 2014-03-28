@@ -182,6 +182,8 @@ data PackageFlag
     | SkipVersion String
     -- ^ Do not build target until its debian version number is different
     -- (presumably newer) than the one given here.
+    | FailVersion String
+    -- ^ Like SkipVersion, but causes a package build failure when matched.
     | DebVersion String
     -- ^ The exact debian version number to insert into the changelog.
     -- An exception will be thrown if the version in the retrieved
