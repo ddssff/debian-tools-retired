@@ -178,6 +178,7 @@ siteAtoms b site =
           T.installDir +++= (b, singleton (apacheLogDirectory b))
           T.logrotateStanza +++= (b, singleton
                                    (Text.unlines $ [ pack (apacheAccessLog b) <> " {"
+                                                   , "  copytruncate" -- hslogger doesn't notice when the log is rotated, maybe this will help
                                                    , "  weekly"
                                                    , "  rotate 5"
                                                    , "  compress"
@@ -185,6 +186,7 @@ siteAtoms b site =
                                                    , "}"]))
           T.logrotateStanza +++= (b, singleton
                                    (Text.unlines $ [ pack (apacheErrorLog b) <> " {"
+                                                   , "  copytruncate"
                                                    , "  weekly"
                                                    , "  rotate 5"
                                                    , "  compress"

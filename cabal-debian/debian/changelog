@@ -1,3 +1,11 @@
+haskell-cabal-debian (4.4) unstable; urgency=low
+
+  * Add the copytruncate directive to logrotate files we generate.
+    As things were, hslogger would continue writing to the deleted
+    log file after it was rotated.
+
+ -- David Fox <dsf@seereason.com>  Sun, 30 Mar 2014 13:05:48 -0700
+
 haskell-cabal-debian (4.3.2) unstable; urgency=low
 
   * Speed up debianization by computing the ghc version once when
