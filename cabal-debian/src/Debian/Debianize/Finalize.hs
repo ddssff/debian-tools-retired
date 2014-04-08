@@ -45,7 +45,7 @@ import Debian.Version (buildDebianVersion, DebianVersion, parseDebianVersion)
 import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
 import Distribution.PackageDescription (PackageDescription)
 import Distribution.PackageDescription as Cabal (allBuildInfo, BuildInfo(buildable, extraLibs), Executable(buildInfo, exeName))
-import qualified Distribution.PackageDescription as Cabal (PackageDescription(dataFiles, executables, library, license, package))
+import qualified Distribution.PackageDescription as Cabal (PackageDescription(dataDir, dataFiles, executables, library, license, package))
 import Prelude hiding (init, log, map, unlines, unlines, writeFile)
 import System.FilePath ((<.>), (</>), makeRelative, splitFileName, takeDirectory, takeFileName)
 
@@ -311,7 +311,8 @@ makeUtilsPackages pkgDesc =
        let installedData = Set.unions (Map.elems installedDataMap)
            installedExec = Set.unions (Map.elems installedExecMap)
 
-       let availableData = Set.union installedData (Set.fromList (Cabal.dataFiles pkgDesc)) :: Set FilePath
+       let prefixPath = Cabal.dataDir pkgDesc
+           availableData = Set.union installedData (Set.fromList (List.map (prefixPath </>) (Cabal.dataFiles pkgDesc))) :: Set FilePath
            availableExec = Set.union installedExec (Set.map Cabal.exeName (Set.filter (Cabal.buildable . Cabal.buildInfo) (Set.fromList (Cabal.executables pkgDesc)))) :: Set FilePath
 
        access T.utilsPackageNames >>= \ names ->
