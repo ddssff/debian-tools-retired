@@ -145,24 +145,24 @@ buildDecision :: P.CacheRec
 buildDecision cache target _ _ _ | elem (T.handle (download (tgt target))) (P.forceBuild (P.params cache)) = Yes "--force-build option is set"
 buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
     | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe skipVersion . P.flags . T.package . download . tgt $ target) =
-        No ("SkipVersion specified for " ++ show (prettyDebianVersion sourceVersion))
+        No ("Skipped version " ++ show (prettyDebianVersion sourceVersion))
     where
       skipVersion (P.SkipVersion s) = Just s
       skipVersion _ = Nothing
 buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
     | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe failVersion . P.flags . T.package . download . tgt $ target) =
-        Error ("FailVersion specified for " ++ show (prettyDebianVersion sourceVersion))
+        No ("Failed version " ++ show (prettyDebianVersion sourceVersion))
     where
       failVersion (P.FailVersion s) = Just s
       failVersion _ = Nothing
 buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
     | any isSkipPackage (P.flags . T.package . download . tgt $ target) =
-        No ("SkipPackage specified")
+        No "Skipped"
     where isSkipPackage P.SkipPackage = True
           isSkipPackage _ = False
 buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
     | any isFailPackage (P.flags . T.package . download . tgt $ target) =
-        Error ("FailPackage specified")
+        Fail "Failed"
     where isFailPackage P.FailPackage = True
           isFailPackage _ = False
 buildDecision _ _ NoFingerprint (Fingerprint _ (Just sourceVersion) _ _) _ =
