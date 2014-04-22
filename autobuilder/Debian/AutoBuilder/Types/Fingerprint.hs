@@ -162,7 +162,7 @@ buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
           isSkipPackage _ = False
 buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
     | any isFailPackage (P.flags . T.package . download . tgt $ target) =
-        Fail "Failed"
+        Error "FailPackage specified"
     where isFailPackage P.FailPackage = True
           isFailPackage _ = False
 buildDecision _ _ NoFingerprint (Fingerprint _ (Just sourceVersion) _ _) _ =
