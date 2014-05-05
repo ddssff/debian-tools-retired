@@ -13,10 +13,9 @@ import Data.Char (toLower, isDigit, ord)
 import Data.Lens.Lazy (Lens, access)
 import Data.Set (singleton)
 import Debian.Debianize.Goodies (doExecutable)
-import Debian.Debianize.Input (ghcVersion')
 import Debian.Debianize.Types
     (verbosity, dryRun, debAction, noDocumentationLibrary, noProfilingLibrary,
-     missingDependencies, sourcePackageName, cabalFlagAssignments, maintainer, buildDir, buildEnv, ghcVersion, omitLTDeps,
+     missingDependencies, sourcePackageName, cabalFlagAssignments, maintainer, buildDir, buildEnv, omitLTDeps,
      sourceFormat, buildDepends, buildDependsIndep, extraDevDeps, depends, conflicts, replaces, provides,
      extraLibMap, debVersion, revision, epochMap, execMap)
 import Debian.Debianize.Monad (DebT)
@@ -40,11 +39,7 @@ import Text.Regex.TDFA ((=~))
 compileArgs :: [String] -> DebT IO ()
 compileArgs args =
     case getOpt' RequireOrder options args of
-      (os, [], [], []) ->
-          do root <- access buildEnv
-             gver <- liftIO $ ghcVersion' root
-             ghcVersion ~= gver
-             sequence_ os
+      (os, [], [], []) -> sequence_ os
       (_, non, unk, errs) -> error ("Errors: " ++ show errs ++
                                     ", Unrecognized: " ++ show unk ++
                                     ", Non-Options: " ++ show non)

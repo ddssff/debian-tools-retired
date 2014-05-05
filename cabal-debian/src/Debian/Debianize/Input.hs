@@ -5,8 +5,6 @@ module Debian.Debianize.Input
     ( inputDebianization
     , inputDebianizationFile
     , inputChangeLog
-    , ghcVersion
-    , ghcVersion'
     , inputCabalization
     , inputCabalization'
     , inputMaintainer
@@ -42,6 +40,7 @@ import Debian.Debianize.Types.Atoms
 import Debian.Debianize.Monad (Atoms, DebT, execDebT)
 import Debian.Debianize.Prelude (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (~?=), (+=), (++=), (+++=))
 import Debian.Debianize.Types (Top(unTop), buildEnv)
+import Debian.GHC (ghcNewestAvailableVersion')
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer)
@@ -272,7 +271,7 @@ inputCabalization top =
     do vb <- access verbosity >>= return . intToVerbosity'
        flags <- access cabalFlagAssignments
        root <- access buildEnv
-       mcid <- liftIO (ghcVersion' root)
+       mcid <- liftIO (ghcNewestAvailableVersion' root)
        ePkgDesc <- liftIO $ inputCabalization' top vb flags (fromMaybe (error $ "inputCabalization - invalid buildEnv: " ++ show root) mcid)
        either (\ deps -> error $ "Missing dependencies in cabal package at " ++ show (unTop top) ++ ": " ++ show deps)
               (\ pkgDesc -> do
@@ -314,32 +313,9 @@ autoreconf verbose pkgDesc = do
               ExitSuccess -> return ()
               ExitFailure n -> die ("autoreconf failed with status " ++ show n)
 
--- | Use apt-cache to find the version number of the newest in a build environment.
-ghcVersion :: MonadIO m => FilePath -> m (Maybe DebianVersion)
-ghcVersion root = do
-  exists <- liftIO $ doesDirectoryExist root
-  when (not exists) (error $ "ghcVersion: no such environment: " ++ show root)
-  versions <- liftIO $ chroot root $ readProcess "apt-cache" ["showpkg", "ghc"] "" >>=
-                                     return . dropWhile (/= "Versions: ") . Prelude.lines
-  case versions of
-    (_ : versionLine : _) -> return . Just . parseDebianVersion . takeWhile (/= ' ') $ versionLine
-    _ -> return Nothing
-
 chroot :: NFData a => FilePath -> IO a -> IO a
 chroot "/" task = task
 chroot root task = useEnv root (return . force) task
-
--- | Return a Data.Version.Version with the major and minor digits of the compiler version.
-ghcVersion' :: MonadIO m => FilePath -> m (Maybe CompilerId)
-ghcVersion' root = do
-  ghcVersion root >>= return . maybe Nothing (Just . cabVersion)
-    where
-      cabVersion :: DebianVersion -> CompilerId
-      cabVersion debVersion =
-          let (Version ds ts) = greatestLowerBound debVersion (map (\ d -> Version [d] []) [0..]) in
-          CompilerId GHC (greatestLowerBound debVersion (map (\ d -> Version (ds ++ [d]) ts) [0..]))
-      greatestLowerBound :: DebianVersion -> [Version] -> Version
-      greatestLowerBound b xs = last $ takeWhile (\ v -> parseDebianVersion (showVersion v) < b) xs
 
 -- | Try to compute a string for the the debian "Maintainer:" field using, in this order
 --    1. the maintainer explicitly specified using "Debian.Debianize.Monad.maintainer"

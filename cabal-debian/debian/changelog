@@ -1,3 +1,9 @@
+haskell-cabal-debian (4.5) unstable; urgency=low
+
+  * Remove the ghcVersion field and lens.
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 May 2014 11:55:53 -0700
+
 haskell-cabal-debian (4.4) unstable; urgency=low
 
   * Add the copytruncate directive to logrotate files we generate.
