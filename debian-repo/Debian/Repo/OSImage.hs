@@ -31,9 +31,6 @@ module Debian.Repo.OSImage
     , syncLocalPool
     , osFlushPackageCache
     , syncOS'
-
-    , ghcVersion
-    , ghcVersion'
     ) where
 
 import Control.Applicative ((<$>))
@@ -51,6 +48,7 @@ import Data.Monoid ((<>))
 import Data.Time (NominalDiffTime)
 import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
+import qualified Debian.Repo.GHC as GHC (ghcNewestAvailableVersion)
 import Debian.Pretty (pretty)
 import Debian.Relation (ParseRelations(parseRelations), PkgName, Relations)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
@@ -551,23 +549,8 @@ osFlushPackageCache = do
     osSourcePackageCache ~= Nothing
     osBinaryPackageCache ~= Nothing
 
-
 -- | Get the version of the newest ghc available in a build environment.
-ghcVersion :: (MonadIO m, MonadOS m) => m (Maybe DebianVersion)
-ghcVersion = do
+ghcNewestAvailableVersion :: (MonadIO m, MonadOS m) => m (Maybe DebianVersion)
+ghcNewestAvailableVersion = do
   root <- rootPath <$> access osRoot
-  liftIO $ ghcVersion' root
-
--- | The IO portion of ghcVersion.
-ghcVersion' :: MonadIO m => FilePath -> m (Maybe DebianVersion)
-ghcVersion' root = do
-  versions <- liftIO $ chroot $
-                (readProcess "apt-cache" ["showpkg", "ghc"] "" >>=
-                return . dropWhile (/= "Versions: ") . lines)
-  case versions of
-    (_ : versionLine : _) -> return . Just . parseDebianVersion . takeWhile (/= ' ') $ versionLine
-    _ -> return Nothing
-    where
-      chroot = case root of
-                 "/" -> id
-                 _ -> useEnv root (return . force)
+  liftIO $ GHC.ghcNewestAvailableVersion root
