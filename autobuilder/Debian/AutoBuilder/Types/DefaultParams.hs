@@ -95,7 +95,6 @@ defaultParams myBuildRelease -- e.g. wheezy or precise
     , optionalIncludePackages = []
     , excludePackages = []
     , components = defaultComponents myBuildRelease
-    , ghcVersion = myCompilerVersion myBuildRelease
     , developmentReleaseNames = myDevelopmentReleaseNames
     , releaseAliases = defaultReleaseAliases
     , archSet = fromList [Binary (ArchOS "linux") (ArchCPU "i386"), Binary (ArchOS "linux") (ArchCPU "amd64")]

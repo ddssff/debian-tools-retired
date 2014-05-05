@@ -1,3 +1,9 @@
+autobuilder (6.63) unstable; urgency=low
+
+  * Remove the ghcVersion field from the parameter record.
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 May 2014 12:55:13 -0700
+
 autobuilder (6.62) unstable; urgency=low
 
   * Add SkipVersion to the PackageFlag type in

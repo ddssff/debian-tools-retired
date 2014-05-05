@@ -198,10 +198,6 @@ data ParamRec =
     , components :: [String]
     -- ^ The list of components of the base repository, for Ubuntu this is
     -- main,restricted,universe,multiverse.
-    , ghcVersion :: Maybe String
-    -- ^ Until we can get the code to look for the compiler version in the
-    -- changeroot, we use this to tell cabal-debian what compiler we are
-    -- going to build with.
     , developmentReleaseNames :: [String]
     -- ^ The list of upstream release which are currently in
     -- development.  This means we the tag we add doesn't need to
@@ -340,7 +336,6 @@ prettyPrint x =
             --, "ifSourcesChanged=" ++ take 120 (show (ifSourcesChanged x))
             , "doSSHExport=" ++ take 120 (show (doSSHExport x))
             , "autobuilderEmail=" ++ take 120 (show (autobuilderEmail x))
-            , "ghcVersion=" ++ take 120 (show (ghcVersion x))
             --, "baseRelease sources=\n" ++ show (lookup (sliceName (baseRelease x)) (sources x))
             ]
 
