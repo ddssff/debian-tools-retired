@@ -58,7 +58,7 @@ data Atoms
       -- the --builddir option of runhaskell Setup appends the "/build"
       -- to the value it receives, so, yes, try not to get confused.
       -- FIXME: make this FilePath or Maybe FilePath
-      , buildEnv_ :: FilePath
+      , buildEnv_ :: Maybe EnvSet
       -- ^ Directory containing the build environment for which the
       -- debianization will be generated.  This determines which
       -- compiler will be available, which in turn determines which
@@ -204,6 +204,12 @@ data Atoms
       -- ^ The result of reading a cabal configuration file.
       } deriving (Eq, Show)
 
+data EnvSet = EnvSet
+    { cleanOS :: FilePath  -- ^ The output of the debootstrap command
+    , dependOS :: FilePath -- ^ An environment with build dependencies installed
+    , buildOS :: FilePath  -- ^ An environment where we have built a package
+    } deriving (Eq, Show)
+
 newAtoms :: Atoms
 newAtoms
     = Atoms
@@ -211,7 +217,7 @@ newAtoms
       , noProfilingLibrary_ = mempty
       , omitLTDeps_ = mempty
       , buildDir_ = mempty
-      , buildEnv_ = "/"
+      , buildEnv_ = Nothing
       , flags_ = defaultFlags
       , debianNameMap_ = mempty
       , control_ = S.newSourceDebDescription
@@ -379,7 +385,7 @@ warning = lens warning_ (\ a b -> b {warning_ = a})
 buildDir :: Lens Atoms (Set FilePath)
 buildDir = lens buildDir_ (\ b a -> a {buildDir_ = b})
 
-buildEnv :: Lens Atoms FilePath
+buildEnv :: Lens Atoms (Maybe EnvSet)
 buildEnv = lens buildEnv_ (\ b a -> a {buildEnv_ = b})
 
 -- | Map from cabal Extra-Lib names to debian binary package names.

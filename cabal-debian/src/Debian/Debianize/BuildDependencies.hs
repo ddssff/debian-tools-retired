@@ -20,6 +20,7 @@ import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.DebianName (mkPkgName, mkPkgName')
 import Debian.Debianize.Monad as Monad (Atoms, DebT)
 import qualified Debian.Debianize.Types as T (buildDepends, buildEnv, buildDependsIndep, debianNameMap, epochMap, execMap, extraLibMap, missingDependencies, noDocumentationLibrary, noProfilingLibrary)
+import Debian.Debianize.Types.Atoms (EnvSet(dependOS))
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (PackageType(Development, Documentation, Profiling))
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.GHC (ghcNewestAvailableVersion')
@@ -263,7 +264,7 @@ doBundled :: MonadIO m =>
 doBundled typ name rels =
     do -- root <- access T.buildEnv
        -- gver <- liftIO $ ghcVersion' root
-       gver <- access T.buildEnv >>= liftIO . ghcNewestAvailableVersion'
+       gver <- access T.buildEnv >>= liftIO . ghcNewestAvailableVersion' . maybe (error "doBundled: no build environment") dependOS
        pver <- ghcBuiltIn gver name
        -- Prefer the compiler to the library, if the compiler provides libghc-foo-dev
        -- generate "ghc | libghc-foo-dev" rather than "libghc-foo-dev | ghc".  It would be

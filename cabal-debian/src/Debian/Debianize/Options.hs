@@ -20,7 +20,7 @@ import Debian.Debianize.Types
      extraLibMap, debVersion, revision, epochMap, execMap)
 import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.Prelude (read', maybeRead, (+=), (~=), (%=), (++=), (+++=))
-import Debian.Debianize.Types.Atoms (Atoms, InstallFile(..), DebAction(..))
+import Debian.Debianize.Types.Atoms (Atoms, EnvSet(..), InstallFile(..), DebAction(..))
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relations, Relation(..))
@@ -159,7 +159,7 @@ options =
                       , "run by haskell-devscripts.  The build subdirectory is added to match the"
                       , "behavior of the --builddir option in the Setup script."]),
 
-      Option "" ["buildenv"] (ReqArg (\ s -> buildEnv ~= s) "PATH")
+      Option "" ["buildenvdir"] (ReqArg (\ s -> buildEnv ~= Just (EnvSet {cleanOS = s </> "clean", dependOS = s </> "depend", buildOS = s </> "build"}) ) "PATH")
              (unlines [ "Directory containing the build environment for which the debianization will"
                       , "be generated.  This determines which compiler will be available, which in turn"
                       , "determines which basic libraries can be provided by the compiler.  This can be"

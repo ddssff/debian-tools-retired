@@ -18,10 +18,11 @@ import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
 import Data.Lens.Lazy (getL)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
+import Debian.Debianize.Types.Atoms (EnvSet(cleanOS))
 import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Release (ReleaseName(relName))
-import Debian.Repo.EnvPath (EnvRoot(rootPath))
+import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
 import Debian.Repo.LocalRepository (LocalRepository)
 import Debian.Repo.OSImage (_pbuilderBuild', aptGetInstall, buildArchOfRoot, buildOS', createOSImage, localeGen, MonadOS, neuterEnv, osArch, osBaseDistro, osFullDistro, osLocalCopy, osLocalMaster, osRoot, syncLocalPool, syncOS', updateLists, osSourcePackageCache, osBinaryPackageCache)
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
@@ -84,7 +85,7 @@ osBinaryPackages = do
 
 -- |Find or create and update an OS image.
 prepareOS :: (MonadRepos m, MonadTop m) =>
-              EnvRoot			-- ^ The location where image is to be built
+              EnvSet			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list of the base distribution
            -> LocalRepository           -- ^ The location of the local upload repository
            -> Bool			-- ^ If true, remove and rebuild the image
@@ -96,8 +97,9 @@ prepareOS :: (MonadRepos m, MonadTop m) =>
            -> [String]			-- ^ Packages to exclude
            -> [String]			-- ^ Components of the base repository
            -> m OSKey
-prepareOS root distro repo flush ifSourcesChanged include optional exclude components =
-    do key <- findOSKey root >>= maybe (createOSImage root distro repo >>= putOSImage) return
+prepareOS eset distro repo flush ifSourcesChanged include optional exclude components =
+    do let root = EnvRoot (cleanOS eset)
+       key <- findOSKey root >>= maybe (createOSImage root distro repo >>= putOSImage) return
        if flush then evalMonadOS (recreate Flushed) key else evalMonadOS updateOS key `catch` (\ (e :: UpdateError) -> evalMonadOS (recreate e) key)
        evalMonadOS (doInclude >> doLocales >> syncLocalPool) key
        return key
@@ -110,17 +112,18 @@ prepareOS root distro repo flush ifSourcesChanged include optional exclude compo
                        show (pretty computed) ++ "\ninstalled:\n" ++
                        show (pretty installed)
       recreate reason =
-          do base <- access osBaseDistro
+          do let root = cleanOS eset
+             base <- access osBaseDistro
              sources <- sourcesPath (sliceListName base)
              dist <- distDir (sliceListName base)
-             liftIO $ do ePutStrLn $ "Removing and recreating build environment at " ++ rootPath root ++ ": " ++ show reason
+             liftIO $ do ePutStrLn $ "Removing and recreating build environment at " ++ root ++ ": " ++ show reason
                          -- ePutStrLn ("removeRecursiveSafely " ++ rootPath root)
-                         removeRecursiveSafely (rootPath root)
+                         removeRecursiveSafely root
                          -- ePutStrLn ("createDirectoryIfMissing True " ++ show dist)
                          createDirectoryIfMissing True dist
                          -- ePutStrLn ("writeFile " ++ show sources ++ " " ++ show (show . osBaseDistro $ os))
                          replaceFile sources (show . pretty $ base)
-             rebuildOS root distro include exclude components
+             rebuildOS (EnvRoot root) distro include exclude components
 
       doInclude =
           do aptGetInstall (map (\ s -> (BinPkgName s, Nothing)) include)

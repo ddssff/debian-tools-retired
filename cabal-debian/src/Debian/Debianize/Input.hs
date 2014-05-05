@@ -13,6 +13,7 @@ module Debian.Debianize.Input
 
 import Debug.Trace (trace)
 
+import Control.Applicative ((<$>))
 import Control.Category ((.))
 import Control.DeepSeq (NFData, force)
 import Control.Exception (bracket)
@@ -40,6 +41,7 @@ import Debian.Debianize.Types.Atoms
 import Debian.Debianize.Monad (Atoms, DebT, execDebT)
 import Debian.Debianize.Prelude (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (~?=), (+=), (++=), (+++=))
 import Debian.Debianize.Types (Top(unTop), buildEnv)
+import Debian.Debianize.Types.Atoms (EnvSet(dependOS))
 import Debian.GHC (ghcNewestAvailableVersion')
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
@@ -270,7 +272,7 @@ inputCabalization :: MonadIO m => Top -> DebT m ()
 inputCabalization top =
     do vb <- access verbosity >>= return . intToVerbosity'
        flags <- access cabalFlagAssignments
-       root <- access buildEnv
+       root <- access buildEnv >>= return . maybe (error "No build environment!") dependOS
        mcid <- liftIO (ghcNewestAvailableVersion' root)
        ePkgDesc <- liftIO $ inputCabalization' top vb flags (fromMaybe (error $ "inputCabalization - invalid buildEnv: " ++ show root) mcid)
        either (\ deps -> error $ "Missing dependencies in cabal package at " ++ show (unTop top) ++ ": " ++ show deps)

@@ -35,7 +35,7 @@ cabalDebianMain init =
               testBuildEnv >>
               get >>= return . getL debAction >>= finish) newAtoms
     where
-      testBuildEnv = access buildEnv >>= \ root -> if root == "" then error ("Invalid build environment: " ++ show root) else return ()
+      testBuildEnv = access buildEnv >>= \ root -> if root == Nothing then error ("Invalid build environment: " ++ show root) else return ()
 
       finish (SubstVar debType) = substvars top debType
       finish Debianize = debianization top (return ()) (return ()) >> doDebianizeAction top

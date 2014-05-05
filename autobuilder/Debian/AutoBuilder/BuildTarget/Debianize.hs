@@ -16,7 +16,7 @@ import Data.Lens.Lazy (setL)
 import Data.List (isSuffixOf)
 import Data.Maybe (fromMaybe)
 import Data.Version (parseVersion)
-import Debian.AutoBuilder.BuildEnv (cleanEnv)
+import Debian.AutoBuilder.BuildEnv (envSet)
 import Debian.AutoBuilder.Params (computeTopDir)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -25,7 +25,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Pretty (pretty)
 import Debian.Relation ()
-import Debian.Repo.EnvPath (EnvRoot(rootPath))
+import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.State (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
@@ -36,7 +36,7 @@ import Distribution.PackageDescription (GenericPackageDescription(..), PackageDe
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.Environment (withArgs)
-import System.FilePath ((</>), takeFileName)
+import System.FilePath ((</>), takeFileName, takeDirectory)
 import System.Process.Progress (verbosity)
 import Text.ParserCombinators.ReadP (readP_to_S)
 
@@ -97,14 +97,14 @@ autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do let rel = P.buildRelease $ P.params cache
        top <- computeTopDir (P.params cache)
-       env <- runTopT top $ rootPath <$> (cleanEnv rel)
+       eset <- runTopT top (envSet rel)
        args <- collectPackageFlags cache pflags
-       let args' = ("--buildenv": env : args)
+       let args' = "--buildenvdir" : takeDirectory (dependOS eset) : args
        -- This will be false if the package has no debian/Debianize.hs script
        done <- runDebianizeScript args'
        when (not done) (withArgs [] (Cabal.evalDebT (debianization (Top ".") defaultAtoms (applyPackageFlags pflags) >>
                                                      writeDebianization (Top "."))
-                                                    (setL buildEnv env newAtoms)))
+                                                    (setL buildEnv (Just eset) newAtoms)))
 
 applyPackageFlags :: [P.PackageFlag] -> DebT IO ()
 applyPackageFlags flags = mapM_ applyPackageFlag flags
