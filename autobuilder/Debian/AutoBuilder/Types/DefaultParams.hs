@@ -122,7 +122,7 @@ defaultParams myBuildRelease -- e.g. wheezy or precise
 
 defaultVendorTag = "+" ++ defaultVendor
 defaultReleaseSuffixes = ["-" ++ defaultVendor, "-private"]
-defaultBaseRelease myBuildRelease = baseReleaseName myBuildRelease
+--defaultBaseRelease myBuildRelease = baseReleaseName myBuildRelease
 defaultDebianMirrorHost = "ftp.debian.org"
 defaultUbuntuMirrorHost = "us.archive.ubuntu.com/ubuntu"
 
@@ -164,8 +164,8 @@ defaultSources myBuildRelease myUploadURIPrefix myPublicURIPrefix debianMirrorHo
              concatMap (derivedReleaseNames myBuildRelease) (debianReleases ++ ubuntuReleases))
     where
       releaseSources release =
-          (release, releaseSourceLines buildURI release debianMirrorHost ubuntuMirrorHost)
-      Just buildURI = defaultBuildURI myBuildRelease myPublicURIPrefix myUploadURIPrefix
+          (release, releaseSourceLines buildURI' release debianMirrorHost ubuntuMirrorHost)
+      Just buildURI' = defaultBuildURI myBuildRelease myPublicURIPrefix myUploadURIPrefix
 
 -- Build a sources.list for one of our build relases.
 --
@@ -271,13 +271,6 @@ defaultComponents myBuildRelease =
       "debian" -> ["main", "contrib", "non-free"]
       "ubuntu" -> ["main", "restricted", "universe", "multiverse"]
       _ -> error $ "Invalid build release: " ++ myBuildRelease
-
--- | Strip off suffixes to reveal the base release name.
-baseReleaseName :: String -> String
-baseReleaseName rname =
-    case parseReleaseName rname of
-      (x : _) -> x
-      _ -> error "Invalid release name: " ++ show rname
 
 releaseSuffix :: String -> Maybe String
 releaseSuffix rname =

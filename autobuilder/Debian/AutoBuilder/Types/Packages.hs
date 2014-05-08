@@ -241,7 +241,7 @@ rename p s = p {name = s}
 
 mapSpec :: (RetrieveMethod -> RetrieveMethod) -> Packages -> Packages
 mapSpec f p@(Package {spec = x}) = p {spec = f x}
-mapSpec f NoPackage = NoPackage
+mapSpec _ NoPackage = NoPackage
 mapSpec f p@(Packages {list = xs}) = p {list = map (mapSpec f) xs}
 
 cd :: Packages -> FilePath -> Packages

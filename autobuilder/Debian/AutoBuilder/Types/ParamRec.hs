@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.AutoBuilder.Types.ParamRec
     ( ParamRec(..)
     , Strictness(..)

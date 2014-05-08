@@ -155,12 +155,12 @@ buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
     where
       failVersion (P.FailVersion s) = Just s
       failVersion _ = Nothing
-buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
+buildDecision _ target _ (Fingerprint _ (Just _sourceVersion) _ _) _
     | any isSkipPackage (P.flags . T.package . download . tgt $ target) =
         No "Skipped"
     where isSkipPackage P.SkipPackage = True
           isSkipPackage _ = False
-buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
+buildDecision _ target _ (Fingerprint _ (Just _sourceVersion) _ _) _
     | any isFailPackage (P.flags . T.package . download . tgt $ target) =
         Error "FailPackage specified"
     where isFailPackage P.FailPackage = True

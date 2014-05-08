@@ -2,13 +2,13 @@
 -- |Modify a target so that \/proc is mounted while it builds.
 module Debian.AutoBuilder.BuildTarget.Proc where
 
-import Control.Monad.Catch (MonadCatch)
-import Control.Monad.State (evalStateT)
-import Control.Monad.Trans (MonadIO)
-import qualified Debian.AutoBuilder.Types.Download as T
-import qualified Debian.AutoBuilder.Types.CacheRec as P
-import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Repo
+--import Control.Monad.Catch (MonadCatch)
+--import Control.Monad.State (evalStateT)
+--fimport Control.Monad.Trans (MonadIO)
+--import qualified Debian.AutoBuilder.Types.Download as T
+--import qualified Debian.AutoBuilder.Types.CacheRec as P
+--import qualified Debian.AutoBuilder.Types.Packages as P
+--import Debian.Repo
 
 documentation = [ "proc:<target> - A target of this form modifies another target by ensuring"
                 , "that /proc is mounted during the build.  This target should only be"

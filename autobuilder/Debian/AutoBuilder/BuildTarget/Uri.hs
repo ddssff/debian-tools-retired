@@ -12,7 +12,7 @@ import Control.Exception (SomeException)
 import Control.Monad
 import Control.Monad.Catch (catch)
 import Control.Monad.Trans (liftIO)
-import qualified Data.ByteString.Lazy.Char8 as B (empty, readFile)
+import qualified Data.ByteString.Lazy.Char8 as B (readFile)
 import Data.Digest.Pure.MD5 (md5)
 import Data.List (isPrefixOf)
 import qualified Debian.AutoBuilder.Types.Download as T

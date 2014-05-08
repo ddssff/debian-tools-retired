@@ -6,7 +6,7 @@ module Debian.AutoBuilder.Main
     ( main
     ) where
 
-import Control.Arrow (first)
+--import Control.Arrow (first)
 import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
 import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException, try)
@@ -34,7 +34,7 @@ import Debian.Pretty (pretty)
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.OSImage (MonadOS, osLocalMaster, osLocalCopy, osBaseDistro)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
-import Debian.Repo.Prelude (access, symbol)
+import Debian.Repo.Prelude (access)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
@@ -58,7 +58,7 @@ import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import qualified System.IO as IO
 import System.Process (proc)
-import System.Process.Progress (Output, timeTask, defaultVerbosity, withModifiedVerbosity, quieter, withModifiedVerbosity, noisier, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
+import System.Process.Progress (Output, timeTask, defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE CPP, PackageImports, ScopedTypeVariables, TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing -fno-warn-type-defaults -fno-warn-missing-signatures #-}
 module Debian.AutoBuilder.BuildTarget.Hackage
     ( prepare
@@ -12,7 +12,7 @@ import Control.Monad (when)
 import Control.Monad.Catch (catch)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
-import Data.List (isPrefixOf, isSuffixOf, intercalate, nub, sort, tails)
+import Data.List (isPrefixOf, intercalate, nub, sort, tails)
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Version (Version, showVersion, parseVersion)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
@@ -28,9 +28,9 @@ import System.Process (shell, showCommandForUser)
 import System.Process.Read (readProcessWithExitCode)
 import System.Process.Progress (collectOutputs)
 import System.Unix.Directory (removeRecursiveSafely)
-import Text.XML.HaXml (htmlprint)
-import Text.XML.HaXml.Types
-import Text.XML.HaXml.Posn
+--import Text.XML.HaXml (htmlprint)
+--import Text.XML.HaXml.Types
+--import Text.XML.HaXml.Posn
 import Text.ParserCombinators.ReadP (readP_to_S)
 
 documentation :: [String]
@@ -176,6 +176,7 @@ validate text =
       Left _ -> Nothing
       Right _ -> Just text
 
+#if 0
 -- | Traverse the a hackage package page to find a version number.
 -- (Obsolete, since hackage2 we are using scrapeVersion, though it is
 -- fragile.)
@@ -200,6 +201,7 @@ findVersion package (Document _ _ (Elem _name _attrs content) _) =
           then let s' = drop (length prefix) s in
                take (length s' - length suffix) s'
           else error $ "findVersion - not a tarball: " ++ show s
+#endif
 
 -- |Download and save the tarball, return its contents.
 download' :: (MonadRepos m, MonadTop m) => String -> String -> Version -> m B.ByteString

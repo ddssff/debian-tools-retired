@@ -35,7 +35,6 @@ import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree,
 import Debian.Repo.State (MonadRepos)
 import Debian.Repo.Top (MonadTop)
 import System.FilePath ((</>))
-import System.Process.Progress (qPutStrLn)
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
 retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>

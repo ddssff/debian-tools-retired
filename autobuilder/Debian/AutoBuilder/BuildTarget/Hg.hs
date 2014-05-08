@@ -5,7 +5,7 @@ module Debian.AutoBuilder.BuildTarget.Hg where
 import Control.Exception (SomeException, try)
 import Control.Monad
 import Control.Monad.Trans
-import Data.ByteString.Lazy.Char8 (empty)
+--import Data.ByteString.Lazy.Char8 (empty)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
