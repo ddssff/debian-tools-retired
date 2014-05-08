@@ -23,13 +23,11 @@ defaultVendor = "extra"
 defaultParams :: String
               -> String
               -> String
-              -> (String -> Maybe String)
               -> [String]
               -> ParamRec
 defaultParams myBuildRelease -- e.g. wheezy or precise
               myUploadURIPrefix
               myBuildURIPrefix
-              myCompilerVersion
               myDevelopmentReleaseNames =
     ParamRec
     { vendorTag = defaultVendorTag

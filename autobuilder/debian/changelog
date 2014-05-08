@@ -1,3 +1,10 @@
+autobuilder (6.64) unstable; urgency=low
+
+  * Remove unused parameter "myCompilerVersion" of defaultParams - we now
+    discover the version of GHC by examining the build environment.
+
+ -- David Fox <dsf@seereason.com>  Thu, 08 May 2014 08:18:19 -0700
+
 autobuilder (6.63) unstable; urgency=low
 
   * Remove the ghcVersion field from the parameter record.
