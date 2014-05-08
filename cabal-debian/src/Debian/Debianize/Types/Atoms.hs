@@ -62,8 +62,8 @@ data Atoms
       -- ^ Directory containing the build environment for which the
       -- debianization will be generated.  This determines which
       -- compiler will be available, which in turn determines which
-      -- basic libraries can be provided by the compiler.  This may be
-      -- set to /, but it must be set.
+      -- basic libraries can be provided by the compiler.  By default
+      -- all the paths in EnvSet are "/".
       , flags_ :: Flags
       -- ^ Information regarding mode of operation - verbosity, dry-run, usage, etc
       , debianNameMap_ :: Map PackageName VersionSplits
@@ -217,7 +217,7 @@ newAtoms
       , noProfilingLibrary_ = mempty
       , omitLTDeps_ = mempty
       , buildDir_ = mempty
-      , buildEnv_ = Nothing
+      , buildEnv_ = Just (EnvSet {cleanOS = "/", dependOS = "/", buildOS = "/"})
       , flags_ = defaultFlags
       , debianNameMap_ = mempty
       , control_ = S.newSourceDebDescription
