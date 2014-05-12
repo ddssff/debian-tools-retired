@@ -40,7 +40,7 @@ import Control.Applicative ((<$>))
 import Control.Applicative.Error (maybeRead)
 import Control.Exception (SomeException)
 import Control.Monad (unless)
-import Control.Monad.Catch (bracket, catch, MonadCatch)
+import Control.Monad.Catch (bracket, catch, MonadCatch, MonadMask)
 import Control.Monad.State (MonadIO(..), MonadState(get, put), MonadTrans(..), StateT(runStateT))
 import Data.Lens.Lazy (getL, modL, setL)
 import Data.Lens.Template (makeLenses)
@@ -214,7 +214,7 @@ instance (MonadCatch m, MonadIO m, Functor m) => MonadRepos (ReposCachedT m) whe
 
 -- | To run a DebT we bracket an action with commands to load and save
 -- the repository list.
-runReposCachedT :: (MonadIO m, MonadCatch m, Functor m) => FilePath -> ReposCachedT m a -> m a
+runReposCachedT :: (MonadIO m, MonadCatch m, Functor m, MonadMask m) => FilePath -> ReposCachedT m a -> m a
 runReposCachedT top action = runReposT $ runTopT top $ bracket loadRepoCache (\ r -> saveRepoCache >> return r) (\ () -> action)
 
 -- | Load the value of the repo cache map from a file as a substitute for

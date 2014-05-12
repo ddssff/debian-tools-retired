@@ -36,7 +36,7 @@ module Debian.Repo.OSImage
 import Control.Applicative ((<$>))
 import Control.DeepSeq (force)
 import Control.Exception (evaluate, SomeException)
-import Control.Monad.Catch (bracket, MonadCatch, throwM, try)
+import Control.Monad.Catch (bracket, MonadCatch, throwM, try, MonadMask)
 import Control.Monad.State (evalStateT, MonadState, StateT)
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString)
@@ -355,7 +355,7 @@ stripDist :: FilePath -> FilePath
 stripDist path = maybe path (\ n -> drop (n + 7) path) (isSublistOf "/dists/" path)
 
 -- | Do an IO task in the build environment with /proc mounted.
-withProc :: forall m c. (MonadOS m, MonadIO m, MonadCatch m) => m c -> m c
+withProc :: forall m c. (MonadOS m, MonadIO m, MonadCatch m, MonadMask m) => m c -> m c
 withProc task =
     do root <- rootPath <$> access osRoot
        let dir = root </> "proc"
@@ -368,7 +368,7 @@ withProc task =
        bracket pre post task'
 
 -- | Do an IO task in the build environment with /proc mounted.
-withTmp :: forall m c. (MonadOS m, MonadIO m, MonadCatch m) => m c -> m c
+withTmp :: forall m c. (MonadOS m, MonadIO m, MonadCatch m, MonadMask m) => m c -> m c
 withTmp task =
     do root <- rootPath <$> access osRoot
        let dir = root </> "tmp"

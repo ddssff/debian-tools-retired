@@ -44,7 +44,7 @@ Library
         data-lens-template,
         deepseq,
         directory,
-        exceptions,
+        exceptions >= 0.6,
         filepath,
         HaXml,
         MIME,

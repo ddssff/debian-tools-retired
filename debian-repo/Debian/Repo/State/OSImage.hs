@@ -12,7 +12,7 @@ module Debian.Repo.State.OSImage
 import Control.Applicative ((<$>))
 import Control.DeepSeq (force)
 import Control.Exception (SomeException, throw)
-import Control.Monad.Catch (MonadCatch, catch, try)
+import Control.Monad.Catch (MonadCatch, catch, try, MonadMask)
 import Control.Monad.State (MonadState(get, put))
 import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
@@ -84,7 +84,7 @@ osBinaryPackages = do
         return pkgs
 
 -- |Find or create and update an OS image.
-prepareOS :: (MonadRepos m, MonadTop m) =>
+prepareOS :: (MonadRepos m, MonadTop m, MonadMask m) =>
               EnvSet			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list of the base distribution
            -> LocalRepository           -- ^ The location of the local upload repository
@@ -104,7 +104,7 @@ prepareOS eset distro repo flush ifSourcesChanged include optional exclude compo
        evalMonadOS (doInclude >> doLocales >> syncLocalPool) key
        return key
     where
-      recreate :: (MonadOS m, MonadRepos m, MonadTop m) => UpdateError -> m ()
+      recreate :: (MonadOS m, MonadRepos m, MonadTop m, MonadMask m) => UpdateError -> m ()
       recreate (Changed name path computed installed)
           | ifSourcesChanged == SourcesChangedError =
               error $ "FATAL: Sources for " ++ relName name ++ " in " ++ path ++
@@ -134,7 +134,7 @@ prepareOS eset distro repo flush ifSourcesChanged include optional exclude compo
              localeGen (either (\ (_ :: IOError) -> "en_US.UTF-8") id localeName)
 
 -- | Not used, but could be a substitute for buildOS.
-_pbuilderBuild :: (MonadRepos m, MonadTop m) =>
+_pbuilderBuild :: (MonadRepos m, MonadTop m, MonadMask m) =>
             EnvRoot
          -> NamedSliceList
          -> Arch
@@ -150,7 +150,7 @@ _pbuilderBuild root distro arch repo copy _extraEssential _omitEssential _extra 
        try (evalMonadOS updateOS key) >>= either (\ (e :: SomeException) -> error (show e)) return
        return key
 
-rebuildOS :: (MonadOS m, MonadRepos m, MonadTop m) =>
+rebuildOS :: (MonadOS m, MonadRepos m, MonadTop m, MonadMask m) =>
              EnvRoot			-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list of the base distribution
            -> [String]			-- ^ Extra packages to install - e.g. keyrings
@@ -166,7 +166,7 @@ rebuildOS root distro include exclude components =
 
 -- | Create a new clean build environment in root.clean FIXME: create
 -- an ".incomplete" flag and remove it when build-env succeeds
-buildOS :: (MonadRepos m, MonadTop m) =>
+buildOS :: (MonadRepos m, MonadTop m, MonadMask m) =>
             EnvRoot
          -> NamedSliceList
          -> Arch
@@ -185,7 +185,7 @@ buildOS root distro arch repo copy include exclude components =
 
 -- | Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.
-updateOS :: (MonadOS m, MonadRepos m) => m ()
+updateOS :: (MonadOS m, MonadRepos m, MonadMask m) => m ()
 updateOS = do
   root <- (rootPath . getL osRoot) <$> get
   liftIO $ createDirectoryIfMissing True (root </> "etc")
