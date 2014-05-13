@@ -11,7 +11,7 @@ import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
 import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException, try)
 import Control.Monad(foldM, when)
-import Control.Monad.Catch (catch, throwM)
+import Control.Monad.Catch (MonadMask, catch, throwM)
 import Control.Monad.State (MonadIO(liftIO), get)
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
@@ -101,7 +101,7 @@ main init myParams =
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: MonadReposCached m => DebT IO () -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
+doParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
 doParameterSet init results params =
     case () of
       _ | not (Set.null badForceBuild) ->
@@ -142,7 +142,7 @@ getLocalSources = do
     Nothing -> error $ "Invalid local repo root: " ++ show root
     Just uri -> repoSources (Just (envRoot root)) uri
 
-runParameterSet :: MonadReposCached m => DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
+runParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
 runParameterSet init cache =
     do
       top <- askTop

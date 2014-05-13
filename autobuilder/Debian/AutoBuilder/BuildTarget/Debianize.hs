@@ -10,7 +10,7 @@ module Debian.AutoBuilder.BuildTarget.Debianize
 import Control.Applicative ((<$>))
 import Control.Monad (when)
 import Control.Monad.State (modify)
-import Control.Monad.Catch (MonadCatch, bracket)
+import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Lens.Lazy (setL)
 import Data.List (isSuffixOf)
@@ -68,7 +68,7 @@ prepare defaultAtoms cache package' target =
                                     , T.buildWrapper = id }
          _ -> error $ "Download at " ++ dir ++ ": missing or multiple cabal files"
 
-withCurrentDirectory :: (MonadCatch m, MonadIO m) => FilePath -> m a -> m a
+withCurrentDirectory :: (MonadMask m, MonadIO m) => FilePath -> m a -> m a
 withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old -> liftIO (setCurrentDirectory new) >> return old) (liftIO . setCurrentDirectory) (\ _ -> action)
 
 {-

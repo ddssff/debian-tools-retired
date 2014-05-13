@@ -15,7 +15,7 @@ import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
 import Control.Arrow (second)
 import Control.Exception (AsyncException(UserInterrupt), evaluate, fromException, SomeException, throw, toException)
-import Control.Monad.Catch (MonadCatch, catch, try)
+import Control.Monad.Catch (MonadCatch, catch, try, MonadMask)
 import Control.Monad.RWS (liftIO, MonadIO, when)
 import qualified Data.ByteString.Char8 as B (concat)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, concat, empty, toChunks, unpack)
@@ -146,7 +146,7 @@ type ReadyTarget = (Target, [Target], [Target])
 -- | Build a set of targets.  When a target build is successful it
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
-buildTargets :: (MonadRepos m, MonadTop m, MonadApt m) =>
+buildTargets :: (MonadRepos m, MonadTop m, MonadApt m, MonadMask m) =>
                 P.CacheRec -> OSKey -> OSKey -> LocalRepository -> [Buildable] -> m (LocalRepository, [Target])
 buildTargets _ _ _ localRepo [] = return (localRepo, [])
 buildTargets cache dependOS buildOS localRepo !targetSpecs =
@@ -159,13 +159,13 @@ buildTargets cache dependOS buildOS localRepo !targetSpecs =
  
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
-buildLoop :: (MonadRepos m, MonadTop m, MonadApt m) =>
+buildLoop :: (MonadRepos m, MonadTop m, MonadApt m, MonadMask m) =>
              P.CacheRec -> LocalRepository -> OSKey -> OSKey -> [Target] -> m [Target]
 buildLoop cache localRepo dependOS buildOS !targets =
     Set.toList <$> loop (Set.fromList targets) Set.empty
     where
       -- This loop computes the ready targets and builds one.
-      loop :: (MonadRepos m, MonadApt m, MonadTop m) =>
+      loop :: (MonadRepos m, MonadApt m, MonadTop m, MonadMask m) =>
               Set.Set Target -> Set.Set Target -> m (Set.Set Target)
       loop unbuilt failed | Set.null unbuilt = return failed
       loop unbuilt failed =
@@ -175,7 +175,7 @@ buildLoop cache localRepo dependOS buildOS !targets =
             triples -> do ePutStrLn (makeTable triples)
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
                           loop2 (Set.difference unbuilt ready) failed triples
-      loop2 :: (MonadRepos m, MonadApt m, MonadTop m) =>
+      loop2 :: (MonadRepos m, MonadApt m, MonadTop m, MonadMask m) =>
                Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
             -> Set.Set Target -- failed: Targets which either failed to build or were blocked by a target that failed to build
             -> [ReadyTarget] -- ready: the list of known buildable targets
@@ -329,7 +329,7 @@ qError message = qPutStrLn message >> error message
 
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
-    (MonadRepos m, MonadTop m, MonadApt m) =>
+    (MonadRepos m, MonadTop m, MonadApt m, MonadMask m) =>
     P.CacheRec ->			-- configuration info
     OSKey ->
     OSKey ->
@@ -373,7 +373,7 @@ buildTarget cache dependOS buildOS repo !target = do
                              return . Just
 
 -- | Build a package and upload it to the local repository.
-buildPackage :: (MonadRepos m, MonadTop m) =>
+buildPackage :: (MonadRepos m, MonadTop m, MonadMask m) =>
                 P.CacheRec -> OSKey -> OSKey -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> BuildDecision -> LocalRepository -> m LocalRepository
 buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !target decision repo = do
   checkDryRun
@@ -391,7 +391,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
           case P.noClean (P.params cache) of
             False -> liftIO (maybeAddLogEntry buildTree newVersion)
             True -> return ()
-      build :: forall m. (MonadOS m, MonadRepos m, MonadCatch m) =>
+      build :: forall m. (MonadOS m, MonadRepos m, MonadMask m) =>
                DebianBuildTree -> m (DebianBuildTree, NominalDiffTime)
       build buildTree =
           do -- The --commit flag does not appear until dpkg-dev-1.16.1,
@@ -446,7 +446,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
                   , changeRelease = name }
           where setDist name (Field ("Distribution", _)) = Field ("Distribution", " " <> T.pack (releaseName' name))
                 setDist _ other = other
-      doLocalUpload :: (MonadRepos m, MonadTop m) => (ChangesFile, NominalDiffTime) -> m LocalRepository
+      doLocalUpload :: (MonadRepos m, MonadTop m, MonadMask m) => (ChangesFile, NominalDiffTime) -> m LocalRepository
       doLocalUpload (changesFile, elapsed) =
           do
             (changesFile' :: ChangesFile) <-
@@ -474,7 +474,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
 -- these operations take place in a different order from other types
 -- of builds.  For lax: dependencies, then image copy, then source
 -- copy.  For other: image copy, then source copy, then dependencies.
-prepareBuildTree :: (MonadTop m, MonadRepos m) => P.CacheRec -> OSKey -> OSKey -> Fingerprint -> Target -> m DebianBuildTree
+prepareBuildTree :: (MonadTop m, MonadRepos m, MonadMask m) => P.CacheRec -> OSKey -> OSKey -> Fingerprint -> Target -> m DebianBuildTree
 prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
   dependRoot <- evalMonadOS (rootPath <$> access osRoot) dependOS
   buildRoot <- evalMonadOS (rootPath <$> access osRoot) buildOS
@@ -757,7 +757,7 @@ pathBelow root path =
     where message = "Expected a path below " ++ root ++ ", saw " ++ path
 
 -- |Install the package's build dependencies.
-installDependencies :: (MonadOS m, MonadCatch m, MonadIO m) => DebianBuildTree -> [String] -> Fingerprint -> m L.ByteString
+installDependencies :: (MonadOS m, MonadCatch m, MonadIO m, MonadMask m) => DebianBuildTree -> [String] -> Fingerprint -> m L.ByteString
 installDependencies source extra sourceFingerprint =
     do root <- rootPath <$> access osRoot
        let path = pathBelow root (topdir source)

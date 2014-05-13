@@ -8,6 +8,7 @@ module Debian.AutoBuilder.BuildEnv
 
 import Control.Applicative (Applicative, (<$>), (<*>))
 import Control.Monad (when)
+import Control.Monad.Catch (MonadMask)
 import Control.Monad.State (MonadIO(liftIO), get)
 import qualified Debian.AutoBuilder.LocalRepo as Local (prepare)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(archSet, buildRelease, cleanUp, components, excludePackages, flushDepends, flushPool, flushRoot, ifSourcesChanged, includePackages, optionalIncludePackages))
@@ -45,7 +46,7 @@ cleanEnvOfRelease distro =
     sub ("dists" </> releaseName' distro </> "clean") >>= return . EnvRoot
 -}
 
-prepareCleanOS :: (MonadRepos m, MonadTop m) => P.ParamRec -> NamedSliceList -> LocalRepository -> m OSKey
+prepareCleanOS :: (MonadRepos m, MonadTop m, MonadMask m) => P.ParamRec -> NamedSliceList -> LocalRepository -> m OSKey
 prepareCleanOS params rel localRepo =
     do eset <- envSet (P.buildRelease params)
        prepareOS eset
@@ -58,7 +59,7 @@ prepareCleanOS params rel localRepo =
                     (P.excludePackages params)
                     (P.components params)
 
-prepareDependOS :: (MonadRepos m, MonadTop m) => P.ParamRec -> NamedSliceList -> m OSKey
+prepareDependOS :: (MonadRepos m, MonadTop m, MonadMask m) => P.ParamRec -> NamedSliceList -> m OSKey
 prepareDependOS params rel =
     do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archSet params)
        -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archSet params)
