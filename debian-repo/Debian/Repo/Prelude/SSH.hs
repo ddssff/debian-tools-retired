@@ -5,13 +5,12 @@ module Debian.Repo.Prelude.SSH
     , sshCopy
     ) where
 
-import System.Cmd
 import System.Directory
 import System.Posix.User
 import System.Environment
 import System.Exit
 import System.IO
-import System.Process (readProcessWithExitCode, showCommandForUser)
+import System.Process (system, readProcessWithExitCode, showCommandForUser)
 
 -- |Set up access to destination (user\@host).
 sshExportDeprecated :: String -> Maybe Int -> IO (Either String ())
