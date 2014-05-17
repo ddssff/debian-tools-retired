@@ -392,7 +392,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
           case P.noClean (P.params cache) of
             False -> liftIO (maybeAddLogEntry buildTree newVersion)
             True -> return ()
-      build :: forall m. (MonadOS m, MonadRepos m, MonadCatch m) =>
+      build :: forall m. (MonadOS m, MonadRepos m, MonadMask m) =>
                DebianBuildTree -> m (DebianBuildTree, NominalDiffTime)
       build buildTree =
           do -- The --commit flag does not appear until dpkg-dev-1.16.1,

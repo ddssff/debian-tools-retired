@@ -46,7 +46,7 @@ Library
       , containers
       , data-lens
       , directory
-      , exceptions
+      , exceptions >= 0.6
       , Extra
       , file-embed
       , filepath
