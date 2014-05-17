@@ -22,7 +22,7 @@
 -- of the features this module supports.
 --
 -- Author: David Fox <ddssff@gmail.com>
-module Debian.Config
+module Config
     ( Flag(..)
     -- , seedFlags
     , optBaseSpecs
@@ -34,7 +34,7 @@ module Debian.Config
     -- , values
     , ParamDescr(..)
     , option
-    , Debian.Config.usageInfo
+    , Config.usageInfo
     ) where
 
 import Control.Exception

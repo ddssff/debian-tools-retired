@@ -10,9 +10,6 @@ import Data.Set (Set, fromList)
 import Data.Text (pack)
 import Debian.Arch (Arch(Binary, Source), ArchCPU(..), ArchOS(..), prettyArch)
 import Debian.Changes (ChangesFile(..))
-import Debian.Config (option)
-import Debian.NewDist.Options (Params(install, rootParam, printVersion, layout, dryRun, binaryOrphans, cleanUp, sign, notifyEmail, senderEmail, keyName, aliases, sections, architectures, releases, expire, removePackages), homeParams, optSpecs)
-import Debian.NewDist.Version (myVersion)
 import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName)
 import Debian.Release (ReleaseName(ReleaseName), releaseName', parseReleaseName, Section, parseSection')
@@ -38,6 +35,12 @@ import System.FilePath ((</>))
 import System.IO as IO (putStrLn, hFlush, stderr)
 import System.Process.Progress (quieter, qPutStrLn)
 import Text.Regex (mkRegex, splitRegex)
+
+import Config (option)
+import Options (Params(install, rootParam, printVersion, layout, dryRun, binaryOrphans, cleanUp,
+                       sign, notifyEmail, senderEmail, keyName, aliases, sections, architectures,
+                       releases, expire, removePackages), homeParams, optSpecs)
+import Version (myVersion)
 
 main :: IO ()
 main =

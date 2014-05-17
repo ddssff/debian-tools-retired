@@ -1,5 +1,5 @@
 Name:           debian-repo
-Version:        5.59
+Version:        5.60
 License:        BSD3
 License-File:	debian/copyright
 Author:         David Fox
@@ -12,7 +12,7 @@ Description:
   This library includes modules covering the management of Debian
   package repositories, local caches of remote debian repositories,
   and Debian build environments.
-Cabal-version: >= 1.2.3
+Cabal-version:  >= 1.9
 Data-Files:
         demos/Versions.hs debian/changelog
         debian/compat debian/control debian/copyright
@@ -103,8 +103,10 @@ Library
         Debian.VersionPolicy
 
 Executable debian-versions
+  Hs-Source-Dirs: demos
+  Build-Depends: base, debian-repo >= 5.60, mtl
   Buildable: True
-  Main-is: demos/Versions.hs
+  Main-is: Versions.hs
   ghc-options: -O2 -threaded -Wall
   if flag(local-debian)
     Hs-Source-Dirs: ., ../../haskell-debian
@@ -112,8 +114,10 @@ Executable debian-versions
     Build-Depends: debian >= 3.80
 
 Executable newdist
+  Hs-Source-Dirs: Debian/NewDist
+  Build-Depends: base, Cabal, containers, debian-repo >= 5.60, directory, filepath, MIME, mtl, process-progress, regex-compat, template-haskell, text
   Buildable: True
-  Main-is: Debian/NewDist/Main.hs
+  Main-is: Main.hs
   ghc-options: -O2 -threaded -Wall -rtsopts
   if flag(local-debian)
     Hs-Source-Dirs: ., ../../haskell-debian
@@ -121,8 +125,10 @@ Executable newdist
     Build-Depends: debian >= 3.80
 
 Executable speedtest
+  Hs-Source-Dirs: Test
+  Build-Depends: base, bytestring, containers, debian-repo >= 5.60, deepseq, filepath, mtl, network, process-listlike, process-progress, text
   Buildable: True
-  Main-is: Test/Speed.hs
+  Main-is: Speed.hs
   ghc-options: -O2 -threaded -Wall -rtsopts
   if flag(local-debian)
     Hs-Source-Dirs: ., ../../haskell-debian
@@ -130,8 +136,10 @@ Executable speedtest
     Build-Depends: debian >= 3.80
 
 Executable speedtest2
+  Hs-Source-Dirs: Test
+  Build-Depends: base, bytestring, debian-repo >= 5.60, deepseq, parsec, text
   Buildable: True
-  Main-is: Test/Speed2.hs
+  Main-is: Speed2.hs
   ghc-options: -O2 -threaded -Wall -rtsopts
   if flag(local-debian)
     Hs-Source-Dirs: ., ../../haskell-debian

@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
 -- | Replacement for debpool.
-module Debian.NewDist.Options
+module Options
     ( Params(..)
     , initialParams
     , homeParams
@@ -9,11 +9,12 @@ module Debian.NewDist.Options
     ) where
 
 import Data.List (intercalate)
-import Debian.Config (ParamDescr(..))
 import Debian.Repo.LocalRepository (Layout(..))
 import Prelude hiding (putStr, putStrLn, putChar)
 import System.Console.GetOpt (ArgDescr(NoArg, ReqArg))
 import System.Environment (getEnv)
+
+import Config (ParamDescr(..))
 
 data Params
     = Params

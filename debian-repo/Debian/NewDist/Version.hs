@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Debian.NewDist.Version (myVersion) where
+module Version (myVersion) where
 
 import Data.Version (showVersion)
 import Distribution.Simple.Utils (findPackageDesc)

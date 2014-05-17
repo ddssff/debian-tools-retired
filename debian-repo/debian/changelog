@@ -1,3 +1,9 @@
+haskell-debian-repo (5.60) unstable; urgency=low
+
+  * Modernize the cabal file a bit.
+
+ -- David Fox <dsf@seereason.com>  Sat, 17 May 2014 06:09:54 -0700
+
 haskell-debian-repo (5.59) unstable; urgency=low
 
   * Rename ghcVersion -> ghcInstalledVersion in Debian.Repo.OSImage
