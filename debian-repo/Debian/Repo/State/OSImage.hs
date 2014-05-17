@@ -97,12 +97,12 @@ prepareOS :: (MonadRepos m, MonadTop m, MonadMask m) =>
            -> [String]			-- ^ Packages to exclude
            -> [String]			-- ^ Components of the base repository
            -> m OSKey
-prepareOS eset distro repo flush ifSourcesChanged include optional exclude components =
-    do let root = EnvRoot (cleanOS eset)
-       key <- findOSKey root >>= maybe (createOSImage root distro repo >>= putOSImage) return
-       if flush then evalMonadOS (recreate Flushed) key else evalMonadOS updateOS key `catch` (\ (e :: UpdateError) -> evalMonadOS (recreate e) key)
-       evalMonadOS (doInclude >> doLocales >> syncLocalPool) key
-       return key
+prepareOS eset distro repo flushRoot ifSourcesChanged include optional exclude components =
+    do let cleanRoot = EnvRoot (cleanOS eset)
+       cleanKey <- findOSKey cleanRoot >>= maybe (createOSImage cleanRoot distro repo >>= putOSImage) return
+       if flushRoot then evalMonadOS (recreate Flushed) cleanKey else evalMonadOS updateOS cleanKey `catch` (\ (e :: UpdateError) -> evalMonadOS (recreate e) cleanKey)
+       evalMonadOS (doInclude >> doLocales >> syncLocalPool) cleanKey
+       return cleanKey
     where
       recreate :: (MonadOS m, MonadRepos m, MonadTop m, MonadMask m) => UpdateError -> m ()
       recreate (Changed name path computed installed)
