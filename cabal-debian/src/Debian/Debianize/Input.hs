@@ -13,9 +13,9 @@ module Debian.Debianize.Input
 
 import Debug.Trace (trace)
 
-import Control.Applicative ((<$>))
+--import Control.Applicative ((<$>))
 import Control.Category ((.))
-import Control.DeepSeq (NFData, force)
+--import Control.DeepSeq (NFData, force)
 import Control.Exception (bracket)
 import Control.Monad (when, foldM, filterM)
 import Control.Monad.State (get, put)
@@ -26,7 +26,7 @@ import Data.Maybe (fromMaybe)
 import Data.Set as Set (Set, toList, fromList, insert, singleton)
 import Data.Text (Text, unpack, pack, lines, words, break, strip, null)
 import Data.Text.IO (readFile)
-import Data.Version (showVersion, Version(Version))
+--import Data.Version (showVersion, Version(Version))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(logWho), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import qualified Debian.Debianize.Types as T (maintainer)
@@ -47,8 +47,8 @@ import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer)
 import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelations)
-import Debian.Version (DebianVersion, parseDebianVersion)
-import Distribution.Compiler (CompilerId(CompilerId), CompilerFlavor(GHC))
+--import Debian.Version (DebianVersion, parseDebianVersion)
+import Distribution.Compiler (CompilerId)
 import Distribution.Package (Package(packageId), PackageIdentifier(..), PackageName(PackageName), Dependency)
 import qualified Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer, package, license, copyright {-, synopsis, description-}))
 import Distribution.PackageDescription as Cabal (PackageDescription, FlagName)
@@ -58,14 +58,14 @@ import Distribution.Simple.Utils (defaultPackageDesc, die, setupMessage)
 import Distribution.System (Platform(..), buildOS, buildArch)
 import Distribution.Verbosity (Verbosity)
 import Prelude hiding (readFile, lines, words, break, null, log, sum, (.))
-import qualified Prelude (lines)
-import System.Directory (doesFileExist, doesDirectoryExist)
+-- import qualified Prelude (lines)
+import System.Directory (doesFileExist)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeExtension, dropExtension)
 import System.Posix.Files (setFileCreationMask)
-import System.Process (readProcess, system)
+import System.Process (system)
 import System.IO.Error (catchIOError, tryIOError)
-import System.Unix.Chroot (useEnv)
+-- import System.Unix.Chroot (useEnv)
 -- import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 inputDebianization :: Top -> DebT IO ()
@@ -315,9 +315,9 @@ autoreconf verbose pkgDesc = do
               ExitSuccess -> return ()
               ExitFailure n -> die ("autoreconf failed with status " ++ show n)
 
-chroot :: NFData a => FilePath -> IO a -> IO a
-chroot "/" task = task
-chroot root task = useEnv root (return . force) task
+-- chroot :: NFData a => FilePath -> IO a -> IO a
+-- chroot "/" task = task
+-- chroot root task = useEnv root (return . force) task
 
 -- | Try to compute a string for the the debian "Maintainer:" field using, in this order
 --    1. the maintainer explicitly specified using "Debian.Debianize.Monad.maintainer"

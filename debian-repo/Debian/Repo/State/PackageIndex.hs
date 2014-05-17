@@ -19,7 +19,7 @@ import Debian.Release (ReleaseName(..), releaseName', sectionName')
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID)
 import Debian.Repo.PackageIndex (BinaryPackage, BinaryPackage(..), PackageIndex(..), PackageIndex(packageIndexArch, packageIndexComponent), packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec), SourcePackage(..), SourcePackage(sourcePackageID))
-import Debian.Repo.Prelude (symbol)
+--import Debian.Repo.Prelude (symbol)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (Repo(repoKey, repoReleaseInfo), RepoKey, repoKeyURI)
 import Debian.Repo.Slice (binarySlices, Slice(sliceRepoKey, sliceSource), SliceList(slices), sourceSlices)
@@ -31,7 +31,7 @@ import Debian.Version (parseDebianVersion)
 import Network.URI (escapeURIString, URI(uriAuthority, uriPath), URIAuth(uriPort, uriRegName, uriUserInfo))
 import qualified System.IO as IO (hClose, IOMode(ReadMode), openBinaryFile)
 --import System.IO.Unsafe (unsafeInterleaveIO)
-import System.Process.Progress (qBracket, quieter)
+--import System.Process.Progress (qBracket, quieter)
 
 -- |Return a list of the index files that contain the packages of a
 -- slice.

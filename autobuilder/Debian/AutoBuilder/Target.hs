@@ -322,6 +322,7 @@ showTargets targets =
     where
       heading = show (P.packageCount targets) ++ " Targets:"
 
+limit :: Int -> String -> String
 limit n s = if length s > n + 3 then take n s ++ "..." else s
 
 qError :: MonadIO m => String -> m b
@@ -483,7 +484,7 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
   when (P.strictness (P.params cache) == P.Lax)
        (do -- Lax mode - dependencies accumulate in the dependency
            -- environment, sync that to build environment.
-           evalMonadOS (installDependencies (cleanSource target) buildDepends sourceFingerprint) dependOS
+           _ <- evalMonadOS (installDependencies (cleanSource target) buildDepends sourceFingerprint) dependOS
            evalMonadOS (when (not noClean) $ syncOS dependOS) buildOS)
   buildTree <- case noClean of
                  True ->
@@ -494,9 +495,9 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
   when (P.strictness (P.params cache) /= P.Lax)
        (do -- Strict mode - download dependencies to depend environment,
            -- sync downloads to build environment and install dependencies there.
-           evalMonadOS (withTmp (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS
+           _ <- evalMonadOS (withTmp (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS
            evalMonadOS (do when (not noClean) $ syncOS dependOS
-                           installDependencies buildTree buildDepends sourceFingerprint
+                           _ <- installDependencies buildTree buildDepends sourceFingerprint
                            return ()) buildOS)
   return buildTree
 
@@ -585,7 +586,7 @@ data Status = Complete | Missing [BinPkgName]
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
 computeNewVersion :: (MonadApt m, MonadRepos m, MonadOS m) => P.CacheRec -> Target -> Maybe SourcePackage -> SourcePackageStatus -> m (Failing DebianVersion)
-computeNewVersion cache target releaseControlInfo releaseStatus = do
+computeNewVersion cache target releaseControlInfo _releaseStatus = do
   let current = if buildTrumped then Nothing else releaseControlInfo
       currentVersion = maybe Nothing (Just . parseDebianVersion . T.unpack) (maybe Nothing (fieldValue "Version" . sourceParagraph) current)
       checkVersion :: DebianVersion -> Failing DebianVersion

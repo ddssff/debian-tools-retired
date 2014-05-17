@@ -72,8 +72,8 @@ prepareAptImage' sourcesChangedAction sources = do
 -- |Run apt-get update and then retrieve all the packages referenced
 -- by the sources.list.  The source packages are sorted so that
 -- packages with the same name are together with the newest first.
-updateAptEnv :: (MonadRepos m, MonadApt m) => m ()
-updateAptEnv = aptGetUpdate
+-- updateAptEnv :: (MonadRepos m, MonadApt m) => m ()
+-- updateAptEnv = aptGetUpdate
 
 aptSourcePackages :: (MonadRepos m, MonadApt m) => m [SourcePackage]
 aptSourcePackages = do
