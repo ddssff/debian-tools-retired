@@ -333,7 +333,7 @@ prefixes = Just (" 1> ", " 2> ")
 
 -- | Run @apt-get update@ and @apt-get dist-upgrade@.  If @update@
 -- fails, run @dpkg --configure -a@ before running @dist-upgrade@.
-updateLists :: (MonadOS m, MonadIO m, MonadCatch m) => m NominalDiffTime
+updateLists :: (MonadOS m, MonadIO m, MonadCatch m, MonadMask m) => m NominalDiffTime
 updateLists =
     do root <-rootPath <$> access osRoot
        withProc $ liftIO $ do
