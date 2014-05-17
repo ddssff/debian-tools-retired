@@ -48,7 +48,7 @@ import Debian.Repo.AptImage (MonadApt)
 import Debian.Repo.OSImage (syncLocalPool, updateLists, withProc, withTmp, buildEssential, osRoot)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
-import Debian.Repo.EnvPath (EnvRoot(rootPath))
+import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
 import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.OSImage (MonadOS)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
@@ -485,7 +485,8 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
        (do -- Lax mode - dependencies accumulate in the dependency
            -- environment, sync that to build environment.
            _ <- evalMonadOS (installDependencies (cleanSource target) buildDepends sourceFingerprint) dependOS
-           evalMonadOS (when (not noClean) $ syncOS dependOS) buildOS)
+           when (not noClean) (syncOS dependOS (EnvRoot buildRoot) >> return ())
+           return ())
   buildTree <- case noClean of
                  True ->
                      liftIO (findOneDebianBuildTree newPath) >>=
@@ -496,9 +497,9 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
        (do -- Strict mode - download dependencies to depend environment,
            -- sync downloads to build environment and install dependencies there.
            _ <- evalMonadOS (withTmp (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS
-           evalMonadOS (do when (not noClean) $ syncOS dependOS
-                           _ <- installDependencies buildTree buildDepends sourceFingerprint
-                           return ()) buildOS)
+           when (not noClean) (syncOS dependOS (EnvRoot buildRoot) >> return ())
+           _ <- evalMonadOS (installDependencies buildTree buildDepends sourceFingerprint) buildOS
+           return ())
   return buildTree
 
     where

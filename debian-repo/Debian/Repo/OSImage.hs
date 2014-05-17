@@ -168,14 +168,17 @@ instance Show UpdateError where
 chrootEnv :: OSImage -> EnvRoot -> OSImage
 chrootEnv os dst = setL osRoot dst os
 
-syncOS' :: OSImage -> OSImage -> IO OSImage
-syncOS' src dst =
-    mkdir >> umount >> rsync ["--exclude=/work/build/*"] (rootPath (getL osRoot src)) (rootPath (getL osRoot dst)) >> return dst
+syncOS' :: (MonadIO m, MonadTop m) => OSImage -> EnvRoot -> m OSImage
+syncOS' src dst = do
+  liftIO mkdir
+  liftIO umount
+  rsync ["--exclude=/work/build/*"] (rootPath (getL osRoot src)) (rootPath dst)
+  createOSImage dst (getL osBaseDistro src) (getL osLocalMaster src)
     where
-      mkdir = createDirectoryIfMissing True (rootPath (getL osRoot dst) ++ "/work")
+      mkdir = createDirectoryIfMissing True (rootPath dst ++ "/work")
       umount =
           do srcResult <- umountBelow False (rootPath (getL osRoot src))
-             dstResult <- umountBelow False (rootPath (getL osRoot dst))
+             dstResult <- umountBelow False (rootPath dst)
              case filter (\ (_, (code, _, _)) -> code /= ExitSuccess) (srcResult ++ dstResult) of
                [] -> return ()
                failed -> fail $ "umount failure(s): " ++ show failed

@@ -18,7 +18,7 @@ import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy as L (empty)
 import Data.Lens.Lazy (getL)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
-import Debian.Debianize.Types.Atoms (EnvSet(cleanOS))
+import qualified Debian.Debianize.Types.Atoms as EnvSet (EnvSet(cleanOS, dependOS, buildOS))
 import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Release (ReleaseName(relName))
@@ -85,7 +85,7 @@ osBinaryPackages = do
 
 -- |Find or create and update an OS image.
 prepareOS :: (MonadRepos m, MonadTop m, MonadMask m) =>
-              EnvSet			-- ^ The location where image is to be built
+              EnvSet.EnvSet		-- ^ The location where image is to be built
            -> NamedSliceList		-- ^ The sources.list of the base distribution
            -> LocalRepository           -- ^ The location of the local upload repository
            -> Bool			-- ^ If true, remove and rebuild the image
@@ -98,11 +98,15 @@ prepareOS :: (MonadRepos m, MonadTop m, MonadMask m) =>
            -> [String]			-- ^ Components of the base repository
            -> m OSKey
 prepareOS eset distro repo flushRoot ifSourcesChanged include optional exclude components =
-    do let cleanRoot = EnvRoot (cleanOS eset)
+    do let cleanRoot = EnvRoot (EnvSet.cleanOS eset)
        cleanKey <- findOSKey cleanRoot >>= maybe (createOSImage cleanRoot distro repo >>= putOSImage) return
        if flushRoot then evalMonadOS (recreate Flushed) cleanKey else evalMonadOS updateOS cleanKey `catch` (\ (e :: UpdateError) -> evalMonadOS (recreate e) cleanKey)
-       evalMonadOS (doInclude >> doLocales >> syncLocalPool) cleanKey
-       return cleanKey
+       evalMonadOS (doInclude >> doLocales) cleanKey
+
+       let dependRoot = EnvRoot (EnvSet.dependOS eset)
+       dependKey <- findOSKey dependRoot >>= maybe (ePutStrLn "sync clean -> depend" >> syncOS cleanKey dependRoot) return
+       evalMonadOS syncLocalPool dependKey
+       return dependKey
     where
       recreate :: (MonadOS m, MonadRepos m, MonadTop m, MonadMask m) => UpdateError -> m ()
       recreate (Changed name path computed installed)
@@ -112,7 +116,7 @@ prepareOS eset distro repo flushRoot ifSourcesChanged include optional exclude c
                        show (pretty computed) ++ "\ninstalled:\n" ++
                        show (pretty installed)
       recreate reason =
-          do let root = cleanOS eset
+          do let root = EnvSet.cleanOS eset
              base <- access osBaseDistro
              sources <- sourcesPath (sliceListName base)
              dist <- distDir (sliceListName base)
@@ -281,9 +285,11 @@ prepareDevs root = do
                        False -> readProcessChunks (shell cmd) L.empty >>= return . oneResult
                        True -> return ExitSuccess
 
-syncOS :: (MonadOS m, MonadRepos m) => OSKey -> m ()
-syncOS srcKey = do
-  dstOS <- get
+syncOS :: (MonadTop m, MonadRepos m) => OSKey -> EnvRoot -> m OSKey
+syncOS srcKey dstRoot = do
   srcOS <- evalMonadOS get srcKey
-  dstOS' <- liftIO $ syncOS' srcOS dstOS
-  put dstOS'
+  dstOS <- syncOS' srcOS dstRoot
+  putOSImage dstOS
+  dstKey <- findOSKey dstRoot
+  maybe (error ("syncOS failed for " ++ show dstRoot)) return dstKey
+
