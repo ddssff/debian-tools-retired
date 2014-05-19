@@ -29,7 +29,7 @@ import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Prelude (access, replaceFile, (~=))
 import Debian.Repo.Prelude.SSH (sshCopy)
 import Debian.Repo.Slice (NamedSliceList(sliceListName), Slice(sliceSource), SliceList(slices), SourcesChangedAction(SourcesChangedError), UpdateError(..))
-import Debian.Repo.State (evalMonadOS, findOSKey, MonadRepos, OSKey, putOSImage)
+import Debian.Repo.State (evalMonadOS, getOSKey, MonadRepos, OSKey, putOSImage)
 import Debian.Repo.State.PackageIndex (binaryPackagesFromSources, sourcePackagesFromSources)
 import Debian.Repo.State.Slice (verifySourcesList)
 import Debian.Repo.Top (distDir, MonadTop, sourcesPath)
@@ -99,12 +99,12 @@ prepareOS :: (MonadRepos m, MonadTop m, MonadMask m) =>
            -> m OSKey
 prepareOS eset distro repo flushRoot ifSourcesChanged include optional exclude components =
     do let cleanRoot = EnvRoot (EnvSet.cleanOS eset)
-       cleanKey <- findOSKey cleanRoot >>= maybe (createOSImage cleanRoot distro repo >>= putOSImage) return
+       cleanKey <- getOSKey cleanRoot >>= maybe (createOSImage cleanRoot distro repo >>= putOSImage) return
        if flushRoot then evalMonadOS (recreate Flushed) cleanKey else evalMonadOS updateOS cleanKey `catch` (\ (e :: UpdateError) -> evalMonadOS (recreate e) cleanKey)
        evalMonadOS (doInclude >> doLocales) cleanKey
 
        let dependRoot = EnvRoot (EnvSet.dependOS eset)
-       dependKey <- findOSKey dependRoot >>= maybe (ePutStrLn "sync clean -> depend" >> syncOS cleanKey dependRoot) return
+       dependKey <- getOSKey dependRoot >>= maybe (ePutStrLn "sync clean -> depend" >> syncOS cleanKey dependRoot) return
        evalMonadOS syncLocalPool dependKey
        return dependKey
     where
@@ -290,6 +290,6 @@ syncOS srcKey dstRoot = do
   srcOS <- evalMonadOS get srcKey
   dstOS <- syncOS' srcOS dstRoot
   putOSImage dstOS
-  dstKey <- findOSKey dstRoot
+  dstKey <- getOSKey dstRoot
   maybe (error ("syncOS failed for " ++ show dstRoot)) return dstKey
 

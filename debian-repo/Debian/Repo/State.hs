@@ -17,13 +17,13 @@ module Debian.Repo.State
 
     , osImageMap
     , OSKey
-    , findOSKey
+    , getOSKey
     , putOSImage
     , evalMonadOS
 
     , aptImageMap
     , AptKey
-    , findAptKey
+    , getAptKey
     , putAptImage
     , evalMonadApt
 
@@ -120,13 +120,13 @@ initState = ReposState
             -- , _binaryPackageMap = Map.empty
             }
 
--- | See if there is an OSImage associated with this directory
-findOS :: MonadRepos m => EnvRoot -> m (Maybe OSImage)
-findOS root = (Map.lookup (OSKey root) . getL osImageMap) <$> getRepos
+-- | See if there is a cached OSImage associated with this directory
+getOS :: MonadRepos m => EnvRoot -> m (Maybe OSImage)
+getOS root = (Map.lookup (OSKey root) . getL osImageMap) <$> getRepos
 
--- | See if there is an OSImage associated with this directory
-findOSKey :: MonadRepos m => EnvRoot -> m (Maybe OSKey)
-findOSKey root = fmap (OSKey . getL osRoot) <$> (findOS root)
+-- | See if there is a cached OSImage associated with this directory
+getOSKey :: MonadRepos m => EnvRoot -> m (Maybe OSKey)
+getOSKey root = fmap (OSKey . getL osRoot) <$> (getOS root)
 
 putOSImage :: MonadRepos m => OSImage -> m OSKey
 putOSImage repo = do
@@ -137,16 +137,16 @@ putOSImage repo = do
 -- | Run MonadOS and update the osImageMap with the modified value
 evalMonadOS :: MonadRepos m => StateT OSImage m a -> OSKey -> m a
 evalMonadOS task (OSKey key) = do
-  Just os <- findOS key
+  Just os <- getOS key
   (a, os') <- runStateT task os
   putOSImage os'
   return a
 
-findApt :: MonadRepos m => EnvRoot -> m (Maybe AptImage)
-findApt root = (Map.lookup (AptKey root) . getL aptImageMap) <$> getRepos
+getApt :: MonadRepos m => EnvRoot -> m (Maybe AptImage)
+getApt root = (Map.lookup (AptKey root) . getL aptImageMap) <$> getRepos
 
-findAptKey :: MonadRepos m => EnvRoot -> m (Maybe AptKey)
-findAptKey root = fmap (AptKey . getL aptImageRoot) <$> (findApt root)
+getAptKey :: MonadRepos m => EnvRoot -> m (Maybe AptKey)
+getAptKey root = fmap (AptKey . getL aptImageRoot) <$> (getApt root)
 
 putAptImage :: MonadRepos m => AptImage -> m AptKey
 putAptImage repo = do
@@ -157,7 +157,7 @@ putAptImage repo = do
 -- | Run MonadOS and update the osImageMap with the modified value
 evalMonadApt :: MonadRepos m => StateT AptImage m a -> AptKey -> m a
 evalMonadApt task (AptKey key) = do
-  Just apt <- findApt key
+  Just apt <- getApt key
   (a, apt') <- runStateT task apt
   putAptImage apt'
   return a

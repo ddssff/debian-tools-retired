@@ -27,7 +27,7 @@ import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage(sourcePackageID))
 import Debian.Repo.Prelude (symbol)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), SliceList, SourcesChangedAction)
 import Debian.Repo.SourceTree (DebianBuildTree(debTree'), DebianSourceTree(tree'), DebianSourceTreeC(entry), findDebianBuildTrees, SourceTree(dir'))
-import Debian.Repo.State (AptKey, evalMonadApt, findAptKey, MonadRepos, putAptImage)
+import Debian.Repo.State (AptKey, evalMonadApt, getAptKey, MonadRepos, putAptImage)
 import Debian.Repo.State.PackageIndex (binaryPackagesFromSources, sourcePackagesFromSources)
 import Debian.Repo.State.Slice (updateCacheSources)
 import Debian.Repo.Top (MonadTop)
@@ -49,12 +49,12 @@ prepareAptImage :: forall m. (MonadTop m, MonadRepos m) =>
               -> NamedSliceList		-- The sources.list
               -> m AptKey		-- The resulting environment
 prepareAptImage sourcesChangedAction sources = do
-  mkey <- findAptKey =<< cacheRootDir (sliceListName sources)
+  mkey <- getAptKey =<< cacheRootDir (sliceListName sources)
   maybe (prepareAptImage' sourcesChangedAction sources) return mkey
 
 prepareAptImage' :: forall m. (MonadCatch m, MonadTop m, MonadRepos m) => SourcesChangedAction -> NamedSliceList -> m AptKey
 prepareAptImage' sourcesChangedAction sources = do
-  mkey <- findAptKey =<< cacheRootDir (sliceListName sources)
+  mkey <- getAptKey =<< cacheRootDir (sliceListName sources)
   maybe (prepareAptImage'' `catch` handle) return mkey
     where
       handle :: SomeException -> m AptKey

@@ -1,3 +1,11 @@
+haskell-debian-repo (5.61) unstable; urgency=low
+
+  * Rename findOSKey -> getOSKey, findOS -> getOS, findAptKey ->
+    getAptKey, and findApt -> getApt (because they all just do lookups in
+    the MonadRepos state.)
+
+ -- David Fox <dsf@seereason.com>  Mon, 19 May 2014 09:57:06 -0700
+
 haskell-debian-repo (5.60) unstable; urgency=low
 
   * Modernize the cabal file a bit.
