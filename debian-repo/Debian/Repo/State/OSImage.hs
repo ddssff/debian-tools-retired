@@ -84,30 +84,32 @@ osBinaryPackages = do
         return pkgs
 
 -- |Find or create and update an OS image.
-prepareOS :: (MonadRepos m, MonadTop m, MonadMask m) =>
-              EnvSet.EnvSet		-- ^ The location where image is to be built
-           -> NamedSliceList		-- ^ The sources.list of the base distribution
-           -> LocalRepository           -- ^ The location of the local upload repository
-           -> Bool			-- ^ If true, remove and rebuild the image
-           -> SourcesChangedAction	-- ^ What to do if called with a sources.list that
-					-- differs from the previous call
-           -> [String]			-- ^ Extra packages to install - e.g. keyrings
-           -> [String]			-- ^ More packages to install, but these may not be available
-                                        -- immediately - e.g seereason-keyring.  Ignore exceptions.
-           -> [String]			-- ^ Packages to exclude
-           -> [String]			-- ^ Components of the base repository
-           -> m OSKey
-prepareOS eset distro repo flushRoot ifSourcesChanged include optional exclude components =
-    do let cleanRoot = EnvRoot (EnvSet.cleanOS eset)
-       cleanKey <- getOSKey cleanRoot >>= maybe (createOSImage cleanRoot distro repo >>= putOSImage) return
+prepareOS
+    :: (MonadRepos m, MonadTop m, MonadMask m) =>
+       EnvSet.EnvSet		-- ^ The location where image is to be built
+    -> NamedSliceList		-- ^ The sources.list of the base distribution
+    -> LocalRepository           -- ^ The location of the local upload repository
+    -> Bool			-- ^ If true, remove and rebuild the image
+    -> Bool			-- ^ If true, flush all the build dependencies
+    -> SourcesChangedAction	-- ^ What to do if called with a sources.list that
+				-- differs from the previous call
+    -> [String]			-- ^ Extra packages to install - e.g. keyrings
+    -> [String]			-- ^ More packages to install, but these may not be available
+                                -- immediately - e.g seereason-keyring.  Ignore exceptions.
+    -> [String]			-- ^ Packages to exclude
+    -> [String]			-- ^ Components of the base repository
+    -> m (OSKey, OSKey)         -- Returns clean and depend os keys
+prepareOS eset distro repo flushRoot flushDepends ifSourcesChanged include optional exclude components =
+    do cleanKey <- getOSKey cleanRoot >>= maybe (createOSImage cleanRoot distro repo >>= putOSImage) return
        if flushRoot then evalMonadOS (recreate Flushed) cleanKey else evalMonadOS updateOS cleanKey `catch` (\ (e :: UpdateError) -> evalMonadOS (recreate e) cleanKey)
        evalMonadOS (doInclude >> doLocales) cleanKey
-
-       let dependRoot = EnvRoot (EnvSet.dependOS eset)
-       dependKey <- getOSKey dependRoot >>= maybe (ePutStrLn "sync clean -> depend" >> syncOS cleanKey dependRoot) return
-       evalMonadOS syncLocalPool dependKey
-       return dependKey
+       dependKey <- getOSKey dependRoot >>= maybe (createOSImage dependRoot distro repo >>= putOSImage) return
+       dependKey' <- if flushDepends then ePutStrLn "sync clean -> depend" >> syncOS cleanKey dependRoot else return dependKey
+       evalMonadOS syncLocalPool dependKey'
+       return (cleanKey, dependKey')
     where
+      cleanRoot = EnvRoot (EnvSet.cleanOS eset)
+      dependRoot = EnvRoot (EnvSet.dependOS eset)
       recreate :: (MonadOS m, MonadRepos m, MonadTop m, MonadMask m) => UpdateError -> m ()
       recreate (Changed name path computed installed)
           | ifSourcesChanged == SourcesChangedError =

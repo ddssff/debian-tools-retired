@@ -46,19 +46,6 @@ cleanEnvOfRelease distro =
     sub ("dists" </> releaseName' distro </> "clean") >>= return . EnvRoot
 -}
 
-prepareCleanOS :: (MonadRepos m, MonadTop m, MonadMask m) => P.ParamRec -> NamedSliceList -> LocalRepository -> m OSKey
-prepareCleanOS params rel localRepo =
-    do eset <- envSet (P.buildRelease params)
-       prepareOS eset
-                    rel
-                    localRepo
-                    (P.flushRoot params)
-                    (P.ifSourcesChanged params)
-                    (P.includePackages params)
-                    (P.optionalIncludePackages params)
-                    (P.excludePackages params)
-                    (P.components params)
-
 prepareDependOS :: (MonadRepos m, MonadTop m, MonadMask m) => P.ParamRec -> NamedSliceList -> m OSKey
 prepareDependOS params rel =
     do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archSet params)
@@ -67,12 +54,7 @@ prepareDependOS params rel =
        eset <- envSet (P.buildRelease params)
        let dRoot = dependOS eset
        exists <- liftIO $ doesDirectoryExist dRoot
-       when (not exists || P.flushDepends params)
-            (do cOS <- prepareCleanOS params rel localRepo
-                code <- evalMonadOS (access osRoot >>= \ cRoot -> liftIO (rsync ["-x"] (rootPath cRoot) dRoot)) cOS
-                checkRsyncExitCode code
-                return ())
-       dOS <- prepareOS eset rel localRepo False (P.ifSourcesChanged params) (P.includePackages params) (P.optionalIncludePackages params) (P.excludePackages params) (P.components params)
+       (cOS, dOS) <- prepareOS eset rel localRepo (P.flushRoot params) (P.flushDepends params) (P.ifSourcesChanged params) (P.includePackages params) (P.optionalIncludePackages params) (P.excludePackages params) (P.components params)
        evalMonadOS syncLocalPool dOS
        return dOS
 
