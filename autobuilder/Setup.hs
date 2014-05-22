@@ -3,7 +3,7 @@
 import Control.Exception (SomeException)
 import Distribution.Simple
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
-import System.Cmd (system)
+import System.Process (system)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>))
 

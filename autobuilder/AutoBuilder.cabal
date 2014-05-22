@@ -1,5 +1,5 @@
 Name:           AutoBuilder
-Version:        6.64
+Version:        6.65
 License:        BSD3
 Copyright:      (c) 2006-2013, SeeReason Partners LLC
 Author:         David Fox <dsf@seereason.com>
@@ -20,31 +20,18 @@ Description:
 Cabal-Version:  >= 1.2
 Build-type:     Simple
 
-flag local-debian-repo
-  Description: Link directly to the source of the debian-repo library
-  Default: False
-  Manual: True
-
-flag local-cabal-debian
-  Description: Link directly to the source of the cabal-debian library
-  Default: False
-  Manual: True
-
-flag local-debian
-  Description: Link directly to the source of the debian library
-  Default: False
-  Manual: True
-
 Library
-
   Build-Depends:
         applicative-extras >= 0.1.8
       , base
       , bytestring
       , bzlib
       , Cabal
+      , cabal-debian >= 4.5
       , containers
       , data-lens
+      , debian >= 3.81
+      , debian-repo >= 5.59
       , directory
       , exceptions >= 0.6
       , Extra
@@ -111,39 +98,8 @@ Library
     Debian.AutoBuilder.Version
     Paths_AutoBuilder
 
-  if flag(local-debian-repo)
-    Build-Depends: deepseq, data-lens, data-lens-template
-    if flag(local-debian)
-      Hs-Source-Dirs: ., ../../haskell-debian, ../debian-repo
-    else
-      Build-Depends: debian >= 3.81
-      Hs-Source-Dirs: ., ../debian-repo
-  else
-    Build-Depends: debian-repo >= 5.59, debian >= 3.81
-
-  if flag(local-cabal-debian)
-    Hs-Source-Dirs: ., ../cabal-debian/src
-    Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff, set-extra
-  else
-    Build-Depends: cabal-debian >= 4.5
-
 Executable autobuilder-tests
   Main-Is: Test/Test.hs
   ghc-options: -O2 -threaded -Wall
   Build-Depends: HUnit
-
-  if flag(local-debian-repo)
-    Build-Depends: deepseq, data-lens, data-lens-template
-    if flag(local-debian)
-      Hs-Source-Dirs: ., ../../haskell-debian, ../debian-repo
-    else
-      Build-Depends: debian >= 3.81
-      Hs-Source-Dirs: ., ../debian-repo
-  else
-    Build-Depends: debian-repo >= 5.59, debian >= 3.81
-
-  if flag(local-cabal-debian)
-    Hs-Source-Dirs: ., ../cabal-debian/src
-    Build-Depends: hsemail, text, syb, data-lens, HUnit, Diff, set-extra
-  else
-    Build-Depends: cabal-debian >= 4.5
+  Build-Depends: debian-repo >= 5.59, debian >= 3.81, cabal-debian >= 4.5

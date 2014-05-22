@@ -1,3 +1,11 @@
+autobuilder (6.65) unstable; urgency=low
+
+  * Remove the script to run the autobuilder the package
+    autobuilder-seereason now builds an autobuilder executable, and
+    includes the configuration information for our repository.
+
+ -- David Fox <dsf@seereason.com>  Wed, 21 May 2014 17:14:17 -0700
+
 autobuilder (6.64) unstable; urgency=low
 
   * Remove unused parameter "myCompilerVersion" of defaultParams - we now

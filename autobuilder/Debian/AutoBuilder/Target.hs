@@ -164,7 +164,8 @@ buildLoop :: (MonadRepos m, MonadTop m, MonadApt m, MonadMask m) =>
 buildLoop cache localRepo dependOS buildOS !targets =
     Set.toList <$> loop (Set.fromList targets) Set.empty
     where
-      -- This loop computes the ready targets and builds one.
+      -- This loop computes the list of known ready targets and call
+      -- loop2 to build them
       loop :: (MonadRepos m, MonadApt m, MonadTop m, MonadMask m) =>
               Set.Set Target -> Set.Set Target -> m (Set.Set Target)
       loop unbuilt failed | Set.null unbuilt = return failed
