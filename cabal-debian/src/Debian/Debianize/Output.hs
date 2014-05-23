@@ -57,8 +57,7 @@ runDebianizeScript args =
     case exists of
       False -> return False
       True ->
-          let autobuilderd = "-i.:" ++ home </> ".autobuilder.d"
-              args' = [autobuilderd, "debian/Debianize.hs"] ++ args in
+          let args' = ["debian/Debianize.hs"] ++ args in
           putEnvironmentArgs args >> readProcessWithExitCode "runhaskell" args' "" >>= \ result ->
           case result of
             (ExitSuccess, _, _) -> return True

@@ -67,7 +67,7 @@ import System.Exit (ExitCode(ExitFailure), ExitCode(ExitSuccess))
 import System.FilePath ((</>))
 import System.Posix.Files (createLink)
 import System.Process (proc, readProcess, readProcessWithExitCode, shell)
-import System.Process.Progress (collectOutputs, doOutput, ePutStr, ePutStrLn, foldOutputsL, keepResult, qPutStr, qPutStrLn, timeTask)
+import System.Process.Progress (collectOutputs, doOutput, ePutStr, ePutStrLn, foldOutputsL, keepResult, qPutStr, qPutStrLn, quieter, timeTask)
 import System.Unix.Chroot (useEnv)
 import System.Unix.Directory (removeRecursiveSafely)
 import System.Unix.Mount (umountBelow)
@@ -337,7 +337,7 @@ prefixes = Just (" 1> ", " 2> ")
 -- | Run @apt-get update@ and @apt-get dist-upgrade@.  If @update@
 -- fails, run @dpkg --configure -a@ before running @dist-upgrade@.
 updateLists :: (MonadOS m, MonadIO m, MonadCatch m, MonadMask m) => m NominalDiffTime
-updateLists =
+updateLists = quieter 1 $
     do root <-rootPath <$> access osRoot
        withProc $ liftIO $ do
          qPutStrLn ($(symbol 'updateLists) <> ": updating OSImage " ++ root)
@@ -361,11 +361,13 @@ stripDist path = maybe path (\ n -> drop (n + 7) path) (isSublistOf "/dists/" pa
 withProc :: forall m c. (MonadOS m, MonadIO m, MonadCatch m, MonadMask m) => m c -> m c
 withProc task =
     do root <- rootPath <$> access osRoot
-       let dir = root </> "proc"
+       let proc = root </> "proc"
+           sys = root </> "sys"
            pre :: m String
-           pre = liftIO (createDirectoryIfMissing True dir >> readProcess "mount" ["--bind", "/proc", dir] "")
+           pre = liftIO (createDirectoryIfMissing True proc >> readProcess "mount" ["--bind", "/proc", proc] "" >>
+                         createDirectoryIfMissing True sys >> readProcess "mount" ["--bind", "/sys", sys] "")
            post :: String -> m String
-           post _s = liftIO $ readProcess "umount" [dir] ""
+           post _s = liftIO $ readProcess "umount" [proc] "" >> readProcess "umount" [sys] ""
            task' :: String -> m c
            task' _s = task
        bracket pre post task'
