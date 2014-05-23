@@ -1,3 +1,11 @@
+haskell-debian-repo (5.62) unstable; urgency=low
+
+  * Have withProc mount both /proc and /sys
+  * Don't add -i~/.autobuilder.d to search path when running
+    debian/Debianize.hs script, that directory is no longer used
+
+ -- David Fox <dsf@seereason.com>  Fri, 23 May 2014 10:03:39 -0700
+
 haskell-debian-repo (5.61) unstable; urgency=low
 
   * Rename findOSKey -> getOSKey, findOS -> getOS, findAptKey ->
