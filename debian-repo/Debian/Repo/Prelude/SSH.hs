@@ -110,6 +110,7 @@ sshCopy root =
     do exists <- doesDirectoryExist "~/.ssh"
        home <- getEnv "HOME"
        case exists of
-         True -> system ("rsync -aHxSpDt --delete " ++ home ++ "/.ssh/ " ++ root ++ "/root/.ssh && " ++
+         True -> system ("mkdir -p " ++ root ++ "/root && " ++
+                         "rsync -aHxSpDt --delete " ++ home ++ "/.ssh/ " ++ root ++ "/root/.ssh && " ++
                          "chown -R root.root " ++ root ++ "/root/.ssh")
          False -> system "mkdir -p /root/.ssh"
