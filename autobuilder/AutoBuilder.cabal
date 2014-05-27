@@ -20,6 +20,11 @@ Description:
 Cabal-Version:  >= 1.2
 Build-type:     Simple
 
+flag local-debian-repo
+  Description: Link directly to the source of the debian-repo library
+  Default: True
+  Manual: True
+
 Library
   Build-Depends:
         applicative-extras >= 0.1.8
@@ -31,7 +36,6 @@ Library
       , containers
       , data-lens
       , debian >= 3.81
-      , debian-repo >= 5.59
       , directory
       , exceptions >= 0.6
       , Extra
@@ -98,8 +102,20 @@ Library
     Debian.AutoBuilder.Version
     Paths_AutoBuilder
 
+  if flag (local-debian-repo)
+    Hs-Source-Dirs: ., ../debian-repo
+    Build-Depends: deepseq, data-lens-template
+  else
+    Build-Depends: debian-repo >= 5.59
+
 Executable autobuilder-tests
   Main-Is: Test/Test.hs
   ghc-options: -O2 -threaded -Wall
   Build-Depends: HUnit
-  Build-Depends: debian-repo >= 5.59, debian >= 3.81, cabal-debian >= 4.5
+  Build-Depends: debian >= 3.81, cabal-debian >= 4.5
+
+  if flag (local-debian-repo)
+    Hs-Source-Dirs: ., ../debian-repo
+    Build-Depends: deepseq, data-lens-template
+  else
+    Build-Depends: debian-repo >= 5.59
