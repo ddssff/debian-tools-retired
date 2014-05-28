@@ -63,8 +63,6 @@ data ReposState
       , releaseMap :: Map.Map ReleaseKey Release -- ^ Map to look up known Release objects
       , aptImageMap :: Map.Map AptKey AptImage	-- ^ Map to look up prepared AptImage objects
       , osImageMap :: Map.Map EnvRoot OSImage	-- ^ Map to look up prepared OSImage objects
-      -- , _sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage])
-      -- , _binaryPackageMap :: Map.Map FilePath (FileStatus, [BinaryPackage])
       }
 
 runReposT :: Monad m => StateT ReposState m a -> m a
@@ -78,8 +76,6 @@ initState = ReposState
             , releaseMap = Map.empty
             , aptImageMap = Map.empty
             , osImageMap = Map.empty
-            -- , _sourcePackageMap = Map.empty
-            -- , _binaryPackageMap = Map.empty
             }
 
 -- | A monad to support the IO requirements of the autobuilder.
@@ -89,10 +85,6 @@ class (MonadCatch m, MonadIO m, Functor m) => MonadRepos m where
 
 modifyRepos :: MonadRepos m => (ReposState -> ReposState) -> m ()
 modifyRepos f = getRepos >>= putRepos . f
-
-instance (MonadIO m, Functor m, MonadCatch m) => MonadRepos (StateT ReposState m) where
-    getRepos = get
-    putRepos = put
 
 -- | Like @MonadRepos@, but is also an instance of MonadTop and tries to
 -- load and save a list of cached repositories from @top/repoCache@.
@@ -109,21 +101,11 @@ runReposCachedT top action = do
   qPutStrLn "Exited MonadReposCached..."
   return r
 
--- instance (MonadRepos m, MonadTop m, MonadCatch m, Functor m) => MonadReposCached m
 instance (MonadCatch m, MonadIO m, Functor m) => MonadReposCached (ReposCachedT m)
+
 instance (MonadCatch m, MonadIO m, Functor m) => MonadRepos (ReposCachedT m) where
     getRepos = lift get
     putRepos = lift . put
-
-{-
-instance MonadRepos m => MonadRepos (StateT AptImage m) where
-    getRepos = lift getRepos
-    putRepos = lift . putRepos
-
-instance MonadRepos m => MonadRepos (StateT OSImage m) where
-    getRepos = lift getRepos
-    putRepos = lift . putRepos
--}
 
 instance (MonadRepos m, Functor m) => MonadRepos (StateT s m) where
     getRepos = lift getRepos
