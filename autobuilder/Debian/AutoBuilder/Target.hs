@@ -53,7 +53,7 @@ import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
 import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
-import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
+import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), prettyBinaryPackage, SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
 import Debian.Repo.Prelude (symbol, runProc, readProc)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..), BuildDecision(..))
 import Debian.Repo.Internal.Repos (MonadRepos, evalMonadOS)
@@ -343,18 +343,21 @@ buildTarget cache dependOS buildOS repo !target = do
   -- build dependencies
   let debianControl = targetControl target
   arch <- evalMonadOS buildArchOfOS dependOS
+  qPutStrLn "Looking for build dependency solutions..."
   soln <- evalMonadOS (buildDepSolution arch (map BinPkgName (P.preferred (P.params cache))) debianControl) dependOS
   -- let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) dependOS globalBuildDeps debianControl
   case soln of
         Failure excuses -> qError $ intercalate "\n  " ("Couldn't satisfy build dependencies" : excuses)
         Success packages ->
-            do -- Get the newest available version of a source package,
+            do qPutStrLn ("Build dependency solution: " ++ show (map prettyBinaryPackage packages))
+               -- Get the newest available version of a source package,
                -- along with its status, either Indep or All
                (releaseControlInfo, releaseStatus, _message) <- evalMonadOS (getReleaseControlInfo target) dependOS
                let repoVersion = fmap (packageVersion . sourcePackageID) releaseControlInfo
                    oldFingerprint = packageFingerprint releaseControlInfo
                -- Get the changelog entry from the clean source
                let newFingerprint = targetFingerprint target packages
+               qPutStrLn "Computing new version number of target package..."
                newVersion <- evalMonadOS (computeNewVersion cache target releaseControlInfo releaseStatus) dependOS
                let decision = buildDecision cache target oldFingerprint newFingerprint releaseStatus
                ePutStrLn ("Build decision: " ++ show decision)
@@ -513,6 +516,7 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
 -- architecture are available.
 getReleaseControlInfo :: (MonadOS m, MonadRepos m) => Target -> m (Maybe SourcePackage, SourcePackageStatus, String)
 getReleaseControlInfo target = do
+  qPutStrLn "Getting release package versions and status..."
   sourcePackages' <- (sortBy compareVersion . sortSourcePackages [packageName]) <$> osSourcePackages
   binaryPackages' <- sortBinaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages') <$> osBinaryPackages
   let sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
