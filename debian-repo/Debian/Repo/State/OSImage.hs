@@ -66,6 +66,7 @@ osSourcePackages = do
   maybe osSourcePackages' return mpkgs
     where
       osSourcePackages' = do
+        qPutStrLn "Reading release source packages"
         root <- osRoot <$> get
         arch <- osArch <$> get
         dist <- osFullDistro <$> get
@@ -79,6 +80,7 @@ osBinaryPackages = do
   maybe osBinaryPackages' return mpkgs
     where
       osBinaryPackages' = do
+        qPutStrLn "Reading release binary packages"
         root <- osRoot <$> get
         arch <- osArch <$> get
         dist <- osFullDistro <$> get
