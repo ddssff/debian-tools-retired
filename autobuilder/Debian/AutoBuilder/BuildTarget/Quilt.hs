@@ -34,6 +34,7 @@ import Text.Regex
 
 qMessage s x = qPutStrLn s >> return x
 
+documentation :: [String]
 documentation = [ "quilt:(<target1>):(<target2>) - In a target of this form, target1 is"
                 , "any source tree, and target2 is a quilt directory which contains"
                 , "a debian style changelog file named 'changelog', a file named"

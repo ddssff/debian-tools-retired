@@ -9,7 +9,6 @@ module Debian.Repo.Internal.Repos
 
     , putOSImage
     , osFromRoot
-    , evalMonadOS
 
     , AptKey
     , getApt
@@ -27,6 +26,8 @@ module Debian.Repo.Internal.Repos
 
     , MonadReposCached
     , runReposCachedT
+
+    , syncOS
     ) where
 
 import Control.Applicative ((<$>))
@@ -41,7 +42,7 @@ import Data.Maybe (fromMaybe)
 import Debian.Release (ReleaseName)
 import Debian.Repo.EnvPath (EnvRoot)
 import Debian.Repo.Internal.Apt (AptImage(aptImageRoot))
-import Debian.Repo.OSImage (OSImage(osRoot))
+import Debian.Repo.OSImage (OSImage(osRoot), syncOS')
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.RemoteRepository (RemoteRepository)
 import Debian.Repo.Repo (Repo, repoKey, RepoKey(..))
@@ -93,10 +94,6 @@ instance (MonadIO m, Functor m, MonadCatch m) => MonadRepos (StateT ReposState m
     getRepos = get
     putRepos = put
 
-instance MonadRepos m => MonadRepos (StateT OSImage m) where
-    getRepos = lift getRepos
-    putRepos = lift . putRepos
-
 -- | Like @MonadRepos@, but is also an instance of MonadTop and tries to
 -- load and save a list of cached repositories from @top/repoCache@.
 class (MonadRepos m, MonadTop m, MonadCatch m) => MonadReposCached m
@@ -128,6 +125,10 @@ instance MonadRepos m => MonadRepos (StateT OSImage m) where
     putRepos = lift . putRepos
 -}
 
+instance (MonadRepos m, Functor m) => MonadRepos (StateT s m) where
+    getRepos = lift getRepos
+    putRepos = lift . putRepos
+
 putOSImage :: MonadRepos m => OSImage -> m ()
 putOSImage repo =
     modifyRepos (\ s -> s {osImageMap = Map.insert (osRoot repo) repo (osImageMap s)})
@@ -146,13 +147,6 @@ getApt root = (Map.lookup (AptKey root) . aptImageMap) <$> getRepos
 
 getAptKey :: MonadRepos m => EnvRoot -> m (Maybe AptKey)
 getAptKey root = fmap (AptKey . aptImageRoot) <$> (getApt root)
-
--- | Run MonadOS and update the osImageMap with the modified value
-evalMonadOS :: MonadRepos m => StateT OSImage m a -> OSImage -> m a
-evalMonadOS task os = do
-  do (a, os') <- runStateT task os
-     putOSImage os'
-     return a
 
 findRelease :: (Repo r, MonadRepos m) => r -> ReleaseName -> m (Maybe Release)
 findRelease repo dist = (Map.lookup (ReleaseKey (repoKey repo) dist) . releaseMap) <$> getRepos
@@ -220,3 +214,10 @@ saveRepoCache =
             loadCache path =
                 readFile path `catch` (\ (_ :: SomeException) -> return "[]") >>=
                 return . Map.fromList . fromMaybe [] . maybeRead
+
+syncOS :: (MonadTop m, MonadRepos m) => OSImage -> EnvRoot -> m OSImage
+syncOS srcOS dstRoot = do
+  dstOS <- liftIO $ syncOS' srcOS dstRoot
+  putOSImage dstOS
+  dstOS' <- osFromRoot dstRoot
+  maybe (error ("syncOS failed for " ++ show dstRoot)) return dstOS'

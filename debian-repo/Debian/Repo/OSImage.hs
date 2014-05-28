@@ -17,17 +17,15 @@ module Debian.Repo.OSImage
     , buildEssential
 
     -- * OSImage Manipulation
-    , osFlushPackageCache
     , neuterEnv
     , restoreEnv
-    , syncLocalPool
     , localeGen
     , removeEnv
     ) where
 
 import Control.Exception (evaluate, SomeException)
 import Control.Monad.Catch (try)
-import Control.Monad.State (MonadIO(..), MonadState, MonadState(get, put))
+import Control.Monad.State (MonadIO(..))
 import Data.Data (Data)
 import Data.List (intercalate)
 import Data.Typeable (Typeable)
@@ -114,7 +112,9 @@ createOSImage root distro repo =
 -- | Create the OSImage record for a copy of an existing OSImage at a
 -- different location.
 cloneOSImage :: OSImage -> EnvRoot -> IO OSImage
-cloneOSImage src dst = createOSImage dst (osBaseDistro src) (osLocalMaster src)
+cloneOSImage src dst = do
+  copy <- copyLocalRepo (EnvPath {envRoot = dst, envPath = "/work/localpool"}) (osLocalMaster src)
+  return $ src {osRoot = dst, osLocalCopy = copy}
 
 -- | Set the location of the OSImage's root directory - where you
 -- would cd to before running chroot.
@@ -427,28 +427,3 @@ debootstrap root distro repo include exclude components =
                "mkdir -p " ++ woot,
                "rm -rf " ++ woot,
                "mv " ++ wootNew ++ " " ++ woot]
-
--- | Use rsync to synchronize the pool of locally built packages from
--- outside the build environment to the location inside the
--- environment where apt can see and install the packages.  On the
--- assumption that we are doing this because the pool changed, we also
--- flush the cached package lists.
-syncLocalPool :: (MonadIO m, MonadState OSImage m) => m ()
-syncLocalPool =
-    do os <- get
-       repo' <- copyLocalRepo (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) (osLocalMaster os)
-       put (os {osLocalCopy = repo'})
-       -- Presumably we are doing this because the pool changed, and
-       -- that invalidates the OS package lists.
-       osFlushPackageCache
-
-osFlushPackageCache :: MonadState OSImage m => m ()
-osFlushPackageCache = do
-  os <- get
-  put (os {osSourcePackageCache = Nothing, osBinaryPackageCache = Nothing})
-
--- | Get the version of the newest ghc available in a build environment.
--- ghcNewestAvailableVersion :: (MonadIO m, Functor m, MonadState OSImage m) => m (Maybe DebianVersion)
--- ghcNewestAvailableVersion = do
---   root <- rootPath . osRoot <$> get
---   liftIO $ GHC.ghcNewestAvailableVersion root
