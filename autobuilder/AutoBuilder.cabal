@@ -22,7 +22,7 @@ Build-type:     Simple
 
 flag local-debian-repo
   Description: Link directly to the source of the debian-repo library
-  Default: True
+  Default: False
   Manual: True
 
 Library
