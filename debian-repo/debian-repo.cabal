@@ -63,7 +63,7 @@ Library
         text,
         time,
         unix,
-        Unixutils >= 1.52.3
+        Unixutils >= 1.52.3,
         utf8-string,
         zlib
   Exposed-modules:
