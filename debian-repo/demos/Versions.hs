@@ -3,10 +3,11 @@
 -- |Print the available version numbers of a package.
 module Main where
 
+import Control.Monad.State (StateT)
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.Maybe (fromJust)
 import Debian.Arch (Arch(Binary), ArchCPU(..), ArchOS(..))
-import Debian.Repo.Internal.Repos (MonadRepos, runReposT, putRelease)
+import Debian.Repo.Internal.Repos (MonadRepos, ReposState, runReposT, putRelease)
 import Debian.Repo.Repo (RepoKey(Remote), repoReleaseInfo)
 import Debian.Repo.State.Repository (foldRepository)
 import Debian.URI (readURI')
@@ -14,9 +15,9 @@ import Debian.URI (readURI')
 main :: IO ()
 main = runReposT main'
 
-main' :: MonadRepos m => m ()
+main' :: StateT ReposState IO ()
 main' =
-    do foldRepository f g (Remote (fromJust (readURI' uri)))
+    foldRepository f g (Remote (fromJust (readURI' uri)))
     where
       f repo =
           do releases <- mapM (putRelease repo) (repoReleaseInfo repo)

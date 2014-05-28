@@ -92,7 +92,7 @@ osBinaryPackages = do
 -- |Find or create and update an OS image.  Returns paths to clean and
 -- depend os images.
 prepareOS
-    :: (MonadRepos m, MonadTop m, MonadMask m) =>
+    :: (MonadRepos m, MonadTop m, MonadMask m, MonadIO m) =>
        EnvSet.EnvSet		-- ^ The location where image is to be built
     -> NamedSliceList		-- ^ The sources.list of the base distribution
     -> LocalRepository           -- ^ The location of the local upload repository
@@ -130,7 +130,7 @@ prepareOS eset distro repo flushRoot flushDepends ifSourcesChanged include optio
     where
       cleanRoot = EnvRoot (EnvSet.cleanOS eset)
       dependRoot = EnvRoot (EnvSet.dependOS eset)
-      recreate :: (MonadOS m, MonadTop m, MonadMask m) => UpdateError -> m ()
+      recreate :: (MonadOS m, MonadTop m, MonadMask m, MonadRepos m, MonadIO m) => UpdateError -> m ()
       recreate (Changed name path computed installed)
           | ifSourcesChanged == SourcesChangedError =
               error $ "FATAL: Sources for " ++ relName name ++ " in " ++ path ++
@@ -151,7 +151,7 @@ prepareOS eset distro repo flushRoot flushDepends ifSourcesChanged include optio
                          replaceFile sources (show . pretty $ base)
              rebuildOS (EnvRoot root) distro include exclude components
 
-      doInclude :: (MonadOS m, MonadIO m) => m ()
+      doInclude :: (MonadOS m, MonadIO m, MonadMask m) => m ()
       doInclude =
           do aptGetInstall (map (\ s -> (BinPkgName s, Nothing)) include)
              aptGetInstall (map (\ s -> (BinPkgName s, Nothing)) optional) `catch` (\ (e :: IOError) -> ePutStrLn ("Ignoring exception on optional package install: " ++ show e))

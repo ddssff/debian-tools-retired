@@ -23,7 +23,7 @@ import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.Internal.Apt (AptImage(aptImageArch, aptImageRoot, aptImageSources,
                                           aptBinaryPackageCache, aptSourcePackageCache),
                                  cacheRootDir, createAptImage, MonadApt(..), modifyApt)
-import Debian.Repo.Internal.Repos (AptKey, evalMonadApt, getAptKey, MonadRepos, putAptImage)
+import Debian.Repo.Internal.Repos (AptKey, evalMonadApt, getAptKey, MonadRepos(..), putAptImage)
 import Debian.Repo.PackageID (PackageID(packageName), PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage(sourcePackageID))
 import Debian.Repo.Prelude (symbol)
@@ -40,6 +40,10 @@ import System.Unix.Directory (removeRecursiveSafely)
 instance MonadApt m => MonadApt (StateT EnvRoot m) where
     getApt = lift getApt
     putApt = lift . putApt
+
+instance MonadRepos m => MonadRepos (StateT AptImage m) where
+    getRepos = lift getRepos
+    putRepos = lift . putRepos
 
 withAptImage :: (MonadRepos m, MonadTop m) => SourcesChangedAction -> NamedSliceList -> StateT AptImage m a -> m a
 withAptImage sourcesChangedAction sources action = prepareAptImage sourcesChangedAction sources >>= evalMonadApt action

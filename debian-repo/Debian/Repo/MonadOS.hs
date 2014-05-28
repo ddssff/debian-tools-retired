@@ -18,7 +18,7 @@ import Control.DeepSeq (force)
 import Control.Exception (evaluate, SomeException)
 import Control.Monad.Catch (bracket, MonadCatch, MonadMask, throwM, try)
 import Control.Monad.State (MonadState(get), StateT, evalStateT, get)
-import Control.Monad.Trans (liftIO, MonadIO)
+import Control.Monad.Trans (liftIO, MonadIO, lift)
 import Data.Monoid ((<>))
 import Data.Time (NominalDiffTime)
 import Debian.Pretty (pretty)
@@ -42,14 +42,14 @@ import System.Unix.Chroot (useEnv)
 -- that then we are modifying a copy of the OSImage in MonadRepos, we
 -- want to go into MonadRepos and modify the map element there.  So
 -- instead put an EnvRoot to look up the OSImage.
-class (MonadRepos m, Functor m) => MonadOS m where
+class (Monad m, Functor m) => MonadOS m where
     getOS :: m OSImage
     putOS :: OSImage -> m ()
     modifyOS :: (OSImage -> OSImage) -> m ()
 
-instance (MonadRepos m, Functor m) => MonadOS (StateT EnvRoot m) where
-    getOS = get >>= \ root -> maybe (error "getOS") id <$> (osFromRoot root)
-    putOS = putOSImage
+instance MonadRepos m => MonadOS (StateT EnvRoot m) where
+    getOS = get >>= \ root -> maybe (error "getOS") id <$> (lift $ osFromRoot root)
+    putOS = lift . putOSImage
     modifyOS f = getOS >>= putOS . f
 
 -- | Run MonadOS and update the osImageMap with the modified value
@@ -148,10 +148,10 @@ osFlushPackageCache = modifyOS (\ os -> os {osSourcePackageCache = Nothing, osBi
 --   root <- rootPath . osRoot <$> get
 --   liftIO $ GHC.ghcNewestAvailableVersion root
 
-buildEssential :: MonadOS m => m Relations
+buildEssential :: (MonadOS m, MonadIO m) => m Relations
 buildEssential = getOS >>= liftIO . OS.buildEssential
 
-syncOS :: (MonadOS m, MonadTop m) => EnvRoot -> m ()
+syncOS :: (MonadOS m, MonadTop m, MonadRepos m) => EnvRoot -> m ()
 syncOS dstRoot =
     do srcOS <- getOS
        dstOS <- Debian.Repo.Internal.Repos.syncOS srcOS dstRoot

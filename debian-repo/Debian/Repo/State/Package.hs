@@ -24,7 +24,7 @@ import Control.Exception (SomeException)
 import Control.Exception as E (ErrorCall(ErrorCall), SomeException(..), try)
 import Control.Monad (filterM, foldM, when)
 import Control.Monad.State (StateT, runStateT, MonadState(get, put))
-import Control.Monad.Trans (liftIO, MonadIO)
+import Control.Monad.Trans (liftIO, MonadIO, lift)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, fromChunks, readFile)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Either (partitionEithers, lefts, rights)
@@ -50,7 +50,7 @@ import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (parseSection', ReleaseName, releaseName', Section(..), sectionName, sectionName', SubSection(section))
 import Debian.Repo.Changes (changeName, changePath, findChangesFiles)
 import Debian.Repo.EnvPath (EnvPath, outsidePath)
-import Debian.Repo.Internal.Repos (MonadRepos, ReleaseKey, releaseByKey, putRelease)
+import Debian.Repo.Internal.Repos (MonadRepos(..), ReleaseKey, releaseByKey, putRelease)
 import Debian.Repo.LocalRepository (Layout(..), LocalRepository, poolDir', repoLayout, repoReleaseInfoLocal, repoRoot)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageName, packageVersion), prettyPackageID)
 import Debian.Repo.PackageIndex (binaryIndexes, BinaryPackage(packageID, packageInfo), BinaryPackage(BinaryPackage, pConflicts, pDepends, pPreDepends, pProvides, pReplaces), PackageIndex(..), packageIndexes, packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec, sourceFileName), sourceIndexes, SourcePackage(sourcePackageID), SourcePackage(SourcePackage, sourceControl, sourceDirectory, sourcePackageFiles, sourceParagraph))
@@ -95,6 +95,10 @@ data InstallState
 instance MonadRepos m => MonadInstall (StateT InstallState m) where
     getInstall = get
     putInstall = put
+
+instance MonadRepos m => MonadRepos (StateT InstallState m) where
+    getRepos = lift getRepos
+    putRepos = lift . putRepos
 
 $(makeLenses [''InstallState])
 

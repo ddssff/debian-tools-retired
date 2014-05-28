@@ -1,7 +1,7 @@
 -- | Manage state information about the available repositories,
 -- releases, OS images, and Apt images.
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, ScopedTypeVariables, TemplateHaskell #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Debian.Repo.Internal.Repos
     ( MonadRepos(getRepos, putRepos)
     , ReposState
@@ -83,6 +83,20 @@ class (MonadCatch m, MonadIO m, Functor m) => MonadRepos m where
     getRepos :: m ReposState
     putRepos :: ReposState -> m ()
 
+instance (MonadCatch m, MonadIO m, Functor m) => MonadRepos (StateT ReposState m) where
+    getRepos = get
+    putRepos = put
+
+{-
+instance (MonadRepos m, Functor m) => MonadRepos (StateT s m) where
+    getRepos = lift getRepos
+    putRepos = lift . putRepos
+-}
+
+instance MonadRepos m => MonadRepos (StateT EnvRoot m) where
+    getRepos = lift getRepos
+    putRepos = lift . putRepos
+
 modifyRepos :: MonadRepos m => (ReposState -> ReposState) -> m ()
 modifyRepos f = getRepos >>= putRepos . f
 
@@ -106,10 +120,6 @@ instance (MonadCatch m, MonadIO m, Functor m) => MonadReposCached (ReposCachedT 
 instance (MonadCatch m, MonadIO m, Functor m) => MonadRepos (ReposCachedT m) where
     getRepos = lift get
     putRepos = lift . put
-
-instance (MonadRepos m, Functor m) => MonadRepos (StateT s m) where
-    getRepos = lift getRepos
-    putRepos = lift . putRepos
 
 putOSImage :: MonadRepos m => OSImage -> m ()
 putOSImage repo =
