@@ -16,7 +16,7 @@ import Control.Applicative.Error (Failing(..))
 import Control.Arrow (second)
 import Control.Exception (AsyncException(UserInterrupt), evaluate, fromException, SomeException, throw, toException)
 import Control.Monad.Catch (MonadCatch, catch, try, MonadMask)
-import Control.Monad.RWS (liftIO, MonadIO, when)
+import Control.Monad.RWS (liftIO, MonadIO, when, get)
 import qualified Data.ByteString.Char8 as B (concat)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, concat, empty, toChunks, unpack)
 import qualified Data.ByteString.UTF8 as UTF8 (toString)
@@ -44,22 +44,22 @@ import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
-import Debian.Repo.AptImage (MonadApt)
-import Debian.Repo.OSImage (syncLocalPool, updateLists, withProc, withTmp, buildEssential, osRoot)
+import Debian.Repo.Internal.Apt (MonadApt)
+import Debian.Repo.MonadOS (MonadOS, updateLists, withProc, withTmp)
+import Debian.Repo.OSImage (OSImage, syncLocalPool, buildEssential, osRoot)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
 import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
 import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
-import Debian.Repo.OSImage (MonadOS)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
-import Debian.Repo.Prelude (symbol, access, runProc, readProc)
+import Debian.Repo.Prelude (symbol, runProc, readProc)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..), BuildDecision(..))
-import Debian.Repo.State (MonadRepos, evalMonadOS, OSKey)
+import Debian.Repo.Internal.Repos (MonadRepos, evalMonadOS)
 import Debian.Repo.State.AptImage (aptSourcePackages)
 import Debian.Repo.State.OSImage (osSourcePackages, osBinaryPackages, updateOS, syncOS, buildArchOfOS)
-import Debian.Repo.State.Package (scanIncoming, InstallResult(Ok), showErrors)
+import Debian.Repo.State.Package (scanIncoming, InstallResult(Ok), showErrors, MonadInstall, evalInstall)
 import Debian.Repo.Top (MonadTop)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
@@ -73,7 +73,7 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
 import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
-import System.Process.Progress (collectOutputs, ePutStr, ePutStrLn, keepResult, keepResult, keepStdout, mergeToStdout, verbosity, noisier, qPutStr, qPutStrLn, quieter, qBracket)
+import System.Process.Progress (collectOutputs, ePutStr, ePutStrLn, keepResult, keepResult, keepStdout, mergeToStdout, noisier, qPutStrLn, quieter)
 import System.Process.Read (readCreateProcess)
 import System.Unix.Chroot (useEnv)
 import Text.Printf (printf)
@@ -147,10 +147,10 @@ type ReadyTarget = (Target, [Target], [Target])
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
 buildTargets :: (MonadRepos m, MonadTop m, MonadApt m, MonadMask m) =>
-                P.CacheRec -> OSKey -> OSKey -> LocalRepository -> [Buildable] -> m (LocalRepository, [Target])
+                P.CacheRec -> OSImage -> OSImage -> LocalRepository -> [Buildable] -> m (LocalRepository, [Target])
 buildTargets _ _ _ localRepo [] = return (localRepo, [])
 buildTargets cache dependOS buildOS localRepo !targetSpecs =
-    do globalBuildDeps <- evalMonadOS buildEssential dependOS
+    do globalBuildDeps <- liftIO $ buildEssential dependOS
        qPutStrLn ("\nAssembling source trees: (" ++ $(symbol 'buildTargets) ++ ")\n")
        targets <- evalMonadOS (prepareTargets cache globalBuildDeps targetSpecs) dependOS
        qPutStrLn "\nBuilding all targets:"
@@ -160,7 +160,7 @@ buildTargets cache dependOS buildOS localRepo !targetSpecs =
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
 buildLoop :: (MonadRepos m, MonadTop m, MonadApt m, MonadMask m) =>
-             P.CacheRec -> LocalRepository -> OSKey -> OSKey -> [Target] -> m [Target]
+             P.CacheRec -> LocalRepository -> OSImage -> OSImage -> [Target] -> m [Target]
 buildLoop cache localRepo dependOS buildOS !targets =
     Set.toList <$> loop (Set.fromList targets) Set.empty
     where
@@ -333,8 +333,8 @@ qError message = qPutStrLn message >> error message
 buildTarget ::
     (MonadRepos m, MonadTop m, MonadApt m, MonadMask m) =>
     P.CacheRec ->			-- configuration info
-    OSKey ->
-    OSKey ->
+    OSImage ->
+    OSImage ->
     LocalRepository ->			-- The local repository the packages will be uploaded to
     Target ->
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
@@ -376,14 +376,15 @@ buildTarget cache dependOS buildOS repo !target = do
 
 -- | Build a package and upload it to the local repository.
 buildPackage :: (MonadRepos m, MonadTop m, MonadMask m) =>
-                P.CacheRec -> OSKey -> OSKey -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> BuildDecision -> LocalRepository -> m LocalRepository
+                P.CacheRec -> OSImage -> OSImage -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> BuildDecision -> LocalRepository -> m LocalRepository
 buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !target decision repo = do
   checkDryRun
   source <- prepareBuildTree cache dependOS buildOS newFingerprint target
   logEntry source
   result <- evalMonadOS (build source) buildOS
   result' <- find result
-  doLocalUpload result'
+  -- Upload to the local repo without a PGP key
+  evalInstall (doLocalUpload result') repo Nothing
     where
       sourceLog = entry . cleanSource $ target
       checkDryRun = when (P.dryRun (P.params cache))
@@ -400,7 +401,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              -- so we need to check this version number.  We also
              -- don't want to leave the patches subdirectory here
              -- unless we actually created a patch.
-             root <- rootPath <$> access osRoot
+             root <- rootPath . osRoot <$> get
              let path = debdir buildTree
                  path' = fromJust (dropPrefix root path)
                  doDpkgSource False =
@@ -448,7 +449,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
                   , changeRelease = name }
           where setDist name (Field ("Distribution", _)) = Field ("Distribution", " " <> T.pack (releaseName' name))
                 setDist _ other = other
-      doLocalUpload :: (MonadRepos m, MonadTop m, MonadMask m) => (ChangesFile, NominalDiffTime) -> m LocalRepository
+      doLocalUpload :: (MonadInstall m, MonadRepos m, MonadTop m, MonadMask m) => (ChangesFile, NominalDiffTime) -> m LocalRepository
       doLocalUpload (changesFile, elapsed) =
           do
             (changesFile' :: ChangesFile) <-
@@ -476,10 +477,10 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
 -- these operations take place in a different order from other types
 -- of builds.  For lax: dependencies, then image copy, then source
 -- copy.  For other: image copy, then source copy, then dependencies.
-prepareBuildTree :: (MonadTop m, MonadRepos m, MonadMask m) => P.CacheRec -> OSKey -> OSKey -> Fingerprint -> Target -> m DebianBuildTree
+prepareBuildTree :: (MonadTop m, MonadRepos m, MonadMask m) => P.CacheRec -> OSImage -> OSImage -> Fingerprint -> Target -> m DebianBuildTree
 prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
-  dependRoot <- evalMonadOS (rootPath <$> access osRoot) dependOS
-  buildRoot <- evalMonadOS (rootPath <$> access osRoot) buildOS
+  dependRoot <- evalMonadOS (rootPath . osRoot <$> get) dependOS
+  buildRoot <- evalMonadOS (rootPath . osRoot <$> get) buildOS
   let oldPath = topdir . cleanSource $ target
       newPath = buildRoot ++ fromJust (dropPrefix dependRoot oldPath)
   when (P.strictness (P.params cache) == P.Lax)
@@ -652,7 +653,8 @@ buildDepSolution arch preferred debianControl = do
 -- FIXME: Most of this code should move into Debian.Repo.Dependencies
 buildDepSolutions :: (MonadOS m, MonadIO m, MonadRepos m) => Arch -> [BinPkgName] -> Control' T.Text -> m (Failing [(Int, [BinaryPackage])])
 buildDepSolutions arch preferred debianControl =
-    do globalBuildDeps <- buildEssential
+    do os <- get
+       globalBuildDeps <- liftIO $ buildEssential os
        packages <- osBinaryPackages
        case G.buildDependencies debianControl of
          Left s -> return $ Failure [s]
@@ -740,7 +742,7 @@ sinkFields f (Paragraph fields) =
 -- |Download the package's build dependencies into /var/cache
 downloadDependencies :: (MonadOS m, MonadIO m) => DebianBuildTree -> [String] -> Fingerprint -> m String
 downloadDependencies source extra sourceFingerprint =
-    do root <- rootPath <$> access osRoot
+    do root <- rootPath . osRoot <$> get
        let path = pathBelow root (topdir source)
            pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
            command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
@@ -762,7 +764,7 @@ pathBelow root path =
 -- |Install the package's build dependencies.
 installDependencies :: (MonadOS m, MonadCatch m, MonadIO m, MonadMask m) => DebianBuildTree -> [String] -> Fingerprint -> m L.ByteString
 installDependencies source extra sourceFingerprint =
-    do root <- rootPath <$> access osRoot
+    do root <- rootPath . osRoot <$> get
        let path = pathBelow root (topdir source)
            pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
            aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)

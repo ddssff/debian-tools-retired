@@ -1,5 +1,5 @@
 Name:           debian-repo
-Version:        5.62
+Version:        5.63
 License:        BSD3
 License-File:	debian/copyright
 Author:         David Fox
@@ -63,7 +63,7 @@ Library
         text,
         time,
         unix,
-        Unixutils >= 1.51,
+        Unixutils >= 1.52.3
         utf8-string,
         zlib
   Exposed-modules:
@@ -73,6 +73,10 @@ Library
         Debian.Repo.Dependencies,
         Debian.Repo.EnvPath,
         Debian.Repo.LocalRepository,
+        Debian.Repo.Internal.Apt,
+        Debian.Repo.Internal.IO,
+        Debian.Repo.Internal.Repos,
+        Debian.Repo.MonadOS,
         Debian.Repo.OSImage,
         Debian.Repo.Package,
         Debian.Repo.PackageID,
@@ -91,7 +95,6 @@ Library
         Debian.Repo.Repo,
         Debian.Repo.Slice,
         Debian.Repo.SourceTree,
-        Debian.Repo.State,
         Debian.Repo.State.AptImage,
         Debian.Repo.State.OSImage,
         Debian.Repo.State.Package,

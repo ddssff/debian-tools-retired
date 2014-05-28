@@ -1,77 +1,65 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleContexts, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.OSImage
-    ( OSImage
-    , osBaseDistro
+    (
+    -- * OSImage type
+      OSImage(osRoot, osBaseDistro, osArch, osLocalMaster, osLocalCopy, osSourcePackageCache, osBinaryPackageCache)
+    , createOSImage
+    , cloneOSImage
+
+    -- * OSImage Creation
+    , pbuilder
+    , debootstrap
+    , syncOS'
+
+    -- * OSImage Queries
     , osFullDistro
-    , osLocalMaster
-    , osLocalCopy
-    , osRoot
-    , osArch
-    , osSourcePackageCache
-    , osBinaryPackageCache
-    , MonadOS
+    , buildEssential
 
-    , buildArchOfRoot
-
-    , chrootEnv
-    , localeGen
+    -- * OSImage Manipulation
+    , osFlushPackageCache
     , neuterEnv
     , restoreEnv
-    , buildEssential
-    , removeEnv
-    , updateLists
-    , withProc
-    , withTmp
-    , aptGetInstall
-
-    , createOSImage
-    , _pbuilderBuild'
-    , buildOS'
     , syncLocalPool
-    , osFlushPackageCache
-    , syncOS'
+    , localeGen
+    , removeEnv
     ) where
 
-import Control.Applicative ((<$>))
-import Control.DeepSeq (force)
 import Control.Exception (evaluate, SomeException)
-import Control.Monad.Catch (bracket, MonadCatch, throwM, try, MonadMask)
-import Control.Monad.State (evalStateT, MonadState, StateT)
-import Control.Monad.Trans (liftIO, MonadIO)
-import qualified Data.ByteString.Lazy as L (ByteString)
+import Control.Monad.Catch (try)
+import Control.Monad.State (MonadIO(..), MonadState, MonadState(get, put))
 import Data.Data (Data)
-import Data.Lens.Lazy (getL, setL)
-import Data.Lens.Template (makeLenses)
 import Data.List (intercalate)
-import Data.Monoid ((<>))
-import Data.Time (NominalDiffTime)
 import Data.Typeable (Typeable)
-import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..))
-import qualified Debian.GHC as GHC (ghcNewestAvailableVersion)
+import Debian.Arch (Arch)
 import Debian.Pretty (pretty)
-import Debian.Relation (ParseRelations(parseRelations), PkgName, Relations)
+import Debian.Relation (ParseRelations(parseRelations), Relations)
 import Debian.Release (parseReleaseName, parseSection', ReleaseName(relName))
-import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath), envRoot, EnvRoot, EnvRoot(rootPath), outsidePath)
+import Debian.Repo.EnvPath (EnvPath(EnvPath, envPath, envRoot), EnvRoot(rootPath), outsidePath)
+import Debian.Repo.Internal.IO (buildArchOfRoot)
 import Debian.Repo.LocalRepository (copyLocalRepo, LocalRepository)
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage)
-import Debian.Repo.Prelude (access, (~=), rsync, runProc, readProc, symbol, sameInode, sameMd5sum, replaceFile, isSublistOf)
+import Debian.Repo.Prelude (isSublistOf, readProc, replaceFile, rsync, sameInode, sameMd5sum)
 import Debian.Repo.Repo (repoKey, repoURI)
-import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), Slice(Slice, sliceRepoKey, sliceSource), SliceList, SliceList(..))
-import Debian.Repo.Top (askTop, MonadTop)
+import Debian.Repo.Slice (NamedSliceList(sliceList), NamedSliceList(sliceListName), Slice(Slice, sliceRepoKey, sliceSource), SliceList(..))
 import Debian.Sources (DebSource(..), DebSource(sourceDist, sourceUri), SourceType(..), SourceType(..))
 import Debian.URI (uriToString')
-import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile, renameFile)
-import System.Exit (ExitCode(ExitFailure), ExitCode(ExitSuccess))
+import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>))
-import System.Posix.Files (createLink)
-import System.Process (proc, readProcess, readProcessWithExitCode, shell)
-import System.Process.Progress (collectOutputs, doOutput, ePutStr, ePutStrLn, foldOutputsL, keepResult, qPutStr, qPutStrLn, quieter, timeTask)
+import System.Posix.Files (createLink, deviceID, fileID, FileStatus, modificationTime)
+import System.Process (shell)
+import System.Process.Progress (collectOutputs, doOutput, ePutStr, ePutStrLn, foldOutputsL, qPutStr, qPutStrLn)
 import System.Unix.Chroot (useEnv)
 import System.Unix.Directory (removeRecursiveSafely)
 import System.Unix.Mount (umountBelow)
 import Text.Regex (matchRegex, mkRegex)
+
+instance Ord FileStatus where
+    compare a b = compare (deviceID a, fileID a, modificationTime a) (deviceID b, fileID b, modificationTime b)
+
+instance Eq FileStatus where
+    a == b = compare a b == EQ
 
 -- |This type represents an OS image located at osRoot built from a
 -- particular osBaseDistro using a particular osArch.  If an
@@ -79,42 +67,64 @@ import Text.Regex (matchRegex, mkRegex)
 -- the environment and kept in sync, and lines will be added to
 -- sources.list to point to it.
 data OSImage
-    = OS { _osRoot :: EnvRoot
-         , _osBaseDistro :: NamedSliceList
-         , _osArch :: Arch
-         , _osLocalMaster :: LocalRepository
+    = OS { osRoot :: EnvRoot
+         , osBaseDistro :: NamedSliceList
+         , osArch :: Arch
+         , osLocalMaster :: LocalRepository
 	 -- ^ The associated local repository, where packages we build
 	 -- inside this image are first uploaded to.
-         , _osLocalCopy :: LocalRepository
+         , osLocalCopy :: LocalRepository
 	 -- ^ A copy of osLocalMaster located inside the os root environment.
-         , _osSourcePackageCache :: Maybe [SourcePackage]
-         , _osBinaryPackageCache :: Maybe [BinaryPackage]
+         , osSourcePackageCache :: Maybe [SourcePackage]
+         , osBinaryPackageCache :: Maybe [BinaryPackage]
          }
 
-$(makeLenses [''OSImage])
+instance Ord OSImage where
+    compare a b = case compare (osRoot a) (osRoot b) of
+                    EQ -> case compare (osBaseDistro a) (osBaseDistro b) of
+                            EQ -> compare (osArch a) (osArch b)
+                            x -> x
+                    x -> x
 
-class (MonadState OSImage m, Monad m, Functor m) => MonadOS m
+instance Eq OSImage where
+    a == b = compare a b == EQ
 
-instance (Monad m, Functor m) => MonadOS (StateT OSImage m)
+-- |Create an OS image record
+createOSImage ::
+              EnvRoot			-- ^ The location where image is to be built
+           -> NamedSliceList		-- ^ The sources.list of the base distribution
+           -> LocalRepository           -- ^ The location of the local upload repository
+           -> IO OSImage
+createOSImage root distro repo =
+    do copy <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) repo
+       -- At this point we can only support the build architecture of
+       -- the underlying system.  We can support multiple
+       -- distributions, but if the hardware is an amd64 the packages
+       -- produced will be amd64.
+       arch <- liftIO buildArchOfRoot
+       let os = OS { osRoot = root
+                   , osBaseDistro = distro
+                   , osArch = arch
+                   , osLocalMaster = repo
+                   , osLocalCopy = copy
+                   , osSourcePackageCache = Nothing
+                   , osBinaryPackageCache = Nothing }
+       return os
+
+-- | Create the OSImage record for a copy of an existing OSImage at a
+-- different location.
+cloneOSImage :: OSImage -> EnvRoot -> IO OSImage
+cloneOSImage src dst = createOSImage dst (osBaseDistro src) (osLocalMaster src)
+
+-- | Set the location of the OSImage's root directory - where you
+-- would cd to before running chroot.
+-- chrootEnv :: OSImage -> EnvRoot -> OSImage
+-- chrootEnv os dst = os {osRoot = dst}
 
 -- The following are path functions which can be used while
 -- constructing instances of AptCache.  Each is followed by a
 -- corresponding function that gives the same result when applied to
 -- an AptCache instance.
-
-buildArchOfRoot :: IO Arch
-buildArchOfRoot =
-    do a@(code1, out1, _err1) <- readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_OS"] ""
-       b@(code2, out2, _err2) <- readProcessWithExitCode "dpkg-architecture" ["-qDEB_BUILD_ARCH_CPU"] ""
-       case (code1, lines out1, code2, lines out2) of
-         (ExitSuccess, os : _, ExitSuccess, cpu : _) ->
-             return $ Binary (parseArchOS os) (parseArchCPU cpu)
-         _ -> error $ "Failure computing build architecture of /: " ++ show (a, b)
-    where
-      parseArchOS "any" = ArchOSAny
-      parseArchOS x = ArchOS x
-      parseArchCPU "any" = ArchCPUAny
-      parseArchCPU x = ArchCPU x
 
 data SourcesChangedAction =
     SourcesChangedError |
@@ -124,34 +134,24 @@ data SourcesChangedAction =
 
 instance Show OSImage where
     show os = intercalate " " ["OS {",
-                               rootPath (getL osRoot os),
-                               relName (sliceListName (getL osBaseDistro os)),
-                               show (getL osArch os),
-                               show (getL osLocalCopy os)]
-
-instance Ord OSImage where
-    compare a b = case compare (getL osRoot a) (getL osRoot b) of
-                    EQ -> case compare (getL osBaseDistro a) (getL osBaseDistro b) of
-                            EQ -> compare (getL osArch a) (getL osArch b)
-                            x -> x
-                    x -> x
-
-instance Eq OSImage where
-    a == b = compare a b == EQ
+                               rootPath (osRoot os),
+                               relName (sliceListName (osBaseDistro os)),
+                               show (osArch os),
+                               show (osLocalCopy os)]
 
 -- |The sources.list is the list associated with the distro name, plus
 -- the local sources where we deposit newly built packages.
-osFullDistro :: MonadOS m => m SliceList
-osFullDistro =
-    do base <- access osBaseDistro
-       repo' <- access osLocalCopy
-       let name = relName (sliceListName base)
-           localSources :: SliceList
-           localSources = SliceList {slices = [Slice {sliceRepoKey = repoKey repo', sliceSource = src},
-                                               Slice {sliceRepoKey = repoKey repo', sliceSource = bin}]}
-           src = DebSource Deb (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
-           bin = DebSource DebSrc (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
-       return $ SliceList { slices = slices (sliceList base) ++ slices localSources }
+osFullDistro :: OSImage -> SliceList
+osFullDistro os =
+    let base = osBaseDistro os
+        repo' = osLocalCopy os
+        name = relName (sliceListName base)
+        localSources :: SliceList
+        localSources = SliceList {slices = [Slice {sliceRepoKey = repoKey repo', sliceSource = src},
+                                            Slice {sliceRepoKey = repoKey repo', sliceSource = bin}]}
+        src = DebSource Deb (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"]))
+        bin = DebSource DebSrc (repoURI repo') (Right (parseReleaseName name, [parseSection' "main"])) in
+    SliceList { slices = slices (sliceList base) ++ slices localSources }
 
 data UpdateError
     = Changed ReleaseName FilePath SliceList SliceList
@@ -163,32 +163,27 @@ instance Show UpdateError where
     show (Missing r p) = unwords ["Missing", show r, show p]
     show Flushed = "Flushed"
 
--- | Set the location of the OSImage's root directory - where you
--- would cd to before running chroot.
-chrootEnv :: OSImage -> EnvRoot -> OSImage
-chrootEnv os dst = setL osRoot dst os
-
-syncOS' :: (MonadIO m, MonadTop m) => OSImage -> EnvRoot -> m OSImage
+syncOS' :: OSImage -> EnvRoot -> IO OSImage
 syncOS' src dst = do
-  liftIO mkdir
-  liftIO umount
-  rsync ["--exclude=/work/build/*"] (rootPath (getL osRoot src)) (rootPath dst)
-  createOSImage dst (getL osBaseDistro src) (getL osLocalMaster src)
+  mkdir
+  umount
+  rsync ["--exclude=/work/build/*"] (rootPath (osRoot src)) (rootPath dst)
+  cloneOSImage src dst
     where
       mkdir = createDirectoryIfMissing True (rootPath dst ++ "/work")
       umount =
-          do srcResult <- umountBelow False (rootPath (getL osRoot src))
+          do srcResult <- umountBelow False (rootPath (osRoot src))
              dstResult <- umountBelow False (rootPath dst)
              case filter (\ (_, (code, _, _)) -> code /= ExitSuccess) (srcResult ++ dstResult) of
                [] -> return ()
                failed -> fail $ "umount failure(s): " ++ show failed
 
 -- | FIXME - we should notice the locale problem and run this.
-localeGen :: (MonadOS m, MonadIO m) => String -> m ()
-localeGen locale =
-    do root <- access osRoot
+localeGen :: OSImage -> String -> IO ()
+localeGen os locale =
+    do let root = osRoot os
        qPutStr ("Generating locale " ++  locale ++ " (" ++ stripDist (rootPath root) ++ ")...")
-       result <- liftIO $ try $ useEnv (rootPath root) forceList (readProc (shell cmd)) >>= return . collectOutputs
+       result <- try $ useEnv (rootPath root) forceList (readProc (shell cmd)) >>= return . collectOutputs
        either (\ (e :: SomeException) -> error $ "Failed to generate locale " ++ rootPath root ++ ": " ++ show e)
               (\ _ -> qPutStrLn "done")
               result
@@ -209,7 +204,7 @@ neuterEnv os =
               (\ _ -> qPutStrLn "done.")
               result
     where
-      root = rootPath (getL osRoot os)
+      root = rootPath (osRoot os)
 
 neuterFiles :: [(FilePath, Bool)]
 neuterFiles = [("/sbin/start-stop-daemon", True),
@@ -254,7 +249,7 @@ neuterFile os (file, mustExist) =
 
       fullPath = EnvPath root file
       binTrue = EnvPath root "/bin/true"
-      root = getL osRoot os
+      root = osRoot os
 
 -- |Reverse the neuterEnv operation.
 restoreEnv :: OSImage -> IO OSImage
@@ -265,7 +260,7 @@ restoreEnv os =
       either (\ (e :: SomeException) -> error $ "damaged environment " ++ rootPath root ++ ": " ++ show e ++ "\n  please remove it.")
                  (\ _ -> return os) result
     where
-      root = getL osRoot os
+      root = osRoot os
 
 -- check_and_restore from build-env.ml
 restoreFile :: OSImage -> (FilePath, Bool) -> IO ()
@@ -292,15 +287,14 @@ restoreFile os (file, mustExist) =
 
       fullPath = EnvPath root file
       binTrue = EnvPath root "/bin/true"
-      root = getL osRoot os
+      root = osRoot os
 
 -- | Build the dependency relations for the build essential packages.
 -- For this to work the @build-essential@ package must be installed in
 -- the OSImage.
-buildEssential :: (MonadOS m, MonadIO m) => m Relations
-buildEssential =
-    access osRoot >>= \ root ->
-    liftIO $ do
+buildEssential :: OSImage -> IO Relations
+buildEssential os = do
+      let root = osRoot os
       -- qPutStrLn "Computing build essentials"
       essential <-
           readFile (rootPath root ++ "/usr/share/build-essential/essential-packages-list") >>=
@@ -329,160 +323,67 @@ removeEnv os =
       removeRecursiveSafely (rootPath root)
       ePutStrLn "done."
     where
-      root = getL osRoot os
+      root = osRoot os
 
-prefixes :: Maybe (L.ByteString, L.ByteString)
-prefixes = Just (" 1> ", " 2> ")
-
--- | Run @apt-get update@ and @apt-get dist-upgrade@.  If @update@
--- fails, run @dpkg --configure -a@ before running @dist-upgrade@.
-updateLists :: (MonadOS m, MonadIO m, MonadCatch m, MonadMask m) => m NominalDiffTime
-updateLists = quieter 1 $
-    do root <-rootPath <$> access osRoot
-       withProc $ liftIO $ do
-         qPutStrLn ($(symbol 'updateLists) <> ": updating OSImage " ++ root)
-         out <- useEnv root forceList (readProc update)
-         _ <- case keepResult out of
-                [ExitFailure _] ->
-                    do _ <- useEnv root forceList (runProc configure)
-                       useEnv root forceList (runProc update)
-                _ -> return []
-         (_, elapsed) <- timeTask (useEnv root forceList (runProc upgrade))
-         return elapsed
-    where
-       update = proc "apt-get" ["update"]
-       configure = proc "dpkg" ["--configure", "-a"]
-       upgrade = proc "apt-get" ["-y", "--force-yes", "dist-upgrade"]
+-- prefixes :: Maybe (L.ByteString, L.ByteString)
+-- prefixes = Just (" 1> ", " 2> ")
 
 stripDist :: FilePath -> FilePath
 stripDist path = maybe path (\ n -> drop (n + 7) path) (isSublistOf "/dists/" path)
-
--- | Do an IO task in the build environment with /proc mounted.
-withProc :: forall m c. (MonadOS m, MonadIO m, MonadCatch m, MonadMask m) => m c -> m c
-withProc task =
-    do root <- rootPath <$> access osRoot
-       let proc = root </> "proc"
-           sys = root </> "sys"
-           pre :: m String
-           pre = liftIO (createDirectoryIfMissing True proc >> readProcess "mount" ["--bind", "/proc", proc] "" >>
-                         createDirectoryIfMissing True sys >> readProcess "mount" ["--bind", "/sys", sys] "")
-           post :: String -> m String
-           post _s = liftIO $ readProcess "umount" [proc] "" >> readProcess "umount" [sys] ""
-           task' :: String -> m c
-           task' _s = task
-       bracket pre post task'
-
--- | Do an IO task in the build environment with /proc mounted.
-withTmp :: forall m c. (MonadOS m, MonadIO m, MonadCatch m, MonadMask m) => m c -> m c
-withTmp task =
-    do root <- rootPath <$> access osRoot
-       let dir = root </> "tmp"
-           pre :: m String
-           pre = liftIO (createDirectoryIfMissing True dir >> readProcess "mount" ["--bind", "/tmp", dir] "")
-           post :: String -> m String
-           post _ = liftIO $ readProcess "umount" [dir] ""
-           task' :: String -> m c
-           task' _ = try task >>= either (\ (e :: SomeException) -> throwM e) return
-       bracket pre post task'
-
--- | Run an apt-get command in a particular directory with a
--- particular list of packages.  Note that apt-get source works for
--- binary or source package names.
-aptGetInstall :: (MonadOS m, MonadIO m, PkgName n) => [(n, Maybe DebianVersion)] -> m ()
-aptGetInstall packages =
-    do root <- rootPath <$> access osRoot
-       liftIO $ useEnv root (return . force) $ do
-         _ <- runProc p
-         return ()
-    where
-      p = proc "apt-get" args'
-      args' = ["-y", "--force-yes", "install"] ++ map formatPackage packages
-      formatPackage (name, Nothing) = show (pretty name)
-      formatPackage (name, Just version) = show (pretty name) ++ "=" ++ show (prettyDebianVersion version)
 
 -- | This is a deepseq thing
 forceList :: [a] -> IO [a]
 forceList output = evaluate (length output) >> return output
 
--- |Create or update an OS image in which packages can be built.
-createOSImage :: (MonadIO m, MonadTop m) =>
-              EnvRoot			-- ^ The location where image is to be built
-           -> NamedSliceList		-- ^ The sources.list of the base distribution
-           -> LocalRepository           -- ^ The location of the local upload repository
-           -> m OSImage
-createOSImage root distro repo =
-    do ePutStrLn ("Preparing clean " ++ relName (sliceListName distro) ++ " build environment at " ++ rootPath root)
-       copy <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) repo
-       arch <- liftIO buildArchOfRoot
-       let os = OS { _osRoot = root
-                   , _osBaseDistro = distro
-                   , _osArch = arch
-                   , _osLocalMaster = repo
-                   , _osLocalCopy = copy
-                   , _osSourcePackageCache = Nothing
-                   , _osBinaryPackageCache = Nothing }
-       return os
-
-_pbuilderBuild' :: (MonadIO m, MonadTop m, Functor m) =>
-            EnvRoot
+pbuilder :: FilePath
+         -> EnvRoot
          -> NamedSliceList
-         -> Arch
-         -> LocalRepository
          -> LocalRepository
          -> [String]
          -> [String]
          -> [String]
-         -> m OSImage
-_pbuilderBuild' root distro arch repo copy _extraEssential _omitEssential _extra =
+         -> IO OSImage
+pbuilder top root distro repo _extraEssential _omitEssential _extra =
       -- We can't create the environment if the sources.list has any
       -- file:// URIs because they can't yet be visible inside the
       -- environment.  So we grep them out, create the environment, and
       -- then add them back in.
-    do top <- askTop
-       ePutStrLn ("Creating clean build environment (" ++ relName (sliceListName distro) ++ ")")
+    do ePutStrLn ("Creating clean build environment (" ++ relName (sliceListName distro) ++ ")")
        ePutStrLn ("# " ++ cmd top)
        let codefn _ ExitSuccess = return ()
            codefn _ failure = error ("Could not create build environment:\n " ++ cmd top ++ " -> " ++ show failure)
        liftIO (readProc (shell (cmd top))) >>= liftIO . doOutput >>= foldOutputsL codefn outfn errfn exnfn (return ())
        ePutStrLn "done."
-       let os = OS { _osRoot = root
-                   , _osBaseDistro = distro
-                   , _osArch = arch
-                   , _osLocalMaster = repo
-                   , _osLocalCopy = copy
-                  , _osSourcePackageCache = Nothing
-                  , _osBinaryPackageCache = Nothing }
+       os <- createOSImage root distro repo -- arch?  copy?
        let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
        -- Rewrite the sources.list with the local pool added.
-       sources <- (show . pretty) <$> evalStateT osFullDistro os
-       liftIO $ replaceFile sourcesPath' sources
+           sources = show $ pretty $ osFullDistro os
+       replaceFile sourcesPath' sources
        return os
     where
       outfn _ _ = return ()
       errfn _ _ = return ()
       exnfn _ _ = return ()
-      cmd top =
+      cmd x =
           intercalate " " $ [ "pbuilder"
                             , "--create"
                             , "--distribution", (relName . sliceListName $ distro)
-                            , "--basetgz", top </> "pbuilderBase"
+                            , "--basetgz", x </> "pbuilderBase"
                             , "--buildplace", rootPath root
                             , "--preserve-buildplace"
                             ]
 
 -- Create a new clean build environment in root.clean
 -- FIXME: create an ".incomplete" flag and remove it when build-env succeeds
-buildOS' :: (MonadIO m, MonadTop m, Functor m) =>
-            EnvRoot
-         -> NamedSliceList
-         -> Arch
-         -> LocalRepository
-         -> LocalRepository
-         -> [String]
-         -> [String]
-         -> [String]
-         -> m OSImage
-buildOS' root distro arch repo copy include exclude components =
+debootstrap
+    :: EnvRoot
+    -> NamedSliceList
+    -> LocalRepository
+    -> [String]
+    -> [String]
+    -> [String]
+    -> IO OSImage
+debootstrap root distro repo include exclude components =
     do
       ePutStr (unlines [ "Creating clean build environment (" ++ relName (sliceListName distro) ++ ")"
                        , "  root: " ++ show root
@@ -494,16 +395,10 @@ buildOS' root distro arch repo copy include exclude components =
       -- then add them back in.
       readProc (shell cmd) >>= foldOutputsL codefn outfn errfn exnfn (return ())
       ePutStrLn "done."
-      let os = OS { _osRoot = root
-                  , _osBaseDistro = distro
-                  , _osArch = arch
-                  , _osLocalMaster = repo
-                  , _osLocalCopy = copy
-                  , _osSourcePackageCache = Nothing
-                  , _osBinaryPackageCache = Nothing }
+      os <- createOSImage root distro repo -- arch?  copy?
       let sourcesPath' = rootPath root ++ "/etc/apt/sources.list"
       -- Rewrite the sources.list with the local pool added.
-      sources <- (show . pretty) <$> evalStateT osFullDistro os
+          sources = show $ pretty $ osFullDistro os
       liftIO $ replaceFile sourcesPath' sources
       return os
     where
@@ -538,24 +433,22 @@ buildOS' root distro arch repo copy include exclude components =
 -- environment where apt can see and install the packages.  On the
 -- assumption that we are doing this because the pool changed, we also
 -- flush the cached package lists.
-syncLocalPool :: (MonadIO m, MonadOS m) => m ()
+syncLocalPool :: (MonadIO m, MonadState OSImage m) => m ()
 syncLocalPool =
-    do root <- access osRoot
-       dist <- access osLocalMaster
-       repo' <- copyLocalRepo (EnvPath {envRoot = root, envPath = "/work/localpool"}) dist
-       osLocalCopy ~= repo'
+    do os <- get
+       repo' <- copyLocalRepo (EnvPath {envRoot = osRoot os, envPath = "/work/localpool"}) (osLocalMaster os)
+       put (os {osLocalCopy = repo'})
        -- Presumably we are doing this because the pool changed, and
        -- that invalidates the OS package lists.
        osFlushPackageCache
-       return ()
 
-osFlushPackageCache :: MonadOS m => m ()
+osFlushPackageCache :: MonadState OSImage m => m ()
 osFlushPackageCache = do
-    osSourcePackageCache ~= Nothing
-    osBinaryPackageCache ~= Nothing
+  os <- get
+  put (os {osSourcePackageCache = Nothing, osBinaryPackageCache = Nothing})
 
 -- | Get the version of the newest ghc available in a build environment.
-ghcNewestAvailableVersion :: (MonadIO m, MonadOS m) => m (Maybe DebianVersion)
-ghcNewestAvailableVersion = do
-  root <- rootPath <$> access osRoot
-  liftIO $ GHC.ghcNewestAvailableVersion root
+-- ghcNewestAvailableVersion :: (MonadIO m, Functor m, MonadState OSImage m) => m (Maybe DebianVersion)
+-- ghcNewestAvailableVersion = do
+--   root <- rootPath . osRoot <$> get
+--   liftIO $ GHC.ghcNewestAvailableVersion root

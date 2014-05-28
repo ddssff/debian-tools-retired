@@ -12,22 +12,24 @@ import Control.Exception (SomeException)
 import Control.Monad.Catch (MonadCatch, catch)
 import Control.Monad.State (StateT)
 import Control.Monad.Trans (MonadIO(..), MonadTrans(lift))
-import Data.Lens.Lazy (getL, setL)
 import Data.List (sort)
 import Data.Maybe (listToMaybe)
 import Debian.Changes (ChangeLogEntry(logVersion))
 import Debian.Pretty (pretty)
 import Debian.Relation (SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName)
-import Debian.Repo.AptImage (aptDir, aptGetSource, aptGetUpdate, AptImage, aptImageArch, aptImageRoot, aptImageSources, cacheRootDir, createAptImage, MonadApt(..), aptBinaryPackageCache, aptSourcePackageCache, modifyApt)
+import Debian.Repo.AptImage (aptDir, aptGetSource, aptGetUpdate)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
+import Debian.Repo.Internal.Apt (AptImage(aptImageArch, aptImageRoot, aptImageSources,
+                                          aptBinaryPackageCache, aptSourcePackageCache),
+                                 cacheRootDir, createAptImage, MonadApt(..), modifyApt)
+import Debian.Repo.Internal.Repos (AptKey, evalMonadApt, getAptKey, MonadRepos(getRepos, putRepos), putAptImage)
 import Debian.Repo.OSImage (OSImage)
 import Debian.Repo.PackageID (PackageID(packageName), PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage, SourcePackage(sourcePackageID))
 import Debian.Repo.Prelude (symbol)
 import Debian.Repo.Slice (NamedSliceList(sliceList, sliceListName), SliceList, SourcesChangedAction)
 import Debian.Repo.SourceTree (DebianBuildTree(debTree'), DebianSourceTree(tree'), DebianSourceTreeC(entry), findDebianBuildTrees, SourceTree(dir'))
-import Debian.Repo.State (AptKey, evalMonadApt, getAptKey, MonadRepos, putAptImage)
 import Debian.Repo.State.PackageIndex (binaryPackagesFromSources, sourcePackagesFromSources)
 import Debian.Repo.State.Slice (updateCacheSources)
 import Debian.Repo.Top (MonadTop)
@@ -39,6 +41,10 @@ import System.Unix.Directory (removeRecursiveSafely)
 instance MonadApt m => MonadApt (StateT OSImage m) where
     getApt = lift getApt
     putApt = lift . putApt
+
+instance MonadRepos m => MonadRepos (StateT AptImage m) where
+    getRepos = lift getRepos
+    putRepos = lift . putRepos
 
 withAptImage :: (MonadRepos m, MonadTop m) => SourcesChangedAction -> NamedSliceList -> StateT AptImage m a -> m a
 withAptImage sourcesChangedAction sources action = prepareAptImage sourcesChangedAction sources >>= evalMonadApt action
@@ -77,30 +83,30 @@ prepareAptImage' sourcesChangedAction sources = do
 
 aptSourcePackages :: (MonadRepos m, MonadApt m) => m [SourcePackage]
 aptSourcePackages = do
-  mpkgs <- getL aptSourcePackageCache <$> getApt
+  mpkgs <- aptSourcePackageCache <$> getApt
   maybe aptSourcePackages' return mpkgs
     where
       aptSourcePackages' = do
-        root <- getL aptImageRoot <$> getApt
-        arch <- getL aptImageArch <$> getApt
-        sources <- getL aptImageSources <$> getApt
+        root <- aptImageRoot <$> getApt
+        arch <- aptImageArch <$> getApt
+        sources <- aptImageSources <$> getApt
         -- qPutStrLn ($(symbol 'aptSourcePackages) ++ " " ++ show (pretty (sliceListName sources)))
         pkgs <- sourcePackagesFromSources root arch (sliceList sources)
-        modifyApt (setL aptSourcePackageCache (Just pkgs))
+        modifyApt (\ s -> s {aptSourcePackageCache = Just pkgs})
         return pkgs
 
 aptBinaryPackages :: (MonadRepos m, MonadApt m) => m [BinaryPackage]
 aptBinaryPackages = do
-  mpkgs <- getL aptBinaryPackageCache <$> getApt
+  mpkgs <- aptBinaryPackageCache <$> getApt
   maybe aptBinaryPackages' return mpkgs
     where
       aptBinaryPackages' = do
-        root <- getL aptImageRoot <$> getApt
-        arch <- getL aptImageArch <$> getApt
-        sources <- getL aptImageSources <$> getApt
+        root <- aptImageRoot <$> getApt
+        arch <- aptImageArch <$> getApt
+        sources <- aptImageSources <$> getApt
         -- qPutStrLn ($(symbol 'aptBinaryPackages) ++ " " ++ show (pretty (sliceListName sources)))
         pkgs <- binaryPackagesFromSources root arch (sliceList sources)
-        modifyApt (setL aptBinaryPackageCache (Just pkgs))
+        modifyApt (\ s -> s {aptBinaryPackageCache = Just pkgs})
         return pkgs
 {-
     do qPutStrLn "AptImage.getBinaryPackages"
@@ -126,7 +132,7 @@ prepareSource :: (MonadRepos m, MonadApt m, MonadTop m, MonadIO m) =>
               -> Maybe DebianVersion		-- The desired version, if Nothing get newest
               -> m DebianBuildTree		-- The resulting source tree
 prepareSource package version =
-    do root <- (rootPath . getL aptImageRoot) <$> getApt
+    do root <- (rootPath . aptImageRoot) <$> getApt
        dir <- aptDir package
        liftIO $ createDirectoryIfMissing True dir
        ready <- liftIO $ findDebianBuildTrees dir

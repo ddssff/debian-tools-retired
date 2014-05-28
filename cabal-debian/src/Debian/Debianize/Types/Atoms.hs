@@ -30,7 +30,6 @@ import Debian.Version (DebianVersion)
 import Distribution.License (License)
 import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
-import Distribution.Simple.Compiler (CompilerId(..))
 import Prelude hiding (init, init, log, log, unlines, (.))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 

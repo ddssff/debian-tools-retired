@@ -15,7 +15,6 @@ import Control.Monad.Catch (MonadMask, catch, throwM)
 import Control.Monad.State (MonadIO(liftIO), get)
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
-import Data.Lens.Lazy (getL)
 import Data.List as List (intercalate, null, nub)
 import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Time(NominalDiffTime)
@@ -32,14 +31,14 @@ import qualified Debian.AutoBuilder.Version as V
 import Debian.Debianize (DebT)
 import Debian.Pretty (pretty)
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
-import Debian.Repo.OSImage (MonadOS, osLocalMaster, osLocalCopy, osBaseDistro)
+import Debian.Repo.Internal.Repos (MonadRepos, runReposCachedT, MonadReposCached, evalMonadOS)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
-import Debian.Repo.Prelude (access)
+import Debian.Repo.MonadOS (MonadOS)
+import Debian.Repo.OSImage (osLocalMaster, osLocalCopy, osBaseDistro)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
                           appendSliceLists, inexactPathSlices, releaseSlices)
-import Debian.Repo.State (MonadRepos, runReposCachedT, MonadReposCached, evalMonadOS)
 import Debian.Repo.State.AptImage (withAptImage)
 import Debian.Repo.State.Repository (foldRepository)
 import Debian.Repo.State.Slice (repoSources, updateCacheSources)
@@ -137,7 +136,7 @@ doParameterSet init results params =
 -- build environment.
 getLocalSources :: (MonadRepos m, MonadOS m, MonadIO m) => m SliceList
 getLocalSources = do
-  root <- repoRoot <$> access osLocalCopy
+  root <- repoRoot . osLocalCopy <$> get
   case parseURI ("file://" ++ envPath root) of
     Nothing -> error $ "Invalid local repo root: " ++ show root
     Just uri -> repoSources (Just (envRoot root)) uri
@@ -155,7 +154,7 @@ runParameterSet init cache =
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       dependOS <- prepareDependOS params buildRelease
       let allTargets = P.buildPackages params
-      buildOS <- evalMonadOS (do sources <- getL osBaseDistro <$> get
+      buildOS <- evalMonadOS (do sources <- osBaseDistro <$> get
                                  updateCacheSources (P.ifSourcesChanged params) sources
                                  when (P.report params) (ePutStrLn . doReport $ allTargets)
                                  qPutStr ("\n" ++ showTargets allTargets ++ "\n")
@@ -172,7 +171,7 @@ runParameterSet init cache =
       -- used to avoid creating package versions that already exist.  Also include the sources
       -- for the local repository to avoid collisions there as well.
       localSources <- evalMonadOS getLocalSources buildOS
-      local <- evalMonadOS (access osLocalMaster) dependOS
+      let local = osLocalMaster dependOS
       let poolSources = NamedSliceList { sliceListName = ReleaseName (relName (sliceListName buildRelease) ++ "-all")
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
 

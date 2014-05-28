@@ -18,6 +18,7 @@ import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(Success, Failure), ErrorMsg)
 import Control.Exception as E (SomeException, try, catch, throw)
 import Control.Monad(when)
+import Control.Monad.State (get)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (intercalate)
 import qualified Data.Map as Map
@@ -35,8 +36,8 @@ import Debian.Control (Control'(Control), fieldValue,  Paragraph'(Paragraph), Fi
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
-import Debian.Repo.OSImage (MonadOS, osRoot)
-import Debian.Repo.Prelude (access)
+import Debian.Repo.MonadOS (MonadOS)
+import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.SourceTree (DebianBuildTree(..), control, entry, subdir, debdir, findDebianBuildTrees, findBuildTree, copySourceTree,
                                DebianSourceTree(..), findSourceTree {-, SourceTree(dir')-})
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
@@ -162,7 +163,7 @@ prepareBuild _cache target =
 
       copySource :: (MonadOS m, MonadIO m) => DebianSourceTree -> m DebianBuildTree
       copySource debSource =
-          do root <- rootPath <$> access osRoot
+          do root <- rootPath . osRoot <$> get
              let name = logPackage . entry $ debSource
                  dest = root ++ "/work/build/" ++ name
                  ver = Debian.Version.version . logVersion . entry $ debSource
@@ -176,7 +177,7 @@ prepareBuild _cache target =
 
       copyBuild :: (MonadOS m, MonadIO m) => DebianBuildTree -> m DebianBuildTree
       copyBuild debBuild =
-          do root <- rootPath <$> access osRoot
+          do root <- rootPath . osRoot <$> get
              let name = logPackage . entry $ debBuild
                  dest = root ++ "/work/build/" ++ name
                  ver = Debian.Version.version . logVersion . entry $ debBuild

@@ -27,7 +27,7 @@ import Debian.Pretty (pretty)
 import Debian.Relation ()
 import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
 import Debian.Repo.Prelude (rsync)
-import Debian.Repo.State (MonadRepos)
+import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
 import Distribution.Verbosity (normal)
 import Distribution.Compiler

@@ -1,5 +1,5 @@
 -- | Install packages to and delete packages from a local repository.
-{-# LANGUAGE BangPatterns, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell, TupleSections #-}
+{-# LANGUAGE BangPatterns, FlexibleContexts, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell, TupleSections, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans -fno-warn-name-shadowing #-}
 module Debian.Repo.State.Package
     ( MonadInstall
@@ -50,6 +50,7 @@ import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 import Debian.Release (parseSection', ReleaseName, releaseName', Section(..), sectionName, sectionName', SubSection(section))
 import Debian.Repo.Changes (changeName, changePath, findChangesFiles)
 import Debian.Repo.EnvPath (EnvPath, outsidePath)
+import Debian.Repo.Internal.Repos (MonadRepos(getRepos, putRepos), ReleaseKey, releaseByKey, putRelease)
 import Debian.Repo.LocalRepository (Layout(..), LocalRepository, poolDir', repoLayout, repoReleaseInfoLocal, repoRoot)
 import Debian.Repo.PackageID (makeBinaryPackageID, makeSourcePackageID, PackageID(packageName, packageVersion), prettyPackageID)
 import Debian.Repo.PackageIndex (binaryIndexes, BinaryPackage(packageID, packageInfo), BinaryPackage(BinaryPackage, pConflicts, pDepends, pPreDepends, pProvides, pReplaces), PackageIndex(..), packageIndexes, packageIndexPath, SourceControl(..), SourceFileSpec(SourceFileSpec, sourceFileName), sourceIndexes, SourcePackage(sourcePackageID), SourcePackage(SourcePackage, sourceControl, sourceDirectory, sourcePackageFiles, sourceParagraph))
@@ -59,7 +60,6 @@ import Debian.Repo.Prelude.Misc (listDiff)
 import Debian.Repo.Prelude.GPGSign (PGPKey)
 import Debian.Repo.Repo (Repo, repoArchList, repoKey, repoKeyURI)
 import Debian.Repo.Release (Release(releaseAliases, releaseComponents, releaseName, releaseArchitectures))
-import Debian.Repo.State (MonadRepos(getRepos, putRepos), getRelease, ReleaseKey, putRelease)
 import Debian.Repo.State.Release (findReleases, prepareRelease, writeRelease, signRepo)
 import Debian.URI (fileFromURIStrict)
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
@@ -106,7 +106,7 @@ runInstall :: MonadRepos m => StateT InstallState m a -> LocalRepository -> Mayb
 runInstall task repo keyname = do
   releases <- findReleases repo
   (r, st) <- runStateT task (InstallState repo Nothing releases empty)
-  mapM_ (\ key -> getRelease key >>= \ rel -> liftIO (writeRelease repo rel >>= signRepo keyname repo)) (Set.toList (getL modified st))
+  mapM_ (\ key -> releaseByKey key >>= \ rel -> liftIO (writeRelease repo rel >>= signRepo keyname repo)) (Set.toList (getL modified st))
   return (r, st)
 
 evalInstall :: MonadRepos m => StateT InstallState m a -> LocalRepository -> Maybe PGPKey -> m a
@@ -231,7 +231,7 @@ plural _ _ = ""
 
 -- | Find all the .changes files in the incoming directory and try to
 -- process each to install the package into a local repository.
-scanIncoming :: MonadRepos m => Bool -> Maybe PGPKey -> LocalRepository -> m [(ChangesFile, InstallResult)]
+scanIncoming :: (MonadInstall m, MonadRepos m) => Bool -> Maybe PGPKey -> LocalRepository -> m [(ChangesFile, InstallResult)]
 scanIncoming createSections keyname repo = do
   qPutStrLn ("Uploading packages to " ++ outsidePath (repoRoot repo) </> "incoming")
   changes <- liftIO (findChangesFiles (outsidePath (repoRoot repo) </> "incoming"))

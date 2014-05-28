@@ -5,7 +5,7 @@ module Debian.AutoBuilder.BuildTarget
     ) where
 
 import Control.Monad.Catch (MonadCatch)
-import Control.Monad.Trans (MonadIO, liftIO)
+import Control.Monad.Trans (liftIO)
 import Data.List (intersperse)
 import qualified Debian.AutoBuilder.BuildTarget.Apt as Apt
 import qualified Debian.AutoBuilder.BuildTarget.Cd as Cd
@@ -30,9 +30,9 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (DebT)
 import Debian.Relation (SrcPkgName(..))
-import Debian.Repo.OSImage (MonadOS, withProc)
+import Debian.Repo.MonadOS (MonadOS, withProc)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
-import Debian.Repo.State (MonadRepos)
+import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop)
 import System.FilePath ((</>))
 

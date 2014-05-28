@@ -6,7 +6,7 @@ module Debian.AutoBuilder.BuildEnv
     , envSet
     ) where
 
-import Control.Applicative (Applicative, (<$>), (<*>))
+import Control.Applicative (Applicative)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.State (MonadIO(liftIO), get)
@@ -14,12 +14,11 @@ import qualified Debian.AutoBuilder.LocalRepo as Local (prepare)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(archSet, buildRelease, cleanUp, components, excludePackages, flushDepends, flushPool, flushRoot, ifSourcesChanged, includePackages, optionalIncludePackages))
 import Debian.Debianize.Types.Atoms (EnvSet(..))
 import Debian.Release (ReleaseName, releaseName')
-import Debian.Repo.EnvPath (EnvRoot(rootPath), EnvRoot(EnvRoot))
-import Debian.Repo.OSImage (MonadOS, chrootEnv, osRoot, syncLocalPool)
-import Debian.Repo.LocalRepository (LocalRepository)
-import Debian.Repo.Prelude (access, checkRsyncExitCode, rsync)
+import Debian.Repo.EnvPath (EnvRoot(EnvRoot))
+import Debian.Repo.MonadOS (MonadOS)
+import Debian.Repo.OSImage (OSImage, syncLocalPool, osRoot)
 import Debian.Repo.Slice (NamedSliceList)
-import Debian.Repo.State (MonadRepos, OSKey, evalMonadOS, putOSImage)
+import Debian.Repo.Internal.Repos (MonadRepos, evalMonadOS, putOSImage)
 import Debian.Repo.State.OSImage (prepareOS)
 import Debian.Repo.State.Package (deleteGarbage, evalInstall)
 import Debian.Repo.Top (MonadTop, sub)
@@ -46,7 +45,7 @@ cleanEnvOfRelease distro =
     sub ("dists" </> releaseName' distro </> "clean") >>= return . EnvRoot
 -}
 
-prepareDependOS :: (MonadRepos m, MonadTop m, MonadMask m) => P.ParamRec -> NamedSliceList -> m OSKey
+prepareDependOS :: (MonadRepos m, MonadTop m, MonadMask m) => P.ParamRec -> NamedSliceList -> m OSImage
 prepareDependOS params rel =
     do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archSet params)
        -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archSet params)
@@ -58,8 +57,10 @@ prepareDependOS params rel =
        evalMonadOS syncLocalPool dOS
        return dOS
 
-prepareBuildOS :: (MonadOS m, MonadTop m, MonadRepos m, Applicative m) => ReleaseName -> m OSKey
+prepareBuildOS :: (MonadOS m, MonadTop m, MonadRepos m, Applicative m) => ReleaseName -> m OSImage
 prepareBuildOS rel = do
-  s <- envSet rel >>= return . EnvRoot . buildOS
-  os <- chrootEnv <$> get <*> return s
-  putOSImage os
+  os <- get
+  r <- envSet rel >>= return . EnvRoot . buildOS
+  let os' = os {osRoot = r}
+  putOSImage os'
+  return os'

@@ -1,3 +1,9 @@
+haskell-debian-repo (5.63) unstable; urgency=low
+
+  * Refactor the state types to improve safety.
+
+ -- David Fox <dsf@seereason.com>  Tue, 27 May 2014 10:17:18 -0700
+
 haskell-debian-repo (5.62) unstable; urgency=low
 
   * Have withProc mount both /proc and /sys

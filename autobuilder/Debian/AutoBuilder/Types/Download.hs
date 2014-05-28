@@ -14,7 +14,7 @@ import Data.Time (NominalDiffTime)
 import Data.Version (Version)
 import Debian.AutoBuilder.Types.Packages (PackageFlag, Packages, RetrieveMethod(..), TargetName)
 import qualified Debian.AutoBuilder.Types.Packages as P (Packages(flags, name, spec))
-import Debian.Repo.OSImage (MonadOS)
+import Debian.Repo.MonadOS (MonadOS)
 import System.Process.Read.Chunks (Output)
 
 data Download

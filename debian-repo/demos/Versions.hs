@@ -6,8 +6,8 @@ module Main where
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.Maybe (fromJust)
 import Debian.Arch (Arch(Binary), ArchCPU(..), ArchOS(..))
+import Debian.Repo.Internal.Repos (MonadRepos, runReposT, putRelease)
 import Debian.Repo.Repo (RepoKey(Remote), repoReleaseInfo)
-import Debian.Repo.State (MonadRepos, runReposT, putRelease)
 import Debian.Repo.State.Repository (foldRepository)
 import Debian.URI (readURI')
 

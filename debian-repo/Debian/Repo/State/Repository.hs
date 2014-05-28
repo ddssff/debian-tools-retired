@@ -10,19 +10,16 @@ module Debian.Repo.State.Repository
     , foldRepository
     ) where
 
-import Control.Applicative ((<$>))
 import Control.Monad (filterM, when)
 import Control.Monad.Trans (liftIO, MonadIO)
-import Data.Lens.Lazy (getL, modL)
-import Data.Map as Map (insert, lookup)
 import Data.Maybe (catMaybes)
 import Debian.Release (ReleaseName(ReleaseName), Section(Section))
 import Debian.Repo.EnvPath (EnvPath, EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath)
+import Debian.Repo.Internal.Repos (MonadRepos(..), repoByURI, putRepo)
 import Debian.Repo.LocalRepository (Layout(..), LocalRepository(..), readLocalRepo)
 import Debian.Repo.Release (getReleaseInfoRemote, parseArchitectures, Release(Release, releaseAliases, releaseArchitectures, releaseComponents, releaseName))
 import Debian.Repo.RemoteRepository (RemoteRepository, RemoteRepository(RemoteRepository))
 import Debian.Repo.Repo (RepoKey(..))
-import Debian.Repo.State (MonadRepos(..), repoMap)
 import Debian.URI (fromURI', toURI', URI(uriPath), URI')
 import Network.URI (URI(..))
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, getDirectoryContents)
@@ -99,8 +96,8 @@ computeLayout root =
 
 prepareRemoteRepository :: MonadRepos m => URI -> m RemoteRepository
 prepareRemoteRepository uri =
-    do mp <- getL repoMap <$> getRepos
-       maybe (loadRemoteRepository (toURI' uri)) return $ Map.lookup (toURI' uri) mp
+    let uri' = toURI' uri in
+    repoByURI uri' >>= maybe (loadRemoteRepository uri') return
 
 -- |To create a RemoteRepo we must query it to find out the
 -- names, sections, and supported architectures of its releases.
@@ -108,7 +105,7 @@ loadRemoteRepository :: MonadRepos m => URI' -> m RemoteRepository
 loadRemoteRepository uri =
     do releaseInfo <- liftIO . unsafeInterleaveIO . getReleaseInfoRemote . fromURI' $ uri
        let repo = RemoteRepository uri releaseInfo
-       getRepos >>= putRepos . modL repoMap (Map.insert uri repo)
+       putRepo uri repo
        return repo
 
 -- foldRepository :: forall m r a. MonadState ReposState m => (r -> m a) -> RepoKey -> m a

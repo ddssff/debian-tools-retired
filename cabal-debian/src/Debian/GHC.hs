@@ -6,6 +6,7 @@ module Debian.GHC
     ) where
 
 import Control.DeepSeq (force)
+import Control.Exception (SomeException, try)
 import Control.Monad (when)
 import Data.Version (showVersion, Version(Version))
 import Debian.Version (DebianVersion, parseDebianVersion)
@@ -19,12 +20,13 @@ ghcNewestAvailableVersion :: FilePath -> IO (Maybe DebianVersion)
 ghcNewestAvailableVersion root = do
   exists <- doesDirectoryExist root
   when (not exists) (error $ "ghcVersion: no such environment: " ++ show root)
-  versions <- chroot $
+  versions <- try $ chroot $
                 (readProcess "apt-cache" ["showpkg", "ghc"] "" >>=
-                return . dropWhile (/= "Versions: ") . lines)
+                return . dropWhile (/= "Versions: ") . lines) :: IO (Either SomeException [String])
   case versions of
-    (_ : versionLine : _) -> return . Just . parseDebianVersion . takeWhile (/= ' ') $ versionLine
-    _ -> return Nothing
+    Left e -> error $ "ghcNewestAvailableVersion failed in " ++ show root ++ ": " ++ show e
+    Right (_ : versionLine : _) -> return . Just . parseDebianVersion . takeWhile (/= ' ') $ versionLine
+    _ -> return $ Nothing
     where
       chroot = case root of
                  "/" -> id

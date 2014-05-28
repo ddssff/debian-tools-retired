@@ -22,6 +22,7 @@ module Debian.Repo.SourceTree
 import Control.Applicative ((<$>), (<*>), pure)
 import Control.Exception (evaluate, SomeException, try)
 import Control.Monad (foldM)
+import Control.Monad.State (get)
 import Control.Monad.Trans (MonadIO(..))
 import Data.List (intercalate, nubBy, sortBy)
 import Data.Text (Text)
@@ -33,8 +34,9 @@ import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName)
 import Debian.Repo.Changes (findChangesFiles)
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
-import Debian.Repo.OSImage (MonadOS, osRoot)
-import Debian.Repo.Prelude (access, rsync, runProc, getSubDirectories, replaceFile, dropPrefix)
+import Debian.Repo.MonadOS (MonadOS)
+import Debian.Repo.OSImage (osRoot)
+import Debian.Repo.Prelude (rsync, runProc, getSubDirectories, replaceFile, dropPrefix)
 import qualified Debian.Version as V (version)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist)
 import System.Environment (getEnv, getEnvironment)
@@ -112,7 +114,7 @@ instance Show BuildDecision where
 buildDebs :: (DebianBuildTreeC t, MonadOS m, MonadIO m) => Bool -> Bool -> [(String, Maybe String)] -> t -> BuildDecision -> m NominalDiffTime
 buildDebs noClean _twice setEnv buildTree decision =
     do
-      root <- rootPath <$> access osRoot
+      root <- rootPath . osRoot <$> get
       noSecretKey <- liftIO $ getEnv "HOME" >>= return . (++ "/.gnupg") >>= doesDirectoryExist >>= return . not
       env0 <- liftIO getEnvironment
       -- Set LOGNAME so dpkg-buildpackage doesn't die when it fails to
