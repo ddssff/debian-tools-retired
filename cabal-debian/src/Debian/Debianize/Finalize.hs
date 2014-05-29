@@ -308,19 +308,21 @@ makeUtilsPackages pkgDesc =
        -- The names of cabal executables that go into eponymous debs
        insExecPkg <- access T.executable >>= return . Set.map ename . Set.fromList . elems
 
-       let installedData = Set.unions (Map.elems installedDataMap)
+       let installedData = Set.map (\ a -> (a, a)) $ Set.unions (Map.elems installedDataMap)
            installedExec = Set.unions (Map.elems installedExecMap)
 
        let prefixPath = Cabal.dataDir pkgDesc
-           availableData = Set.union installedData (Set.fromList (List.map (prefixPath </>) (Cabal.dataFiles pkgDesc))) :: Set FilePath
-           availableExec = Set.union installedExec (Set.map Cabal.exeName (Set.filter (Cabal.buildable . Cabal.buildInfo) (Set.fromList (Cabal.executables pkgDesc)))) :: Set FilePath
+       let dataFilePaths = Set.fromList (zip (List.map (prefixPath </>) (Cabal.dataFiles pkgDesc)) (Cabal.dataFiles pkgDesc)) :: Set (FilePath, FilePath)
+           execFilePaths = Set.map Cabal.exeName (Set.filter (Cabal.buildable . Cabal.buildInfo) (Set.fromList (Cabal.executables pkgDesc))) :: Set FilePath
+       let availableData = Set.union installedData dataFilePaths
+           availableExec = Set.union installedExec execFilePaths
 
        access T.utilsPackageNames >>= \ names ->
            when (Set.null names) (debianName B.Utilities >>= \ name -> T.utilsPackageNames ~= singleton name)
        utilsPackages <- access T.utilsPackageNames
 
        -- Files that are installed into packages other than the utils packages
-       let installedDataOther = Set.unions $ Map.elems $ foldr (Map.delete) installedDataMap (Set.toList utilsPackages)
+       let installedDataOther = Set.map (\ a -> (a, a)) $ Set.unions $ Map.elems $ foldr (Map.delete) installedDataMap (Set.toList utilsPackages)
            installedExecOther =
                Set.union (tr "insExecPkg: " insExecPkg) $
                                 Set.unions $ Map.elems $ foldr (Map.delete) (tr "installedExec: " installedExecMap) (Set.toList utilsPackages)
@@ -339,7 +341,7 @@ makeUtilsPackages pkgDesc =
                                   T.binarySection p ~?= Just (MainSection "misc")
                                   binaryPackageRelations p B.Utilities) utilsPackages)
        -- Add the unassigned files to the utils packages
-       Set.mapM_ (\ p -> Set.mapM_ (\ path -> T.installData +++= (p, singleton (path, path))) utilsDataMissing) utilsPackages
+       Set.mapM_ (\ p -> Set.mapM_ (\ pair -> T.installData +++= (p, singleton pair)) utilsDataMissing) utilsPackages
        Set.mapM_ (\ p -> Set.mapM_ (\ name -> T.installCabalExec +++= (p, singleton (name, "usr/bin"))) (tr "utilsExecMissing: " utilsExecMissing)) utilsPackages
     where
       ename i =

@@ -2,6 +2,9 @@ haskell-cabal-debian (4.6) unstable; urgency=low
 
   * Add a --default-package option to change haskell-packagename-utils to
     some other name.
+  * Fix treatment of cabalfile Data-Dir field - it describes where the
+    data files are in the source tree, but shouldn't affect where they will
+    be installed.
 
  -- David Fox <dsf@seereason.com>  Thu, 29 May 2014 08:27:54 -0700
 
