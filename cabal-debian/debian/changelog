@@ -1,3 +1,10 @@
+haskell-cabal-debian (4.6) unstable; urgency=low
+
+  * Add a --default-package option to change haskell-packagename-utils to
+    some other name.
+
+ -- David Fox <dsf@seereason.com>  Thu, 29 May 2014 08:27:54 -0700
+
 haskell-cabal-debian (4.5) unstable; urgency=low
 
   * Remove the ghcVersion field and lens.

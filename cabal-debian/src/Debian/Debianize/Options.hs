@@ -7,17 +7,16 @@ module Debian.Debianize.Options
     , withEnvironmentArgs
     ) where
 
-import Control.Monad.Trans (liftIO)
 import Control.Monad.State (lift)
 import Data.Char (toLower, isDigit, ord)
-import Data.Lens.Lazy (Lens, access)
+import Data.Lens.Lazy (Lens)
 import Data.Set (singleton)
 import Debian.Debianize.Goodies (doExecutable)
 import Debian.Debianize.Types
     (verbosity, dryRun, debAction, noDocumentationLibrary, noProfilingLibrary,
      missingDependencies, sourcePackageName, cabalFlagAssignments, maintainer, buildDir, buildEnv, omitLTDeps,
      sourceFormat, buildDepends, buildDependsIndep, extraDevDeps, depends, conflicts, replaces, provides,
-     extraLibMap, debVersion, revision, epochMap, execMap)
+     extraLibMap, debVersion, revision, epochMap, execMap, utilsPackageNames)
 import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.Prelude (read', maybeRead, (+=), (~=), (%=), (++=), (+++=))
 import Debian.Debianize.Types.Atoms (Atoms, EnvSet(..), InstallFile(..), DebAction(..))
@@ -74,6 +73,9 @@ options =
       Option "" ["executable"] (ReqArg (\ path -> executableOption path (\ bin e -> doExecutable bin e)) "SOURCEPATH or SOURCEPATH:DESTDIR")
              (unlines [ "Create an individual binary package to hold this executable.  Other executables "
                       , " and data files are gathered into a single utils package named 'haskell-packagename-utils'."]),
+      Option "" ["default-package"] (ReqArg (\ name -> utilsPackageNames ~= singleton (BinPkgName name)) "DEB")
+             (unlines [ "Set the name of the catch-all package that receives all the files not included in a library package or "
+                      , " some other executable package.  By default this is 'haskell-packagename-utils'."]),
       Option "" ["disable-haddock"] (NoArg (noDocumentationLibrary ~= singleton True))
              (unlines [ "Don't generate API documentation packages, usually named"
                       , "libghc-packagename-doc.  Use this if your build is crashing due to a"
