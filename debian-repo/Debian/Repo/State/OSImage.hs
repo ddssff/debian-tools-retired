@@ -62,7 +62,6 @@ buildArchOfOS = do
 osSourcePackages :: (MonadRepos m, MonadOS m) => m [SourcePackage]
 osSourcePackages = do
   mpkgs <- osSourcePackageCache <$> getOS
-  qPutStrLn ("Source package cache size: " ++ show (fmap length mpkgs))
   maybe osSourcePackages' return mpkgs
     where
       osSourcePackages' = do
@@ -77,7 +76,6 @@ osSourcePackages = do
 osBinaryPackages :: (MonadRepos m, MonadOS m) => m [BinaryPackage]
 osBinaryPackages = do
   mpkgs <- osBinaryPackageCache <$> getOS
-  qPutStrLn ("Binary package cache size: " ++ show (fmap length mpkgs))
   maybe osBinaryPackages' return mpkgs
     where
       osBinaryPackages' = do
@@ -209,7 +207,7 @@ buildOS root distro repo include exclude components =
 -- | Try to update an existing build environment: run apt-get update
 -- and dist-upgrade.
 updateOS :: (MonadOS m, MonadRepos m, MonadMask m) => m ()
-updateOS = do
+updateOS = quieter 1 $ do
   root <- (rootPath . osRoot) <$> getOS
   liftIO $ createDirectoryIfMissing True (root </> "etc")
   liftIO $ readFile "/etc/resolv.conf" >>= writeFile (root </> "etc/resolv.conf")
