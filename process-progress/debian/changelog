@@ -1,3 +1,11 @@
+haskell-process-progress (0.10) unstable; urgency=low
+
+  * When DEBUG_VERBOSITY environment variable is set, prefix each string
+    output by vPutStr of vPutStrLn with the current verbosity level, and
+    don't suppress any output.
+
+ -- David Fox <dsf@seereason.com>  Fri, 30 May 2014 13:36:08 -0700
+
 haskell-process-progress (0.9) unstable; urgency=low
 
   * Now $VERBOSITY<=0 means the qPutStr and qPutStrLn functions don't

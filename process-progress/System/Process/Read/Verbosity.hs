@@ -4,6 +4,7 @@ module System.Process.Read.Verbosity
     , noisier
     , withModifiedVerbosity
     , defaultVerbosity
+    , debugging
     , verbosity
     -- * Process functions controlled by the VERBOSITY level.
     , runProcess
@@ -49,6 +50,9 @@ defaultVerbosity = 1
 verbosity :: MonadIO m => m Int
 verbosity = liftIO $ getEnv "VERBOSITY" >>= return . maybe 1 read
 
+debugging :: MonadIO m -> m Bool
+debugging = liftIO $ lookupEnv "DEBUG_VERBOSITY" >>= return . maybe False (const True)
+
 -- | Select from the runProcess* functions in Monad based on a verbosity level.
 runProcess :: (NonBlocking s c, Enum c, MonadIO m) => CreateProcess -> s -> m [Output s]
 runProcess p input = liftIO $
@@ -71,10 +75,18 @@ runProcessF prefixes p input = liftIO $
       _ -> runProcessVF p input
 
 qPutStrLn :: MonadIO m => String -> m ()
-qPutStrLn s = verbosity >>= \ v -> when (v > 0) (ePutStrLn s)
+qPutStrLn s = do
+  d <- debugging
+  v <- verbosity
+  when d (ePutStr ("(v=" ++ show v ++ ")"))
+  when (d || v > 0) (ePutStrLn s)
 
 qPutStr :: MonadIO m => String -> m ()
-qPutStr s = verbosity >>= \ v -> when (v > 0) (ePutStr s)
+qPutStr s = do
+  d <- debugging
+  v <- verbosity
+  when d (ePutStr ("(v=" ++ show v ++ ")"))
+  when (d || v > 0) (ePutStr s)
 
 qMessage :: MonadIO m => String -> a -> m a
 qMessage s x = qPutStr s >> return x
