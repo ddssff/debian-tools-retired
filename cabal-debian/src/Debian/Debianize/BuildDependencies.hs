@@ -6,7 +6,7 @@ module Debian.Debianize.BuildDependencies
     ) where
 
 import Control.Monad.State (MonadState(get))
-import Control.Monad.Trans (MonadIO, liftIO)
+import Control.Monad.Trans (MonadIO)
 import Data.Char (isSpace)
 import Data.Function (on)
 import Data.Lens.Lazy (access, getL)
@@ -19,11 +19,10 @@ import Data.Version (showVersion, Version(Version))
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.DebianName (mkPkgName, mkPkgName')
 import Debian.Debianize.Monad as Monad (Atoms, DebT)
-import qualified Debian.Debianize.Types as T (buildDepends, buildEnv, buildDependsIndep, debianNameMap, epochMap, execMap, extraLibMap, missingDependencies, noDocumentationLibrary, noProfilingLibrary)
-import Debian.Debianize.Types.Atoms (EnvSet(dependOS))
+import qualified Debian.Debianize.Types as T (buildDepends, buildDependsIndep, debianNameMap, epochMap, execMap, extraLibMap, missingDependencies, noDocumentationLibrary, noProfilingLibrary)
+import Debian.Debianize.Types.Atoms (ghcVersion)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (PackageType(Development, Documentation, Profiling))
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
-import Debian.GHC (ghcNewestAvailableVersion')
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName, Relation(..), Relations)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(EEQ, GRE, LTE, SGR, SLT))
@@ -264,7 +263,7 @@ doBundled :: MonadIO m =>
 doBundled typ name rels =
     do -- root <- access T.buildEnv
        -- gver <- liftIO $ ghcVersion' root
-       gver <- access T.buildEnv >>= liftIO . ghcNewestAvailableVersion' . maybe (error "doBundled: no build environment") dependOS
+       gver <- access ghcVersion
        pver <- ghcBuiltIn gver name
        -- Prefer the compiler to the library, if the compiler provides libghc-foo-dev
        -- generate "ghc | libghc-foo-dev" rather than "libghc-foo-dev | ghc".  It would be
@@ -272,7 +271,7 @@ doBundled typ name rels =
        -- version.  For now, libraries built into the new 7.8 compiler must trump uploaded
        -- packages because they were all built with 7.6.3.
        let preferCompiler = case gver of
-                              Just (CompilerId GHC (Version (7 : 8 : _) _)) -> True
+                              CompilerId GHC (Version (7 : n : _) _) | n >= 8 -> True
                               _ -> False
        case pver of
          -- If preferCompiler is set generate "ghc | libghc-foo-dev" instead of "libghc-foo-dev | ghc"

@@ -26,6 +26,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text as Text (split, Text, unpack)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..))
 import Debian.Debianize.Types (Top(unTop))
+import Debian.Debianize.Types.Atoms (EnvSet)
 import Debian.Debianize.Files (debianizationFileMap)
 import Debian.Debianize.Input (inputDebianization)
 import Debian.Debianize.Monad (DebT, Atoms, evalDebT)
@@ -66,16 +67,16 @@ runDebianizeScript args =
 
 -- | Depending on the options in @atoms@, either validate, describe,
 -- or write the generated debianization.
-doDebianizeAction :: Top -> DebT IO ()
-doDebianizeAction top =
+doDebianizeAction :: Top -> EnvSet -> DebT IO ()
+doDebianizeAction top envset =
     do new <- get
        case () of
          _ | getL T.validate new ->
-               do inputDebianization top
+               do inputDebianization top envset
                   old <- get
                   return $ validateDebianization old new
          _ | getL T.dryRun new ->
-               do inputDebianization top
+               do inputDebianization top envset
                   old <- get
                   diff <- lift $ compareDebianization old new
                   lift $ putStr ("Debianization (dry run):\n" ++ diff)

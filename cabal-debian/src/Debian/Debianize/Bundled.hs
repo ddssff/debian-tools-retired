@@ -9,7 +9,6 @@ module Debian.Debianize.Bundled
 import Control.Monad.Trans (MonadIO)
 import Data.Function (on)
 import Data.List (sortBy)
-import Data.Maybe (fromMaybe)
 import Data.Version (Version(..))
 import Debian.Relation.ByteString()
 import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), {-PackageDB(GlobalPackageDB), compilerFlavor-})
@@ -61,15 +60,14 @@ pairs = sortBy
            , (Version [6,6,1] [], ghc661BuiltIns)
            , (Version [6,6] [], ghc66BuiltIns) ])
 
-ghcBuiltIn :: MonadIO m => Maybe CompilerId -> PackageName -> m (Maybe Version)
+ghcBuiltIn :: MonadIO m => CompilerId -> PackageName -> m (Maybe Version)
 ghcBuiltIn ghc package = do
-  let compiler = fromMaybe (error $ "No GHC available in environment") ghc
-  let (_, xs) = ghcBuiltIns compiler
+  let (_, xs) = ghcBuiltIns ghc
       packageIds = filter (\ p -> pkgName p == package) xs
   case packageIds of
     [] -> return Nothing
     [p] -> return $ Just (pkgVersion p)
-    ps -> error $ "Multiple versions of " ++ show package ++ " built into " ++ show compiler ++ ": " ++ show ps
+    ps -> error $ "Multiple versions of " ++ show package ++ " built into " ++ show ghc ++ ": " ++ show ps
 
 v :: String -> [Int] -> PackageIdentifier
 v n x = PackageIdentifier (PackageName n) (Version x [])

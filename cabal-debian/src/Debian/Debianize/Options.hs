@@ -7,19 +7,19 @@ module Debian.Debianize.Options
     , withEnvironmentArgs
     ) where
 
-import Control.Monad.State (lift)
+import Control.Monad.State (lift, get, put)
 import Data.Char (toLower, isDigit, ord)
 import Data.Lens.Lazy (Lens)
 import Data.Set (singleton)
 import Debian.Debianize.Goodies (doExecutable)
-import Debian.Debianize.Types
-    (verbosity, dryRun, debAction, noDocumentationLibrary, noProfilingLibrary,
-     missingDependencies, sourcePackageName, cabalFlagAssignments, maintainer, buildDir, buildEnv, omitLTDeps,
-     sourceFormat, buildDepends, buildDependsIndep, extraDevDeps, depends, conflicts, replaces, provides,
-     extraLibMap, debVersion, revision, epochMap, execMap, utilsPackageNames)
 import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.Prelude (read', maybeRead, (+=), (~=), (%=), (++=), (+++=))
-import Debian.Debianize.Types.Atoms (Atoms, EnvSet(..), InstallFile(..), DebAction(..))
+import Debian.Debianize.Types
+    (verbosity, dryRun, debAction, noDocumentationLibrary, noProfilingLibrary,
+     missingDependencies, sourcePackageName, cabalFlagAssignments, maintainer, buildDir, omitLTDeps,
+     sourceFormat, buildDepends, buildDependsIndep, extraDevDeps, depends, conflicts, replaces, provides,
+     extraLibMap, debVersion, revision, epochMap, execMap, utilsPackageNames)
+import Debian.Debianize.Types.Atoms (Atoms, EnvSet(..), InstallFile(..), DebAction(..), setBuildEnv)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relations, Relation(..))
@@ -161,7 +161,9 @@ options =
                       , "run by haskell-devscripts.  The build subdirectory is added to match the"
                       , "behavior of the --builddir option in the Setup script."]),
 
-      Option "" ["buildenvdir"] (ReqArg (\ s -> buildEnv ~= Just (EnvSet {cleanOS = s </> "clean", dependOS = s </> "depend", buildOS = s </> "build"}) ) "PATH")
+      let f :: String -> DebT IO ()
+          f s = get >>= setBuildEnv (EnvSet {cleanOS = s </> "clean", dependOS = s </> "depend", buildOS = s </> "build"}) >>= put in
+      Option "" ["buildenvdir"] (ReqArg f "PATH")
              (unlines [ "Directory containing the build environment for which the debianization will"
                       , "be generated.  This determines which compiler will be available, which in turn"
                       , "determines which basic libraries can be provided by the compiler.  This can be"

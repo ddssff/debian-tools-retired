@@ -102,9 +102,9 @@ autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
        let args' = "--buildenvdir" : takeDirectory (dependOS eset) : args
        -- This will be false if the package has no debian/Debianize.hs script
        done <- runDebianizeScript args'
-       when (not done) (withArgs [] (Cabal.evalDebT (debianization (Top ".") defaultAtoms (applyPackageFlags pflags) >>
-                                                     writeDebianization (Top "."))
-                                                    (setL buildEnv (Just eset) newAtoms)))
+       when (not done) (withArgs [] (do atoms <- liftIO (newAtoms eset)
+                                        Cabal.evalDebT (do debianization (Top ".") defaultAtoms (applyPackageFlags pflags)
+                                                           writeDebianization (Top ".")) atoms))
 
 applyPackageFlags :: [P.PackageFlag] -> DebT IO ()
 applyPackageFlags flags = mapM_ applyPackageFlag flags

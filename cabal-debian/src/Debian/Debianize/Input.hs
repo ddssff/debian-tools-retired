@@ -13,7 +13,7 @@ module Debian.Debianize.Input
 
 import Debug.Trace (trace)
 
---import Control.Applicative ((<$>))
+import Control.Applicative ((<$>))
 import Control.Category ((.))
 --import Control.DeepSeq (NFData, force)
 import Control.Exception (bracket)
@@ -30,7 +30,7 @@ import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(logWho), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import qualified Debian.Debianize.Types as T (maintainer)
-import qualified Debian.Debianize.Types.Atoms as T (changelog)
+import qualified Debian.Debianize.Types.Atoms as T (changelog, ghcVersion)
 import Debian.Debianize.Types.BinaryDebDescription (BinaryDebDescription, newBinaryDebDescription)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S
@@ -40,9 +40,8 @@ import Debian.Debianize.Types.Atoms
      logrotateStanza, link, install, installDir, intermediateFiles, cabalFlagAssignments, verbosity)
 import Debian.Debianize.Monad (Atoms, DebT, execDebT)
 import Debian.Debianize.Prelude (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (~?=), (+=), (++=), (+++=))
-import Debian.Debianize.Types (Top(unTop), buildEnv)
-import Debian.Debianize.Types.Atoms (EnvSet(dependOS))
-import Debian.GHC (ghcNewestAvailableVersion')
+import Debian.Debianize.Types (Top(unTop))
+import Debian.Debianize.Types.Atoms (EnvSet(dependOS), buildEnv)
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer)
@@ -68,10 +67,10 @@ import System.IO.Error (catchIOError, tryIOError)
 -- import System.Unix.Chroot (useEnv)
 -- import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
-inputDebianization :: Top -> DebT IO ()
-inputDebianization top =
+inputDebianization :: Top -> EnvSet -> DebT IO ()
+inputDebianization top envset =
     do -- Erase any the existing information
-       put newAtoms
+       liftIO (newAtoms envset) >>= put
        (ctl, _) <- inputSourceDebDescription top
        inputAtomsFromDirectory top
        control ~= ctl
@@ -195,59 +194,57 @@ inputChangeLog top =
 
 inputAtomsFromDirectory :: Top -> DebT IO () -- .install files, .init files, etc.
 inputAtomsFromDirectory top =
-    do atoms <- get
-       atoms' <- lift $ findFiles atoms
-       atoms'' <- lift $ doFiles (unTop top </> "debian/cabalInstall") atoms'
-       put atoms''
+    do findFiles
+       doFiles (unTop top </> "debian/cabalInstall")
     where
       -- Find regular files matching debian/* and debian/source/format and
       -- add them to the debianization.
-      findFiles :: Atoms -> IO Atoms
-      findFiles atoms =
-          getDirectoryContents' (unTop top </> "debian") >>=
+      findFiles :: DebT IO ()
+      findFiles =
+          liftIO (getDirectoryContents' (unTop top </> "debian")) >>=
           return . (++ ["source/format"]) >>=
-          filterM (doesFileExist . ((unTop top </> "debian") </>)) >>=
-          foldM (\ atoms' name -> inputAtoms (unTop top </> "debian") name atoms') atoms
-      doFiles :: FilePath -> Atoms -> IO Atoms
-      doFiles tmp atoms =
-          do sums <- getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
-             paths <- mapM (\ sum -> getDirectoryContents' (tmp </> sum) >>= return . map (sum </>)) sums >>= return . filter ((/= '~') . last) . concat
-             files <- mapM (readFile . (tmp </>)) paths
-             execDebT (mapM_ (intermediateFiles +=) (zip (map ("debian/cabalInstall" </>) paths) files)) atoms
+          liftIO . filterM (doesFileExist . ((unTop top </> "debian") </>)) >>= \ names ->
+          mapM_ (inputAtoms (unTop top </> "debian")) names
+      doFiles :: FilePath -> DebT IO ()
+      doFiles tmp =
+          do sums <- liftIO $ getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
+             paths <- liftIO $ mapM (\ sum -> getDirectoryContents' (tmp </> sum) >>= return . map (sum </>)) sums >>= return . filter ((/= '~') . last) . concat
+             files <- liftIO $ mapM (readFile . (tmp </>)) paths
+             mapM_ (intermediateFiles +=) (zip (map ("debian/cabalInstall" </>) paths) files)
 
 -- | Construct a file path from the debian directory and a relative
 -- path, read its contents and add the result to the debianization.
 -- This may mean using a specialized parser from the debian package
 -- (e.g. parseChangeLog), and some files (like control) are ignored
 -- here, though I don't recall why at the moment.
-inputAtoms :: FilePath -> FilePath -> Atoms -> IO Atoms
-inputAtoms _ path xs | elem path ["control"] = return xs
-inputAtoms debian name@"source/format" xs = readFile (debian </> name) >>= \ text -> execDebT (either (warning +=) ((sourceFormat ~=) . Just) (readSourceFormat text)) xs
-inputAtoms debian name@"watch" xs = readFile (debian </> name) >>= \ text -> execDebT (watch ~= Just text) xs
-inputAtoms debian name@"rules" xs = readFile (debian </> name) >>= \ text -> execDebT (rulesHead ~= (Just text)) xs
-inputAtoms debian name@"compat" xs = readFile (debian </> name) >>= \ text -> execDebT (compat ~= Just (read' (\ s -> error $ "compat: " ++ show s) (unpack text))) xs
-inputAtoms debian name@"copyright" xs = readFile (debian </> name) >>= \ text -> execDebT (copyright ~= Just text) xs
-inputAtoms debian name@"changelog" xs =
-    readFile (debian </> name) >>= return . parseChangeLog . unpack >>= \ log -> execDebT (changelog ~= Just log) xs
-inputAtoms debian name xs =
+inputAtoms :: FilePath -> FilePath -> DebT IO ()
+inputAtoms _ path | elem path ["control"] = return ()
+inputAtoms debian name@"source/format" = liftIO (readFile (debian </> name)) >>= \ text -> either (warning +=) ((sourceFormat ~=) . Just) (readSourceFormat text)
+inputAtoms debian name@"watch" = liftIO (readFile (debian </> name)) >>= \ text -> watch ~= Just text
+inputAtoms debian name@"rules" = liftIO (readFile (debian </> name)) >>= \ text -> rulesHead ~= (Just text)
+inputAtoms debian name@"compat" = liftIO (readFile (debian </> name)) >>= \ text -> compat ~= Just (read' (\ s -> error $ "compat: " ++ show s) (unpack text))
+inputAtoms debian name@"copyright" = liftIO (readFile (debian </> name)) >>= \ text -> copyright ~= Just text
+inputAtoms debian name@"changelog" =
+    liftIO (readFile (debian </> name)) >>= return . parseChangeLog . unpack >>= \ log -> changelog ~= Just log
+inputAtoms debian name =
     case (BinPkgName (dropExtension name), takeExtension name) of
-      (p, ".install") ->   readFile (debian </> name) >>= \ text -> execDebT (mapM_ (readInstall p) (lines text)) xs
-      (p, ".dirs") ->      readFile (debian </> name) >>= \ text -> execDebT (mapM_ (readDir p) (lines text)) xs
-      (p, ".init") ->      readFile (debian </> name) >>= \ text -> execDebT (installInit ++= (p, text)) xs
-      (p, ".logrotate") -> readFile (debian </> name) >>= \ text -> execDebT (logrotateStanza +++= (p, singleton text)) xs
-      (p, ".links") ->     readFile (debian </> name) >>= \ text -> execDebT (mapM_ (readLink p) (lines text)) xs
-      (p, ".postinst") ->  readFile (debian </> name) >>= \ text -> execDebT (postInst ++= (p, text)) xs
-      (p, ".postrm") ->    readFile (debian </> name) >>= \ text -> execDebT (postRm ++= (p, text)) xs
-      (p, ".preinst") ->   readFile (debian </> name) >>= \ text -> execDebT (preInst ++= (p, text)) xs
-      (p, ".prerm") ->     readFile (debian </> name) >>= \ text -> execDebT (preRm ++= (p, text)) xs
-      (_, ".log") ->       return xs -- Generated by debhelper
-      (_, ".debhelper") -> return xs -- Generated by debhelper
-      (_, ".hs") ->        return xs -- Code that uses this library
-      (_, ".setup") ->     return xs -- Compiled Setup.hs file
-      (_, ".substvars") -> return xs -- Unsupported
-      (_, "") ->           return xs -- File with no extension
-      (_, x) | last x == '~' -> return xs -- backup file
-      _ -> trace ("Ignored: " ++ debian </> name) (return xs)
+      (p, ".install") ->   liftIO (readFile (debian </> name)) >>= \ text -> mapM_ (readInstall p) (lines text)
+      (p, ".dirs") ->      liftIO (readFile (debian </> name)) >>= \ text -> mapM_ (readDir p) (lines text)
+      (p, ".init") ->      liftIO (readFile (debian </> name)) >>= \ text -> installInit ++= (p, text)
+      (p, ".logrotate") -> liftIO (readFile (debian </> name)) >>= \ text -> logrotateStanza +++= (p, singleton text)
+      (p, ".links") ->     liftIO (readFile (debian </> name)) >>= \ text -> mapM_ (readLink p) (lines text)
+      (p, ".postinst") ->  liftIO (readFile (debian </> name)) >>= \ text -> postInst ++= (p, text)
+      (p, ".postrm") ->    liftIO (readFile (debian </> name)) >>= \ text -> postRm ++= (p, text)
+      (p, ".preinst") ->   liftIO (readFile (debian </> name)) >>= \ text -> preInst ++= (p, text)
+      (p, ".prerm") ->     liftIO (readFile (debian </> name)) >>= \ text -> preRm ++= (p, text)
+      (_, ".log") ->       return () -- Generated by debhelper
+      (_, ".debhelper") -> return () -- Generated by debhelper
+      (_, ".hs") ->        return () -- Code that uses this library
+      (_, ".setup") ->     return () -- Compiled Setup.hs file
+      (_, ".substvars") -> return () -- Unsupported
+      (_, "") ->           return () -- File with no extension
+      (_, x) | last x == '~' -> return () -- backup file
+      _ -> trace ("Ignored: " ++ debian </> name) (return ())
 
 -- | Read a line from a debian .links file
 readLink :: Monad m => BinPkgName -> Text -> DebT m ()
@@ -268,13 +265,13 @@ readInstall p line =
 readDir :: Monad m => BinPkgName -> Text -> DebT m ()
 readDir p line = installDir +++= (p, singleton (unpack line))
 
-inputCabalization :: MonadIO m => Top -> DebT m ()
+inputCabalization :: (MonadIO m, Functor m) => Top -> DebT m ()
 inputCabalization top =
     do vb <- access verbosity >>= return . intToVerbosity'
        flags <- access cabalFlagAssignments
-       root <- access buildEnv >>= return . maybe (error "No build environment!") dependOS
-       mcid <- liftIO (ghcNewestAvailableVersion' root)
-       ePkgDesc <- liftIO $ inputCabalization' top vb flags (fromMaybe (error $ "inputCabalization - invalid buildEnv: " ++ show root) mcid)
+       -- root <- dependOS <$> (buildEnv <$> get)
+       mcid <- access T.ghcVersion
+       ePkgDesc <- liftIO $ inputCabalization' top vb flags mcid
        either (\ deps -> error $ "Missing dependencies in cabal package at " ++ show (unTop top) ++ ": " ++ show deps)
               (\ pkgDesc -> do
                  packageDescription ~= Just pkgDesc

@@ -1,22 +1,30 @@
 {-# OPTIONS_GHC -Wall #-}
 module Debian.GHC
-    ( ghcNewestAvailableVersion
-    , ghcNewestAvailableVersion'
-    , compilerIdFromDebianVersion
+    ( withGHCVersion
+    -- , ghcNewestAvailableVersion
+    -- , ghcNewestAvailableVersion'
+    -- , compilerIdFromDebianVersion
     ) where
 
 import Control.DeepSeq (force)
 import Control.Exception (SomeException, try)
 import Control.Monad (when)
+import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Version (showVersion, Version(Version))
 import Debian.Version (DebianVersion, parseDebianVersion)
 import Distribution.Compiler (CompilerId(CompilerId), CompilerFlavor(GHC))
 import System.Directory (doesDirectoryExist)
 import System.Process (readProcess)
+import System.Process.Progress (qPutStrLn, verbosity, ePutStrLn)
 import System.Unix.Chroot (useEnv)
 
--- | The IO portion of ghcVersion.
-ghcNewestAvailableVersion :: FilePath -> IO (Maybe DebianVersion)
+withGHCVersion :: MonadIO m => FilePath -> (CompilerId -> m a) -> m a
+withGHCVersion root f = liftIO (ghcNewestAvailableVersion' root) >>= f
+
+-- | The IO portion of ghcVersion.  For there to be no version of ghc
+-- available is an exceptional condition, it has been standard in
+-- Debian and Ubuntu for a long time.
+ghcNewestAvailableVersion :: FilePath -> IO DebianVersion
 ghcNewestAvailableVersion root = do
   exists <- doesDirectoryExist root
   when (not exists) (error $ "ghcVersion: no such environment: " ++ show root)
@@ -25,16 +33,19 @@ ghcNewestAvailableVersion root = do
                 return . dropWhile (/= "Versions: ") . lines) :: IO (Either SomeException [String])
   case versions of
     Left e -> error $ "ghcNewestAvailableVersion failed in " ++ show root ++ ": " ++ show e
-    Right (_ : versionLine : _) -> return . Just . parseDebianVersion . takeWhile (/= ' ') $ versionLine
-    _ -> return $ Nothing
+    Right (_ : versionLine : _) -> return . parseDebianVersion . takeWhile (/= ' ') $ versionLine
+    _ -> error $ "No version of ghc available in " ++ show root
     where
       chroot = case root of
                  "/" -> id
                  _ -> useEnv root (return . force)
 
-ghcNewestAvailableVersion' :: FilePath -> IO (Maybe CompilerId)
+ghcNewestAvailableVersion' :: FilePath -> IO CompilerId
 ghcNewestAvailableVersion' root =
-    ghcNewestAvailableVersion root >>= return . maybe Nothing (Just . compilerIdFromDebianVersion)
+    do ver <- ghcNewestAvailableVersion root
+       let cid = compilerIdFromDebianVersion ver
+       qPutStrLn ("GHC Debian version: " ++ show ver ++ ", Compiler ID: " ++ show cid)
+       return cid
 
 compilerIdFromDebianVersion :: DebianVersion -> CompilerId
 compilerIdFromDebianVersion debVersion =

@@ -15,6 +15,7 @@ module Debian.Debianize.Types.Atoms
     ) -} where
 
 import Control.Category ((.))
+import Control.Monad.Trans (MonadIO)
 import Data.Lens.Lazy (Lens, lens)
 import Data.Map as Map (Map)
 import Data.Monoid (Monoid(..))
@@ -23,10 +24,12 @@ import Data.Text (Text)
 import Debian.Changes (ChangeLog)
 import qualified Debian.Debianize.Types.SourceDebDescription as S
 import Debian.Debianize.VersionSplits (VersionSplits)
+import Debian.GHC (withGHCVersion)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat)
 import Debian.Relation (BinPkgName, Relations, SrcPkgName)
 import Debian.Version (DebianVersion)
+import Distribution.Compiler (CompilerId)
 import Distribution.License (License)
 import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
@@ -57,7 +60,7 @@ data Atoms
       -- the --builddir option of runhaskell Setup appends the "/build"
       -- to the value it receives, so, yes, try not to get confused.
       -- FIXME: make this FilePath or Maybe FilePath
-      , buildEnv_ :: Maybe EnvSet
+      , buildEnv_ :: EnvSet
       -- ^ Directory containing the build environment for which the
       -- debianization will be generated.  This determines which
       -- compiler will be available, which in turn determines which
@@ -201,6 +204,10 @@ data Atoms
       -- reason to use this is because we don't yet know the name of the dev library package.
       , packageDescription_ :: Maybe PackageDescription
       -- ^ The result of reading a cabal configuration file.
+      , ghcVersion_ :: CompilerId
+      -- ^ The newest available version of GHC in the build repository.  We don't support
+      -- base repositories with no version of GHC, it has been standard in Debian and
+      -- Ubuntu for quite some time.
       } deriving (Eq, Show)
 
 data EnvSet = EnvSet
@@ -209,14 +216,15 @@ data EnvSet = EnvSet
     , buildOS :: FilePath  -- ^ An environment where we have built a package
     } deriving (Eq, Show)
 
-newAtoms :: Atoms
-newAtoms
-    = Atoms
+newAtoms :: EnvSet -> IO Atoms
+newAtoms envset
+    = withGHCVersion (dependOS envset) $ \ ghc -> return $
+      Atoms
       { noDocumentationLibrary_ = mempty
       , noProfilingLibrary_ = mempty
       , omitLTDeps_ = mempty
       , buildDir_ = mempty
-      , buildEnv_ = Just (EnvSet {cleanOS = "/", dependOS = "/", buildOS = "/"})
+      , buildEnv_ = EnvSet {cleanOS = "/", dependOS = "/", buildOS = "/"}
       , flags_ = defaultFlags
       , debianNameMap_ = mempty
       , control_ = S.newSourceDebDescription
@@ -270,6 +278,7 @@ newAtoms
       , backups_ = mempty
       , extraDevDeps_ = mempty
       , packageDescription_ = Nothing
+      , ghcVersion_ = ghc
       }
 
 -- | This record supplies information about the task we want done -
@@ -384,8 +393,16 @@ warning = lens warning_ (\ a b -> b {warning_ = a})
 buildDir :: Lens Atoms (Set FilePath)
 buildDir = lens buildDir_ (\ b a -> a {buildDir_ = b})
 
-buildEnv :: Lens Atoms (Maybe EnvSet)
-buildEnv = lens buildEnv_ (\ b a -> a {buildEnv_ = b})
+-- We need to update ghcVersion when this is changed, which means doing IO
+-- buildEnv :: Lens Atoms (Maybe EnvSet)
+-- buildEnv = lens buildEnv_ (\ b a -> a {buildEnv_ = b})
+
+buildEnv :: Atoms -> EnvSet
+buildEnv = buildEnv_
+
+setBuildEnv :: MonadIO m => EnvSet -> Atoms -> m Atoms
+setBuildEnv envset atoms =
+    withGHCVersion (dependOS envset) $ \ ghc -> return $ atoms {buildEnv_ = envset, ghcVersion_ = ghc}
 
 -- | Map from cabal Extra-Lib names to debian binary package names.
 extraLibMap :: Lens Atoms (Map String Relations)
@@ -606,3 +623,6 @@ installInit = lens installInit_ (\ a b -> b {installInit_ = a})
 -- FIXME: change signature to BinPkgName -> Lens Atoms (Set (FilePath, Text))
 intermediateFiles :: Lens Atoms (Set (FilePath, Text))
 intermediateFiles = lens intermediateFiles_ (\ a b -> b {intermediateFiles_ = a})
+
+ghcVersion :: Lens Atoms CompilerId
+ghcVersion = lens ghcVersion_ (\ a b -> b {ghcVersion_ = a})

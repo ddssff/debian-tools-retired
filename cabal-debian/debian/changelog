@@ -1,3 +1,9 @@
+haskell-cabal-debian (4.6.1) unstable; urgency=low
+
+  * Don't compute the current ghc version so often.
+
+ -- David Fox <dsf@seereason.com>  Fri, 30 May 2014 13:40:12 -0700
+
 haskell-cabal-debian (4.6) unstable; urgency=low
 
   * Add a --default-package option to change haskell-packagename-utils to
