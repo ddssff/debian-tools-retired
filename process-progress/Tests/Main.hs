@@ -39,12 +39,12 @@ test1 =
                       pnm <- readProcessChunks (proc "djpeg" []) jpg >>= return . concat . keepStdout :: IO L.ByteString
                       info <- readProcessChunks (proc "pnmfile" []) pnm >>= return . concat . keepStdout :: IO L.ByteString
                       assertEqual "pnmfile3" (encode "stdin:\tPPM raw, 96 by 96  maxval 255\n") info)
-       , test2
+       -- , test2
        , TestLabel "readProcessChunks stdout stderr" $
          TestCase (do out <- readProcessChunks (shell "yes | head -10 | while read i; do echo stdout; echo stderr 1>&2; done") L.empty
                       let result = collectOutputs out
                       assertEqual "readProcessChunks stdout stderr" ([ExitSuccess], encode "stdout\nstdout\nstdout\nstdout\nstdout\nstdout\nstdout\nstdout\nstdout\nstdout\n", encode "stderr\nstderr\nstderr\nstderr\nstderr\nstderr\nstderr\nstderr\nstderr\nstderr\n", []) result)
-       , test3
+       -- , test3
        , TestLabel "readProcessChunks' stdout stderr" $
          TestCase (do out <- readProcessChunks' (shell "yes | head -10 | while read i; do echo stdout; echo stderr 1>&2; done") L.empty
                       let result = collectOutputs out
@@ -56,6 +56,7 @@ test1 =
 -}
        ])
 
+-- These are bogus, different versions of gzip give different outputs.  Think of something different.
 test2 :: Test
 test2 = TestLabel "readProcessChunks gzip" $
         TestCase (do result <- readProcessChunks (shell "gzip -v -f < Tests/penguin.jpg") L.empty
