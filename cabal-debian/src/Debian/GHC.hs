@@ -44,7 +44,7 @@ ghcNewestAvailableVersion' :: FilePath -> IO CompilerId
 ghcNewestAvailableVersion' root =
     do ver <- ghcNewestAvailableVersion root
        let cid = compilerIdFromDebianVersion ver
-       hPutStrLn stderr ("GHC Debian version: " ++ show ver ++ ", Compiler ID: " ++ show cid)
+       -- hPutStrLn stderr ("GHC Debian version: " ++ show ver ++ ", Compiler ID: " ++ show cid)
        return cid
 
 compilerIdFromDebianVersion :: DebianVersion -> CompilerId
