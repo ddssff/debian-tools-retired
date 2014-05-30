@@ -21,6 +21,7 @@ module System.Process.Read.Verbosity
 
 import Control.Monad (when)
 import Control.Monad.Trans (MonadIO, liftIO)
+import System.Environment (lookupEnv)
 import System.Process (CreateProcess)
 import System.Posix.EnvPlus (getEnv, modifyEnv)
 import System.Process.Read.Chunks (Output, NonBlocking)
@@ -50,7 +51,7 @@ defaultVerbosity = 1
 verbosity :: MonadIO m => m Int
 verbosity = liftIO $ getEnv "VERBOSITY" >>= return . maybe 1 read
 
-debugging :: MonadIO m -> m Bool
+debugging :: MonadIO m => m Bool
 debugging = liftIO $ lookupEnv "DEBUG_VERBOSITY" >>= return . maybe False (const True)
 
 -- | Select from the runProcess* functions in Monad based on a verbosity level.
