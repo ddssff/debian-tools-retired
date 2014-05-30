@@ -14,8 +14,8 @@ import Data.Version (showVersion, Version(Version))
 import Debian.Version (DebianVersion, parseDebianVersion)
 import Distribution.Compiler (CompilerId(CompilerId), CompilerFlavor(GHC))
 import System.Directory (doesDirectoryExist)
+import System.IO (hPutStrLn, stderr)
 import System.Process (readProcess)
-import System.Process.Progress (qPutStrLn, verbosity, ePutStrLn)
 import System.Unix.Chroot (useEnv)
 
 withGHCVersion :: MonadIO m => FilePath -> (CompilerId -> m a) -> m a
@@ -44,7 +44,7 @@ ghcNewestAvailableVersion' :: FilePath -> IO CompilerId
 ghcNewestAvailableVersion' root =
     do ver <- ghcNewestAvailableVersion root
        let cid = compilerIdFromDebianVersion ver
-       qPutStrLn ("GHC Debian version: " ++ show ver ++ ", Compiler ID: " ++ show cid)
+       hPutStrLn stderr ("GHC Debian version: " ++ show ver ++ ", Compiler ID: " ++ show cid)
        return cid
 
 compilerIdFromDebianVersion :: DebianVersion -> CompilerId
