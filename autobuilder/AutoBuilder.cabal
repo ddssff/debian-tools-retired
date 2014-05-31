@@ -25,14 +25,28 @@ flag local-debian-repo
   Default: False
   Manual: True
 
+flag local-cabal-debian
+  Description: Link directly to the source of the cabal-debian library
+  Default: False
+  Manual: True
+
 Library
+  if flag (local-debian-repo)
+    if flag (local-cabal-debian)
+      Hs-Source-Dirs: ., ../cabal-debian/src, ../debian-repo
+      Build-Depends: Diff, set-extra, hsemail, syb
+    else
+      Hs-Source-Dirs: ., ../debian-repo
+      Build-Depends: deepseq, data-lens-template, cabal-debian >= 4.6.1
+  else
+    Build-Depends: debian-repo >= 5.59
+
   Build-Depends:
         applicative-extras >= 0.1.8
       , base
       , bytestring
       , bzlib
       , Cabal
-      , cabal-debian >= 4.5
       , containers
       , data-lens
       , debian >= 3.81
@@ -101,12 +115,6 @@ Library
     Debian.AutoBuilder.Types.ParamRec
     Debian.AutoBuilder.Version
     Paths_AutoBuilder
-
-  if flag (local-debian-repo)
-    Hs-Source-Dirs: ., ../debian-repo
-    Build-Depends: deepseq, data-lens-template
-  else
-    Build-Depends: debian-repo >= 5.59
 
 Executable autobuilder-tests
   Main-Is: Test/Test.hs
