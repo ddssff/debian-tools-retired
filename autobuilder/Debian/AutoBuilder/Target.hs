@@ -777,8 +777,10 @@ installDependencies source extra sourceFingerprint =
                             return . collectOutputs . mergeToStdout
        case code of
          [ExitSuccess] -> return out
-         code -> ePutStrLn ("FAILURE: " ++ command ++ " -> " ++ show code ++ "\n" ++ decode out) >>
-                 error ("FAILURE: " ++ command ++ " -> " ++ show code)
+         code ->
+             let message = "FAILURE: " ++ command ++ " -> " ++ show code ++ " (in " ++ show root ++ ")" in
+             ePutStrLn (message ++ "\n stdout: " ++ show (decode out)) >>
+                 error message
 
 -- | This should probably be what the real useEnv does.
 useEnv' :: FilePath -> (a -> IO a) -> IO a -> IO a

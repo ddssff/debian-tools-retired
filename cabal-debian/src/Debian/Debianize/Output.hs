@@ -41,6 +41,7 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, getPermissions
 import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>), takeDirectory)
+import System.IO (hPutStrLn, stderr)
 import System.Process (readProcessWithExitCode, showCommandForUser)
 
 -- | Run the script in @debian/Debianize.hs@ with the given command
@@ -57,13 +58,15 @@ runDebianizeScript args =
     doesFileExist "debian/Debianize.hs" >>= \ exists ->
     case exists of
       False -> return False
-      True ->
-          let args' = ["debian/Debianize.hs"] ++ args in
-          putEnvironmentArgs args >> readProcessWithExitCode "runhaskell" args' "" >>= \ result ->
-          case result of
-            (ExitSuccess, _, _) -> return True
-            (code, out, err) ->
-              error ("runDebianizeScript: " ++ showCommandForUser "runhaskell" args' ++ " -> " ++ show code ++ "\n stdout: " ++ show out ++"\n stderr: " ++ show err)
+      True -> do
+        let args' = ["debian/Debianize.hs"] ++ args
+        putEnvironmentArgs args
+        hPutStrLn stderr (showCommandForUser "runhaskell" args')
+        result <- readProcessWithExitCode "runhaskell" args' ""
+        case result of
+          (ExitSuccess, _, _) -> return True
+          (code, out, err) -> error ("runDebianizeScript: " ++ showCommandForUser "runhaskell" args' ++ " -> " ++ show code ++
+                                     "\n stdout: " ++ show out ++"\n stderr: " ++ show err)
 
 -- | Depending on the options in @atoms@, either validate, describe,
 -- or write the generated debianization.

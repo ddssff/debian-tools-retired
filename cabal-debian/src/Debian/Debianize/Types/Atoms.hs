@@ -14,11 +14,11 @@ module Debian.Debianize.Types.Atoms
     , PackageInfo(..)
     ) -} where
 
+import Control.Applicative ((<$>))
 import Control.Category ((.))
 import Control.Monad.Trans (MonadIO)
 import Data.Lens.Lazy (Lens, lens)
 import Data.Map as Map (Map)
-import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
 import Data.Set as Set (Set)
 import Data.Text (Text)
@@ -35,7 +35,8 @@ import Distribution.License (License)
 import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Prelude hiding (init, init, log, log, unlines, (.))
-import System.IO (hPutStrLn, stderr)
+import System.Console.GetOpt (getOpt, ArgOrder(Permute), OptDescr(Option), ArgDescr(ReqArg))
+import System.Environment (getArgs)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 -- | Bits and pieces of information about the mapping from cabal package
@@ -220,11 +221,16 @@ data EnvSet = EnvSet
 
 newAtoms :: Maybe FilePath -> IO Atoms
 newAtoms root = do
-  hPutStrLn stderr ("newAtoms - root=" ++ show root)
-  withGHCVersion (fromMaybe "/" root) makeAtoms
+  (roots, _, _) <- lookOpts
+  let root' = case (root, roots) of
+                (Just x, _) -> x
+                (Nothing, x : _) -> x
+                _ -> "/"
+  withGHCVersion root' makeAtoms
   where
+    lookOpts = getOpt Permute [Option "buildenvdir" [] (ReqArg id "PATH")
+                                      "Directory containing the build environment"] <$> getArgs
     makeAtoms ghc = do
-     hPutStrLn stderr ("newAtoms - ghc=" ++ show ghc)
      return $
       Atoms
       { noDocumentationLibrary_ = mempty
