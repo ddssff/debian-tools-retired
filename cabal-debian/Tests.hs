@@ -58,7 +58,7 @@ defaultAtoms =
 
 -- | Force the compiler version to 7.6 to get predictable outputs
 testAtoms :: IO Atoms
-testAtoms = ghc763 <$> T.newAtoms Nothing
+testAtoms = ghc763 <$> T.newAtoms
     where
       ghc763 :: Atoms -> Atoms
       ghc763 atoms =

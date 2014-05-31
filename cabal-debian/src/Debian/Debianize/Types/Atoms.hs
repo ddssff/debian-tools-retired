@@ -219,20 +219,21 @@ data EnvSet = EnvSet
     , buildOS :: FilePath  -- ^ An environment where we have built a package
     } deriving (Eq, Show)
 
-newAtoms :: Maybe FilePath -> IO Atoms
-newAtoms root = do
-  (roots, _, _) <- lookOpts
-  let root' = case (root, roots) of
-                (Just x, _) -> x
-                (Nothing, x : _) -> x
-                _ -> "/"
-  withGHCVersion root' makeAtoms
-  where
-    lookOpts = getOpt Permute [Option "buildenvdir" [] (ReqArg id "PATH")
-                                      "Directory containing the build environment"] <$> getArgs
-    makeAtoms ghc = do
-     return $
-      Atoms
+-- | Build an Atoms value for the given changeroot.
+newAtomsChroot :: FilePath -> IO Atoms
+newAtomsChroot root = withGHCVersion root (return . makeAtoms)
+
+-- | Look for --buildenvdir in the command line arguments to get the
+-- changeroot path, use "/" if not present.
+newAtoms :: IO Atoms
+newAtoms = do
+  (roots, _, _) <- getOpt Permute [Option "buildenvdir" [] (ReqArg id "PATH")
+                                          "Directory containing the build environment"] <$> getArgs
+  withGHCVersion (case roots of (x : _) -> x; _ -> "/") (return . makeAtoms)
+
+makeAtoms :: CompilerId -> Atoms
+makeAtoms ghc =
+    Atoms
       { noDocumentationLibrary_ = mempty
       , noProfilingLibrary_ = mempty
       , omitLTDeps_ = mempty

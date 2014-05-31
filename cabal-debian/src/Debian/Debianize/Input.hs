@@ -34,7 +34,7 @@ import Debian.Debianize.Types.BinaryDebDescription (BinaryDebDescription, newBin
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S
 import Debian.Debianize.Types.Atoms
-    (newAtoms, control, warning, sourceFormat, watch, rulesHead, compat, packageDescription,
+    (newAtomsChroot, control, warning, sourceFormat, watch, rulesHead, compat, packageDescription,
      license, licenseFile, copyright, changelog, installInit, postInst, postRm, preInst, preRm,
      logrotateStanza, link, install, installDir, intermediateFiles, cabalFlagAssignments, verbosity)
 import Debian.Debianize.Monad (DebT)
@@ -69,7 +69,7 @@ import System.IO.Error (catchIOError, tryIOError)
 inputDebianization :: Top -> EnvSet -> DebT IO ()
 inputDebianization top envset =
     do -- Erase any the existing information
-       atoms <- liftIO $ newAtoms $ Just $ dependOS envset
+       atoms <- liftIO $ newAtomsChroot $ dependOS envset
        put atoms
        (ctl, _) <- inputSourceDebDescription top
        inputAtomsFromDirectory top

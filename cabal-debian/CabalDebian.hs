@@ -31,7 +31,7 @@ cabalDebianMain :: DebT IO () -> IO ()
 cabalDebianMain init =
     -- This picks up the options required to decide what action we are
     -- taking.  Much of this will be repeated in the call to debianize.
-    newAtoms Nothing >>= \ atoms ->
+    newAtoms >>= \ atoms ->
     evalDebT (init >> compileEnvironmentArgs >> compileCommandlineArgs >>
               get >>= return . getL debAction >>= finish) atoms
     where
