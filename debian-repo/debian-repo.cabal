@@ -18,6 +18,11 @@ Data-Files:
         debian/compat debian/control debian/copyright
         debian/rules
 
+flag local-cabal-debian
+  Description: Link directly to the source of the cabal-debian library
+  Default: False
+  Manual: True
+
 flag local-debian
   Description: Link directly to the source of the debian library
   Default: False
@@ -27,10 +32,15 @@ Library
   Buildable: True
   ghc-options: -O2 -threaded -Wall
 
-  if flag(local-debian)
-    Hs-Source-Dirs: ., ../../haskell-debian
+  if flag(local-cabal-debian)
+    if flag(local-debian)
+      Hs-Source-Dirs: ., ../cabal-debian/src, ../../haskell-debian
+      Build-Depends: hsemail, syb
+    else
+      Hs-Source-Dirs: ., ../cabal-debian/src
+      Build-Depends: debian >= 3.80, hsemail, syb
   else
-    Build-Depends: debian >= 3.80
+    Build-Depends: cabal-debian >= 4.5, debian >= 3.80
 
   Build-Depends:
         applicative-extras,
@@ -38,7 +48,6 @@ Library
         bytestring,
         bzlib,
         Cabal,
-        cabal-debian >= 4.5,
         containers,
         data-lens,
         data-lens-template,
