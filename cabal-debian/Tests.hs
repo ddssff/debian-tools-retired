@@ -5,7 +5,7 @@ module Main
     , main
     ) where
 
--- import Control.Monad.State (get, put)
+import Control.Applicative ((<$>))
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Function (on)
@@ -17,7 +17,7 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), mconcat, mempty)
 import Data.Set as Set (fromList, singleton, union)
 import Data.Text as Text (intercalate, lines, split, Text, unlines)
-import Data.Version (Version(Version))
+import Data.Version (Version(Version, versionBranch))
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(..), parseEntry)
 import Debian.Debianize.DebianName (mapCabal, splitCabal)
 import Debian.Debianize.Files (debianizationFileMap)
@@ -35,7 +35,7 @@ import Debian.Pretty (pretty, text, Doc)
 import Debian.Relation (BinPkgName(..), Relation(..), SrcPkgName(..), VersionReq(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Version (parseDebianVersion, buildDebianVersion)
-import Distribution.Simple.Compiler (CompilerId(CompilerId), CompilerFlavor(GHC))
+import Distribution.Compiler (CompilerId(..))
 import Distribution.License (License(..))
 import Distribution.Package (PackageName(PackageName))
 import Prelude hiding (log)
@@ -55,6 +55,15 @@ defaultAtoms =
        mapCabal (PackageName "QuickCheck") "quickcheck2"
        splitCabal (PackageName "QuickCheck") "quickcheck1" (Version [2] [])
        mapCabal (PackageName "gtk2hs-buildtools") "gtk2hs-buildtools"
+
+-- | Force the compiler version to 7.6 to get predictable outputs
+testAtoms :: IO Atoms
+testAtoms = ghc763 <$> T.newAtoms Nothing
+    where
+      ghc763 :: Atoms -> Atoms
+      ghc763 atoms =
+          let CompilerId flavor version = ghcVersion_ atoms in
+          atoms {ghcVersion_ = CompilerId flavor (version {versionBranch = [7, 6, 3]})}
 
 -- | Create a Debianization based on a changelog entry and a license
 -- value.  Uses the currently installed versions of debhelper and
@@ -93,7 +102,7 @@ test1 label =
     TestLabel label $
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion :: IO (Maybe StandardsVersion)
-                 atoms <- newAtoms envset
+                 atoms <- testAtoms
                  deb <- execDebT
                           (do -- let top = Top "."
                               defaultAtoms
@@ -105,7 +114,6 @@ test1 label =
                  diff <- diffDebianizations (testDeb1 atoms) deb
                  assertEqual label [] diff)
     where
-      envset = EnvSet "/" "/" "/"
       testDeb1 :: Atoms -> Atoms
       testDeb1 atoms =
           execDebM
@@ -141,7 +149,7 @@ test2 label =
     TestLabel label $
     TestCase (do level <- getDebhelperCompatLevel
                  standards <- getDebianStandardsVersion
-                 atoms <- newAtoms (EnvSet "/" "/" "/")
+                 atoms <- testAtoms
                  deb <- execDebT
                           (do -- let top = Top "."
                               defaultAtoms
@@ -199,7 +207,7 @@ test3 label =
     TestLabel label $
     TestCase (do let top = Top "test-data/haskell-devscripts"
                      envset = EnvSet "/" "/" "/"
-                 atoms <- T.newAtoms envset
+                 atoms <- testAtoms
                  deb <- execDebT (inputDebianization top envset) atoms
                  diff <- diffDebianizations (testDeb2 atoms) deb
                  assertEqual label [] diff)
@@ -361,7 +369,7 @@ test4 label =
     TestCase (do let inTop = Top "test-data/clckwrks-dot-com/input"
                      outTop = Top "test-data/clckwrks-dot-com/output"
                      envset = EnvSet "/" "/" "/"
-                 atoms <- T.newAtoms envset
+                 atoms <- testAtoms
                  old <- execDebT (inputDebianization outTop envset) atoms
                  let log = getL T.changelog old
                  new <- execDebT (debianization inTop defaultAtoms (customize log)) atoms
@@ -473,7 +481,7 @@ test5 label =
     TestCase (do let inTop = (Top "test-data/creativeprompts/input")
                      outTop = (Top "test-data/creativeprompts/output")
                      envset = EnvSet "/" "/" "/"
-                 atoms <- newAtoms envset
+                 atoms <- testAtoms
                  old <- execDebT (inputDebianization outTop envset) atoms
                  let standards = getL T.standardsVersion old
                      level = getL T.compat old
@@ -556,7 +564,7 @@ test5 label =
 test6 :: String -> Test
 test6 label =
     TestLabel label $
-    TestCase (do result <- readProcessWithExitCode "runhaskell" ["-isrc", "test-data/artvaluereport2/input/debian/Debianize.hs"] ""
+    TestCase (do result <- readProcessWithExitCode "runhaskell" ["-isrc", "-DMIN_VERSION_Cabal(1,18,0)", "test-data/artvaluereport2/input/debian/Debianize.hs"] ""
                  assertEqual label (ExitSuccess, "", "") result)
 
 test7 :: String -> Test
@@ -571,7 +579,7 @@ test8 label =
     TestCase ( do let inTop = Top "test-data/artvaluereport-data/input"
                       outTop = Top "test-data/artvaluereport-data/output"
                       envset = EnvSet "/" "/" "/"
-                  atoms <- newAtoms envset
+                  atoms <- testAtoms
                   old <- execDebT (inputDebianization outTop envset) atoms
                   log <- evalDebT (inputChangeLog inTop >> access T.changelog) atoms
                   new <- execDebT (debianization inTop defaultAtoms (customize log)) atoms
@@ -593,7 +601,7 @@ test9 label =
     TestCase (do let inTop = Top "test-data/alex/input"
                      outTop = Top "test-data/alex/output"
                      envset = EnvSet "/" "/" "/"
-                 atoms <- newAtoms envset
+                 atoms <- testAtoms
                  old <- execDebT (inputDebianization outTop envset) atoms
                  let Just (ChangeLog (entry : _)) = getL T.changelog old
                  new <- execDebT (debianization inTop defaultAtoms customize >> copyChangelogDate (logDate entry)) atoms
@@ -631,7 +639,7 @@ test10 label =
     TestCase (do let inTop = Top "test-data/archive/input"
                      outTop = Top "test-data/archive/output"
                      envset = EnvSet "/" "/" "/"
-                 atoms <- newAtoms envset
+                 atoms <- testAtoms
                  old <- execDebT (inputDebianization outTop envset) atoms
                  let Just (ChangeLog (entry : _)) = getL T.changelog old
                  new <- execDebT (debianization inTop defaultAtoms customize >> copyChangelogDate (logDate entry)) atoms

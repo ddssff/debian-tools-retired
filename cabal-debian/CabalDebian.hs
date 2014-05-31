@@ -5,9 +5,8 @@
 -- function directly, many sophisticated configuration options cannot
 -- be accessed using the command line interface.
 
-import Control.Applicative ((<$>))
 import Control.Monad.State (get, lift)
-import Data.Lens.Lazy (getL, access)
+import Data.Lens.Lazy (getL)
 import Data.List as List (unlines)
 import Debian.Debianize.Details (debianDefaultAtoms)
 import Debian.Debianize.Finalize (debianization)
@@ -16,7 +15,7 @@ import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs,
 import Debian.Debianize.Output (doDebianizeAction)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types (Top(Top))
-import Debian.Debianize.Types.Atoms (DebAction(Debianize, SubstVar, Usage), EnvSet(EnvSet), debAction, newAtoms, buildEnv)
+import Debian.Debianize.Types.Atoms (DebAction(Debianize, SubstVar, Usage), EnvSet(EnvSet), debAction, newAtoms)
 import Prelude hiding (unlines, writeFile, init)
 import System.Console.GetOpt (usageInfo)
 import System.Environment (getProgName)
@@ -32,7 +31,7 @@ cabalDebianMain :: DebT IO () -> IO ()
 cabalDebianMain init =
     -- This picks up the options required to decide what action we are
     -- taking.  Much of this will be repeated in the call to debianize.
-    newAtoms envset >>= \ atoms ->
+    newAtoms Nothing >>= \ atoms ->
     evalDebT (init >> compileEnvironmentArgs >> compileCommandlineArgs >>
               get >>= return . getL debAction >>= finish) atoms
     where

@@ -14,7 +14,6 @@ import Data.Version (showVersion, Version(Version))
 import Debian.Version (DebianVersion, parseDebianVersion)
 import Distribution.Compiler (CompilerId(CompilerId), CompilerFlavor(GHC))
 import System.Directory (doesDirectoryExist)
-import System.IO (hPutStrLn, stderr)
 import System.Process (readProcess)
 import System.Unix.Chroot (useEnv)
 

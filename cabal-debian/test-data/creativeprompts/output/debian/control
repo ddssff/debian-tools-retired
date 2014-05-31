@@ -113,6 +113,8 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-web-routes-th-prof
                , libghc-xss-sanitize-dev (>= 0.3.0.1)
                , libghc-xss-sanitize-prof (>= 0.3.0.1)
+               , libghc-base-dev | ghc
+               , libghc-base-prof | ghc-prof
                , haskell-hsx-utils
 Build-Depends-Indep: ghc-doc
                      , libghc-extra-doc

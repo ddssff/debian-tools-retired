@@ -18,6 +18,7 @@ import Control.Category ((.))
 import Control.Monad.Trans (MonadIO)
 import Data.Lens.Lazy (Lens, lens)
 import Data.Map as Map (Map)
+import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid(..))
 import Data.Set as Set (Set)
 import Data.Text (Text)
@@ -34,6 +35,7 @@ import Distribution.License (License)
 import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Prelude hiding (init, init, log, log, unlines, (.))
+import System.IO (hPutStrLn, stderr)
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 -- | Bits and pieces of information about the mapping from cabal package
@@ -216,9 +218,14 @@ data EnvSet = EnvSet
     , buildOS :: FilePath  -- ^ An environment where we have built a package
     } deriving (Eq, Show)
 
-newAtoms :: EnvSet -> IO Atoms
-newAtoms envset
-    = withGHCVersion (dependOS envset) $ \ ghc -> return $
+newAtoms :: Maybe FilePath -> IO Atoms
+newAtoms root = do
+  hPutStrLn stderr ("newAtoms - root=" ++ show root)
+  withGHCVersion (fromMaybe "/" root) makeAtoms
+  where
+    makeAtoms ghc = do
+     hPutStrLn stderr ("newAtoms - ghc=" ++ show ghc)
+     return $
       Atoms
       { noDocumentationLibrary_ = mempty
       , noProfilingLibrary_ = mempty

@@ -13,11 +13,10 @@ module Debian.Debianize.Input
 
 import Debug.Trace (trace)
 
-import Control.Applicative ((<$>))
 import Control.Category ((.))
 --import Control.DeepSeq (NFData, force)
 import Control.Exception (bracket)
-import Control.Monad (when, foldM, filterM)
+import Control.Monad (when, filterM)
 import Control.Monad.State (get, put)
 import Control.Monad.Trans (MonadIO, liftIO, lift)
 import Data.Char (isSpace, toLower)
@@ -38,10 +37,10 @@ import Debian.Debianize.Types.Atoms
     (newAtoms, control, warning, sourceFormat, watch, rulesHead, compat, packageDescription,
      license, licenseFile, copyright, changelog, installInit, postInst, postRm, preInst, preRm,
      logrotateStanza, link, install, installDir, intermediateFiles, cabalFlagAssignments, verbosity)
-import Debian.Debianize.Monad (Atoms, DebT, execDebT)
+import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.Prelude (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (~?=), (+=), (++=), (+++=))
 import Debian.Debianize.Types (Top(unTop))
-import Debian.Debianize.Types.Atoms (EnvSet(dependOS), buildEnv)
+import Debian.Debianize.Types.Atoms (EnvSet(dependOS))
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer)
@@ -70,7 +69,8 @@ import System.IO.Error (catchIOError, tryIOError)
 inputDebianization :: Top -> EnvSet -> DebT IO ()
 inputDebianization top envset =
     do -- Erase any the existing information
-       liftIO (newAtoms envset) >>= put
+       atoms <- liftIO $ newAtoms $ Just $ dependOS envset
+       put atoms
        (ctl, _) <- inputSourceDebDescription top
        inputAtomsFromDirectory top
        control ~= ctl
