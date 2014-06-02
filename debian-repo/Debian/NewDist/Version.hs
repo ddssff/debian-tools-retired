@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP, TemplateHaskell #-}
 module Version (myVersion) where
 
 import Data.Version (showVersion)
@@ -14,6 +14,10 @@ import Language.Haskell.TH.Syntax (lift)
 -- To convert this to type Version, remove ". showVersion" from below.
 myVersion :: String
 myVersion = $(runIO (findPackageDesc "." >>=
+#if MIN_VERSION_Cabal(1,19,0)
+                              either error (readPackageDescription silent) >>=
+#else
                               readPackageDescription silent >>=
+#endif
                               return . pkgVersion . package . packageDescription) >>=
                        lift . showVersion)
