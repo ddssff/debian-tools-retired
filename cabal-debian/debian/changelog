@@ -1,3 +1,10 @@
+haskell-cabal-debian (4.6.2) unstable; urgency=low
+
+  * Move a seereason specific function from here to the
+    autobuilder-seereason package.
+
+ -- David Fox <dsf@seereason.com>  Mon, 02 Jun 2014 11:03:13 -0700
+
 haskell-cabal-debian (4.6.1) unstable; urgency=low
 
   * Don't compute the current ghc version so often.

@@ -111,7 +111,6 @@ module Debian.Debianize
     , Debian.Debianize.Output.validateDebianization
 
     , Debian.Debianize.Details.debianDefaultAtoms
-    , Debian.Debianize.Details.seereasonDefaultAtoms
 
     , Debian.Debianize.Goodies.tightDependencyFixup
     , Debian.Debianize.Goodies.doExecutable
