@@ -1,5 +1,5 @@
 -- | Read an existing Debianization from a directory file.
-{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TypeSynonymInstances #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleInstances, OverloadedStrings, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Debian.Debianize.Input
     ( inputDebianization
@@ -48,7 +48,12 @@ import Debian.Relation (Relations, BinPkgName(..), SrcPkgName(..), parseRelation
 --import Debian.Version (DebianVersion, parseDebianVersion)
 import Distribution.Compiler (CompilerId)
 import Distribution.Package (Package(packageId), PackageIdentifier(..), PackageName(PackageName), Dependency)
-import qualified Distribution.PackageDescription as Cabal (PackageDescription(licenseFile, maintainer, package, license, copyright {-, synopsis, description-}))
+import qualified Distribution.PackageDescription as Cabal (PackageDescription(maintainer, package, license, copyright {-, synopsis, description-}))
+#if MIN_VERSION_Cabal(1,19,0)
+import qualified Distribution.PackageDescription as Cabal (PackageDescription(licenseFiles))
+#else
+import qualified Distribution.PackageDescription as Cabal (PackageDescription(licenseFile))
+#endif
 import Distribution.PackageDescription as Cabal (PackageDescription, FlagName)
 import Distribution.PackageDescription.Configuration (finalizePackageDescription)
 import Distribution.PackageDescription.Parse (readPackageDescription)
@@ -197,7 +202,7 @@ inputAtomsFromDirectory top =
     do findFiles
        doFiles (unTop top </> "debian/cabalInstall")
     where
-      -- Find regular files matching debian/* and debian/source/format and
+      -- Find regular files in the debian/ or in debian/source/format/ and
       -- add them to the debianization.
       findFiles :: DebT IO ()
       findFiles =
@@ -279,9 +284,15 @@ inputCabalization top =
                  -- the license-file: field or the contents of the license:
                  -- field.
                  license ~?= (Just (Cabal.license pkgDesc))
+#if MIN_VERSION_Cabal(1,19,0)
+                 licenseFileText <- liftIO $ case Cabal.licenseFiles pkgDesc of
+                                               [] -> return Nothing
+                                               (path : _) -> readFileMaybe (unTop top </> path) -- better than nothing
+#else
                  licenseFileText <- liftIO $ case Cabal.licenseFile pkgDesc of
                                                "" -> return Nothing
                                                path -> readFileMaybe (unTop top </> path)
+#endif
                  licenseFile ~?= licenseFileText
                  copyright ~?= (case Cabal.copyright pkgDesc of
                                   "" -> Nothing
