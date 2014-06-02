@@ -1,3 +1,16 @@
+haskell-cabal-debian (4.7) unstable; urgency=low
+
+  * Improve the treatment of dependencies which are built into ghc.  This
+    will allow the use of newer libraries than the ones built into ghc,
+    provided they are given deb names that are different than the one ghc
+    specifically conflicts with.  For example, a newer version of Cabal
+    could be used if it was in the deb package libghc-cabal-ghcjs-dev.  To
+    change the debian names of libraries we need to use the mapCabal and
+    splitCabal functions, as is done in the autobuilder-seereason module
+    Debian.AutoBuilder.Details.Atoms.
+
+ -- David Fox <dsf@seereason.com>  Mon, 02 Jun 2014 14:28:59 -0700
+
 haskell-cabal-debian (4.6.2) unstable; urgency=low
 
   * Move a seereason specific function from here to the

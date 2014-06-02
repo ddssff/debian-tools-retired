@@ -24,7 +24,7 @@ import Debian.Debianize.Types.Atoms (ghcVersion)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (PackageType(Development, Documentation, Profiling))
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
-import Debian.Relation (BinPkgName, Relation(..), Relations)
+import Debian.Relation (BinPkgName, Relation(..), Relations, checkVersionReq)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(EEQ, GRE, LTE, SGR, SLT))
 import Debian.Version (DebianVersion, parseDebianVersion)
 import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
@@ -261,24 +261,18 @@ doBundled :: MonadIO m =>
           -> [D.Relation]
           -> DebT m [D.Relation]
 doBundled typ name rels =
-    do -- root <- access T.buildEnv
-       -- gver <- liftIO $ ghcVersion' root
-       gver <- access ghcVersion
-       pver <- ghcBuiltIn gver name
-       -- Prefer the compiler to the library, if the compiler provides libghc-foo-dev
-       -- generate "ghc | libghc-foo-dev" rather than "libghc-foo-dev | ghc".  It would be
-       -- better to see if the version built into the compiler is newer than the uploaded
-       -- version.  For now, libraries built into the new 7.8 compiler must trump uploaded
-       -- packages because they were all built with 7.6.3.
-       let preferCompiler = case gver of
-                              CompilerId GHC (Version (7 : n : _) _) | n >= 8 -> True
-                              _ -> False
-       case pver of
-         -- If preferCompiler is set generate "ghc | libghc-foo-dev" instead of "libghc-foo-dev | ghc"
-         Just _ | preferCompiler -> return $ [D.Rel (compilerPackageName typ) Nothing Nothing] ++ rels
-         Just _ -> return $ rels ++ [D.Rel (compilerPackageName typ) Nothing Nothing]
-         Nothing -> return rels
+    mapM doRel rels >>= return . concat
     where
+      doRel :: MonadIO m => D.Relation -> DebT m [D.Relation]
+      doRel rel@(D.Rel _ req _) = do
+        gver <- access ghcVersion
+        -- Look at what version of the package is provided by the compiler.
+        atoms <- get
+        pver <- ghcBuiltIn gver name >>= return . maybe Nothing (Just . debianVersion'' atoms name)
+        case checkVersionReq req pver of
+          -- the compiler can satisfy this version requirement
+          True -> return [rel, D.Rel (compilerPackageName typ) Nothing Nothing]
+          False -> return [rel]
       compilerPackageName B.Documentation = D.BinPkgName "ghc-doc"
       compilerPackageName B.Profiling = D.BinPkgName "ghc-prof"
       compilerPackageName B.Development = D.BinPkgName "ghc"
@@ -289,6 +283,9 @@ debianVersion' :: Monad m => PackageName -> Version -> DebT m DebianVersion
 debianVersion' name v =
     do atoms <- get
        return $ parseDebianVersion (maybe "" (\ n -> show n ++ ":") (Map.lookup name (getL T.epochMap atoms)) ++ showVersion v)
+
+debianVersion'' :: Atoms -> PackageName -> Version -> DebianVersion
+debianVersion'' atoms name v = parseDebianVersion (maybe "" (\ n -> show n ++ ":") (Map.lookup name (getL T.epochMap atoms)) ++ showVersion v)
 
 data Rels a = And {unAnd :: [Rels a]} | Or {unOr :: [Rels a]} | Rel' {unRel :: a} deriving Show
 
