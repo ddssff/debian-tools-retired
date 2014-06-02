@@ -88,7 +88,7 @@ prepare cache package theUri =
              _output <- runProc cmd
              findSourceTree dir
           where
-            cmd = proc "git" (["clone", renderForGit theUri'] ++ maybe [] (\ branch -> [" --branch", "'" ++ branch ++ "'"]) theBranch ++ [dir])
+            cmd = proc "git" (["clone", renderForGit theUri'] ++ maybe [] (\ branch -> ["--branch", branch]) theBranch ++ [dir])
 
       -- CB  git reset --hard    will remove all edits back to the most recent commit
       fixLink base =

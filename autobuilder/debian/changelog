@@ -1,3 +1,9 @@
+autobuilder (6.65.2) unstable; urgency=low
+
+  * Fix the generation of git arguments when the GitBranch flag is used.
+
+ -- David Fox <dsf@seereason.com>  Mon, 02 Jun 2014 15:55:05 -0700
+
 autobuilder (6.65.1) unstable; urgency=low
 
   * Bump version.
