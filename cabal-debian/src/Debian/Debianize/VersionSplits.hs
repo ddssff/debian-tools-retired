@@ -57,7 +57,6 @@ insertSplit ver@(Version _ _) ltname sp@(VersionSplits {}) =
       -- ltname = base ++ "-" ++ (show (last ns - 1))
 
 instance Interspersed VersionSplits String Version where
-    leftmost (VersionSplits {splits = []}) = error "Empty Interspersed instance"
     leftmost (VersionSplits {oldestPackage = p}) = p
     pairs (VersionSplits {splits = xs}) = xs
 
