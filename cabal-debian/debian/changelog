@@ -1,3 +1,9 @@
+haskell-cabal-debian (4.7.1) unstable; urgency=low
+
+  * Fix the code added in 4.7.
+
+ -- David Fox <dsf@seereason.com>  Tue, 03 Jun 2014 07:14:52 -0700
+
 haskell-cabal-debian (4.7) unstable; urgency=low
 
   * Improve the treatment of dependencies which are built into ghc.  This

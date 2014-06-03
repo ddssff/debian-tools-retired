@@ -25,7 +25,11 @@ import Prelude hiding (init, unlines, log)
 data VersionSplits
     = VersionSplits {
         oldestPackage :: String
-      -- ^ The name given to versions older than the oldest split.
+      -- ^ The Debian name given to versions older than the oldest
+      -- split.  This name and the names in splits are strings rather
+      -- than BinPkgName because they are the package basename, the
+      -- string which appears between "libghc-" and "-dev".  Maybe
+      -- this should be a new type.
       , splits :: [(Version, String)]
       -- ^ Each pair is The version where the split occurs, and the
       -- name to use for versions greater than or equal to that

@@ -12,10 +12,10 @@ import Data.Function (on)
 import Data.Lens.Lazy (access, getL)
 import Data.List as List (filter, map, minimumBy, nub)
 import Data.Map as Map (lookup, Map)
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing)
 import Data.Set as Set (singleton)
 import qualified Data.Set as Set (member)
-import Data.Version (showVersion, Version(Version))
+import Data.Version (showVersion, Version)
 import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.DebianName (mkPkgName, mkPkgName')
 import Debian.Debianize.Monad as Monad (Atoms, DebT)
@@ -31,7 +31,6 @@ import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(
 import Distribution.PackageDescription (PackageDescription)
 import Distribution.PackageDescription as Cabal (allBuildInfo, BuildInfo(..), BuildInfo(buildTools, extraLibs, pkgconfigDepends), Executable(..))
 import qualified Distribution.PackageDescription as Cabal (PackageDescription(buildDepends, executables, package))
-import Distribution.Simple.Compiler
 import Distribution.Version (anyVersion, asVersionIntervals, earlierVersion, foldVersionRange', fromVersionIntervals, intersectVersionRanges, isNoVersion, laterVersion, orEarlierVersion, orLaterVersion, toVersionIntervals, unionVersionRanges, VersionRange, withinVersion)
 import Distribution.Version.Invert (invertVersionRange)
 import Prelude hiding (init, log, map, unlines, unlines, writeFile)
@@ -197,14 +196,15 @@ dependencies typ name cabalRange =
        -- satisfying a cabal dependency.  The only caveat is that
        -- we may need to distribute any "and" dependencies implied
        -- by a version range over these "or" dependences.
-       let alts = case Map.lookup name (getL T.debianNameMap atoms) of
-                    -- If there are no splits for this package just return the single dependency for the package
+       let alts :: [(BinPkgName, VersionRange)]
+           alts = case Map.lookup name (getL T.debianNameMap atoms) of
+                    -- If there are no splits for this package just
+                    -- return the single dependency for the package.
                     Nothing -> [(mkPkgName name typ, cabalRange')]
                     -- If there are splits create a list of (debian package name, VersionRange) pairs
                     Just splits' -> List.map (\ (n, r) -> (mkPkgName' n typ, r)) (packageRangesFromVersionSplits splits')
        mapM convert alts >>= mapM (doBundled typ name) . convert' . canonical . Or . catMaybes
     where
-      convert :: Monad m => (BinPkgName, VersionRange) -> DebT m (Maybe (Rels Relation))
       convert (dname, range) =
           case isNoVersion range''' of
             True -> return Nothing
@@ -251,7 +251,7 @@ dependencies typ name cabalRange =
       -- Simplify a VersionRange
       canon = fromVersionIntervals . toVersionIntervals
 
--- If a package is bundled with the compiler we make the
+-- | If a package is bundled with the compiler we make the
 -- compiler a substitute for that package.  If we were to
 -- specify the virtual package (e.g. libghc-base-dev) we would
 -- have to make sure not to specify a version number.
@@ -263,16 +263,28 @@ doBundled :: MonadIO m =>
 doBundled typ name rels =
     mapM doRel rels >>= return . concat
     where
+      -- If a library is built into the compiler, this is the debian
+      -- package name the compiler will conflict with.
+      comp = D.Rel (compilerPackageName typ) Nothing Nothing
       doRel :: MonadIO m => D.Relation -> DebT m [D.Relation]
-      doRel rel@(D.Rel _ req _) = do
+      doRel rel@(D.Rel dname req _) = do
         gver <- access ghcVersion
         -- Look at what version of the package is provided by the compiler.
         atoms <- get
+        -- What version of this package (if any) does the compiler provide?
         pver <- ghcBuiltIn gver name >>= return . maybe Nothing (Just . debianVersion'' atoms name)
-        case checkVersionReq req pver of
-          -- the compiler can satisfy this version requirement
-          True -> return [rel, D.Rel (compilerPackageName typ) Nothing Nothing]
-          False -> return [rel]
+        -- The name this library would have if it was in the compiler conflicts list.
+        let naiveDebianName = mkPkgName name typ
+        return $ -- The compiler should appear in the build dependency if
+                 -- it provides a suitable version of the library, or
+                 -- if it conflicts with all versions of the library.
+                 (if isJust pver && (checkVersionReq req pver || dname == naiveDebianName) then [comp] else []) ++
+                 -- The library package can satisfy the dependency if
+                 -- the compiler doesn't provide a version, or if the
+                 -- debian name of the library package is different
+                 -- from the debian name of the library package the
+                 -- compiler provides.
+                 (if isNothing pver || dname /= naiveDebianName then [rel] else [])
       compilerPackageName B.Documentation = D.BinPkgName "ghc-doc"
       compilerPackageName B.Profiling = D.BinPkgName "ghc-prof"
       compilerPackageName B.Development = D.BinPkgName "ghc"
