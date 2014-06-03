@@ -25,18 +25,10 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-archive-prof (>= 1.2.9)
                , libghc-authenticate-dev (>= 0.8.0)
                , libghc-authenticate-prof (>= 0.8.0)
-               , libghc-base-dev (>= 4) | ghc
-               , libghc-base-dev (<< 5) | ghc
-               , libghc-base-prof (>= 4) | ghc-prof
-               , libghc-base-prof (<< 5) | ghc-prof
                , libghc-blaze-html-dev (>= 0.5)
                , libghc-blaze-html-prof (>= 0.5)
                , libghc-blaze-markup-dev
                , libghc-blaze-markup-prof
-               , libghc-bytestring-dev | ghc
-               , libghc-bytestring-prof | ghc-prof
-               , libghc-containers-dev | ghc
-               , libghc-containers-prof | ghc-prof
                , libghc-debian-packaging-dev (>= 0.8)
                , libghc-debian-packaging-prof (>= 0.8)
                , libghc-digestive-functors-dev (>= 0.2)
@@ -45,12 +37,8 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-digestive-functors-happstack-prof (>= 0.1)
                , libghc-digestive-functors-hsp-dev (>= 0.3.1)
                , libghc-digestive-functors-hsp-prof (>= 0.3.1)
-               , libghc-directory-dev | ghc
-               , libghc-directory-prof | ghc-prof
                , libghc-extensible-exceptions-dev
                , libghc-extensible-exceptions-prof
-               , libghc-filepath-dev | ghc
-               , libghc-filepath-prof | ghc-prof
                , libghc-happstack-authenticate-dev (>= 0.6)
                , libghc-happstack-authenticate-prof (>= 0.6)
                , libghc-happstack-hsp-dev (>= 7.1)
@@ -81,14 +69,8 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-mtl-prof
                , libghc-network-dev
                , libghc-network-prof
-               , libghc-old-locale-dev | ghc
-               , libghc-old-locale-prof | ghc-prof
-               , libghc-old-time-dev | ghc
-               , libghc-old-time-prof | ghc-prof
                , libghc-parsec3-dev (>= 3) | libghc-parsec2-dev (<< 3)
                , libghc-parsec3-prof (>= 3) | libghc-parsec2-prof (<< 3)
-               , libghc-process-dev | ghc
-               , libghc-process-prof | ghc-prof
                , libghc-random-dev
                , libghc-random-prof
                , libghc-safecopy-dev (>= 0.6.0)
@@ -97,10 +79,6 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-syb-prof
                , libghc-text-dev (>= 0.11)
                , libghc-text-prof (>= 0.11)
-               , libghc-time-dev | ghc
-               , libghc-time-prof | ghc-prof
-               , libghc-unix-dev | ghc
-               , libghc-unix-prof | ghc-prof
                , libghc-utf8-string-dev
                , libghc-utf8-string-prof
                , libghc-web-routes-dev (>= 0.26.2)
@@ -113,8 +91,6 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-web-routes-th-prof
                , libghc-xss-sanitize-dev (>= 0.3.0.1)
                , libghc-xss-sanitize-prof (>= 0.3.0.1)
-               , libghc-base-dev | ghc
-               , libghc-base-prof | ghc-prof
                , haskell-hsx-utils
 Build-Depends-Indep: ghc-doc
                      , libghc-extra-doc
@@ -126,19 +102,13 @@ Build-Depends-Indep: ghc-doc
                      , libghc-acid-state-doc (>= 0.6.0)
                      , libghc-archive-doc (>= 1.2.9)
                      , libghc-authenticate-doc (>= 0.8.0)
-                     , libghc-base-doc (>= 4) | ghc-doc
-                     , libghc-base-doc (<< 5) | ghc-doc
                      , libghc-blaze-html-doc (>= 0.5)
                      , libghc-blaze-markup-doc
-                     , libghc-bytestring-doc | ghc-doc
-                     , libghc-containers-doc | ghc-doc
                      , libghc-debian-packaging-doc (>= 0.8)
                      , libghc-digestive-functors-doc (>= 0.2)
                      , libghc-digestive-functors-happstack-doc (>= 0.1)
                      , libghc-digestive-functors-hsp-doc (>= 0.3.1)
-                     , libghc-directory-doc | ghc-doc
                      , libghc-extensible-exceptions-doc
-                     , libghc-filepath-doc | ghc-doc
                      , libghc-happstack-authenticate-doc (>= 0.6)
                      , libghc-happstack-hsp-doc (>= 7.1)
                      , libghc-happstack-hsp-doc (<< 7.2)
@@ -154,16 +124,11 @@ Build-Depends-Indep: ghc-doc
                      , libghc-json-doc
                      , libghc-mtl-doc
                      , libghc-network-doc
-                     , libghc-old-locale-doc | ghc-doc
-                     , libghc-old-time-doc | ghc-doc
                      , libghc-parsec3-doc (>= 3) | libghc-parsec2-doc (<< 3)
-                     , libghc-process-doc | ghc-doc
                      , libghc-random-doc
                      , libghc-safecopy-doc (>= 0.6.0)
                      , libghc-syb-doc
                      , libghc-text-doc (>= 0.11)
-                     , libghc-time-doc | ghc-doc
-                     , libghc-unix-doc | ghc-doc
                      , libghc-utf8-string-doc
                      , libghc-web-routes-doc (>= 0.26.2)
                      , libghc-web-routes-happstack-doc

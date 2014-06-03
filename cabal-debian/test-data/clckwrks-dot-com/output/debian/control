@@ -7,10 +7,6 @@ Build-Depends: debhelper (>= 7.0)
                , cdbs
                , ghc
                , ghc-prof
-               , libghc-base-dev (>> 4) | ghc
-               , libghc-base-dev (<< 5) | ghc
-               , libghc-base-prof (>> 4) | ghc-prof
-               , libghc-base-prof (<< 5) | ghc-prof
                , libghc-clckwrks-dev (>= 0.13)
                , libghc-clckwrks-dev (<< 0.15)
                , libghc-clckwrks-prof (>= 0.13)
@@ -27,10 +23,6 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-clckwrks-theme-clckwrks-dev (<< 0.3)
                , libghc-clckwrks-theme-clckwrks-prof (>= 0.2)
                , libghc-clckwrks-theme-clckwrks-prof (<< 0.3)
-               , libghc-containers-dev (>= 0.4) | ghc
-               , libghc-containers-dev (<< 0.5) | ghc
-               , libghc-containers-prof (>= 0.4) | ghc-prof
-               , libghc-containers-prof (<< 0.5) | ghc-prof
                , libghc-happstack-server-dev (>= 7.0)
                , libghc-happstack-server-dev (<< 7.2)
                , libghc-happstack-server-prof (>= 7.0)
@@ -52,16 +44,12 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-web-plugins-prof (>= 0.1)
                , libghc-web-plugins-prof (<< 0.2)
 Build-Depends-Indep: ghc-doc
-                     , libghc-base-doc (>> 4) | ghc-doc
-                     , libghc-base-doc (<< 5) | ghc-doc
                      , libghc-clckwrks-doc (>= 0.13)
                      , libghc-clckwrks-doc (<< 0.15)
                      , libghc-clckwrks-plugin-bugs-doc (>= 0.3)
                      , libghc-clckwrks-plugin-bugs-doc (<< 0.4)
                      , libghc-clckwrks-plugin-media-doc (>= 0.3)
                      , libghc-clckwrks-plugin-media-doc (<< 0.4)
-                     , libghc-containers-doc (>= 0.4) | ghc-doc
-                     , libghc-containers-doc (<< 0.5) | ghc-doc
                      , libghc-happstack-server-doc (>= 7.0)
                      , libghc-happstack-server-doc (<< 7.2)
                      , libghc-hsp-doc (>= 0.7)
