@@ -26,26 +26,14 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-acid-state-prof
                , libghc-applicative-extras-dev
                , libghc-applicative-extras-prof
-               , libghc-base-dev | ghc
-               , libghc-base-prof | ghc-prof
-               , libghc-binary-dev | ghc
-               , libghc-binary-prof | ghc-prof
-               , libghc-bytestring-dev | ghc
-               , libghc-bytestring-prof | ghc-prof
                , libghc-cabal-debian-dev
                , libghc-cabal-debian-prof
                , libghc-cereal-dev
                , libghc-cereal-prof
-               , libghc-containers-dev | ghc
-               , libghc-containers-prof | ghc-prof
                , libghc-cryptohash-dev (>= 0.7)
                , libghc-cryptohash-prof (>= 0.7)
                , libghc-debian-dev (>= 3.67)
                , libghc-debian-prof (>= 3.67)
-               , libghc-directory-dev | ghc
-               , libghc-directory-prof | ghc-prof
-               , libghc-filepath-dev | ghc
-               , libghc-filepath-prof | ghc-prof
                , libghc-formlets-dev
                , libghc-formlets-prof
                , libghc-happstack-extra-dev
@@ -74,16 +62,12 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-mtl-prof
                , libghc-network-dev (>= 2.4)
                , libghc-network-prof (>= 2.4)
-               , libghc-old-time-dev | ghc
-               , libghc-old-time-prof | ghc-prof
                , libghc-pandoc-dev
                , libghc-pandoc-prof
                , libghc-pandoc-types-dev
                , libghc-pandoc-types-prof
                , libghc-parsec3-dev (>= 3) | libghc-parsec2-dev (<< 3)
                , libghc-parsec3-prof (>= 3) | libghc-parsec2-prof (<< 3)
-               , libghc-process-dev | ghc
-               , libghc-process-prof | ghc-prof
                , libghc-process-extras-dev (>= 0.6)
                , libghc-process-extras-prof (>= 0.6)
                , libghc-process-progress-dev
@@ -104,10 +88,6 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-syb-with-class-prof
                , libghc-text-dev
                , libghc-text-prof
-               , libghc-time-dev | ghc
-               , libghc-time-prof | ghc-prof
-               , libghc-unix-dev | ghc
-               , libghc-unix-prof | ghc-prof
                , libghc-utf8-string-dev
                , libghc-utf8-string-prof
                , libghc-xhtml-dev
@@ -122,16 +102,10 @@ Build-Depends-Indep: ghc-doc
                      , libghc-unixutils-doc (>= 1.50)
                      , libghc-acid-state-doc
                      , libghc-applicative-extras-doc
-                     , libghc-base-doc | ghc-doc
-                     , libghc-binary-doc | ghc-doc
-                     , libghc-bytestring-doc | ghc-doc
                      , libghc-cabal-debian-doc
                      , libghc-cereal-doc
-                     , libghc-containers-doc | ghc-doc
                      , libghc-cryptohash-doc (>= 0.7)
                      , libghc-debian-doc (>= 3.67)
-                     , libghc-directory-doc | ghc-doc
-                     , libghc-filepath-doc | ghc-doc
                      , libghc-formlets-doc
                      , libghc-happstack-extra-doc
                      , libghc-happstack-hsp-doc
@@ -146,11 +120,9 @@ Build-Depends-Indep: ghc-doc
                      , libghc-maccatcher-doc
                      , libghc-mtl-doc
                      , libghc-network-doc (>= 2.4)
-                     , libghc-old-time-doc | ghc-doc
                      , libghc-pandoc-doc
                      , libghc-pandoc-types-doc
                      , libghc-parsec3-doc (>= 3) | libghc-parsec2-doc (<< 3)
-                     , libghc-process-doc | ghc-doc
                      , libghc-process-extras-doc (>= 0.6)
                      , libghc-process-progress-doc
                      , libghc-puremd5-doc
@@ -161,8 +133,6 @@ Build-Depends-Indep: ghc-doc
                      , libghc-syb-doc
                      , libghc-syb-with-class-doc
                      , libghc-text-doc
-                     , libghc-time-doc | ghc-doc
-                     , libghc-unix-doc | ghc-doc
                      , libghc-utf8-string-doc
                      , libghc-xhtml-doc
 Standards-Version: 3.9.3

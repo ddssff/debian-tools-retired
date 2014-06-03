@@ -11,14 +11,11 @@ Build-Depends: debhelper (>= 7.0)
                , libghc-extra-prof
                , libghc-archive-dev (>= 1.7)
                , libghc-archive-prof (>= 1.7)
-               , libghc-base-dev | ghc
-               , libghc-base-prof | ghc-prof
                , libghc-network-dev
                , libghc-network-prof
 Build-Depends-Indep: ghc-doc
                      , libghc-extra-doc
                      , libghc-archive-doc (>= 1.7)
-                     , libghc-base-doc | ghc-doc
                      , libghc-network-doc
 Standards-Version: 3.8.1
 
