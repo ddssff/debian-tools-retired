@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
+{-# LANGUAGE CPP, OverloadedStrings, RankNTypes, ScopedTypeVariables, StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Main
     ( tests
@@ -62,8 +62,13 @@ testAtoms = ghc763 <$> T.newAtoms
     where
       ghc763 :: Atoms -> Atoms
       ghc763 atoms =
+#if MIN_VERSION_Cabal(1,21,0)
+          let CompilerId flavor version _ = ghcVersion_ atoms in
+          atoms {ghcVersion_ = CompilerId flavor (version {versionBranch = [7, 6, 3]}) Nothing}
+#else
           let CompilerId flavor version = ghcVersion_ atoms in
           atoms {ghcVersion_ = CompilerId flavor (version {versionBranch = [7, 6, 3]})}
+#endif
 
 -- | Create a Debianization based on a changelog entry and a license
 -- value.  Uses the currently installed versions of debhelper and

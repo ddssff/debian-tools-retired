@@ -1,7 +1,7 @@
 -- | Determine whether a specific version of a Haskell package is
 -- bundled with into this particular version of the given compiler.
 
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE CPP, StandaloneDeriving #-}
 module Debian.Debianize.Bundled
     ( ghcBuiltIn
     ) where
@@ -28,7 +28,11 @@ type Bundled = (Version, [PackageIdentifier])
 --           PackageIdentifier (PackageName n) (Version (map read (filter (/= ".") (groupBy (\ a b -> (a == '.') == (b == '.')) v))) [])
 
 ghcBuiltIns :: CompilerId -> Bundled
+#if MIN_VERSION_Cabal(1,21,0)
+ghcBuiltIns (CompilerId GHC compilerVersion _) =
+#else
 ghcBuiltIns (CompilerId GHC compilerVersion) =
+#endif
     case dropWhile (\ pr -> (fst pr < compilerVersion)) pairs of
       [] -> error $ "cabal-debian: No bundled package list for ghc " ++ show compilerVersion
       x : _ -> x
