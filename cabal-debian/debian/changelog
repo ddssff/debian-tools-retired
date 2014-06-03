@@ -1,6 +1,7 @@
 haskell-cabal-debian (4.7.1) unstable; urgency=low
 
   * Fix the code added in 4.7.
+  * Add --recommends and --suggests options, similar to --depends et. al.
 
  -- David Fox <dsf@seereason.com>  Tue, 03 Jun 2014 07:14:52 -0700
 

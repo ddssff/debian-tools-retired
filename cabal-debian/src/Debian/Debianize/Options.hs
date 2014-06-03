@@ -18,7 +18,7 @@ import Debian.Debianize.Types
     (verbosity, dryRun, debAction, noDocumentationLibrary, noProfilingLibrary,
      missingDependencies, sourcePackageName, cabalFlagAssignments, maintainer, buildDir, omitLTDeps,
      sourceFormat, buildDepends, buildDependsIndep, extraDevDeps, depends, conflicts, replaces, provides,
-     extraLibMap, debVersion, revision, epochMap, execMap, utilsPackageNames)
+     recommends, suggests, extraLibMap, debVersion, revision, epochMap, execMap, utilsPackageNames)
 import Debian.Debianize.Types.Atoms (Atoms, EnvSet(..), InstallFile(..), DebAction(..), setBuildEnv)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
@@ -128,6 +128,12 @@ options =
       Option "" ["provides"]
              (ReqArg (addDep provides) "deb:deb,deb:deb,...")
              "Like --depends, modifies the Provides field.",
+      Option "" ["recommends"]
+             (ReqArg (addDep recommends) "deb:deb,deb:deb,...")
+             "Like --depends, modifies the Recommends field.",
+      Option "" ["suggests"]
+             (ReqArg (addDep suggests) "deb:deb,deb:deb,...")
+             "Like --depends, modifies the Suggests field.",
       Option "" ["map-dep"] (ReqArg (\ pair -> case break (== '=') pair of
                                                  (cab, (_ : deb)) -> extraLibMap +++= (cab, rels deb)
                                                  (_, "") -> error "usage: --map-dep CABALNAME=RELATIONS") "CABALNAME=RELATIONS")
