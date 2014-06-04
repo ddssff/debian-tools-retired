@@ -68,6 +68,7 @@ import Extra.Files (replaceFile)
 import "Extra" Extra.List (dropPrefix)
 import Extra.Misc (columns)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, removeDirectory)
+import System.Environment (setEnv)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
@@ -413,7 +414,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
                      doDpkgSource' >> doesFileExist (path' </> "debian/patches/autobuilder.diff") >>= \ exists ->
                      when (not exists) (removeDirectory (path' </> "debian/patches"))
                  doDpkgSource True = doDpkgSource' >> return ()
-                 doDpkgSource' = readCreateProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
+                 doDpkgSource' = setEnv "EDITOR" "/bin/true" >> readCreateProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
              _ <- liftIO $ useEnv' root (\ _ -> return ())
                              (-- Get the version number of dpkg-dev in the build environment
                               runProc (shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")) >>= return . head . words . L.unpack . L.concat . keepStdout >>= \ installed ->
