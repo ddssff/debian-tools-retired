@@ -51,6 +51,8 @@ data Atoms
       -- ^ Do not produce a libghc-foo-doc package.  FIXME: make this Bool or Maybe Bool
       , noProfilingLibrary_ :: Set Bool
       -- ^ Do not produce a libghc-foo-prof package.  FIXME: make this Bool or Maybe Bool
+      , noHoogle_ :: Set Bool
+      -- ^ Don't link the documentation for hoogle.  FIXME: make this Bool or Maybe Bool
       , omitLTDeps_ :: Set Bool
       -- ^ If present, don't generate the << dependency when we see a cabal
       -- equals dependency.  (The implementation of this was somehow lost.)
@@ -236,6 +238,7 @@ makeAtoms ghc =
     Atoms
       { noDocumentationLibrary_ = mempty
       , noProfilingLibrary_ = mempty
+      , noHoogle_ = mempty
       , omitLTDeps_ = mempty
       , buildDir_ = mempty
       , buildEnv_ = EnvSet {cleanOS = "/", dependOS = "/", buildOS = "/"}
@@ -505,6 +508,10 @@ omitLTDeps = lens omitLTDeps_ (\ b a -> a {omitLTDeps_ = b})
 -- | Set this to omit the prof library deb.
 noProfilingLibrary :: Lens Atoms (Set Bool)
 noProfilingLibrary = lens noProfilingLibrary_ (\ b a -> a {noProfilingLibrary_ = b})
+
+-- | Set this to omit the hoogle documentation link
+noHoogle :: Lens Atoms (Set Bool)
+noHoogle = lens noHoogle_ (\ b a -> a {noHoogle_ = b})
 
 -- | Set this to omit the doc library deb.
 noDocumentationLibrary :: Lens Atoms (Set Bool)

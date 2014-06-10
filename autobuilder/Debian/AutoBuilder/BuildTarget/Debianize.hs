@@ -115,6 +115,7 @@ applyPackageFlag P.FailPackage = return ()
 applyPackageFlag x@(P.Revision _) = compileArgs (asCabalFlags x)
 applyPackageFlag x@(P.Epoch _ _) = compileArgs (asCabalFlags x)
 applyPackageFlag x@P.NoDoc = compileArgs (asCabalFlags x)
+applyPackageFlag x@P.NoHoogle = compileArgs (asCabalFlags x)
 applyPackageFlag (P.CabalDebian ss) = compileArgs ss
 applyPackageFlag (P.ModifyAtoms f) = modify f
 applyPackageFlag (P.RelaxDep _) = return ()
@@ -138,6 +139,7 @@ asCabalFlags P.FailPackage = []
 asCabalFlags (P.Revision s) = ["--revision", s]
 asCabalFlags (P.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]
 asCabalFlags P.NoDoc = ["--disable-haddock"]
+asCabalFlags P.NoHoogle = ["--no-hoogle"]
 asCabalFlags (P.CabalDebian ss) = ss
 asCabalFlags (P.RelaxDep _) = []
 asCabalFlags (P.UDeb _) = []

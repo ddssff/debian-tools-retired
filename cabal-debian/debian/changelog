@@ -1,3 +1,11 @@
+haskell-cabal-debian (4.8) unstable; urgency=low
+
+  * Add a --no-hoogle flag to omit the hoogle documentation link.  This
+    link doesn't contain the package's version number, so it will conflict
+    with other versions of the library (such as those built into ghc.)
+
+ -- David Fox <dsf@seereason.com>  Tue, 10 Jun 2014 10:42:38 -0700
+
 haskell-cabal-debian (4.7.1) unstable; urgency=low
 
   * Fix the code added in 4.7.

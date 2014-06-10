@@ -170,6 +170,8 @@ data PackageFlag
     -- ^ Omit the -doc section from the control file so that no
     -- documentation files are generated.  Used to work around haddock
     -- bugs.
+    | NoHoogle
+    -- ^ Pass the --no-hoogle flag to cabal-debian.
     | CabalDebian [String]
     -- ^ Pass some arbitrary arguments to cabal-debian
     | ModifyAtoms (CD.Atoms -> CD.Atoms)

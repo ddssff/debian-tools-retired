@@ -31,7 +31,7 @@ import Debian.Debianize.Monad as Monad (DebT)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
 import Debian.Debianize.Prelude ((%=), (+++=), (+=), foldEmpty, fromEmpty, fromSingleton, (~=), (~?=))
 import Debian.Debianize.Types (Top)
-import qualified Debian.Debianize.Types as T (apacheSite, backups, binaryArchitectures, binaryPackages, binarySection, breaks, buildDepends, buildDependsIndep, buildDir, builtUsing, changelog, comments, compat, conflicts, debianDescription, debVersion, depends, epochMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installDir, installTo, intermediateFiles, license, link, maintainer, noDocumentationLibrary, noProfilingLibrary, packageDescription, packageType, preDepends, provides, recommends, replaces, revision, rulesFragments, serverInfo, source, sourcePackageName, sourcePriority, sourceSection, suggests, utilsPackageNames, verbosity, watch, website)
+import qualified Debian.Debianize.Types as T (apacheSite, backups, binaryArchitectures, binaryPackages, binarySection, breaks, buildDepends, buildDependsIndep, buildDir, builtUsing, changelog, comments, compat, conflicts, debianDescription, debVersion, depends, epochMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installDir, installTo, intermediateFiles, license, link, maintainer, noDocumentationLibrary, noProfilingLibrary, noHoogle, packageDescription, packageType, preDepends, provides, recommends, replaces, revision, rulesFragments, serverInfo, source, sourcePackageName, sourcePriority, sourceSection, suggests, utilsPackageNames, verbosity, watch, website)
 import qualified Debian.Debianize.Types.Atoms as A (InstallFile(execName, sourceDir), showAtoms)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (BinaryDebDescription, package, PackageType(Development, Documentation, Exec, Profiling, Source', Utilities))
 import Debian.Orphans ()
@@ -241,8 +241,8 @@ binaryPackageRelations b typ =
     do edds <- access T.extraDevDeps
        T.depends b %= \ rels -> [anyrel "${shlibs:Depends}", anyrel "${haskell:Depends}", anyrel "${misc:Depends}"] ++
                                 (if typ == B.Development then edds else []) ++ rels
-       T.recommends b ~= [anyrel "${haskell:Recommends}"]
-       T.suggests b ~= [anyrel "${haskell:Suggests}"]
+       T.recommends b %= \ rels -> [anyrel "${haskell:Recommends}"] ++ rels
+       T.suggests b %= \ rels -> [anyrel "${haskell:Suggests}"] ++ rels
        T.preDepends b ~= []
        T.breaks b ~= []
        T.conflicts b %= \ rels -> [anyrel "${haskell:Conflicts}"] ++ rels
@@ -256,15 +256,15 @@ librarySpecs pkgDesc =
        let dev = isJust (Cabal.library pkgDesc)
        doc <- get >>= return . (/= singleton True) . getL T.noDocumentationLibrary
        prof <- get >>= return . (/= singleton True) . getL T.noProfilingLibrary
+       hoogle <- get >>= return . (/= singleton True) . getL T.noHoogle
        when dev (librarySpec Any B.Development)
        when (dev && prof) (librarySpec Any B.Profiling)
-       when (dev && doc)
+       when (dev && doc && hoogle)
             (do docSpecsParagraph
                 T.link +++= (debName, singleton ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt",
-                                                 "/usr/lib/ghc-doc/hoogle" </> hoogle <.> "txt")))
+                                                 "/usr/lib/ghc-doc/hoogle" </> List.map toLower cabal <.> "txt")))
     where
       PackageName cabal = pkgName (Cabal.package pkgDesc)
-      hoogle = List.map toLower cabal
 
 docSpecsParagraph :: Monad m => DebT m ()
 docSpecsParagraph =
