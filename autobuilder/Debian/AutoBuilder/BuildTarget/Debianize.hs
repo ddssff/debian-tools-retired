@@ -7,15 +7,11 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
-import Control.Applicative ((<$>))
 import Control.Monad (when)
 import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
-import Data.Lens.Lazy (setL)
 import Data.List (isSuffixOf)
-import Data.Maybe (fromMaybe)
-import Data.Version (parseVersion)
 import Debian.AutoBuilder.BuildEnv (envSet)
 import Debian.AutoBuilder.Params (computeTopDir)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
@@ -25,12 +21,10 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Pretty (pretty)
 import Debian.Relation ()
-import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
 import Distribution.Verbosity (normal)
-import Distribution.Compiler
 import Distribution.Package (PackageIdentifier(..))
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
@@ -38,7 +32,6 @@ import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurr
 import System.Environment (withArgs)
 import System.FilePath ((</>), takeFileName, takeDirectory)
 import System.Process.Progress (verbosity)
-import Text.ParserCombinators.ReadP (readP_to_S)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
@@ -87,7 +80,7 @@ autobuilderDebianize cache pflags currentDirectory =
 -- cabal-debian command line options.  (Is this really in the IO monad
 -- for a good reason?)
 collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> IO [String]
-collectPackageFlags cache pflags =
+collectPackageFlags _cache pflags =
     do v <- verbosity
        return $ ["--verbose=" ++ show v] ++
                 concatMap asCabalFlags pflags
