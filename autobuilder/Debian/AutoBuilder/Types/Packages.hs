@@ -275,7 +275,7 @@ debianize p = p { spec = Debianize (spec p) }
 -- debdir name method1 method2 = method name (DebDir method1 method1)
 
 debdir :: Packages -> RetrieveMethod -> Packages
-debdir p debian = p {spec = DebDir debian (spec p)}
+debdir p debian = p {spec = DebDir (spec p) debian}
 
 dir :: String -> FilePath -> Packages
 dir name path = method name (Dir path)
