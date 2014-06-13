@@ -13,7 +13,7 @@ import Data.Lens.Lazy (access)
 import Data.Map as Map (lookup, alter)
 import Data.Version (Version, showVersion)
 import Debian.Debianize.Types.BinaryDebDescription as Debian (PackageType(..))
-import Debian.Debianize.Types.Atoms as T (debianNameMap, packageDescription, ghcVersion)
+import Debian.Debianize.Types.Atoms as T (debianNameMap, packageDescription, compilerFlavor)
 import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.Prelude ((%=))
 import Debian.Debianize.VersionSplits (insertSplit, doSplits, VersionSplits, makePackage)
@@ -21,7 +21,7 @@ import Debian.Orphans ()
 import Debian.Relation (PkgName(..), Relations)
 import qualified Debian.Relation as D (VersionReq(EEQ))
 import Debian.Version (parseDebianVersion)
-import Distribution.Compiler (CompilerId(..), CompilerFlavor(..))
+import Distribution.Compiler (CompilerFlavor(..))
 import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
 import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (unlines)
@@ -36,7 +36,7 @@ data Dependency_
 -- | Build the Debian package name for a given package type.
 debianName :: (Monad m, PkgName name) => PackageType -> DebT m name
 debianName typ =
-    do (CompilerId cfl _ _) <- access T.ghcVersion
+    do cfl <- compilerFlavor
        Just pkgDesc <- access packageDescription
        let pkgId = Cabal.package pkgDesc
        nameMap <- access T.debianNameMap

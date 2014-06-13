@@ -1,7 +1,7 @@
 -- | This module holds a long list of lenses that access the Atoms
 -- record, the record that holds the input data from which the
 -- debianization is to be constructed.
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE CPP, DeriveDataTypeable #-}
 module Debian.Debianize.Types.Atoms
 {-    ( Atoms
     , showAtoms
@@ -16,8 +16,9 @@ module Debian.Debianize.Types.Atoms
 
 import Control.Applicative ((<$>))
 import Control.Category ((.))
+import Control.Monad.State (StateT)
 import Control.Monad.Trans (MonadIO)
-import Data.Lens.Lazy (Lens, lens)
+import Data.Lens.Lazy (Lens, lens, access)
 import Data.Map as Map (Map)
 import Data.Monoid (Monoid(..))
 import Data.Set as Set (Set)
@@ -30,7 +31,7 @@ import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat)
 import Debian.Relation (BinPkgName, Relations, SrcPkgName)
 import Debian.Version (DebianVersion)
-import Distribution.Compiler (CompilerId)
+import Distribution.Compiler (CompilerId(..), CompilerFlavor)
 import Distribution.License (License)
 import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
@@ -646,3 +647,12 @@ intermediateFiles = lens intermediateFiles_ (\ a b -> b {intermediateFiles_ = a}
 
 ghcVersion :: Lens Atoms CompilerId
 ghcVersion = lens ghcVersion_ (\ a b -> b {ghcVersion_ = a})
+
+compilerFlavor :: Monad m => StateT Atoms m CompilerFlavor
+compilerFlavor = do
+#if MIN_VERSION_Cabal(1,20,0)
+  CompilerId x _ _ <- access ghcVersion
+#else
+  CompilerId x _ <- access ghcVersion
+#endif
+  return x

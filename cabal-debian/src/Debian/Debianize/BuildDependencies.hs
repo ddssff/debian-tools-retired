@@ -19,14 +19,14 @@ import Debian.Debianize.Bundled (ghcBuiltIn)
 import Debian.Debianize.DebianName (mkPkgName, mkPkgName')
 import Debian.Debianize.Monad as Monad (Atoms, DebT)
 import qualified Debian.Debianize.Types as T (buildDepends, buildDependsIndep, debianNameMap, epochMap, execMap, extraLibMap, missingDependencies, noDocumentationLibrary, noProfilingLibrary)
-import Debian.Debianize.Types.Atoms (ghcVersion)
+import Debian.Debianize.Types.Atoms (ghcVersion, compilerFlavor)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (PackageType(Development, Documentation, Profiling))
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName, Relation(..), Relations, checkVersionReq)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(EEQ, GRE, LTE, SGR, SLT))
 import Debian.Version (DebianVersion, parseDebianVersion)
-import Distribution.Compiler (CompilerId(..), CompilerFlavor(GHC))
+import Distribution.Compiler (CompilerFlavor(GHC))
 import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
 import Distribution.PackageDescription (PackageDescription)
 import Distribution.PackageDescription as Cabal (allBuildInfo, BuildInfo(..), BuildInfo(buildTools, extraLibs, pkgconfigDepends), Executable(..))
@@ -82,7 +82,7 @@ debianBuildDeps pkgDesc =
        cDeps <- cabalDeps
        let bDeps = getL T.buildDepends deb
            prof = not $ getL T.noProfilingLibrary deb
-       CompilerId cfl _ _ <- access ghcVersion
+       cfl <- compilerFlavor
        let xs = nub $ [[D.Rel (D.BinPkgName "debhelper") (Just (D.GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
                        [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
                        anyrel "cdbs",
@@ -193,7 +193,7 @@ anyrel' x = [D.Rel x Nothing Nothing]
 dependencies :: MonadIO m => B.PackageType -> PackageName -> VersionRange -> DebT m Relations
 dependencies typ name cabalRange =
     do atoms <- get
-       CompilerId cfl _ _ <- access ghcVersion
+       cfl <- compilerFlavor
        -- Compute a list of alternative debian dependencies for
        -- satisfying a cabal dependency.  The only caveat is that
        -- we may need to distribute any "and" dependencies implied
@@ -271,9 +271,9 @@ doBundled typ name rels =
       doRel :: MonadIO m => D.Relation -> DebT m [D.Relation]
       doRel rel@(D.Rel dname req _) = do
         gver <- access ghcVersion
+        cfl <- compilerFlavor
         -- Look at what version of the package is provided by the compiler.
         atoms <- get
-        CompilerId cfl _ _ <- access ghcVersion
         -- What version of this package (if any) does the compiler provide?
         pver <- ghcBuiltIn gver name >>= return . maybe Nothing (Just . debianVersion'' atoms name)
         -- The name this library would have if it was in the compiler conflicts list.
