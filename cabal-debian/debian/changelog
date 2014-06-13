@@ -1,3 +1,11 @@
+haskell-cabal-debian (4.9) unstable; urgency=low
+
+  * Generate the library package prefix, previously hard coded as libghc-,
+    using the CompilerFlavor value, so we get libghcjs-foo-dev when using
+    ghcjs.
+
+ -- David Fox <dsf@seereason.com>  Fri, 13 Jun 2014 09:58:13 -0700
+
 haskell-cabal-debian (4.8) unstable; urgency=low
 
   * Add a --no-hoogle flag to omit the hoogle documentation link.  This

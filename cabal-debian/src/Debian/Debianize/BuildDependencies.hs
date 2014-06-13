@@ -27,6 +27,7 @@ import Debian.Orphans ()
 import Debian.Relation (BinPkgName, Relation(..), Relations, checkVersionReq)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(EEQ, GRE, LTE, SGR, SLT))
 import Debian.Version (DebianVersion, parseDebianVersion)
+import Distribution.Compiler (CompilerId(..))
 import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
 import Distribution.PackageDescription (PackageDescription)
 import Distribution.PackageDescription as Cabal (allBuildInfo, BuildInfo(..), BuildInfo(buildTools, extraLibs, pkgconfigDepends), Executable(..))
@@ -192,6 +193,7 @@ anyrel' x = [D.Rel x Nothing Nothing]
 dependencies :: MonadIO m => B.PackageType -> PackageName -> VersionRange -> DebT m Relations
 dependencies typ name cabalRange =
     do atoms <- get
+       CompilerId cfl _ _ <- access ghcVersion
        -- Compute a list of alternative debian dependencies for
        -- satisfying a cabal dependency.  The only caveat is that
        -- we may need to distribute any "and" dependencies implied
@@ -200,9 +202,9 @@ dependencies typ name cabalRange =
            alts = case Map.lookup name (getL T.debianNameMap atoms) of
                     -- If there are no splits for this package just
                     -- return the single dependency for the package.
-                    Nothing -> [(mkPkgName name typ, cabalRange')]
+                    Nothing -> [(mkPkgName cfl name typ, cabalRange')]
                     -- If there are splits create a list of (debian package name, VersionRange) pairs
-                    Just splits' -> List.map (\ (n, r) -> (mkPkgName' n typ, r)) (packageRangesFromVersionSplits splits')
+                    Just splits' -> List.map (\ (n, r) -> (mkPkgName' cfl n typ, r)) (packageRangesFromVersionSplits splits')
        mapM convert alts >>= mapM (doBundled typ name) . convert' . canonical . Or . catMaybes
     where
       convert (dname, range) =
@@ -271,10 +273,11 @@ doBundled typ name rels =
         gver <- access ghcVersion
         -- Look at what version of the package is provided by the compiler.
         atoms <- get
+        CompilerId cfl _ _ <- access ghcVersion
         -- What version of this package (if any) does the compiler provide?
         pver <- ghcBuiltIn gver name >>= return . maybe Nothing (Just . debianVersion'' atoms name)
         -- The name this library would have if it was in the compiler conflicts list.
-        let naiveDebianName = mkPkgName name typ
+        let naiveDebianName = mkPkgName cfl name typ
         return $ -- The compiler should appear in the build dependency if
                  -- it provides a suitable version of the library, or
                  -- if it conflicts with all versions of the library.

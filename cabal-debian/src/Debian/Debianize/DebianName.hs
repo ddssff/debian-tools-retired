@@ -13,7 +13,7 @@ import Data.Lens.Lazy (access)
 import Data.Map as Map (lookup, alter)
 import Data.Version (Version, showVersion)
 import Debian.Debianize.Types.BinaryDebDescription as Debian (PackageType(..))
-import Debian.Debianize.Types.Atoms as T (debianNameMap, packageDescription)
+import Debian.Debianize.Types.Atoms as T (debianNameMap, packageDescription, ghcVersion)
 import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.Prelude ((%=))
 import Debian.Debianize.VersionSplits (insertSplit, doSplits, VersionSplits, makePackage)
@@ -21,6 +21,7 @@ import Debian.Orphans ()
 import Debian.Relation (PkgName(..), Relations)
 import qualified Debian.Relation as D (VersionReq(EEQ))
 import Debian.Version (parseDebianVersion)
+import Distribution.Compiler (CompilerId(..), CompilerFlavor(..))
 import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
 import qualified Distribution.PackageDescription as Cabal
 import Prelude hiding (unlines)
@@ -35,22 +36,23 @@ data Dependency_
 -- | Build the Debian package name for a given package type.
 debianName :: (Monad m, PkgName name) => PackageType -> DebT m name
 debianName typ =
-    do Just pkgDesc <- access packageDescription
+    do (CompilerId cfl _ _) <- access T.ghcVersion
+       Just pkgDesc <- access packageDescription
        let pkgId = Cabal.package pkgDesc
        nameMap <- access T.debianNameMap
-       return $ debianName' (Map.lookup (pkgName pkgId) nameMap) typ pkgId
+       return $ debianName' cfl (Map.lookup (pkgName pkgId) nameMap) typ pkgId
 
 -- | Function that applies the mapping from cabal names to debian
 -- names based on version numbers.  If a version split happens at v,
 -- this will return the ltName if < v, and the geName if the relation
 -- is >= v.
-debianName' :: (PkgName name) => Maybe VersionSplits -> PackageType -> PackageIdentifier -> name
-debianName' msplits typ pkgId =
+debianName' :: (PkgName name) => CompilerFlavor -> Maybe VersionSplits -> PackageType -> PackageIdentifier -> name
+debianName' cfl msplits typ pkgId =
     case msplits of
-      Nothing -> mkPkgName pname typ
-      Just splits -> (\ s -> mkPkgName' s typ) $ doSplits splits version
+      Nothing -> mkPkgName cfl pname typ
+      Just splits -> (\ s -> mkPkgName' cfl s typ) $ doSplits splits version
     where
-      -- def = mkPkgName pname typ
+      -- def = mkPkgName cfl pname typ
       pname@(PackageName _) = pkgName pkgId
       version = (Just (D.EEQ (parseDebianVersion (showVersion (pkgVersion pkgId)))))
 
@@ -58,20 +60,21 @@ debianName' msplits typ pkgId =
 -- debian package type.  Unfortunately, this does not enforce the
 -- correspondence between the PackageType value and the name type, so
 -- it can return nonsense like (SrcPkgName "libghc-debian-dev").
-mkPkgName :: PkgName name => PackageName -> PackageType -> name
-mkPkgName pkg typ = mkPkgName' (debianBaseName pkg) typ
+mkPkgName :: PkgName name => CompilerFlavor -> PackageName -> PackageType -> name
+mkPkgName cfl pkg typ = mkPkgName' cfl (debianBaseName pkg) typ
 
-mkPkgName' :: PkgName name => String -> PackageType -> name
-mkPkgName' base typ =
+mkPkgName' :: PkgName name => CompilerFlavor -> String -> PackageType -> name
+mkPkgName' cfl base typ =
     pkgNameFromString $
              case typ of
-                Documentation -> "libghc-" ++ base ++ "-doc"
-                Development -> "libghc-" ++ base ++ "-dev"
-                Profiling -> "libghc-" ++ base ++ "-prof"
+                Documentation -> prefix ++ base ++ "-doc"
+                Development -> prefix ++ base ++ "-dev"
+                Profiling -> prefix ++ base ++ "-prof"
                 Utilities -> "haskell-" ++ base ++ "-utils"
                 Exec -> base
                 Source' -> "haskell-" ++ base ++ ""
                 Cabal -> base
+    where prefix = "lib" ++ map toLower (show cfl) ++ "-"
 
 debianBaseName :: PackageName -> String
 debianBaseName (PackageName name) =
