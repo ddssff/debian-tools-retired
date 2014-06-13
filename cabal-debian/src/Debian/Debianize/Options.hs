@@ -76,7 +76,7 @@ options =
       Option "" ["default-package"] (ReqArg (\ name -> utilsPackageNames ~= singleton (BinPkgName name)) "DEB")
              (unlines [ "Set the name of the catch-all package that receives all the files not included in a library package or "
                       , " some other executable package.  By default this is 'haskell-packagename-utils'."]),
-      Option "" ["disable-haddock"] (NoArg (noDocumentationLibrary ~= singleton True))
+      Option "" ["disable-haddock"] (NoArg (noDocumentationLibrary ~= True))
              (unlines [ "Don't generate API documentation packages, usually named"
                       , "libghc-packagename-doc.  Use this if your build is crashing due to a"
                       , "haddock bug."]),
@@ -90,10 +90,10 @@ options =
              (unlines [ "Use this name for the debian source package, the name in the Source field at the top of the"
                       , "debian control file, and also at the very beginning of the debian/changelog file.  By default"
                       , "this is haskell-<cabalname>, where the cabal package name is downcased."]),
-      Option "" ["disable-library-profiling"] (NoArg (noProfilingLibrary ~= singleton True))
+      Option "" ["disable-library-profiling"] (NoArg (noProfilingLibrary ~= True))
              (unlines [ "Don't generate profiling (-prof) library packages.  This has been used in one case"
                       , "where the package code triggered a compiler bug."]),
-      Option "" ["no-hoogle"] (NoArg (noHoogle ~= singleton True))
+      Option "" ["no-hoogle"] (NoArg (noHoogle ~= True))
              (unlines [ "Do not create the link from /usr/lib/ghc-doc/hoogle/Package.txt to the top"
                       , "of the package's html documentation tree.  This path does not contain"
                       , "the package version, so it may conflict with libraries built into ghc."]),
@@ -159,7 +159,7 @@ options =
                                                (cab, (_ : deb)) -> execMap ++= (cab, rels deb)
                                                _ -> error "usage: --exec-map EXECNAME=RELATIONS") "EXECNAME=RELATIONS")
              "Specify a mapping from the name appearing in the Build-Tool field of the cabal file to a debian binary package name, e.g. --exec-map trhsx=haskell-hsx-utils",
-      Option "" ["omit-lt-deps"] (NoArg (omitLTDeps ~= singleton True))
+      Option "" ["omit-lt-deps"] (NoArg (omitLTDeps ~= True))
              (unlines [ "Remove all less-than dependencies from the generated control file.  Less-than"
                       , "dependencies are less useful and more troublesome for debian packages than cabal,"
                       , "because you can't install multiple versions of a given debian package.  For more"

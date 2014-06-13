@@ -47,16 +47,15 @@ import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 -- debianization is finalized.
 data Atoms
     = Atoms
-      { noDocumentationLibrary_ :: Set Bool
-      -- ^ Do not produce a libghc-foo-doc package.  FIXME: make this Bool or Maybe Bool
-      , noProfilingLibrary_ :: Set Bool
-      -- ^ Do not produce a libghc-foo-prof package.  FIXME: make this Bool or Maybe Bool
-      , noHoogle_ :: Set Bool
-      -- ^ Don't link the documentation for hoogle.  FIXME: make this Bool or Maybe Bool
-      , omitLTDeps_ :: Set Bool
+      { noDocumentationLibrary_ :: Bool
+      -- ^ Do not produce a libghc-foo-doc package.
+      , noProfilingLibrary_ :: Bool
+      -- ^ Do not produce a libghc-foo-prof package.
+      , noHoogle_ :: Bool
+      -- ^ Don't link the documentation for hoogle.
+      , omitLTDeps_ :: Bool
       -- ^ If present, don't generate the << dependency when we see a cabal
       -- equals dependency.  (The implementation of this was somehow lost.)
-      -- FIXME: make this Bool or Maybe Bool
       , buildDir_ :: Set FilePath
       -- ^ The build directory used by cabal, typically dist/build when
       -- building manually or dist-ghc/build when building using GHC and
@@ -236,10 +235,10 @@ newAtoms = do
 makeAtoms :: CompilerId -> Atoms
 makeAtoms ghc =
     Atoms
-      { noDocumentationLibrary_ = mempty
-      , noProfilingLibrary_ = mempty
-      , noHoogle_ = mempty
-      , omitLTDeps_ = mempty
+      { noDocumentationLibrary_ = False
+      , noProfilingLibrary_ = False
+      , noHoogle_ = False
+      , omitLTDeps_ = False
       , buildDir_ = mempty
       , buildEnv_ = EnvSet {cleanOS = "/", dependOS = "/", buildOS = "/"}
       , flags_ = defaultFlags
@@ -502,19 +501,19 @@ packageInfo = lens packageInfo_ (\ a b -> b {packageInfo_ = a})
 
 -- | Set this to filter any less-than dependencies out of the generated debian
 -- dependencies.  (Not sure if this is implemented.)
-omitLTDeps :: Lens Atoms (Set Bool)
+omitLTDeps :: Lens Atoms Bool
 omitLTDeps = lens omitLTDeps_ (\ b a -> a {omitLTDeps_ = b})
 
 -- | Set this to omit the prof library deb.
-noProfilingLibrary :: Lens Atoms (Set Bool)
+noProfilingLibrary :: Lens Atoms Bool
 noProfilingLibrary = lens noProfilingLibrary_ (\ b a -> a {noProfilingLibrary_ = b})
 
 -- | Set this to omit the hoogle documentation link
-noHoogle :: Lens Atoms (Set Bool)
+noHoogle :: Lens Atoms Bool
 noHoogle = lens noHoogle_ (\ b a -> a {noHoogle_ = b})
 
 -- | Set this to omit the doc library deb.
-noDocumentationLibrary :: Lens Atoms (Set Bool)
+noDocumentationLibrary :: Lens Atoms Bool
 noDocumentationLibrary = lens noDocumentationLibrary_ (\ b a -> a {noDocumentationLibrary_ = b})
 
 -- | The copyright information from the cabal file

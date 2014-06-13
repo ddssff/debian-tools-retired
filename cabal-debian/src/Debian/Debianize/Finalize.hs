@@ -254,9 +254,9 @@ librarySpecs :: Monad m => PackageDescription -> DebT m ()
 librarySpecs pkgDesc =
     do debName <- debianName B.Documentation
        let dev = isJust (Cabal.library pkgDesc)
-       doc <- get >>= return . (/= singleton True) . getL T.noDocumentationLibrary
-       prof <- get >>= return . (/= singleton True) . getL T.noProfilingLibrary
-       hoogle <- get >>= return . (/= singleton True) . getL T.noHoogle
+       doc <- get >>= return . not . getL T.noDocumentationLibrary
+       prof <- get >>= return . not . getL T.noProfilingLibrary
+       hoogle <- get >>= return . not . getL T.noHoogle
        when dev (librarySpec Any B.Development)
        when (dev && prof) (librarySpec Any B.Profiling)
        when (dev && doc && hoogle)

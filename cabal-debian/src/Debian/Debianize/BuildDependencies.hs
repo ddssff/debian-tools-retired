@@ -82,7 +82,7 @@ debianBuildDeps pkgDesc =
     do deb <- get
        cDeps <- cabalDeps
        let bDeps = getL T.buildDepends deb
-           prof = (/= singleton True) $ getL T.noProfilingLibrary deb
+           prof = not $ getL T.noProfilingLibrary deb
        let xs = nub $ [[D.Rel (D.BinPkgName "debhelper") (Just (D.GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
                        [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
                        anyrel "cdbs",
@@ -102,7 +102,7 @@ debianBuildDeps pkgDesc =
 
 debianBuildDepsIndep :: MonadIO m => PackageDescription -> DebT m D.Relations
 debianBuildDepsIndep pkgDesc =
-    do doc <- get >>= return . (/= singleton True) . getL T.noDocumentationLibrary
+    do doc <- get >>= return . not . getL T.noDocumentationLibrary
        bDeps <- get >>= return . getL T.buildDependsIndep
        cDeps <- cabalDeps
        let xs = if doc
