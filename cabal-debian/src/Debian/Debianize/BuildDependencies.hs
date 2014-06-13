@@ -13,7 +13,6 @@ import Data.Lens.Lazy (access, getL)
 import Data.List as List (filter, map, minimumBy, nub)
 import Data.Map as Map (lookup, Map)
 import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing)
-import Data.Set as Set (singleton)
 import qualified Data.Set as Set (member)
 import Data.Version (showVersion, Version)
 import Debian.Debianize.Bundled (ghcBuiltIn)
@@ -27,7 +26,7 @@ import Debian.Orphans ()
 import Debian.Relation (BinPkgName, Relation(..), Relations, checkVersionReq)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(EEQ, GRE, LTE, SGR, SLT))
 import Debian.Version (DebianVersion, parseDebianVersion)
-import Distribution.Compiler (CompilerId(..))
+import Distribution.Compiler (CompilerId(..), CompilerFlavor(GHC))
 import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
 import Distribution.PackageDescription (PackageDescription)
 import Distribution.PackageDescription as Cabal (allBuildInfo, BuildInfo(..), BuildInfo(buildTools, extraLibs, pkgconfigDepends), Executable(..))
@@ -83,12 +82,13 @@ debianBuildDeps pkgDesc =
        cDeps <- cabalDeps
        let bDeps = getL T.buildDepends deb
            prof = not $ getL T.noProfilingLibrary deb
+       CompilerId cfl _ _ <- access ghcVersion
        let xs = nub $ [[D.Rel (D.BinPkgName "debhelper") (Just (D.GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
                        [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
                        anyrel "cdbs",
                        anyrel "ghc"] ++
                        bDeps ++
-                       (if prof then [anyrel "ghc-prof"] else []) ++
+                       (if prof && cfl == GHC then [anyrel "ghc-prof"] else []) ++
                        cDeps
        filterMissing xs
     where

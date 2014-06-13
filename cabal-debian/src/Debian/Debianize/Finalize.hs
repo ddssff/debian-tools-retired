@@ -32,7 +32,7 @@ import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
 import Debian.Debianize.Prelude ((%=), (+++=), (+=), foldEmpty, fromEmpty, fromSingleton, (~=), (~?=))
 import Debian.Debianize.Types (Top)
 import qualified Debian.Debianize.Types as T (apacheSite, backups, binaryArchitectures, binaryPackages, binarySection, breaks, buildDepends, buildDependsIndep, buildDir, builtUsing, changelog, comments, compat, conflicts, debianDescription, debVersion, depends, epochMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installDir, installTo, intermediateFiles, license, link, maintainer, noDocumentationLibrary, noProfilingLibrary, noHoogle, packageDescription, packageType, preDepends, provides, recommends, replaces, revision, rulesFragments, serverInfo, source, sourcePackageName, sourcePriority, sourceSection, suggests, utilsPackageNames, verbosity, watch, website)
-import qualified Debian.Debianize.Types.Atoms as A (InstallFile(execName, sourceDir), showAtoms)
+import qualified Debian.Debianize.Types.Atoms as A (InstallFile(execName, sourceDir), showAtoms, ghcVersion)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (BinaryDebDescription, package, PackageType(Development, Documentation, Exec, Profiling, Source', Utilities))
 import Debian.Orphans ()
 import Debian.Policy (getDebhelperCompatLevel, haskellMaintainer, PackageArchitectures(Any, All), PackagePriority(Optional), Section(..))
@@ -42,6 +42,7 @@ import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..))
 import Debian.Release (parseReleaseName)
 import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.Version (buildDebianVersion, DebianVersion, parseDebianVersion)
+import Distribution.Compiler (CompilerId(..), CompilerFlavor(GHC))
 import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
 import Distribution.PackageDescription (PackageDescription)
 import Distribution.PackageDescription as Cabal (allBuildInfo, BuildInfo(buildable, extraLibs), Executable(buildInfo, exeName))
@@ -256,9 +257,10 @@ librarySpecs pkgDesc =
        let dev = isJust (Cabal.library pkgDesc)
        doc <- get >>= return . not . getL T.noDocumentationLibrary
        prof <- get >>= return . not . getL T.noProfilingLibrary
+       (CompilerId cfl _ _) <- access A.ghcVersion
        hoogle <- get >>= return . not . getL T.noHoogle
        when dev (librarySpec Any B.Development)
-       when (dev && prof) (librarySpec Any B.Profiling)
+       when (dev && prof && cfl == GHC) (librarySpec Any B.Profiling)
        when (dev && doc && hoogle)
             (do docSpecsParagraph
                 T.link +++= (debName, singleton ("/usr/share/doc" </> show (pretty debName) </> "html" </> cabal <.> "txt",
