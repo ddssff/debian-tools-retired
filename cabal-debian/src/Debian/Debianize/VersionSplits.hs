@@ -43,7 +43,10 @@ data VersionSplits
       -- name to use for versions greater than or equal to that
       -- version.  This list assumed to be in (must be kept in)
       -- ascending version number order.
-      } deriving (Eq, Ord, Show)
+      } deriving (Eq, Ord)
+
+instance Show VersionSplits where
+    show s = foldr (\ (v, b) r -> ("insertSplit (" ++ show v ++ ") (" ++ show b ++ ") (" ++ r ++ ")")) ("makePackage (" ++ show (oldestPackage s) ++ ")") (splits s)
 
 instance Interspersed VersionSplits DebBase Version where
     leftmost (VersionSplits {oldestPackage = p}) = p
@@ -86,17 +89,17 @@ debianFromCabal s p =
     doSplits s (Just (D.EEQ debVer))
     where debVer = parseDebianVersion (showVersion (pkgVersion p))
 
-cabalFromDebian' :: Map PackageName VersionSplits -> DebBase -> Version -> Maybe PackageIdentifier
+cabalFromDebian' :: Map PackageName VersionSplits -> DebBase -> Version -> PackageIdentifier
 cabalFromDebian' mp base ver =
-    fmap (\ name -> PackageIdentifier name ver) $ cabalFromDebian mp base dver
+    PackageIdentifier (cabalFromDebian mp base dver) ver
     where dver = parseDebianVersion (showVersion ver)
 
 -- | Brute force implementation - I'm assuming this is not a huge map.
-cabalFromDebian :: Map PackageName VersionSplits -> DebBase -> DebianVersion -> Maybe PackageName
-cabalFromDebian mp base ver =
+cabalFromDebian :: Map PackageName VersionSplits -> DebBase -> DebianVersion -> PackageName
+cabalFromDebian mp base@(DebBase name) ver =
     case Set.toList pset of
-      [x] -> Just x
-      [] -> Nothing
+      [x] -> x
+      [] -> PackageName name
       l -> error $ "Error, multiple cabal package names associated with " ++ show base ++ ": " ++ show l
     where
       -- Look for splits that involve the right DebBase and return the

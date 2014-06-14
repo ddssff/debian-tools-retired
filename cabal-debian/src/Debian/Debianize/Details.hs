@@ -32,7 +32,8 @@ debianDefaultAtoms =
 debianVersionSplits :: Map PackageName VersionSplits
 debianVersionSplits =
     Map.fromList
-    [ (PackageName "parsec", insertSplit (Version [3] []) (DebBase "parsec3") (makePackage (DebBase "parsec2")))
+    [ (PackageName "Cabal", makePackage (DebBase "cabal"))
+    , (PackageName "parsec", insertSplit (Version [3] []) (DebBase "parsec3") (makePackage (DebBase "parsec2")))
     , (PackageName "QuickCheck", insertSplit (Version [2] []) (DebBase "quickcheck2") (makePackage (DebBase "quickcheck1")))
     -- This looks like a no-op - probably isn't needed.
     , (PackageName "gtk2hs-buildtools", makePackage (DebBase "gtk2hs-buildtools")) ]

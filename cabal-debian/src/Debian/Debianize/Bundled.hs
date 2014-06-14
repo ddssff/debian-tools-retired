@@ -9,12 +9,11 @@ module Debian.Debianize.Bundled
 import Control.Applicative ((<$>))
 import Control.DeepSeq (force)
 import Control.Exception (try, SomeException)
-import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Char (toLower)
 import Data.Function (on)
-import Data.Function.Memoize (deriveMemoizable, memoize2)
+import Data.Function.Memoize (memoize2)
 import Data.List (sortBy, isPrefixOf)
-import Data.Map (Map)
+import Data.Map as Map (Map)
 import Data.Maybe (mapMaybe, listToMaybe)
 import Data.Version (Version(..), parseVersion)
 import Debian.Debianize.VersionSplits (DebBase(DebBase), VersionSplits, cabalFromDebian')
@@ -43,51 +42,12 @@ import Text.ParserCombinators.ReadP (readP_to_S)
 --               (v, n) = (reverse (tail n'), reverse v') in
 --           PackageIdentifier (PackageName n) (Version (map read (filter (/= ".") (groupBy (\ a b -> (a == '.') == (b == '.')) v))) [])
 
-{-
-ghcBuiltIns :: CompilerId -> Map PackageName VersionSplits -> Bundled
-#if MIN_VERSION_Cabal(1,21,0)
-ghcBuiltIns (CompilerId GHC compilerVersion _) splits =
-#else
-ghcBuiltIns (CompilerId GHC compilerVersion) splits =
-#endif
-    case dropWhile (\ pr -> (fst pr < compilerVersion)) pairs of
-      [] -> error $ "cabal-debian: No bundled package list for ghc " ++ show compilerVersion
-      x : _ -> x
-ghcBuiltIns _ _ = error "ghcBuiltIns: Only GHC is supported"
-
-pairs :: [Bundled]
-pairs = sortBy
-          (compare `on` fst)
-          ([ (Version [7,8,20140228] [], ghc781BuiltIns)
-           , (Version [7,8,20140130] [], ghc781BuiltIns)
-           , (Version [7,8,1] [], ghc781BuiltIns)
-
-           , (Version [7,6,3] [], ghc763BuiltIns)
-           , (Version [7,6,2] [], ghc762BuiltIns)
-           , (Version [7,6,1] [], ghc761BuiltIns)
-           , (Version [7,6,1,20121207] [], ghc761BuiltIns)
-
-           , (Version [7,4,1] [], ghc741BuiltIns)
-           , (Version [7,4,0,20111219] [], ghc740BuiltIns)
-           , (Version [7,4,0,20120108] [], ghc740BuiltIns)
-           , (Version [7,2,2] [], ghc721BuiltIns)
-           , (Version [7,2,1] [], ghc721BuiltIns)
-           , (Version [7,0,4] [], ghc701BuiltIns)
-           , (Version [7,0,3] [], ghc701BuiltIns)
-           , (Version [7,0,1] [], ghc701BuiltIns)
-           , (Version [6,8,3] [], ghc683BuiltIns)
-           , (Version [6,8,2] [], ghc682BuiltIns)
-           , (Version [6,8,1] [], ghc681BuiltIns)
-           , (Version [6,6,1] [], ghc661BuiltIns)
-           , (Version [6,6] [], ghc66BuiltIns) ])
--}
-
 ghcBuiltIn :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> PackageName -> Maybe Version
 ghcBuiltIn splits hc root lib = do
   f (builtIn splits hc root)
     where
-      f :: [PackageIdentifier] -> Maybe Version
-      f ids = case map pkgVersion (filter (\ i -> pkgName i == lib) ids) of
+      f :: (DebianVersion, [PackageIdentifier]) -> Maybe Version
+      f (_, ids) = case map pkgVersion (filter (\ i -> pkgName i == lib) ids) of
                 [] -> Nothing
                 [v] -> Just v
                 vs -> error $ "Multiple versions of " ++ show lib ++ " built into " ++ show hc ++ ": " ++ show vs
@@ -510,17 +470,20 @@ ghc66BuiltIns = [
 --       "time",
 --       "unix" ]
 
-builtIn :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> [PackageIdentifier]
+builtIn :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> (DebianVersion, [PackageIdentifier])
 builtIn splits hc root = memoize2 (\ hc' root' -> unsafePerformIO (builtIn' splits hc' root')) hc root
 
 -- | Ok, lets see if we can infer the built in packages from the
 -- Provides field returned by apt-cache.
-builtIn' :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> IO [PackageIdentifier]
+builtIn' :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> IO (DebianVersion, [PackageIdentifier])
 builtIn' splits hc root = do
-  hcs <- sortBy (compare `on` fst) . map doHCVersion . map words . tail . takeWhile (not . isPrefixOf "Reverse Provides:") . dropWhile (not . isPrefixOf "Provides:") . lines . either (\ (e :: SomeException) -> error $ "builtIn: " ++ show e) id <$> try (chroot root (readProcess "apt-cache" ["showpkg", hcname] ""))
-  case hcs of
+  lns <- lines . either (\ (e :: SomeException) -> error $ "builtIn: " ++ show e) id <$> try (chroot root (readProcess "apt-cache" ["showpkg", hcname] ""))
+  let hcs = map words $ tail $ takeWhile (not . isPrefixOf "Reverse Provides:") $ dropWhile (not . isPrefixOf "Provides:") $ lns
+      hcs' = reverse . sortBy (compare `on` fst) . map doHCVersion $ hcs
+  case hcs' of
     [] -> error $ "No versions of " ++ show hc ++ " in " ++ show root
-    ((_, pids) : _) -> return pids
+    ((_, []) : _) -> error $ "No versions of " ++ show hc ++ " in " ++ show root
+    ((v, pids) : _) -> return (v, pids)
     where
       BinPkgName hcname = BinPkgName (map toLower (show hc))
       doHCVersion :: [String] -> (DebianVersion, [PackageIdentifier])
@@ -535,7 +498,7 @@ builtIn' splits hc root = do
       parsePackageID :: String -> Maybe PackageIdentifier
       parsePackageID s = case s =~ ("lib" ++ hcname ++ "-(.*)-dev-([0-9.]*)-.....$") :: (String, String, String, [String]) of
                      (_, _, _, [base, vs]) -> case listToMaybe (map fst $ filter ((== "") . snd) $ readP_to_S parseVersion $ vs) of
-                                                Just v -> cabalFromDebian' splits (DebBase base) v
+                                                Just v -> Just (cabalFromDebian' splits (DebBase base) v)
                                                 Nothing -> Nothing
                      _ -> Nothing
       chroot "/" = id
