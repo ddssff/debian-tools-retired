@@ -15,7 +15,7 @@ import Control.DeepSeq (force)
 import Control.Exception (SomeException, try)
 import Control.Monad (when)
 import Data.Char (toLower, toUpper, isSpace)
-import Data.Function.Memoize (deriveMemoizable, memoize)
+import Data.Function.Memoize (deriveMemoizable, memoize2)
 import Data.Maybe (fromMaybe)
 import Data.Version (showVersion, Version(Version))
 import Debian.Relation (BinPkgName(BinPkgName))
@@ -37,10 +37,10 @@ withCompilerVersion hc root f = f (newestAvailableCompiler hc root)
 -- | Memoized version of newestAvailable'
 newestAvailable :: BinPkgName -> FilePath -> Maybe DebianVersion
 newestAvailable pkg root =
-    memoize f (pkg, root)
+    memoize2 f pkg root
     where
-      f :: (BinPkgName, FilePath) -> Maybe DebianVersion
-      f (pkg', root') = unsafePerformIO (newestAvailable' pkg' root')
+      f :: BinPkgName -> FilePath -> Maybe DebianVersion
+      f pkg' root' = unsafePerformIO (newestAvailable' pkg' root')
 
 -- | Look up the newest version of a deb available in the given changeroot.
 newestAvailable' :: BinPkgName -> FilePath -> IO (Maybe DebianVersion)

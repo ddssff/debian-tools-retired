@@ -22,7 +22,6 @@ import qualified Debian.Debianize.Types as T (buildDepends, buildDependsIndep, d
 import Debian.Debianize.Types.Atoms (EnvSet(dependOS), compilerFlavor, buildEnv)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (PackageType(Development, Documentation, Profiling))
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
-import Debian.GHC (newestAvailableCompilerId)
 import Debian.Orphans ()
 import Debian.Relation (BinPkgName, Relation(..), Relations, checkVersionReq)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(EEQ, GRE, LTE, SGR, SLT))
@@ -273,12 +272,12 @@ doBundled typ name rels =
       doRel rel@(D.Rel dname req _) = do
         -- gver <- access ghcVersion
         hc <- access compilerFlavor
+        splits <- access T.debianNameMap
         root <- access buildEnv >>= return . dependOS
-        let hcid = newestAvailableCompilerId hc root
         -- Look at what version of the package is provided by the compiler.
         atoms <- get
         -- What version of this package (if any) does the compiler provide?
-        pver <- ghcBuiltIn hcid name >>= return . maybe Nothing (Just . debianVersion'' atoms name)
+        let pver = maybe Nothing (Just . debianVersion'' atoms name) (ghcBuiltIn splits hc root name)
         -- The name this library would have if it was in the compiler conflicts list.
         let naiveDebianName = mkPkgName hc name typ
         return $ -- The compiler should appear in the build dependency if

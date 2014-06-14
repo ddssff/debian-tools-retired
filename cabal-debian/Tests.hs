@@ -30,6 +30,7 @@ import Debian.Debianize.Types as T
 import Debian.Debianize.Types.Atoms as T
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S
+import Debian.Debianize.VersionSplits (DebBase(DebBase))
 import Debian.Policy (databaseDirectory, PackageArchitectures(All), PackagePriority(Extra), parseMaintainer, Section(MainSection), SourceFormat(Native3), StandardsVersion(..), getDebhelperCompatLevel, getDebianStandardsVersion)
 import Debian.Pretty (pretty, text, Doc)
 import Debian.Relation (BinPkgName(..), Relation(..), SrcPkgName(..), VersionReq(..))
@@ -50,11 +51,11 @@ defaultAtoms :: Monad m => DebT m ()
 defaultAtoms =
     do T.epochMap ++= (PackageName "HaXml", 1)
        T.epochMap ++= (PackageName "HTTP", 1)
-       mapCabal (PackageName "parsec") "parsec3"
-       splitCabal (PackageName "parsec") "parsec2" (Version [3] [])
-       mapCabal (PackageName "QuickCheck") "quickcheck2"
-       splitCabal (PackageName "QuickCheck") "quickcheck1" (Version [2] [])
-       mapCabal (PackageName "gtk2hs-buildtools") "gtk2hs-buildtools"
+       mapCabal (PackageName "parsec") (DebBase "parsec3")
+       splitCabal (PackageName "parsec") (DebBase "parsec2") (Version [3] [])
+       mapCabal (PackageName "QuickCheck") (DebBase "quickcheck2")
+       splitCabal (PackageName "QuickCheck") (DebBase "quickcheck1") (Version [2] [])
+       mapCabal (PackageName "gtk2hs-buildtools") (DebBase "gtk2hs-buildtools")
 
 -- | Force the compiler version to 7.6 to get predictable outputs
 testAtoms :: IO Atoms

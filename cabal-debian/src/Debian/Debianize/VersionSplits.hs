@@ -1,22 +1,34 @@
+-- | Convert between cabal and debian package names based on version
+-- number ranges.
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, TypeSynonymInstances #-}
 module Debian.Debianize.VersionSplits
-    ( VersionSplits
-    , packageRangesFromVersionSplits
+    ( DebBase(DebBase)
+    -- * Combinators for VersionSplits
+    , VersionSplits
     , makePackage
     , insertSplit
+    -- * Operators on VersionSplits
+    , cabalFromDebian
+    , cabalFromDebian'
+    , debianFromCabal
+    , packageRangesFromVersionSplits
     , doSplits
-    , knownVersionSplits
     ) where
 
+import Data.Map as Map (Map, mapMaybeWithKey, elems)
+import Data.Set as Set (Set, toList, fromList)
 import Data.Version (Version(Version), showVersion)
 import Debian.Debianize.Interspersed (Interspersed(leftmost, pairs, foldInverted), foldTriples)
-import Data.Map as Map (Map, fromList)
 import Debian.Orphans ()
 import qualified Debian.Relation as D
-import Debian.Version (parseDebianVersion)
-import Distribution.Package (PackageName(PackageName))
+import Debian.Version (DebianVersion, parseDebianVersion)
+import Distribution.Package (PackageIdentifier(..), PackageName(..))
 import Distribution.Version (VersionRange, anyVersion, intersectVersionRanges, earlierVersion, orLaterVersion)
 import Prelude hiding (init, unlines, log)
+
+-- | The base of a debian binary package name, the string that appears
+-- between "libghc-" and "-dev".
+newtype DebBase = DebBase String deriving (Eq, Ord, Read, Show)
 
 -- | Describes a mapping from cabal package name and version to debian
 -- package names.  For example, versions of the cabal QuickCheck
@@ -24,24 +36,26 @@ import Prelude hiding (init, unlines, log)
 -- greater is mapped to "quickcheck2".
 data VersionSplits
     = VersionSplits {
-        oldestPackage :: String
-      -- ^ The Debian name given to versions older than the oldest
-      -- split.  This name and the names in splits are strings rather
-      -- than BinPkgName because they are the package basename, the
-      -- string which appears between "libghc-" and "-dev".  Maybe
-      -- this should be a new type.
-      , splits :: [(Version, String)]
+        oldestPackage :: DebBase
+      -- ^ The Debian name given to versions older than the oldest split.
+      , splits :: [(Version, DebBase)]
       -- ^ Each pair is The version where the split occurs, and the
       -- name to use for versions greater than or equal to that
       -- version.  This list assumed to be in (must be kept in)
       -- ascending version number order.
       } deriving (Eq, Ord, Show)
 
-makePackage :: String -> VersionSplits
+instance Interspersed VersionSplits DebBase Version where
+    leftmost (VersionSplits {oldestPackage = p}) = p
+    pairs (VersionSplits {splits = xs}) = xs
+
+-- | Create a version split database that assigns a single debian
+-- package name base to all cabal versions.
+makePackage :: DebBase -> VersionSplits
 makePackage name = VersionSplits {oldestPackage = name, splits = []}
 
 -- | Split the version range and give the older packages a new name.
-insertSplit :: Version -> String -> VersionSplits -> VersionSplits
+insertSplit :: Version -> DebBase -> VersionSplits -> VersionSplits
 insertSplit ver@(Version _ _) ltname sp@(VersionSplits {}) =
     -- (\ x -> trace ("insertSplit " ++ show (ltname, ver, sp) ++ " -> " ++ show x) x) $
     case splits sp of
@@ -60,18 +74,44 @@ insertSplit ver@(Version _ _) ltname sp@(VersionSplits {}) =
       insert [] = [(ver, oldestPackage sp)]
       -- ltname = base ++ "-" ++ (show (last ns - 1))
 
-instance Interspersed VersionSplits String Version where
-    leftmost (VersionSplits {oldestPackage = p}) = p
-    pairs (VersionSplits {splits = xs}) = xs
-
-packageRangesFromVersionSplits :: VersionSplits -> [(String, VersionRange)]
+packageRangesFromVersionSplits :: VersionSplits -> [(DebBase, VersionRange)]
 packageRangesFromVersionSplits s =
     foldInverted (\ older dname newer more ->
                       (dname, intersectVersionRanges (maybe anyVersion orLaterVersion older) (maybe anyVersion earlierVersion newer)) : more)
                  []
                  s
 
-doSplits :: VersionSplits -> Maybe D.VersionReq -> String
+debianFromCabal :: VersionSplits -> PackageIdentifier -> DebBase
+debianFromCabal s p =
+    doSplits s (Just (D.EEQ debVer))
+    where debVer = parseDebianVersion (showVersion (pkgVersion p))
+
+cabalFromDebian' :: Map PackageName VersionSplits -> DebBase -> Version -> Maybe PackageIdentifier
+cabalFromDebian' mp base ver =
+    fmap (\ name -> PackageIdentifier name ver) $ cabalFromDebian mp base dver
+    where dver = parseDebianVersion (showVersion ver)
+
+-- | Brute force implementation - I'm assuming this is not a huge map.
+cabalFromDebian :: Map PackageName VersionSplits -> DebBase -> DebianVersion -> Maybe PackageName
+cabalFromDebian mp base ver =
+    case Set.toList pset of
+      [x] -> Just x
+      [] -> Nothing
+      l -> error $ "Error, multiple cabal package names associated with " ++ show base ++ ": " ++ show l
+    where
+      -- Look for splits that involve the right DebBase and return the
+      -- associated Cabal package name.  It is unlikely that more than
+      -- one Cabal name will be returned - if so throw an exception.
+      pset :: Set PackageName
+      pset = Set.fromList $ Map.elems $
+             Map.mapMaybeWithKey
+                (\ p s -> if doSplits s (Just (D.EEQ ver)) == base then Just p else Nothing)
+                mp
+
+-- | Given a version split database, turn the debian version
+-- requirements into a debian package name base that ought to satisfy
+-- them.
+doSplits :: VersionSplits -> Maybe D.VersionReq -> DebBase
 doSplits s version =
     foldTriples' (\ ltName v geName _ ->
                            let split = parseDebianVersion (showVersion v) in
@@ -87,17 +127,5 @@ doSplits s version =
                  (oldestPackage s)
                  s
     where
-      foldTriples' :: (String -> Version -> String -> String -> String) -> String -> VersionSplits -> String
+      foldTriples' :: (DebBase -> Version -> DebBase -> DebBase -> DebBase) -> DebBase -> VersionSplits -> DebBase
       foldTriples' = foldTriples
-
--- | These are the instances of debian names changing that I know
--- about.  I know they really shouldn't be hard coded.  Send a patch.
--- Note that this inherits the lack of type safety of the mkPkgName
--- function.
-knownVersionSplits :: Map PackageName VersionSplits
-knownVersionSplits =
-    Map.fromList
-    [ (PackageName "parsec", VersionSplits {oldestPackage = "parsec2", splits = [(Version [3] [], "parsec3")]})
-    , (PackageName "QuickCheck", VersionSplits {oldestPackage = "quickcheck1", splits = [(Version [2] [], "quickcheck2")]})
-    -- This just gives a special case cabal to debian name mapping.
-    , (PackageName "gtk2hs-buildtools", VersionSplits {oldestPackage = "gtk2hs-buildtools", splits = []}) ]

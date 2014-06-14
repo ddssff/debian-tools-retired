@@ -1,3 +1,11 @@
+haskell-cabal-debian (4.10) unstable; urgency=low
+
+  * Rename knownVersionSplits -> debianVersionSplits and move to
+    Debian.Debianize.Details.  (Should that be renamed
+    Debian.Debianize.Debian?)
+
+ -- David Fox <dsf@seereason.com>  Sat, 14 Jun 2014 10:20:01 -0700
+
 haskell-cabal-debian (4.9) unstable; urgency=low
 
   * Generate the library package prefix, previously hard coded as libghc-,

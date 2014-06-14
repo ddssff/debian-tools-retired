@@ -1,20 +1,36 @@
 -- | Determine whether a specific version of a Haskell package is
 -- bundled with into this particular version of the given compiler.
 
-{-# LANGUAGE CPP, StandaloneDeriving #-}
+{-# LANGUAGE CPP, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell #-}
 module Debian.Debianize.Bundled
     ( ghcBuiltIn
     ) where
 
-import Control.Monad.Trans (MonadIO)
+import Control.Applicative ((<$>))
+import Control.DeepSeq (force)
+import Control.Exception (try, SomeException)
+import Control.Monad.Trans (MonadIO, liftIO)
+import Data.Char (toLower)
 import Data.Function (on)
-import Data.List (sortBy)
-import Data.Version (Version(..))
+import Data.Function.Memoize (deriveMemoizable, memoize2)
+import Data.List (sortBy, isPrefixOf)
+import Data.Map (Map)
+import Data.Maybe (mapMaybe, listToMaybe)
+import Data.Version (Version(..), parseVersion)
+import Debian.Debianize.VersionSplits (DebBase(DebBase), VersionSplits, cabalFromDebian')
+import Debian.GHC ({- Memoizable instances -})
+import Debian.Relation (BinPkgName(..))
 import Debian.Relation.ByteString()
-import Distribution.Simple.Compiler (CompilerId(..), CompilerFlavor(..), {-PackageDB(GlobalPackageDB), compilerFlavor-})
+import Debian.Version (DebianVersion, parseDebianVersion)
+import Distribution.Simple.Compiler (CompilerFlavor(..), {-PackageDB(GlobalPackageDB), compilerFlavor-})
 import Distribution.Package (PackageIdentifier(..), PackageName(..) {-, Dependency(..)-})
+import System.IO.Unsafe (unsafePerformIO)
+import System.Process (readProcess)
+import System.Unix.Chroot (useEnv)
+import Text.Regex.TDFA ((=~))
+import Text.ParserCombinators.ReadP (readP_to_S)
 
-type Bundled = (Version, [PackageIdentifier])
+-- type Bundled = (Version, [PackageIdentifier])
 
 -- |Return a list of built in packages for the compiler in an environment.
 -- ghcBuiltIns :: FilePath -> IO [PackageIdentifier]
@@ -27,16 +43,17 @@ type Bundled = (Version, [PackageIdentifier])
 --               (v, n) = (reverse (tail n'), reverse v') in
 --           PackageIdentifier (PackageName n) (Version (map read (filter (/= ".") (groupBy (\ a b -> (a == '.') == (b == '.')) v))) [])
 
-ghcBuiltIns :: CompilerId -> Bundled
+{-
+ghcBuiltIns :: CompilerId -> Map PackageName VersionSplits -> Bundled
 #if MIN_VERSION_Cabal(1,21,0)
-ghcBuiltIns (CompilerId GHC compilerVersion _) =
+ghcBuiltIns (CompilerId GHC compilerVersion _) splits =
 #else
-ghcBuiltIns (CompilerId GHC compilerVersion) =
+ghcBuiltIns (CompilerId GHC compilerVersion) splits =
 #endif
     case dropWhile (\ pr -> (fst pr < compilerVersion)) pairs of
       [] -> error $ "cabal-debian: No bundled package list for ghc " ++ show compilerVersion
       x : _ -> x
-ghcBuiltIns _ = error "ghcBuiltIns: Only GHC is supported"
+ghcBuiltIns _ _ = error "ghcBuiltIns: Only GHC is supported"
 
 pairs :: [Bundled]
 pairs = sortBy
@@ -63,19 +80,22 @@ pairs = sortBy
            , (Version [6,8,1] [], ghc681BuiltIns)
            , (Version [6,6,1] [], ghc661BuiltIns)
            , (Version [6,6] [], ghc66BuiltIns) ])
+-}
 
-ghcBuiltIn :: MonadIO m => CompilerId -> PackageName -> m (Maybe Version)
-ghcBuiltIn ghc package = do
-  let (_, xs) = ghcBuiltIns ghc
-      packageIds = filter (\ p -> pkgName p == package) xs
-  case packageIds of
-    [] -> return Nothing
-    [p] -> return $ Just (pkgVersion p)
-    ps -> error $ "Multiple versions of " ++ show package ++ " built into " ++ show ghc ++ ": " ++ show ps
+ghcBuiltIn :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> PackageName -> Maybe Version
+ghcBuiltIn splits hc root lib = do
+  f (builtIn splits hc root)
+    where
+      f :: [PackageIdentifier] -> Maybe Version
+      f ids = case map pkgVersion (filter (\ i -> pkgName i == lib) ids) of
+                [] -> Nothing
+                [v] -> Just v
+                vs -> error $ "Multiple versions of " ++ show lib ++ " built into " ++ show hc ++ ": " ++ show vs
 
 v :: String -> [Int] -> PackageIdentifier
 v n x = PackageIdentifier (PackageName n) (Version x [])
 
+{-
 ghc781BuiltIns :: [PackageIdentifier]
 ghc781BuiltIns = [
     v "array" [0,5,0,0],
@@ -445,6 +465,7 @@ ghc66BuiltIns = [
     v "X11" [1,1],
     v "xhtml" [2006,9,13]
     ]
+-}
 
 -- Script to output a list of the libraries in the ghc package
 -- provides line.  This could be run inside the build environment
@@ -488,3 +509,34 @@ ghc66BuiltIns = [
 --       "template-haskell",
 --       "time",
 --       "unix" ]
+
+builtIn :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> [PackageIdentifier]
+builtIn splits hc root = memoize2 (\ hc' root' -> unsafePerformIO (builtIn' splits hc' root')) hc root
+
+-- | Ok, lets see if we can infer the built in packages from the
+-- Provides field returned by apt-cache.
+builtIn' :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> IO [PackageIdentifier]
+builtIn' splits hc root = do
+  hcs <- sortBy (compare `on` fst) . map doHCVersion . map words . tail . takeWhile (not . isPrefixOf "Reverse Provides:") . dropWhile (not . isPrefixOf "Provides:") . lines . either (\ (e :: SomeException) -> error $ "builtIn: " ++ show e) id <$> try (chroot root (readProcess "apt-cache" ["showpkg", hcname] ""))
+  case hcs of
+    [] -> error $ "No versions of " ++ show hc ++ " in " ++ show root
+    ((_, pids) : _) -> return pids
+    where
+      BinPkgName hcname = BinPkgName (map toLower (show hc))
+      doHCVersion :: [String] -> (DebianVersion, [PackageIdentifier])
+      doHCVersion (versionString : "-" : deps) = (parseDebianVersion versionString, mapMaybe parsePackageID deps)
+      doHCVersion x = error $ "Unexpected output from apt-cache: " ++ show x
+      -- The virtual package id, which appears in the Provides
+      -- line for the compiler package, is generated by the
+      -- function package_id_to_virtual_package in Dh_Haskell.sh.
+      -- It consists of the library's debian package name and the
+      -- first five characters of the checksum.
+      -- parsePID "libghc-unix-dev-2.7.0.1-2a456" -> Just (PackageIdentifier "unix" (Version [2,7,0,1] []))
+      parsePackageID :: String -> Maybe PackageIdentifier
+      parsePackageID s = case s =~ ("lib" ++ hcname ++ "-(.*)-dev-([0-9.]*)-.....$") :: (String, String, String, [String]) of
+                     (_, _, _, [base, vs]) -> case listToMaybe (map fst $ filter ((== "") . snd) $ readP_to_S parseVersion $ vs) of
+                                                Just v -> cabalFromDebian' splits (DebBase base) v
+                                                Nothing -> Nothing
+                     _ -> Nothing
+      chroot "/" = id
+      chroot _ = useEnv root (return . force)

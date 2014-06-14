@@ -16,7 +16,7 @@ import Debian.Debianize.Types.BinaryDebDescription as Debian (PackageType(..))
 import Debian.Debianize.Types.Atoms as T (debianNameMap, packageDescription, compilerFlavor)
 import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.Prelude ((%=))
-import Debian.Debianize.VersionSplits (insertSplit, doSplits, VersionSplits, makePackage)
+import Debian.Debianize.VersionSplits (DebBase(DebBase), insertSplit, doSplits, VersionSplits, makePackage)
 import Debian.Orphans ()
 import Debian.Relation (PkgName(..), Relations)
 import qualified Debian.Relation as D (VersionReq(EEQ))
@@ -63,8 +63,8 @@ debianName' cfl msplits typ pkgId =
 mkPkgName :: PkgName name => CompilerFlavor -> PackageName -> PackageType -> name
 mkPkgName cfl pkg typ = mkPkgName' cfl (debianBaseName pkg) typ
 
-mkPkgName' :: PkgName name => CompilerFlavor -> String -> PackageType -> name
-mkPkgName' cfl base typ =
+mkPkgName' :: PkgName name => CompilerFlavor -> DebBase -> PackageType -> name
+mkPkgName' cfl (DebBase base) typ =
     pkgNameFromString $
              case typ of
                 Documentation -> prefix ++ base ++ "-doc"
@@ -76,9 +76,9 @@ mkPkgName' cfl base typ =
                 Cabal -> base
     where prefix = "lib" ++ map toLower (show cfl) ++ "-"
 
-debianBaseName :: PackageName -> String
+debianBaseName :: PackageName -> DebBase
 debianBaseName (PackageName name) =
-    map (fixChar . toLower) name
+    DebBase (map (fixChar . toLower) name)
     where
       -- Underscore is prohibited in debian package names.
       fixChar :: Char -> Char
@@ -89,7 +89,7 @@ debianBaseName (PackageName name) =
 -- Not really a debian package name, but the name of a cabal package
 -- that maps to the debian package name we want.  (Should this be a
 -- SrcPkgName?)
-mapCabal :: Monad m => PackageName -> String -> DebT m ()
+mapCabal :: Monad m => PackageName -> DebBase -> DebT m ()
 mapCabal pname dname =
     debianNameMap %= Map.alter f pname
     where
@@ -98,7 +98,7 @@ mapCabal pname dname =
       f (Just sp) = error $ "mapCabal " ++ show pname ++ " " ++ show dname ++ ": - already mapped: " ++ show sp
 
 -- | Map versions less than ver of Cabal Package pname to Debian package ltname
-splitCabal :: Monad m => PackageName -> String -> Version -> DebT m ()
+splitCabal :: Monad m => PackageName -> DebBase -> Version -> DebT m ()
 splitCabal pname ltname ver =
     debianNameMap %= Map.alter f pname
     where
