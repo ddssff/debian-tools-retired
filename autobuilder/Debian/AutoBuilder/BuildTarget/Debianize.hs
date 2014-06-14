@@ -11,6 +11,7 @@ import Control.Monad (when)
 import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
+import Data.Lens.Lazy (getL)
 import Data.List (isSuffixOf)
 import Debian.AutoBuilder.BuildEnv (envSet)
 import Debian.AutoBuilder.Params (computeTopDir)
@@ -24,6 +25,7 @@ import Debian.Relation ()
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
+import Distribution.Compiler (CompilerFlavor)
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..))
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
@@ -38,8 +40,8 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: (MonadRepos m, MonadTop m) => DebT IO () -> P.CacheRec -> P.Packages -> T.Download -> m T.Download
-prepare defaultAtoms cache package' target =
+prepare :: (MonadRepos m, MonadTop m) => CompilerFlavor -> DebT IO () -> P.CacheRec -> P.Packages -> T.Download -> m T.Download
+prepare hc defaultAtoms cache package' target =
     do dir <- sub ("debianize" </> takeFileName (T.getTop target))
        liftIO $ createDirectoryIfMissing True dir
        _ <- rsync [] (T.getTop target) dir
@@ -51,7 +53,7 @@ prepare defaultAtoms cache package' target =
                 let version = pkgVersion . package . Distribution.PackageDescription.packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderCabal cache (P.flags package') dir defaultAtoms
+                liftIO $ autobuilderCabal hc cache (P.flags package') dir defaultAtoms
                 return $ T.Download { T.package = package'
                                     , T.getTop = dir
                                     , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
@@ -85,8 +87,8 @@ collectPackageFlags _cache pflags =
        return $ ["--verbose=" ++ show v] ++
                 concatMap asCabalFlags pflags
 
-autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> DebT IO () -> IO ()
-autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
+autobuilderCabal :: CompilerFlavor -> P.CacheRec -> [P.PackageFlag] -> FilePath -> DebT IO () -> IO ()
+autobuilderCabal hc cache pflags debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do let rel = P.buildRelease $ P.params cache
        top <- computeTopDir (P.params cache)
@@ -95,7 +97,7 @@ autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
        let args' = "--buildenvdir" : takeDirectory (dependOS eset) : args
        -- This will be false if the package has no debian/Debianize.hs script
        done <- runDebianizeScript args'
-       when (not done) (withArgs [] (do atoms <- liftIO (newAtomsChroot (dependOS eset))
+       when (not done) (withArgs [] (do let atoms = makeAtoms hc eset
                                         Cabal.evalDebT (do debianization (Top ".") defaultAtoms (applyPackageFlags pflags)
                                                            writeDebianization (Top ".")) atoms))
 

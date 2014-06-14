@@ -36,7 +36,7 @@ data Dependency_
 -- | Build the Debian package name for a given package type.
 debianName :: (Monad m, PkgName name) => PackageType -> DebT m name
 debianName typ =
-    do cfl <- compilerFlavor
+    do cfl <- access compilerFlavor
        Just pkgDesc <- access packageDescription
        let pkgId = Cabal.package pkgDesc
        nameMap <- access T.debianNameMap

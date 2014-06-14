@@ -48,6 +48,7 @@ import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
 import Debian.Repo.Prelude (runProc)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
+import Distribution.Compiler (CompilerFlavor)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
 import Prelude hiding (null)
@@ -116,7 +117,7 @@ doParameterSet init results params =
       _ ->
           withModifiedVerbosity (const (P.verbosity params))
             (do top <- askTop
-                withLock (top </> "lockfile") (P.buildCache params >>= runParameterSet init))
+                withLock (top </> "lockfile") (P.buildCache params >>= runParameterSet (P.compilerFlavor params) init))
             `catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
           (\ result -> return (result : results))
     where
@@ -141,8 +142,8 @@ getLocalSources = do
     Nothing -> error $ "Invalid local repo root: " ++ show root
     Just uri -> repoSources (Just (envRoot root)) uri
 
-runParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
-runParameterSet init cache =
+runParameterSet :: (MonadReposCached m, MonadMask m) => CompilerFlavor -> DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
+runParameterSet hc init cache =
     do
       top <- askTop
       liftIO doRequiredVersion
@@ -162,7 +163,7 @@ runParameterSet init cache =
       qPutStrLn "Retrieving all source code:\n"
       retrieved <-
           countTasks' (map (\ (target :: P.Packages) ->
-                                (show (P.spec target), (Right <$> evalMonadOS (retrieve init cache target) buildOS) `catch` handleRetrieveException target))
+                                (show (P.spec target), (Right <$> evalMonadOS (retrieve hc init cache target) buildOS) `catch` handleRetrieveException target))
                            (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
       (failures, targets) <- mapM (either (return . Left) (\ download -> liftIO (try (asBuildable download)) >>= return. either (\ (e :: SomeException) -> Left (show e)) Right)) retrieved >>= return . partitionEithers
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)

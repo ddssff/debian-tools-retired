@@ -35,7 +35,7 @@ import Debian.Pretty (pretty, text, Doc)
 import Debian.Relation (BinPkgName(..), Relation(..), SrcPkgName(..), VersionReq(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Version (parseDebianVersion, buildDebianVersion)
-import Distribution.Compiler (CompilerId(..))
+import Distribution.Compiler (CompilerId(..), CompilerFlavor(GHC))
 import Distribution.License (License(..))
 import Distribution.Package (PackageName(PackageName))
 import Prelude hiding (log)
@@ -58,17 +58,19 @@ defaultAtoms =
 
 -- | Force the compiler version to 7.6 to get predictable outputs
 testAtoms :: IO Atoms
-testAtoms = ghc763 <$> T.newAtoms
+testAtoms = ghc763 <$> T.newAtoms GHC
     where
       ghc763 :: Atoms -> Atoms
-      ghc763 atoms =
+      ghc763 atoms = atoms
+{-
 #if MIN_VERSION_Cabal(1,21,0)
-          let CompilerId flavor version _ = ghcVersion_ atoms in
+          let CompilerId flavor version _ = getL ghcVersion_ atoms in
           atoms {ghcVersion_ = CompilerId flavor (version {versionBranch = [7, 6, 3]}) Nothing}
 #else
           let CompilerId flavor version = ghcVersion_ atoms in
           atoms {ghcVersion_ = CompilerId flavor (version {versionBranch = [7, 6, 3]})}
 #endif
+-}
 
 -- | Create a Debianization based on a changelog entry and a license
 -- value.  Uses the currently installed versions of debhelper and

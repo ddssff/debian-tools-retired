@@ -34,18 +34,19 @@ import Debian.Repo.MonadOS (MonadOS, withProc)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop)
+import Distribution.Compiler (CompilerFlavor)
 import System.FilePath ((</>))
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
 retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
-            DebT IO () -> C.CacheRec -> P.Packages -> m Download
-retrieve defaultAtoms cache target =
+            CompilerFlavor -> DebT IO () -> C.CacheRec -> P.Packages -> m Download
+retrieve hc defaultAtoms cache target =
      case P.spec target of
       P.Apt dist package -> Apt.prepare cache target dist (SrcPkgName package)
       P.Bzr string -> Bzr.prepare cache target string
 
       P.Cd dir spec' ->
-          retrieve defaultAtoms cache (target {P.spec = spec'}) >>= \ target' ->
+          retrieve hc defaultAtoms cache (target {P.spec = spec'}) >>= \ target' ->
           return $ Download { T.package = target
                             , T.getTop = getTop target' </> dir
                             , T.logText = logText target' ++ " (in subdirectory " ++ dir ++ ")"
@@ -58,20 +59,20 @@ retrieve defaultAtoms cache target =
       P.Darcs uri -> Darcs.prepare cache target uri
 
       P.DataFiles base files loc ->
-          do base' <- retrieve defaultAtoms cache (target {P.spec = base})
-             files' <- retrieve defaultAtoms cache (target {P.spec = files})
+          do base' <- retrieve hc defaultAtoms cache (target {P.spec = base})
+             files' <- retrieve hc defaultAtoms cache (target {P.spec = files})
              baseTree <- liftIO (findSourceTree (T.getTop base') :: IO SourceTree)
              filesTree <- liftIO (findSourceTree (T.getTop files') :: IO SourceTree)
              _ <- liftIO $ copySourceTree filesTree (dir' baseTree </> loc)
              return base'
 
       P.DebDir upstream debian ->
-          do upstream' <- retrieve defaultAtoms cache (target {P.spec = upstream})
-             debian' <- retrieve defaultAtoms cache (target {P.spec = debian})
+          do upstream' <- retrieve hc defaultAtoms cache (target {P.spec = upstream})
+             debian' <- retrieve hc defaultAtoms cache (target {P.spec = debian})
              DebDir.prepare target upstream' debian'
       P.Debianize package ->
-          retrieve defaultAtoms cache (target {P.spec = package}) >>=
-          Debianize.prepare defaultAtoms cache target
+          retrieve hc defaultAtoms cache (target {P.spec = package}) >>=
+          Debianize.prepare hc defaultAtoms cache target
 
       -- Dir is a simple instance of BuildTarget representing building the
       -- debian source in a local directory.  This type of target is used
@@ -93,11 +94,11 @@ retrieve defaultAtoms cache target =
       P.Hackage package -> Hackage.prepare cache target package
       P.Hg string -> Hg.prepare cache target string
       P.Patch base patch ->
-          retrieve defaultAtoms cache (target {P.spec = base}) >>=
+          retrieve hc defaultAtoms cache (target {P.spec = base}) >>=
           Patch.prepare target patch
 
       P.Proc spec' ->
-          retrieve defaultAtoms cache (target {P.spec = spec'}) >>= \ base ->
+          retrieve hc defaultAtoms cache (target {P.spec = spec'}) >>= \ base ->
           return $ T.Download {
                        T.package = target
                      , T.getTop = T.getTop base
@@ -108,15 +109,15 @@ retrieve defaultAtoms cache target =
                      , T.buildWrapper = withProc
                      }
       P.Quilt base patches ->
-          do base' <- retrieve defaultAtoms cache (target {P.spec = base})
-             patches' <- retrieve defaultAtoms cache (target {P.spec = patches})
+          do base' <- retrieve hc defaultAtoms cache (target {P.spec = base})
+             patches' <- retrieve hc defaultAtoms cache (target {P.spec = patches})
              Quilt.prepare target base' patches'
       P.SourceDeb spec' ->
-          retrieve defaultAtoms cache (target {P.spec = spec'}) >>=
+          retrieve hc defaultAtoms cache (target {P.spec = spec'}) >>=
           SourceDeb.prepare cache target
       P.Svn uri -> Svn.prepare cache target uri
       P.Tla string -> Tla.prepare cache target string
-      P.Twice base -> retrieve defaultAtoms cache (target {P.spec = base}) >>=
+      P.Twice base -> retrieve hc defaultAtoms cache (target {P.spec = base}) >>=
                       Twice.prepare target
       P.Uri uri sum -> Uri.prepare cache target uri sum
 

@@ -16,6 +16,7 @@ import Debian.Debianize.Output (doDebianizeAction)
 import Debian.Debianize.SubstVars (substvars)
 import Debian.Debianize.Types (Top(Top))
 import Debian.Debianize.Types.Atoms (DebAction(Debianize, SubstVar, Usage), EnvSet(EnvSet), debAction, newAtoms)
+import Distribution.Compiler (CompilerFlavor(GHC))
 import Prelude hiding (unlines, writeFile, init)
 import System.Console.GetOpt (usageInfo)
 import System.Environment (getProgName)
@@ -24,14 +25,14 @@ top :: Top
 top = Top "."
 
 main :: IO ()
-main = cabalDebianMain debianDefaultAtoms
+main = cabalDebianMain GHC debianDefaultAtoms
 
 -- | The main function for the cabal-debian executable.
-cabalDebianMain :: DebT IO () -> IO ()
-cabalDebianMain init =
+cabalDebianMain :: CompilerFlavor -> DebT IO () -> IO ()
+cabalDebianMain hc init =
     -- This picks up the options required to decide what action we are
     -- taking.  Much of this will be repeated in the call to debianize.
-    newAtoms >>= \ atoms ->
+    newAtoms hc >>= \ atoms ->
     evalDebT (init >> compileEnvironmentArgs >> compileCommandlineArgs >>
               get >>= return . getL debAction >>= finish) atoms
     where

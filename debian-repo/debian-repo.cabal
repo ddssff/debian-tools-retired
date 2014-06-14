@@ -35,10 +35,10 @@ Library
   if flag(local-cabal-debian)
     if flag(local-debian)
       Hs-Source-Dirs: ., ../cabal-debian/src, ../../haskell-debian
-      Build-Depends: hsemail, syb
+      Build-Depends: hsemail, memoize, syb
     else
       Hs-Source-Dirs: ., ../cabal-debian/src
-      Build-Depends: debian >= 3.80, hsemail, syb
+      Build-Depends: debian >= 3.80, hsemail, memoize, syb
   else
     Build-Depends: cabal-debian >= 4.5, debian >= 3.80
 

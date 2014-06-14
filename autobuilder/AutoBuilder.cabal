@@ -34,7 +34,7 @@ Library
   if flag (local-debian-repo)
     if flag (local-cabal-debian)
       Hs-Source-Dirs: ., ../cabal-debian/src, ../debian-repo
-      Build-Depends: Diff, set-extra, hsemail, syb
+      Build-Depends: Diff, set-extra, hsemail, memoize, syb
     else
       Hs-Source-Dirs: ., ../debian-repo
       Build-Depends: deepseq, data-lens-template, cabal-debian >= 4.6.1

@@ -257,7 +257,7 @@ librarySpecs pkgDesc =
        let dev = isJust (Cabal.library pkgDesc)
        doc <- get >>= return . not . getL T.noDocumentationLibrary
        prof <- get >>= return . not . getL T.noProfilingLibrary
-       cfl <- A.compilerFlavor
+       cfl <- access A.compilerFlavor
        hoogle <- get >>= return . not . getL T.noHoogle
        when dev (librarySpec Any B.Development)
        when (dev && prof && cfl == GHC) (librarySpec Any B.Profiling)

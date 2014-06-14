@@ -13,6 +13,7 @@ module Debian.Debianize.Input
 
 import Debug.Trace (trace)
 
+import Control.Applicative ((<$>))
 import Control.Category ((.))
 --import Control.DeepSeq (NFData, force)
 import Control.Exception (bracket)
@@ -29,18 +30,19 @@ import Data.Text.IO (readFile)
 import Debian.Changes (ChangeLog(..), ChangeLogEntry(logWho), parseChangeLog)
 import Debian.Control (Control'(unControl), Paragraph'(..), stripWS, parseControlFromFile, Field, Field'(..), ControlFunctions)
 import qualified Debian.Debianize.Types as T (maintainer)
-import qualified Debian.Debianize.Types.Atoms as T (changelog, ghcVersion)
+import qualified Debian.Debianize.Types.Atoms as T (changelog, compilerFlavor, makeAtoms)
 import Debian.Debianize.Types.BinaryDebDescription (BinaryDebDescription, newBinaryDebDescription)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B
 import qualified Debian.Debianize.Types.SourceDebDescription as S
 import Debian.Debianize.Types.Atoms
-    (newAtomsChroot, control, warning, sourceFormat, watch, rulesHead, compat, packageDescription,
+    (control, warning, sourceFormat, watch, rulesHead, compat, packageDescription,
      license, licenseFile, copyright, changelog, installInit, postInst, postRm, preInst, preRm,
-     logrotateStanza, link, install, installDir, intermediateFiles, cabalFlagAssignments, verbosity)
+     logrotateStanza, link, install, installDir, intermediateFiles, cabalFlagAssignments, verbosity, buildEnv)
 import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.Prelude (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (~?=), (+=), (++=), (+++=))
 import Debian.Debianize.Types (Top(unTop))
 import Debian.Debianize.Types.Atoms (EnvSet(dependOS))
+import Debian.GHC (newestAvailableCompilerId)
 import Debian.Orphans ()
 import Debian.Policy (Section(..), parseStandardsVersion, readPriority, readSection, parsePackageArchitectures, parseMaintainer,
                       parseUploaders, readSourceFormat, getDebianMaintainer)
@@ -74,7 +76,8 @@ import System.IO.Error (catchIOError, tryIOError)
 inputDebianization :: Top -> EnvSet -> DebT IO ()
 inputDebianization top envset =
     do -- Erase any the existing information
-       atoms <- liftIO $ newAtomsChroot $ dependOS envset
+       hc <- access T.compilerFlavor
+       let atoms = T.makeAtoms hc envset
        put atoms
        (ctl, _) <- inputSourceDebDescription top
        inputAtomsFromDirectory top
@@ -272,10 +275,11 @@ readDir p line = installDir +++= (p, singleton (unpack line))
 
 inputCabalization :: (MonadIO m, Functor m) => Top -> DebT m ()
 inputCabalization top =
-    do vb <- access verbosity >>= return . intToVerbosity'
+    do hc <- access T.compilerFlavor
+       vb <- access verbosity >>= return . intToVerbosity'
        flags <- access cabalFlagAssignments
-       -- root <- dependOS <$> (buildEnv <$> get)
-       mcid <- access T.ghcVersion
+       root <- dependOS <$> access buildEnv
+       let mcid = newestAvailableCompilerId hc root
        ePkgDesc <- liftIO $ inputCabalization' top vb flags mcid
        either (\ deps -> error $ "Missing dependencies in cabal package at " ++ show (unTop top) ++ ": " ++ show deps)
               (\ pkgDesc -> do

@@ -164,6 +164,7 @@ Library
    filepath,
    hsemail,
    HUnit,
+   memoize,
    mtl,
    parsec >= 3,
    process,
@@ -214,7 +215,7 @@ Executable cabal-debian
  Hs-Source-Dirs: .
  Main-is: CabalDebian.hs
  ghc-options: -threaded -Wall -O2
- Build-Depends: base, cabal-debian, data-lens, mtl
+ Build-Depends: base, Cabal, cabal-debian, data-lens, mtl
 
 Executable cabal-debian-tests
  Hs-Source-Dirs: .

@@ -16,9 +16,8 @@ module Debian.Debianize.Types.Atoms
 
 import Control.Applicative ((<$>))
 import Control.Category ((.))
-import Control.Monad.State (StateT)
 import Control.Monad.Trans (MonadIO)
-import Data.Lens.Lazy (Lens, lens, access)
+import Data.Lens.Lazy (Lens, lens)
 import Data.Map as Map (Map)
 import Data.Monoid (Monoid(..))
 import Data.Set as Set (Set)
@@ -26,18 +25,18 @@ import Data.Text (Text)
 import Debian.Changes (ChangeLog)
 import qualified Debian.Debianize.Types.SourceDebDescription as S
 import Debian.Debianize.VersionSplits (VersionSplits)
-import Debian.GHC (withGHCVersion)
 import Debian.Orphans ()
 import Debian.Policy (PackageArchitectures, PackagePriority, Section, SourceFormat)
 import Debian.Relation (BinPkgName, Relations, SrcPkgName)
 import Debian.Version (DebianVersion)
-import Distribution.Compiler (CompilerId(..), CompilerFlavor)
+import Distribution.Compiler (CompilerFlavor)
 import Distribution.License (License)
 import Distribution.Package (PackageName)
 import Distribution.PackageDescription as Cabal (FlagName, PackageDescription)
 import Prelude hiding (init, init, log, log, unlines, (.))
 import System.Console.GetOpt (getOpt, ArgOrder(Permute), OptDescr(Option), ArgDescr(ReqArg))
 import System.Environment (getArgs)
+import System.FilePath ((</>))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
 -- | Bits and pieces of information about the mapping from cabal package
@@ -209,7 +208,7 @@ data Atoms
       -- reason to use this is because we don't yet know the name of the dev library package.
       , packageDescription_ :: Maybe PackageDescription
       -- ^ The result of reading a cabal configuration file.
-      , ghcVersion_ :: CompilerId
+      , compilerFlavor_ :: CompilerFlavor
       -- ^ The newest available version of GHC in the build repository.  We don't support
       -- base repositories with no version of GHC, it has been standard in Debian and
       -- Ubuntu for quite some time.
@@ -221,27 +220,26 @@ data EnvSet = EnvSet
     , buildOS :: FilePath  -- ^ An environment where we have built a package
     } deriving (Eq, Show)
 
--- | Build an Atoms value for the given changeroot.
-newAtomsChroot :: FilePath -> IO Atoms
-newAtomsChroot root = withGHCVersion root (return . makeAtoms)
-
 -- | Look for --buildenvdir in the command line arguments to get the
 -- changeroot path, use "/" if not present.
-newAtoms :: IO Atoms
-newAtoms = do
+newAtoms :: CompilerFlavor -> IO Atoms
+newAtoms hc = do
   (roots, _, _) <- getOpt Permute [Option "buildenvdir" [] (ReqArg id "PATH")
                                           "Directory containing the build environment"] <$> getArgs
-  withGHCVersion (case roots of (x : _) -> x; _ -> "/") (return . makeAtoms)
+  let envset = case roots of
+                 (x : _) -> EnvSet {cleanOS = x </> "clean", dependOS = x </> "depend", buildOS = x </> "build"}
+                 _ -> EnvSet {cleanOS = "/", dependOS = "/", buildOS = "/"}
+  return $ makeAtoms hc envset
 
-makeAtoms :: CompilerId -> Atoms
-makeAtoms ghc =
+makeAtoms :: CompilerFlavor -> EnvSet -> Atoms
+makeAtoms hc envset =
     Atoms
       { noDocumentationLibrary_ = False
       , noProfilingLibrary_ = False
       , noHoogle_ = False
       , omitLTDeps_ = False
       , buildDir_ = mempty
-      , buildEnv_ = EnvSet {cleanOS = "/", dependOS = "/", buildOS = "/"}
+      , buildEnv_ = envset
       , flags_ = defaultFlags
       , debianNameMap_ = mempty
       , control_ = S.newSourceDebDescription
@@ -295,7 +293,7 @@ makeAtoms ghc =
       , backups_ = mempty
       , extraDevDeps_ = mempty
       , packageDescription_ = Nothing
-      , ghcVersion_ = ghc
+      , compilerFlavor_ = hc
       }
 
 -- | This record supplies information about the task we want done -
@@ -414,12 +412,11 @@ buildDir = lens buildDir_ (\ b a -> a {buildDir_ = b})
 -- buildEnv :: Lens Atoms (Maybe EnvSet)
 -- buildEnv = lens buildEnv_ (\ b a -> a {buildEnv_ = b})
 
-buildEnv :: Atoms -> EnvSet
-buildEnv = buildEnv_
+buildEnv :: Lens Atoms EnvSet
+buildEnv = lens buildEnv_ (\ b a -> a {buildEnv_ = b})
 
 setBuildEnv :: MonadIO m => EnvSet -> Atoms -> m Atoms
-setBuildEnv envset atoms =
-    withGHCVersion (dependOS envset) $ \ ghc -> return $ atoms {buildEnv_ = envset, ghcVersion_ = ghc}
+setBuildEnv envset atoms = return $ atoms {buildEnv_ = envset}
 
 -- | Map from cabal Extra-Lib names to debian binary package names.
 extraLibMap :: Lens Atoms (Map String Relations)
@@ -645,9 +642,10 @@ installInit = lens installInit_ (\ a b -> b {installInit_ = a})
 intermediateFiles :: Lens Atoms (Set (FilePath, Text))
 intermediateFiles = lens intermediateFiles_ (\ a b -> b {intermediateFiles_ = a})
 
-ghcVersion :: Lens Atoms CompilerId
-ghcVersion = lens ghcVersion_ (\ a b -> b {ghcVersion_ = a})
+compilerFlavor :: Lens Atoms CompilerFlavor
+compilerFlavor = lens compilerFlavor_ (\ a b -> b {compilerFlavor_ = a})
 
+{-
 compilerFlavor :: Monad m => StateT Atoms m CompilerFlavor
 compilerFlavor = do
 #if MIN_VERSION_Cabal(1,20,0)
@@ -656,3 +654,4 @@ compilerFlavor = do
   CompilerId x _ <- access ghcVersion
 #endif
   return x
+-}

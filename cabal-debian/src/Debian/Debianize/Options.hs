@@ -8,7 +8,7 @@ module Debian.Debianize.Options
     ) where
 
 import Control.Monad.State (lift, get, put)
-import Data.Char (toLower, isDigit, ord)
+import Data.Char (toLower, toUpper, isDigit, ord)
 import Data.Lens.Lazy (Lens)
 import Data.Set (singleton)
 import Debian.Debianize.Goodies (doExecutable)
@@ -19,12 +19,13 @@ import Debian.Debianize.Types
      missingDependencies, sourcePackageName, cabalFlagAssignments, maintainer, buildDir, omitLTDeps,
      sourceFormat, buildDepends, buildDependsIndep, extraDevDeps, depends, conflicts, replaces, provides,
      recommends, suggests, extraLibMap, debVersion, revision, epochMap, execMap, utilsPackageNames)
-import Debian.Debianize.Types.Atoms (Atoms, EnvSet(..), InstallFile(..), DebAction(..), setBuildEnv)
+import Debian.Debianize.Types.Atoms (Atoms, EnvSet(..), InstallFile(..), DebAction(..), setBuildEnv, compilerFlavor)
 import Debian.Orphans ()
 import Debian.Policy (SourceFormat(Quilt3), parseMaintainer)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..), Relations, Relation(..))
 import Debian.Relation.String (parseRelations)
 import Debian.Version (parseDebianVersion)
+import Distribution.Compiler (CompilerFlavor)
 import Distribution.PackageDescription (FlagName(..))
 import Distribution.Package (PackageName(..))
 import Prelude hiding (readFile, lines, null, log, sum)
@@ -33,6 +34,7 @@ import System.Environment (getArgs, getEnv)
 import System.FilePath ((</>), splitFileName)
 import System.IO.Error (tryIOError)
 import System.Posix.Env (setEnv)
+import Text.Read (readMaybe)
 import Text.Regex.TDFA ((=~))
 
 compileArgs :: [String] -> DebT IO ()
@@ -178,6 +180,10 @@ options =
                       , "be generated.  This determines which compiler will be available, which in turn"
                       , "determines which basic libraries can be provided by the compiler.  This can be"
                       , "set to /, but it must be set."]),
+      Option "" ["hc", "compiler-flavor"] (ReqArg (\ s -> maybe (error $ "Invalid compiler id: " ++ show s)
+                                                                (\ hc -> compilerFlavor ~= hc)
+                                                                (readMaybe (map toUpper s) :: Maybe CompilerFlavor)) "COMPILER")
+             (unlines [ "Specify which Haskell compiler: ghc, ghcjs, hugs, etc." ]),
       Option "f" ["flags"] (ReqArg (\ fs -> mapM_ (cabalFlagAssignments +=) (flagList fs)) "FLAGS")
              (unlines [ "Flags to pass to the finalizePackageDescription function in"
                       , "Distribution.PackageDescription.Configuration when loading the cabal file."]),

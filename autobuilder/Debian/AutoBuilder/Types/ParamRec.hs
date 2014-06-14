@@ -11,6 +11,7 @@ module Debian.AutoBuilder.Types.ParamRec
     ) where
 
 import Control.Arrow (first)
+import Data.Char (toUpper)
 import Data.List as List (map)
 import Data.Map as Map (Map, insertWith, elems, empty)
 import Data.Set as Set (Set, insert, empty, fold, member)
@@ -22,8 +23,10 @@ import Debian.Repo.Slice (SourcesChangedAction)
 import Debian.Sources (DebSource)
 import Debian.Version ( DebianVersion, prettyDebianVersion )
 import Debian.URI ( URI )
+import Distribution.Compiler (CompilerFlavor)
 import Prelude hiding (map)
 import System.Console.GetOpt
+import Text.Read (readMaybe)
 
 -- |An instance of 'ParamClass' contains the configuration parameters
 -- for a run of the autobuilder.  Among other things, it defined a set
@@ -260,6 +263,8 @@ data ParamRec =
     -- ^ The set of package that need to be built.
     , knownPackages :: Packages
     -- ^ The set of all known packages
+    , compilerFlavor :: CompilerFlavor
+    -- ^ Build packages using this Haskell compiler
   }
 
 data Strictness
@@ -378,6 +383,10 @@ optSpecs =
       "Exit as soon as we discover a package that needs to be built."
     , Option [] ["all-targets"] (NoArg (Right (\ p ->  p {targets = (targets p) {allTargets = True}})))
       "Add all known targets for the release to the target list."
+    , Option [] ["hc", "compiler-flavor"] (ReqArg (\ s -> (Right (\ p -> maybe (error $ "Invalid CompilerFlavor: " ++ show s)
+                                                                               (\ hc -> p {compilerFlavor = hc})
+                                                                               (readMaybe (map toUpper s) :: Maybe CompilerFlavor)))) "COMPILER")
+             "Build packages using this Haskell compiler"
     , Option [] ["allow-build-dependency-regressions"]
                  (NoArg (Right (\ p -> p {allowBuildDependencyRegressions = True})))
       (unlines [ "Normally it is an error if a build dependency has an older version"
