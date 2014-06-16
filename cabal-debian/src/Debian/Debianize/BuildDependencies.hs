@@ -15,7 +15,7 @@ import Data.Map as Map (lookup, Map)
 import Data.Maybe (catMaybes, fromMaybe, isJust, isNothing)
 import qualified Data.Set as Set (member)
 import Data.Version (showVersion, Version)
-import Debian.Debianize.Bundled (ghcBuiltIn)
+import Debian.Debianize.Bundled (builtIn)
 import Debian.Debianize.DebianName (mkPkgName, mkPkgName')
 import Debian.Debianize.Monad as Monad (Atoms, DebT)
 import qualified Debian.Debianize.Types as T (buildDepends, buildDependsIndep, debianNameMap, epochMap, execMap, extraLibMap, missingDependencies, noDocumentationLibrary, noProfilingLibrary)
@@ -277,7 +277,7 @@ doBundled typ name rels =
         -- Look at what version of the package is provided by the compiler.
         atoms <- get
         -- What version of this package (if any) does the compiler provide?
-        let pver = maybe Nothing (Just . debianVersion'' atoms name) (ghcBuiltIn splits hc root name)
+        let pver = maybe Nothing (Just . debianVersion'' atoms name) (builtIn splits hc root name)
         -- The name this library would have if it was in the compiler conflicts list.
         let naiveDebianName = mkPkgName hc name typ
         return $ -- The compiler should appear in the build dependency if

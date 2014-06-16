@@ -3,7 +3,7 @@
 
 {-# LANGUAGE CPP, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell #-}
 module Debian.Debianize.Bundled
-    ( ghcBuiltIn
+    ( builtIn
     ) where
 
 import Control.Applicative ((<$>))
@@ -29,21 +29,22 @@ import System.Unix.Chroot (useEnv)
 import Text.Regex.TDFA ((=~))
 import Text.ParserCombinators.ReadP (readP_to_S)
 
-ghcBuiltIn :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> PackageName -> Maybe Version
-ghcBuiltIn splits hc root lib = do
-  f (builtIn splits hc root)
+-- | Find out what version, if any, of a cabal library is built into the
+-- newest version of haskell compiler hc in environment root.  For GHC
+-- this is done by looking at what virtual packages debian package
+-- provides.  For GHCJS ...?   For other compilers it is unimplemented.
+builtIn :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> PackageName -> Maybe Version
+builtIn splits hc@GHC root lib = do
+  f $ memoize2 (\ hc' root' -> unsafePerformIO (builtIn' splits hc' root')) hc root
     where
       f :: (DebianVersion, [PackageIdentifier]) -> Maybe Version
-      f (_, ids) = case map pkgVersion (filter (\ i -> pkgName i == lib) ids) of
+      f (hcv, ids) = case map pkgVersion (filter (\ i -> pkgName i == lib) ids) of
                 [] -> Nothing
                 [v] -> Just v
-                vs -> error $ "Multiple versions of " ++ show lib ++ " built into " ++ show hc ++ ": " ++ show vs
-
-v :: String -> [Int] -> PackageIdentifier
-v n x = PackageIdentifier (PackageName n) (Version x [])
-
-builtIn :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> (DebianVersion, [PackageIdentifier])
-builtIn splits hc root = memoize2 (\ hc' root' -> unsafePerformIO (builtIn' splits hc' root')) hc root
+                vs -> error $ show hc ++ "-" ++ show hcv ++ " in " ++ show root ++ " provides multiple versions of " ++ show lib ++ ": " ++ show vs
+-- | There are no libraries 
+builtIn splits GHCJS root lib = error $ "builtIn - unimplemented for ghcjs"
+builtIn splits hc root lib = error $ "builtIn - unimplemented for compiler " ++ show hc
 
 -- | Ok, lets see if we can infer the built in packages from the
 -- Provides field returned by apt-cache.
@@ -53,11 +54,12 @@ builtIn' splits hc root = do
   let hcs = map words $ tail $ takeWhile (not . isPrefixOf "Reverse Provides:") $ dropWhile (not . isPrefixOf "Provides:") $ lns
       hcs' = reverse . sortBy (compare `on` fst) . map doHCVersion $ hcs
   case hcs' of
-    [] -> error $ "No versions of " ++ show hc ++ " in " ++ show root
-    ((_, []) : _) -> error $ "No versions of " ++ show hc ++ " in " ++ show root
+    [] -> error $ "No versions of " ++ show hc ++ " (" ++ show hcname ++ ") in " ++ show root
     ((v, pids) : _) -> return (v, pids)
     where
       BinPkgName hcname = BinPkgName (map toLower (show hc))
+      -- Find out what library versions are provided by the latest version
+      -- of the compiler.
       doHCVersion :: [String] -> (DebianVersion, [PackageIdentifier])
       doHCVersion (versionString : "-" : deps) = (parseDebianVersion versionString, mapMaybe parsePackageID deps)
       doHCVersion x = error $ "Unexpected output from apt-cache: " ++ show x
