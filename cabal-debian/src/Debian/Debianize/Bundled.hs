@@ -29,12 +29,14 @@ import System.Unix.Chroot (useEnv)
 import Text.Regex.TDFA ((=~))
 import Text.ParserCombinators.ReadP (readP_to_S)
 
--- | Find out what version, if any, of a cabal library is built into the
--- newest version of haskell compiler hc in environment root.  For GHC
--- this is done by looking at what virtual packages debian package
--- provides.  For GHCJS ...?   For other compilers it is unimplemented.
+-- | Find out what version, if any, of a cabal library is built into
+-- the newest version of haskell compiler hc in environment root.  For
+-- GHC this is done by looking at what virtual packages debian package
+-- provides.  I have modified the ghcjs packaging to generate the
+-- required virtual packages in the Provides line.  For other
+-- compilers it maybe be unimplemented.
 builtIn :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> PackageName -> Maybe Version
-builtIn splits hc@GHC root lib = do
+builtIn splits hc root lib = do
   f $ memoize2 (\ hc' root' -> unsafePerformIO (builtIn' splits hc' root')) hc root
     where
       f :: (DebianVersion, [PackageIdentifier]) -> Maybe Version
@@ -42,9 +44,6 @@ builtIn splits hc@GHC root lib = do
                 [] -> Nothing
                 [v] -> Just v
                 vs -> error $ show hc ++ "-" ++ show hcv ++ " in " ++ show root ++ " provides multiple versions of " ++ show lib ++ ": " ++ show vs
--- | There are no libraries 
-builtIn splits GHCJS root lib = error $ "builtIn - unimplemented for ghcjs"
-builtIn splits hc root lib = error $ "builtIn - unimplemented for compiler " ++ show hc
 
 -- | Ok, lets see if we can infer the built in packages from the
 -- Provides field returned by apt-cache.
