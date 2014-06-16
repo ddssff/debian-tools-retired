@@ -3,6 +3,8 @@ haskell-cabal-debian (4.10) unstable; urgency=low
   * Rename knownVersionSplits -> debianVersionSplits and move to
     Debian.Debianize.Details.  (Should that be renamed
     Debian.Debianize.Debian?)
+  * Add HC=ghc or HC=ghcjs to header of debian/rules depending on
+    the value of the compilerFlavor atom.
 
  -- David Fox <dsf@seereason.com>  Sat, 14 Jun 2014 10:20:01 -0700
 

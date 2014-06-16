@@ -18,6 +18,7 @@ module Debian.Debianize.Goodies
     , makeRulesHead
     ) where
 
+import Data.Char (toLower)
 import Data.Lens.Lazy (modL, access)
 import Data.List as List (map, intersperse, intercalate)
 import Data.Map as Map (insertWith)
@@ -358,7 +359,10 @@ fileAtoms' b sourceDir' execName' destDir' destName' r =
 makeRulesHead :: Monad m => DebT m Text
 makeRulesHead =
     do b <- debianName B.Cabal
-       let ls = ["DEB_CABAL_PACKAGE = " <> pack (show (pretty (b :: BinPkgName))), ""]
+       hc <- access T.compilerFlavor
+       let ls = ["DEB_CABAL_PACKAGE = " <> pack (show (pretty (b :: BinPkgName))),
+                 "HC = " <> pack (map toLower (show hc)),
+                 ""]
        return $
           Text.unlines $
             ["#!/usr/bin/make -f", ""] ++
