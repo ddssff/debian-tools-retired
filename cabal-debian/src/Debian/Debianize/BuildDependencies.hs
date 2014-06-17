@@ -139,8 +139,9 @@ docDependencies _ = return []
 -- references.  Also the packages associated with extra libraries.
 buildDependencies :: MonadIO m => Dependency_ -> DebT m D.Relations
 buildDependencies (BuildDepends (Dependency name ranges)) =
-    do dev <- dependencies B.Development name ranges
-       prof <- dependencies B.Profiling name ranges
+    do hc <- access compilerFlavor
+       dev <- dependencies B.Development name ranges
+       prof <- if hc == GHC then dependencies B.Profiling name ranges else return []
        return $ dev ++ prof
 buildDependencies dep@(ExtraLibs _) =
     do mp <- get >>= return . getL T.execMap
