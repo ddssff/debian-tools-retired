@@ -1,3 +1,9 @@
+haskell-cabal-debian (4.10.1) unstable; urgency=low
+
+  * Fix a tail exception in builtIn.
+
+ -- David Fox <dsf@seereason.com>  Tue, 17 Jun 2014 07:21:22 -0700
+
 haskell-cabal-debian (4.10) unstable; urgency=low
 
   * Rename knownVersionSplits -> debianVersionSplits and move to

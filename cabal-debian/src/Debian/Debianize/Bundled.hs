@@ -50,7 +50,7 @@ builtIn splits hc root lib = do
 builtIn' :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> IO (DebianVersion, [PackageIdentifier])
 builtIn' splits hc root = do
   lns <- lines . either (\ (e :: SomeException) -> error $ "builtIn: " ++ show e) id <$> try (chroot root (readProcess "apt-cache" ["showpkg", hcname] ""))
-  let hcs = map words $ tail $ takeWhile (not . isPrefixOf "Reverse Provides:") $ dropWhile (not . isPrefixOf "Provides:") $ lns
+  let hcs = map words $ takeBetween (isPrefixOf "Provides:") (isPrefixOf "Reverse Provides:") lns
       hcs' = reverse . sortBy (compare `on` fst) . map doHCVersion $ hcs
   case hcs' of
     [] -> error $ "No versions of " ++ show hc ++ " (" ++ show hcname ++ ") in " ++ show root
@@ -76,3 +76,6 @@ builtIn' splits hc root = do
                      _ -> Nothing
       chroot "/" = id
       chroot _ = useEnv root (return . force)
+
+takeBetween :: (a -> Bool) -> (a -> Bool) -> [a] -> [a]
+takeBetween startPred endPred = takeWhile (not . endPred) . dropWhile startPred . dropWhile (not . startPred)
