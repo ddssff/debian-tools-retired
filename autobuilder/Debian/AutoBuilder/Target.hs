@@ -774,7 +774,7 @@ installDependencies source extra sourceFingerprint =
            aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
            command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
        qPutStrLn $ "Installing build dependencies into " ++ root
-       (code, out, _, _) <- withProc (liftIO $ useEnv' root forceList $ noisier 1 $ readProc (shell command)) >>=
+       (code, out, _, _) <- withProc (liftIO $ useEnv' root forceList $ noisier 2 $ readProc (shell command)) >>=
                             return . collectOutputs . mergeToStdout
        case code of
          [ExitSuccess] -> return out
