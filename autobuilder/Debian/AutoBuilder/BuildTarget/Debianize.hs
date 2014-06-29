@@ -98,8 +98,8 @@ autobuilderCabal hc cache pflags debianizeDirectory defaultAtoms =
        -- This will be false if the package has no debian/Debianize.hs script
        done <- runDebianizeScript args'
        when (not done) (withArgs [] (do let atoms = makeAtoms hc eset
-                                        Cabal.evalDebT (do debianization (Top ".") defaultAtoms (applyPackageFlags pflags)
-                                                           writeDebianization (Top ".")) atoms))
+                                        Cabal.evalDebT (do debianization defaultAtoms (applyPackageFlags pflags)
+                                                           writeDebianization) atoms))
 
 applyPackageFlags :: [P.PackageFlag] -> DebT IO ()
 applyPackageFlags flags = mapM_ applyPackageFlag flags
