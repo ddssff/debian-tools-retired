@@ -16,15 +16,11 @@ import Debian.Debianize.Monad (DebT, evalDebT)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs, options)
 import Debian.Debianize.Output (doDebianizeAction)
 import Debian.Debianize.SubstVars (substvars)
-import Debian.Debianize.Types (Top(Top))
 import Debian.Debianize.Types.Atoms (DebAction(Debianize, SubstVar, Usage), EnvSet(EnvSet), debAction, newAtoms)
 import Distribution.Compiler (CompilerFlavor(GHC))
 import Prelude hiding (unlines, writeFile, init)
 import System.Console.GetOpt (OptDescr, usageInfo)
 import System.Environment (getProgName)
-
-top :: Top
-top = Top "."
 
 main :: IO ()
 main = cabalDebianMain GHC debianDefaultAtoms
@@ -40,8 +36,8 @@ cabalDebianMain hc init =
     where
       envset = EnvSet "/" "/" "/"
       finish :: forall m. (MonadIO m, Functor m) => DebAction -> DebT m ()
-      finish (SubstVar debType) = substvars top debType
-      finish Debianize = debianization top (return ()) (return ()) >> doDebianizeAction top envset
+      finish (SubstVar debType) = substvars debType
+      finish Debianize = debianization (return ()) (return ()) >> doDebianizeAction envset
       finish Usage = do
           progName <- liftIO getProgName
           let info = unlines [ "Typical usage is to cd to the top directory of the package's unpacked source and run: "

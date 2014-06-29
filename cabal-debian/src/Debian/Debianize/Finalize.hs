@@ -30,7 +30,6 @@ import Debian.Debianize.Input (dataDir, inputCabalization, inputChangeLog, input
 import Debian.Debianize.Monad as Monad (DebT)
 import Debian.Debianize.Options (compileCommandlineArgs, compileEnvironmentArgs)
 import Debian.Debianize.Prelude ((%=), (+++=), (+=), foldEmpty, fromEmpty, fromSingleton, (~=), (~?=))
-import Debian.Debianize.Types (Top)
 import qualified Debian.Debianize.Types as T (apacheSite, backups, binaryArchitectures, binaryPackages, binarySection, breaks, buildDepends, buildDependsIndep, buildDir, builtUsing, changelog, comments, compat, conflicts, debianDescription, debVersion, depends, epochMap, executable, extraDevDeps, extraLibMap, file, install, installCabalExec, installCabalExecTo, installData, installDir, installTo, intermediateFiles, license, link, maintainer, noDocumentationLibrary, noProfilingLibrary, noHoogle, packageDescription, packageType, preDepends, provides, recommends, replaces, revision, rulesFragments, serverInfo, source, sourcePackageName, sourcePriority, sourceSection, suggests, utilsPackageNames, verbosity, watch, website)
 import qualified Debian.Debianize.Types.Atoms as A (InstallFile(execName, sourceDir), showAtoms, compilerFlavor)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (BinaryDebDescription, package, PackageType(Development, Documentation, Exec, Profiling, Source', Utilities))
@@ -55,12 +54,12 @@ import System.FilePath ((<.>), (</>), makeRelative, splitFileName, takeDirectory
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-debianization :: (MonadIO m, Functor m) => Top -> DebT m () -> DebT m () -> DebT m ()
-debianization top init customize =
+debianization :: (MonadIO m, Functor m) => DebT m () -> DebT m () -> DebT m ()
+debianization init customize =
     do compileEnvironmentArgs
        compileCommandlineArgs
-       inputCabalization top
-       inputChangeLog top
+       inputCabalization
+       inputChangeLog
        inputMaintainer
        init
        customize

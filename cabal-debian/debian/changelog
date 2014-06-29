@@ -1,3 +1,9 @@
+haskell-cabal-debian (4.12) unstable; urgency=low
+
+  * Remove the Top type and argument - use getWorkingDirectory instead.
+
+ -- David Fox <dsf@seereason.com>  Sun, 29 Jun 2014 08:11:01 -0700
+
 haskell-cabal-debian (4.11) unstable; urgency=low
 
   * Use MonadIO instead of IO for all signatures.  This is so

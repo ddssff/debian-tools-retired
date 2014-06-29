@@ -24,7 +24,6 @@ import Debian.Control (Control'(unControl), ControlFunctions(lookupP, parseContr
 import Debian.Debianize.Input (inputCabalization)
 import Debian.Debianize.Monad (DebT)
 import Debian.Debianize.Prelude ((!), buildDebVersionMap, cond, DebMap, debOfFile, diffFile, dpkgFileMap, replaceFile, showDeps, modifyM)
-import Debian.Debianize.Types (Top)
 import qualified Debian.Debianize.Types.Atoms as T
 import Debian.Orphans ()
 import Debian.Pretty (pretty)
@@ -60,11 +59,10 @@ buildCompilerId = CompilerId GHC (Version [7,6,3] [])
 -- these we can determine the source package name, and from that the
 -- documentation package name.
 substvars :: (MonadIO m, Functor m) =>
-             Top
-          -> T.DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
+             T.DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
           -> DebT m ()
-substvars top debType =
-    do inputCabalization top
+substvars debType =
+    do inputCabalization
        debVersions <- liftIO buildDebVersionMap
        modifyM (liftIO . libPaths debVersions)
        control <- liftIO $ readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"

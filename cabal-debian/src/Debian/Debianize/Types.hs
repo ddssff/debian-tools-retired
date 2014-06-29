@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 module Debian.Debianize.Types
-    ( Top(..)
+    (
     -- * Modes of operation
-    , verbosity
+      verbosity
     , dryRun
     , debAction
     , cabalFlagAssignments
@@ -116,7 +116,6 @@ module Debian.Debianize.Types
     ) where
 
 import Control.Category ((.))
-import Data.Generics (Typeable)
 import Data.Lens.Lazy (Lens, iso, getL)
 import Data.Set as Set (Set)
 import Data.Text (Text)
@@ -129,11 +128,6 @@ import Debian.Policy (PackageArchitectures, PackagePriority, Section, StandardsV
 import Debian.Relation (BinPkgName, Relations, SrcPkgName)
 import Prelude hiding (init, init, log, log, unlines, (.))
 import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
-
--- | This is a special filepath that represents the top of a directory
--- tree.  For a cabal package this directory would contain the .cabal
--- file, for a debian package it would contain the debian directory.
-newtype Top = Top {unTop :: FilePath} deriving (Eq, Ord, Show, Typeable)
 
 -- | Not exported - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s-f-Package>
 binaryDebDescription :: BinPkgName -> Lens Atoms B.BinaryDebDescription
@@ -153,8 +147,8 @@ essential :: BinPkgName -> Lens Atoms (Maybe Bool)
 essential b = B.essential . binaryDebDescription b
 
 -- | <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
-relations :: BinPkgName -> Lens Atoms B.PackageRelations
-relations b = B.relations . binaryDebDescription b
+-- relations :: BinPkgName -> Lens Atoms B.PackageRelations
+-- relations b = B.relations . binaryDebDescription b
 
 -- | The Depends: relations for each binary deb - <http://www.debian.org/doc/debian-policy/ch-controlfields.html#s5.6.10>
 depends :: BinPkgName -> Lens Atoms Relations

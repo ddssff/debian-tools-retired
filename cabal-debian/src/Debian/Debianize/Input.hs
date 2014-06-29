@@ -39,8 +39,7 @@ import Debian.Debianize.Types.Atoms
      license, licenseFile, copyright, changelog, installInit, postInst, postRm, preInst, preRm,
      logrotateStanza, link, install, installDir, intermediateFiles, cabalFlagAssignments, verbosity, buildEnv)
 import Debian.Debianize.Monad (DebT)
-import Debian.Debianize.Prelude (getDirectoryContents', withCurrentDirectory, readFileMaybe, read', intToVerbosity', (~=), (~?=), (+=), (++=), (+++=))
-import Debian.Debianize.Types (Top(unTop))
+import Debian.Debianize.Prelude (getDirectoryContents', readFileMaybe, read', intToVerbosity', (~=), (~?=), (+=), (++=), (+++=))
 import Debian.Debianize.Types.Atoms (EnvSet(dependOS))
 import Debian.GHC (newestAvailableCompilerId)
 import Debian.Orphans ()
@@ -64,7 +63,7 @@ import Distribution.System (Platform(..), buildOS, buildArch)
 import Distribution.Verbosity (Verbosity)
 import Prelude hiding (readFile, lines, words, break, null, log, sum, (.))
 -- import qualified Prelude (lines)
-import System.Directory (doesFileExist)
+import System.Directory (doesFileExist, getCurrentDirectory)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeExtension, dropExtension)
 import System.Posix.Files (setFileCreationMask)
@@ -73,25 +72,25 @@ import System.IO.Error (catchIOError, tryIOError)
 -- import System.Unix.Chroot (useEnv)
 -- import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
-inputDebianization :: MonadIO m => Top -> EnvSet -> DebT m ()
-inputDebianization top envset =
+inputDebianization :: MonadIO m => EnvSet -> DebT m ()
+inputDebianization envset =
     do -- Erase any the existing information
        hc <- access T.compilerFlavor
        let atoms = T.makeAtoms hc envset
        put atoms
-       (ctl, _) <- inputSourceDebDescription top
-       inputAtomsFromDirectory top
+       (ctl, _) <- inputSourceDebDescription
+       inputAtomsFromDirectory
        control ~= ctl
 
 -- | Try to input a file and if successful add it to the debianization.
-inputDebianizationFile :: MonadIO m => Top -> FilePath -> DebT m ()
-inputDebianizationFile top path =
-    do inputAtomsFromDirectory top
-       liftIO (readFileMaybe (unTop top </> path)) >>= maybe (return ()) (\ text -> intermediateFiles += (path, text))
+inputDebianizationFile :: MonadIO m => FilePath -> DebT m ()
+inputDebianizationFile path =
+    do inputAtomsFromDirectory
+       liftIO (readFileMaybe path) >>= maybe (return ()) (\ text -> intermediateFiles += (path, text))
 
-inputSourceDebDescription :: MonadIO m => Top -> DebT m (S.SourceDebDescription, [Field])
-inputSourceDebDescription top =
-    do paras <- liftIO $ parseControlFromFile (unTop top </> "debian/control") >>= either (error . show) (return . unControl)
+inputSourceDebDescription :: MonadIO m => DebT m (S.SourceDebDescription, [Field])
+inputSourceDebDescription =
+    do paras <- liftIO $ parseControlFromFile "debian/control" >>= either (error . show) (return . unControl)
        case paras of
          [] -> error "Missing source paragraph"
          [_] -> error "Missing binary paragraph"
@@ -195,24 +194,24 @@ yes "yes" = True
 yes "no" = False
 yes x = error $ "Expecting yes or no: " ++ x
 
-inputChangeLog :: MonadIO m => Top -> DebT m ()
-inputChangeLog top =
-    do log <- liftIO $ tryIOError (readFile (unTop top </> "debian/changelog") >>= return . parseChangeLog . unpack)
+inputChangeLog :: MonadIO m => DebT m ()
+inputChangeLog =
+    do log <- liftIO $ tryIOError (readFile "debian/changelog" >>= return . parseChangeLog . unpack)
        changelog ~?= either (\ _ -> Nothing) Just log
 
-inputAtomsFromDirectory :: MonadIO m => Top -> DebT m () -- .install files, .init files, etc.
-inputAtomsFromDirectory top =
+inputAtomsFromDirectory :: MonadIO m => DebT m () -- .install files, .init files, etc.
+inputAtomsFromDirectory =
     do findFiles
-       doFiles (unTop top </> "debian/cabalInstall")
+       doFiles ("./debian/cabalInstall")
     where
       -- Find regular files in the debian/ or in debian/source/format/ and
       -- add them to the debianization.
       findFiles :: MonadIO m => DebT m ()
       findFiles =
-          liftIO (getDirectoryContents' (unTop top </> "debian")) >>=
+          liftIO (getDirectoryContents' ("debian")) >>=
           return . (++ ["source/format"]) >>=
-          liftIO . filterM (doesFileExist . ((unTop top </> "debian") </>)) >>= \ names ->
-          mapM_ (inputAtoms (unTop top </> "debian")) names
+          liftIO . filterM (doesFileExist . (("debian") </>)) >>= \ names ->
+          mapM_ (inputAtoms ("debian")) names
       doFiles :: MonadIO m => FilePath -> DebT m ()
       doFiles tmp =
           do sums <- liftIO $ getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
@@ -273,15 +272,16 @@ readInstall p line =
 readDir :: Monad m => BinPkgName -> Text -> DebT m ()
 readDir p line = installDir +++= (p, singleton (unpack line))
 
-inputCabalization :: (MonadIO m, Functor m) => Top -> DebT m ()
-inputCabalization top =
+inputCabalization :: (MonadIO m, Functor m) => DebT m ()
+inputCabalization =
     do hc <- access T.compilerFlavor
        vb <- access verbosity >>= return . intToVerbosity'
        flags <- access cabalFlagAssignments
        root <- dependOS <$> access buildEnv
        let mcid = newestAvailableCompilerId hc root
-       ePkgDesc <- liftIO $ inputCabalization' top vb flags mcid
-       either (\ deps -> error $ "Missing dependencies in cabal package at " ++ show (unTop top) ++ ": " ++ show deps)
+       ePkgDesc <- liftIO $ inputCabalization' vb flags mcid
+       either (\ deps -> liftIO getCurrentDirectory >>= \ here ->
+                         error $ "Missing dependencies in cabal package at " ++ here ++ ": " ++ show deps)
               (\ pkgDesc -> do
                  packageDescription ~= Just pkgDesc
                  -- This will contain either the contents of the file given in
@@ -291,11 +291,11 @@ inputCabalization top =
 #if MIN_VERSION_Cabal(1,19,0)
                  licenseFileText <- liftIO $ case Cabal.licenseFiles pkgDesc of
                                                [] -> return Nothing
-                                               (path : _) -> readFileMaybe (unTop top </> path) -- better than nothing
+                                               (path : _) -> readFileMaybe path -- better than nothing
 #else
                  licenseFileText <- liftIO $ case Cabal.licenseFile pkgDesc of
                                                "" -> return Nothing
-                                               path -> readFileMaybe (unTop top </> path)
+                                               path -> readFileMaybe path
 #endif
                  licenseFile ~?= licenseFileText
                  copyright ~?= (case Cabal.copyright pkgDesc of
@@ -303,9 +303,8 @@ inputCabalization top =
                                   s -> Just (pack s)))
               ePkgDesc
 
-inputCabalization' :: Top -> Verbosity -> Set (FlagName, Bool) -> CompilerId -> IO (Either [Dependency] PackageDescription)
-inputCabalization' top vb flags cid =
-    withCurrentDirectory (unTop top) $ do
+inputCabalization' :: Verbosity -> Set (FlagName, Bool) -> CompilerId -> IO (Either [Dependency] PackageDescription)
+inputCabalization' vb flags cid = do
          descPath <- defaultPackageDesc vb
          genPkgDesc <- readPackageDescription vb descPath
          case finalizePackageDescription (toList flags) (const True) (Platform buildArch buildOS) cid [] genPkgDesc of
