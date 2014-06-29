@@ -16,7 +16,7 @@ module Debian.Debianize.Types.Atoms
 
 import Control.Applicative ((<$>))
 import Control.Category ((.))
-import Control.Monad.Trans (MonadIO)
+import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Lens.Lazy (Lens, lens)
 import Data.Map as Map (Map)
 import Data.Monoid (Monoid(..))
@@ -222,8 +222,8 @@ data EnvSet = EnvSet
 
 -- | Look for --buildenvdir in the command line arguments to get the
 -- changeroot path, use "/" if not present.
-newAtoms :: CompilerFlavor -> IO Atoms
-newAtoms hc = do
+newAtoms :: MonadIO m => CompilerFlavor -> m Atoms
+newAtoms hc = liftIO $ do
   (roots, _, _) <- getOpt Permute [Option "buildenvdir" [] (ReqArg id "PATH")
                                           "Directory containing the build environment"] <$> getArgs
   let envset = case roots of

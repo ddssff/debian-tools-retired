@@ -7,7 +7,8 @@ module Debian.Debianize.Options
     , withEnvironmentArgs
     ) where
 
-import Control.Monad.State (lift, get, put)
+import Control.Monad.State (get, put)
+import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Char (toLower, toUpper, isDigit, ord)
 import Data.Lens.Lazy (Lens)
 import Data.Set (singleton)
@@ -37,7 +38,7 @@ import System.Posix.Env (setEnv)
 import Text.Read (readMaybe)
 import Text.Regex.TDFA ((=~))
 
-compileArgs :: [String] -> DebT IO ()
+compileArgs :: MonadIO m => [String] -> DebT m ()
 compileArgs args =
     case getOpt' RequireOrder options args of
       (os, [], [], []) -> sequence_ os
@@ -45,17 +46,17 @@ compileArgs args =
                                     ", Unrecognized: " ++ show unk ++
                                     ", Non-Options: " ++ show non)
 
-compileEnvironmentArgs :: DebT IO ()
+compileEnvironmentArgs :: MonadIO m => DebT m ()
 compileEnvironmentArgs = withEnvironmentArgs compileArgs
 
-compileCommandlineArgs :: DebT IO ()
-compileCommandlineArgs = lift getArgs >>= compileArgs
+compileCommandlineArgs :: MonadIO m => DebT m ()
+compileCommandlineArgs = liftIO getArgs >>= compileArgs
 
 -- | Read a value out of the CABALDEBIAN environment variable which is
 -- the result of applying show to a [String].
-withEnvironmentArgs :: ([String] -> DebT IO a) -> DebT IO a
+withEnvironmentArgs :: MonadIO m => ([String] -> DebT m a) -> DebT m a
 withEnvironmentArgs f =
-    lift (tryIOError (getEnv "CABALDEBIAN")) >>= either (\ _ -> f []) (maybe (f []) f . maybeRead)
+    liftIO (tryIOError (getEnv "CABALDEBIAN")) >>= either (\ _ -> f []) (maybe (f []) f . maybeRead)
 
 -- | Insert a value for CABALDEBIAN into the environment that the
 -- withEnvironment* functions above will find and use.  E.g.
@@ -64,7 +65,7 @@ putEnvironmentArgs :: [String] -> IO ()
 putEnvironmentArgs fs = setEnv "CABALDEBIAN" (show fs) True
 
 -- | Options that modify other atoms.
-options :: [OptDescr (DebT IO ())]
+options :: MonadIO m => [OptDescr (DebT m ())]
 options =
     [ Option "v" ["verbose"] (ReqArg (\ s -> verbosity ~= (read' (\ s' -> error $ "verbose: " ++ show s') s)) "n")
              "Change the amount of progress messages generated",
@@ -173,7 +174,7 @@ options =
                       , "run by haskell-devscripts.  The build subdirectory is added to match the"
                       , "behavior of the --builddir option in the Setup script."]),
 
-      let f :: String -> DebT IO ()
+      let f :: MonadIO m => String -> DebT m ()
           f s = get >>= setBuildEnv (EnvSet {cleanOS = s </> "clean", dependOS = s </> "depend", buildOS = s </> "build"}) >>= put in
       Option "" ["buildenvdir"] (ReqArg f "PATH")
              (unlines [ "Directory containing the build environment for which the debianization will"

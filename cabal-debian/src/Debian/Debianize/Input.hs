@@ -19,7 +19,7 @@ import Control.Category ((.))
 import Control.Exception (bracket)
 import Control.Monad (when, filterM)
 import Control.Monad.State (get, put)
-import Control.Monad.Trans (MonadIO, liftIO, lift)
+import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Char (isSpace, toLower)
 import Data.Lens.Lazy (getL, setL, modL, access)
 import Data.Maybe (fromMaybe)
@@ -73,7 +73,7 @@ import System.IO.Error (catchIOError, tryIOError)
 -- import System.Unix.Chroot (useEnv)
 -- import Text.ParserCombinators.Parsec.Rfc2822 (NameAddr)
 
-inputDebianization :: Top -> EnvSet -> DebT IO ()
+inputDebianization :: MonadIO m => Top -> EnvSet -> DebT m ()
 inputDebianization top envset =
     do -- Erase any the existing information
        hc <- access T.compilerFlavor
@@ -84,14 +84,14 @@ inputDebianization top envset =
        control ~= ctl
 
 -- | Try to input a file and if successful add it to the debianization.
-inputDebianizationFile :: Top -> FilePath -> DebT IO ()
+inputDebianizationFile :: MonadIO m => Top -> FilePath -> DebT m ()
 inputDebianizationFile top path =
     do inputAtomsFromDirectory top
-       lift (readFileMaybe (unTop top </> path)) >>= maybe (return ()) (\ text -> intermediateFiles += (path, text))
+       liftIO (readFileMaybe (unTop top </> path)) >>= maybe (return ()) (\ text -> intermediateFiles += (path, text))
 
-inputSourceDebDescription :: Top -> DebT IO (S.SourceDebDescription, [Field])
+inputSourceDebDescription :: MonadIO m => Top -> DebT m (S.SourceDebDescription, [Field])
 inputSourceDebDescription top =
-    do paras <- lift $ parseControlFromFile (unTop top </> "debian/control") >>= either (error . show) (return . unControl)
+    do paras <- liftIO $ parseControlFromFile (unTop top </> "debian/control") >>= either (error . show) (return . unControl)
        case paras of
          [] -> error "Missing source paragraph"
          [_] -> error "Missing binary paragraph"
@@ -200,20 +200,20 @@ inputChangeLog top =
     do log <- liftIO $ tryIOError (readFile (unTop top </> "debian/changelog") >>= return . parseChangeLog . unpack)
        changelog ~?= either (\ _ -> Nothing) Just log
 
-inputAtomsFromDirectory :: Top -> DebT IO () -- .install files, .init files, etc.
+inputAtomsFromDirectory :: MonadIO m => Top -> DebT m () -- .install files, .init files, etc.
 inputAtomsFromDirectory top =
     do findFiles
        doFiles (unTop top </> "debian/cabalInstall")
     where
       -- Find regular files in the debian/ or in debian/source/format/ and
       -- add them to the debianization.
-      findFiles :: DebT IO ()
+      findFiles :: MonadIO m => DebT m ()
       findFiles =
           liftIO (getDirectoryContents' (unTop top </> "debian")) >>=
           return . (++ ["source/format"]) >>=
           liftIO . filterM (doesFileExist . ((unTop top </> "debian") </>)) >>= \ names ->
           mapM_ (inputAtoms (unTop top </> "debian")) names
-      doFiles :: FilePath -> DebT IO ()
+      doFiles :: MonadIO m => FilePath -> DebT m ()
       doFiles tmp =
           do sums <- liftIO $ getDirectoryContents' tmp `catchIOError` (\ _ -> return [])
              paths <- liftIO $ mapM (\ sum -> getDirectoryContents' (tmp </> sum) >>= return . map (sum </>)) sums >>= return . filter ((/= '~') . last) . concat
@@ -225,7 +225,7 @@ inputAtomsFromDirectory top =
 -- This may mean using a specialized parser from the debian package
 -- (e.g. parseChangeLog), and some files (like control) are ignored
 -- here, though I don't recall why at the moment.
-inputAtoms :: FilePath -> FilePath -> DebT IO ()
+inputAtoms :: MonadIO m => FilePath -> FilePath -> DebT m ()
 inputAtoms _ path | elem path ["control"] = return ()
 inputAtoms debian name@"source/format" = liftIO (readFile (debian </> name)) >>= \ text -> either (warning +=) ((sourceFormat ~=) . Just) (readSourceFormat text)
 inputAtoms debian name@"watch" = liftIO (readFile (debian </> name)) >>= \ text -> watch ~= Just text

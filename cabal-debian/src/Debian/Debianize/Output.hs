@@ -16,8 +16,8 @@ module Debian.Debianize.Output
 
 import Control.Category ((.))
 import Control.Exception as E (throw)
-import Control.Monad.State (get, lift)
-import Control.Monad.Trans (MonadIO)
+import Control.Monad.State (get)
+import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Algorithm.Diff.Context (contextDiff)
 import Data.Algorithm.Diff.Pretty (prettyDiff)
 import Data.Lens.Lazy (getL)
@@ -38,7 +38,7 @@ import qualified Debian.Debianize.Types.SourceDebDescription as S (source)
 import Debian.Pretty (Pretty(pretty))
 import Prelude hiding (unlines, writeFile, (.))
 import System.Directory (createDirectoryIfMissing, doesFileExist, getPermissions, Permissions(executable), setPermissions)
-import System.Environment (getEnv)
+--import System.Environment (getEnv)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>), takeDirectory)
 import System.IO (hPutStrLn, stderr)
@@ -54,7 +54,7 @@ import System.Process (readProcessWithExitCode, showCommandForUser)
 -- in the debian subdirectory of this library.
 runDebianizeScript :: [String] -> IO Bool
 runDebianizeScript args =
-    getEnv "HOME" >>= \ home ->
+    -- getEnv "HOME" >>= \ home ->
     doesFileExist "debian/Debianize.hs" >>= \ exists ->
     case exists of
       False -> return False
@@ -70,7 +70,7 @@ runDebianizeScript args =
 
 -- | Depending on the options in @atoms@, either validate, describe,
 -- or write the generated debianization.
-doDebianizeAction :: Top -> EnvSet -> DebT IO ()
+doDebianizeAction :: (MonadIO m, Functor m) => Top -> EnvSet -> DebT m ()
 doDebianizeAction top envset =
     do new <- get
        case () of
@@ -81,16 +81,16 @@ doDebianizeAction top envset =
          _ | getL T.dryRun new ->
                do inputDebianization top envset
                   old <- get
-                  diff <- lift $ compareDebianization old new
-                  lift $ putStr ("Debianization (dry run):\n" ++ diff)
+                  diff <- liftIO $ compareDebianization old new
+                  liftIO $ putStr ("Debianization (dry run):\n" ++ diff)
          _ -> writeDebianization top
 
 -- | Write the files of the debianization @d@ to the directory @top@.
-writeDebianization :: Top -> DebT IO ()
+writeDebianization :: (MonadIO m, Functor m) => Top -> DebT m ()
 writeDebianization top =
     do files <- debianizationFileMap
-       lift $ withCurrentDirectory (unTop top) $ mapM_ (uncurry doFile) (Map.toList files)
-       lift $ getPermissions (unTop top </> "debian/rules") >>= setPermissions (unTop top </> "debian/rules") . (\ p -> p {executable = True})
+       liftIO $ withCurrentDirectory (unTop top) $ mapM_ (uncurry doFile) (Map.toList files)
+       liftIO $ getPermissions (unTop top </> "debian/rules") >>= setPermissions (unTop top </> "debian/rules") . (\ p -> p {executable = True})
     where
       doFile path text =
           do createDirectoryIfMissing True (takeDirectory path)

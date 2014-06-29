@@ -12,7 +12,7 @@ import Control.Exception (SomeException, try)
 import Control.Monad (foldM)
 import Control.Monad.Reader (ReaderT(runReaderT))
 import Control.Monad.State (get)
-import Control.Monad.Trans (MonadIO, lift)
+import Control.Monad.Trans (MonadIO, liftIO, lift)
 import Data.Lens.Lazy (getL, modL, access)
 import Data.List (intercalate, isPrefixOf, isSuffixOf, nub, partition, unlines)
 import Data.List as List (map)
@@ -59,17 +59,18 @@ buildCompilerId = CompilerId GHC (Version [7,6,3] [])
 -- names, or examining the /var/lib/dpkg/info/\*.list files.  From
 -- these we can determine the source package name, and from that the
 -- documentation package name.
-substvars :: Top
+substvars :: (MonadIO m, Functor m) =>
+             Top
           -> T.DebType  -- ^ The type of deb we want to write substvars for - Dev, Prof, or Doc
-          -> DebT IO ()
+          -> DebT m ()
 substvars top debType =
     do inputCabalization top
-       debVersions <- lift buildDebVersionMap
-       modifyM (lift . libPaths debVersions)
-       control <- lift $ readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
+       debVersions <- liftIO buildDebVersionMap
+       modifyM (liftIO . libPaths debVersions)
+       control <- liftIO $ readFile "debian/control" >>= either (error . show) return . parseControl "debian/control"
        substvars' debType control
 
-substvars' :: T.DebType -> Control' String -> DebT IO ()
+substvars' :: (MonadIO m, Functor m) => T.DebType -> Control' String -> DebT m ()
 substvars' debType control =
     get >>= return . getL T.packageInfo >>= \ info ->
     cabalDependencies >>= \ cabalDeps ->
@@ -83,18 +84,18 @@ substvars' debType control =
       -- haskell-cabal-debian-doc.substvars:
       --    haskell:Depends=ghc-doc, haddock (>= 2.1.0), haddock (<< 2.1.0-999)
       ([], Just path') ->
-          do old <- lift $ readFile path'
+          do old <- liftIO $ readFile path'
              deps <- debDeps debType control
              new <- addDeps old deps
              dry <- get >>= return . getL T.dryRun
-             lift (diffFile path' (pack new) >>= maybe (putStrLn ("cabal-debian substvars: No updates found for " ++ show path'))
+             liftIO (diffFile path' (pack new) >>= maybe (putStrLn ("cabal-debian substvars: No updates found for " ++ show path'))
                                                        (\ diff -> if dry then putStr diff else replaceFile path' new))
       ([], Nothing) -> return ()
       (missing, _) ->
-          lift $ die ("These debian packages need to be added to the build dependency list so the required cabal " ++
-                      "packages are available:\n  " ++ intercalate "\n  " (map (show . pretty . fst) missing) ++
-                      "\nIf this is an obsolete package you may need to withdraw the old versions from the\n" ++
-                      "upstream repository, and uninstall and purge it from your local system.")
+          liftIO $ die ("These debian packages need to be added to the build dependency list so the required cabal " ++
+                        "packages are available:\n  " ++ intercalate "\n  " (map (show . pretty . fst) missing) ++
+                        "\nIf this is an obsolete package you may need to withdraw the old versions from the\n" ++
+                        "upstream repository, and uninstall and purge it from your local system.")
     where
       addDeps old deps =
           case partition (isPrefixOf "haskell:Depends=") (lines old) of

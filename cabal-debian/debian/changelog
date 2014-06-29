@@ -1,3 +1,10 @@
+haskell-cabal-debian (4.11) unstable; urgency=low
+
+  * Use MonadIO instead of IO for all signatures.  This is so
+    we can more easily use cabal debian from a Shelly script.
+
+ -- David Fox <dsf@seereason.com>  Sun, 29 Jun 2014 07:16:45 -0700
+
 haskell-cabal-debian (4.10.1) unstable; urgency=low
 
   * Fix a tail exception in builtIn.

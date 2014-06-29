@@ -55,7 +55,7 @@ import System.FilePath ((<.>), (</>), makeRelative, splitFileName, takeDirectory
 -- description and possibly the debian/changelog file, then generate
 -- and return the new debianization (along with the data directory
 -- computed from the cabal package description.)
-debianization :: Top -> DebT IO () -> DebT IO () -> DebT IO ()
+debianization :: (MonadIO m, Functor m) => Top -> DebT m () -> DebT m () -> DebT m ()
 debianization top init customize =
     do compileEnvironmentArgs
        compileCommandlineArgs
