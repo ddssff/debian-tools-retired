@@ -26,7 +26,7 @@ import Debian.Orphans ()
 import Debian.Relation (BinPkgName, Relation(..), Relations, checkVersionReq)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(EEQ, GRE, LTE, SGR, SLT))
 import Debian.Version (DebianVersion, parseDebianVersion)
-import Distribution.Compiler (CompilerFlavor(GHC))
+import Distribution.Compiler (CompilerFlavor(GHC, GHCJS))
 import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
 import Distribution.PackageDescription (PackageDescription)
 import Distribution.PackageDescription as Cabal (allBuildInfo, BuildInfo(..), BuildInfo(buildTools, extraLibs, pkgconfigDepends), Executable(..))
@@ -85,11 +85,13 @@ debianBuildDeps pkgDesc =
        cfl <- access compilerFlavor
        let xs = nub $ [[D.Rel (D.BinPkgName "debhelper") (Just (D.GRE (parseDebianVersion ("7.0" :: String)))) Nothing],
                        [D.Rel (D.BinPkgName "haskell-devscripts") (Just (D.GRE (parseDebianVersion ("0.8" :: String)))) Nothing],
-                       anyrel "cdbs",
-                       anyrel "ghc"] ++
-                       bDeps ++
-                       (if prof && cfl == GHC then [anyrel "ghc-prof"] else []) ++
-                       cDeps
+                       anyrel "cdbs"] ++
+                      (case cfl of
+                        GHC -> [anyrel "ghc"] ++ if prof then [anyrel "ghc-prof"] else []
+                        GHCJS -> [anyrel "ghcjs"]
+                        x -> error ("Unsupported compiler flavor: " ++ show x)) ++
+                      bDeps ++
+                      cDeps
        filterMissing xs
     where
       cabalDeps =
