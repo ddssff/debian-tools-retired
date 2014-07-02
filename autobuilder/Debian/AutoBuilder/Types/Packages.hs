@@ -123,7 +123,7 @@ data RetrieveMethod
     | DebDir RetrieveMethod RetrieveMethod   -- ^ Combine the upstream download with a download for a debian directory
     | Debianize RetrieveMethod               -- ^ Retrieve a cabal package from Hackage and use cabal-debian to debianize it
     | Dir FilePath                           -- ^ Retrieve the source code from a directory on a local machine
-    | Git String                             -- ^ Download from a Git repository
+    | Git String (Maybe String)              -- ^ Download from a Git repository, optional commit hash
     | Hackage String                         -- ^ Download a cabal package from hackage
     | Hg String                              -- ^ Download from a Mercurial repository
     | Patch RetrieveMethod ByteString        -- ^ Apply the patch given in the string text to the target
@@ -280,8 +280,8 @@ debdir p debian = p {spec = DebDir (spec p) debian}
 dir :: String -> FilePath -> Packages
 dir name path = method name (Dir path)
 
-git :: String -> String -> Packages
-git name path = method name (Git path)
+git :: String -> String -> Maybe String -> Packages
+git name path commit = method name (Git path commit)
 
 hackage :: String -> Packages
 hackage s =

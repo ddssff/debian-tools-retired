@@ -22,6 +22,7 @@ import System.Process.Progress (keepStdout, keepResult, timeTask)
 import System.Unix.Directory
 import Text.Regex
 
+documentation :: [String]
 documentation = [ "darcs:<string> - a target of this form obtains the source code by running"
                 , "darcs get <string>.  If the argument needs to use ssh to reach the darcs"
                 , "repository, it is necessary to set up ssh keys to allow access without"
@@ -40,8 +41,8 @@ darcsRev tree m =
 showCmd (RawCommand cmd args) = showCommandForUser cmd args
 showCmd (ShellCommand cmd) = cmd
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> m T.Download
-prepare cache package theUri =
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> Maybe String -> m T.Download
+prepare cache package theUri mCommit =
     sub "git" >>= \ base ->
     sub ("git" </> sum) >>= \ dir -> liftIO $
     do
@@ -85,10 +86,9 @@ prepare cache package theUri =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _output <- runProc cmd
+             _ <- runProc (proc "git" (["clone", renderForGit theUri'] ++ maybe [] (\ branch -> ["--branch", branch]) theBranch ++ [dir]))
+             _ <- maybe (return []) (\ commit -> runProc ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir})) mCommit
              findSourceTree dir
-          where
-            cmd = proc "git" (["clone", renderForGit theUri'] ++ maybe [] (\ branch -> ["--branch", branch]) theBranch ++ [dir])
 
       -- CB  git reset --hard    will remove all edits back to the most recent commit
       fixLink base =

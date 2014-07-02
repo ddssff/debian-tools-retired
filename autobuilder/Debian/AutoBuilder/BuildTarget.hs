@@ -90,7 +90,7 @@ retrieve hc defaultAtoms cache target =
                                  , T.buildWrapper = id
                                  }
 
-      P.Git uri -> Git.prepare cache target uri
+      P.Git uri mcommit -> Git.prepare cache target uri mcommit
       P.Hackage package -> Hackage.prepare cache target package
       P.Hg string -> Hg.prepare cache target string
       P.Patch base patch ->
