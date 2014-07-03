@@ -22,7 +22,7 @@ import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import Data.Set (toList)
 import qualified Data.Set as Set (Set, singleton, toList, union)
-import Debian.Arch (Arch(Source, Binary), ArchCPU(..))
+import Debian.Arch (Arch(Source, Binary), ArchCPU(..), ArchOS(..))
 import Debian.Control ()
 import qualified Debian.Control.Text as S ()
 import Debian.Pretty (Doc, pretty, text)
@@ -61,10 +61,19 @@ testArch architecture (Rel _ _ (Just (ArchOnly archList))) = any (testArch' arch
 testArch architecture (Rel _ _ (Just (ArchExcept archList))) = not (any (testArch' architecture) (toList archList))
 
 testArch' :: Arch -> Arch -> Bool
-testArch' (Binary _ (ArchCPU x)) (Binary _ (ArchCPU cpu)) = x == cpu
-testArch' _ (Binary _os ArchCPUAny) = True
+testArch' (Binary os1 cpu1) (Binary os2 cpu2) = testOS os1 os2 && testCPU cpu1 cpu2
 testArch' Source Source = True
 testArch' _ _ = False
+
+testOS :: ArchOS -> ArchOS -> Bool
+testOS _ ArchOSAny = True
+testOS (ArchOS a) (ArchOS b) = a == b
+testOS ArchOSAny _ = error "testOS - invalid argument"
+
+testCPU :: ArchCPU -> ArchCPU -> Bool
+testCPU _ ArchCPUAny = True
+testCPU (ArchCPU a) (ArchCPU b) = a == b
+testCPU ArchCPUAny _ = error "testCPU - invalid argument"
 
 -- |Turn the expressive inequality style relations to a set of simple
 -- equality relations on only the packages in the available list.

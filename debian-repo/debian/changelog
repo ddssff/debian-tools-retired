@@ -1,3 +1,10 @@
+haskell-debian-repo (5.64) unstable; urgency=low
+
+  * Fix the testing of architecture OS in package dependencies, before it
+    was only testing architecture CPU.
+
+ -- David Fox <dsf@seereason.com>  Thu, 03 Jul 2014 08:46:26 -0700
+
 haskell-debian-repo (5.63) unstable; urgency=low
 
   * Refactor the state types to improve safety.
