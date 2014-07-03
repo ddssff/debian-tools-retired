@@ -23,7 +23,7 @@ import Debian.Debianize.Types.Atoms (EnvSet(dependOS), compilerFlavor, buildEnv)
 import qualified Debian.Debianize.Types.BinaryDebDescription as B (PackageType(Development, Documentation, Profiling))
 import Debian.Debianize.VersionSplits (packageRangesFromVersionSplits)
 import Debian.Orphans ()
-import Debian.Relation (BinPkgName, Relation(..), Relations, checkVersionReq)
+import Debian.Relation (BinPkgName(..), Relation(..), Relations, checkVersionReq)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(EEQ, GRE, LTE, SGR, SLT))
 import Debian.Version (DebianVersion, parseDebianVersion)
 #if MIN_VERSION_Cabal(1,21,0)
@@ -289,20 +289,31 @@ doBundled typ name rels =
         let pver = maybe Nothing (Just . debianVersion'' atoms name) (builtIn splits hc root name)
         -- The name this library would have if it was in the compiler conflicts list.
         let naiveDebianName = mkPkgName hc name typ
-        return $ -- The compiler should appear in the build dependency if
-                 -- it provides a suitable version of the library, or
-                 -- if it conflicts with all versions of the library.
-                 (if isJust pver && (checkVersionReq req pver || dname == naiveDebianName) then [comp] else []) ++
+        return $ -- The compiler should appear in the build dependency
+                 -- if it provides a suitable version of the library,
+                 -- or if it conflicts with all versions of the
+                 -- library (which, if pver is Nothing, will certainly
+                 -- result in an error which needs to be corrected in
+                 -- the packaging.)
+                 (if isJust pver && (checkVersionReq req pver || (dname == naiveDebianName && conflictsWithHC naiveDebianName)) then [comp] else []) ++
                  -- The library package can satisfy the dependency if
                  -- the compiler doesn't provide a version, or if the
-                 -- debian name of the library package is different
-                 -- from the debian name of the library package the
-                 -- compiler provides.
-                 (if isNothing pver || dname /= naiveDebianName then [rel] else [])
+                 -- compiler doesn't conflict with the package's
+                 -- debian name.
+                 (if isNothing pver || dname /= naiveDebianName || not (conflictsWithHC naiveDebianName) then [rel] else [])
       compilerPackageName B.Documentation = D.BinPkgName "ghc-doc"
       compilerPackageName B.Profiling = D.BinPkgName "ghc-prof"
       compilerPackageName B.Development = D.BinPkgName "ghc"
       compilerPackageName _ = D.BinPkgName "ghc" -- whatevs
+
+      -- FIXME: we are assuming here that ghc conflicts with all the
+      -- library packages it provides but it no longer conflicts with
+      -- libghc-cabal-dev.  We can now check these conflicts using the
+      -- new functions in Bundled.
+      conflictsWithHC (BinPkgName "libghc-cabal-dev") = False
+      conflictsWithHC (BinPkgName "libghc-cabal-prof") = False
+      conflictsWithHC (BinPkgName "libghc-cabal-doc") = False
+      conflictsWithHC _ = True
 
 {-
 doBundled :: MonadIO m =>
