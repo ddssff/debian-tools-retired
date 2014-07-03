@@ -5,7 +5,7 @@
 --
 -- Author: David Fox <dsf@seereason.com>
 {-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables, ScopedTypeVariables #-}
-{-# OPTIONS -Werror -fwarn-missing-signatures #-}
+{-# OPTIONS -Wall -fwarn-missing-signatures #-}
 module Debian.Repo.Dependencies
     ( simplifyRelations
     , solutions
