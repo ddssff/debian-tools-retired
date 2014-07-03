@@ -6,7 +6,6 @@ module Debian.Debianize.Bundled
     ( builtIn
     ) where
 
-import Control.Applicative ((<$>))
 import Control.DeepSeq (force)
 import Control.Exception (try, SomeException)
 import Data.Char (toLower)
@@ -37,7 +36,7 @@ import Text.ParserCombinators.ReadP (readP_to_S)
 -- compilers it maybe be unimplemented.
 builtIn :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> PackageName -> Maybe Version
 builtIn splits hc root lib = do
-  f $ memoize2 (\ hc' root' -> unsafePerformIO (builtIn' splits hc' root')) hc root
+  f $ builtIn' splits hc root
     where
       f :: (DebianVersion, [PackageIdentifier]) -> Maybe Version
       f (hcv, ids) = case map pkgVersion (filter (\ i -> pkgName i == lib) ids) of
@@ -45,16 +44,23 @@ builtIn splits hc root lib = do
                 [v] -> Just v
                 vs -> error $ show hc ++ "-" ++ show hcv ++ " in " ++ show root ++ " provides multiple versions of " ++ show lib ++ ": " ++ show vs
 
+aptCache :: FilePath -> String -> Either SomeException String
+aptCache =
+    memoize2 (\ root hcname -> unsafePerformIO (try (chroot root (readProcess "apt-cache" ["showpkg", hcname] ""))))
+    where
+      chroot "/" = id
+      chroot root = useEnv root (return . force)
+
 -- | Ok, lets see if we can infer the built in packages from the
 -- Provides field returned by apt-cache.
-builtIn' :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> IO (DebianVersion, [PackageIdentifier])
+builtIn' :: Map PackageName VersionSplits -> CompilerFlavor -> FilePath -> (DebianVersion, [PackageIdentifier])
 builtIn' splits hc root = do
-  lns <- lines . either (\ (e :: SomeException) -> error $ "builtIn: " ++ show e) id <$> try (chroot root (readProcess "apt-cache" ["showpkg", hcname] ""))
-  let hcs = map words $ takeBetween (isPrefixOf "Provides:") (isPrefixOf "Reverse Provides:") lns
+  let lns = lines . either (\ (e :: SomeException) -> error $ "builtIn: " ++ show e) id $ aptCache root hcname
+      hcs = map words $ takeBetween (isPrefixOf "Provides:") (isPrefixOf "Reverse Provides:") lns
       hcs' = reverse . sortBy (compare `on` fst) . map doHCVersion $ hcs
   case hcs' of
     [] -> error $ "No versions of " ++ show hc ++ " (" ++ show hcname ++ ") in " ++ show root
-    ((v, pids) : _) -> return (v, pids)
+    ((v, pids) : _) -> (v, pids)
     where
       BinPkgName hcname = BinPkgName (map toLower (show hc))
       -- Find out what library versions are provided by the latest version
@@ -74,8 +80,6 @@ builtIn' splits hc root = do
                                                 Just v -> Just (cabalFromDebian' splits (DebBase base) v)
                                                 Nothing -> Nothing
                      _ -> Nothing
-      chroot "/" = id
-      chroot _ = useEnv root (return . force)
 
 takeBetween :: (a -> Bool) -> (a -> Bool) -> [a] -> [a]
 takeBetween startPred endPred = takeWhile (not . endPred) . dropWhile startPred . dropWhile (not . startPred)
