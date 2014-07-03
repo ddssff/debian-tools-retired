@@ -1,3 +1,9 @@
+haskell-cabal-debian (4.13) unstable; urgency=low
+
+  * Add a flag for ghcjs support.
+
+ -- David Fox <dsf@seereason.com>  Thu, 03 Jul 2014 12:05:21 -0700
+
 haskell-cabal-debian (4.12) unstable; urgency=low
 
   * Remove the Top type and argument - use getWorkingDirectory instead.

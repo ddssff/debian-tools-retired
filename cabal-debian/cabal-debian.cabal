@@ -1,5 +1,5 @@
 Name:           cabal-debian
-Version:        4.12
+Version:        4.13
 License:        BSD3
 License-File:   debian/copyright
 Author:         David Fox <dsf@seereason.com>
@@ -140,6 +140,10 @@ Flag tests
   Default: False
   Manual: True
 
+Flag ghcjs-support
+  Description: Pulls in Cabal-1.21, which includes support for the ghcjs compiler.
+  Default: True
+
 -- flag local-debian
 --   Description: Link directly to the source of the debian library
 --   Default: False
@@ -154,7 +158,6 @@ Library
  GHC-Options: -Wall -O2
  Build-Depends:
    base < 5,
-   Cabal >= 1.9,
    containers,
    data-lens,
    data-lens-template,
@@ -176,6 +179,10 @@ Library
    unix,
    Unixutils,
    utf8-string
+ if flag(ghcjs-support)
+   Build-Depends: Cabal >= 1.21
+ else
+   Build-Depends: Cabal >= 1.9
  Exposed-Modules:
    Data.Algorithm.Diff.Context
    Data.Algorithm.Diff.Pretty
@@ -215,10 +222,18 @@ Executable cabal-debian
  Hs-Source-Dirs: .
  Main-is: CabalDebian.hs
  ghc-options: -threaded -Wall -O2
- Build-Depends: base, Cabal, cabal-debian, data-lens, mtl
+ Build-Depends: base, cabal-debian, data-lens, mtl
+ if flag(ghcjs-support)
+   Build-Depends: Cabal >= 1.21
+ else
+   Build-Depends: Cabal >= 1.9
 
 Executable cabal-debian-tests
  Hs-Source-Dirs: .
  Main-is: Tests.hs
  ghc-options: -threaded -Wall -O2
- Build-Depends: base, Cabal, cabal-debian, containers, data-lens, debian, filepath, hsemail, HUnit, process, text
+ Build-Depends: base, cabal-debian, containers, data-lens, debian, filepath, hsemail, HUnit, process, text
+ if flag(ghcjs-support)
+   Build-Depends: Cabal >= 1.21
+ else
+   Build-Depends: Cabal >= 1.9

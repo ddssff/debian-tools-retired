@@ -1,5 +1,5 @@
 -- | Compute the debianization of a cabal package.
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, OverloadedStrings, ScopedTypeVariables #-}
 module Debian.Debianize.BuildDependencies
     ( debianBuildDeps
     , debianBuildDepsIndep
@@ -26,7 +26,11 @@ import Debian.Orphans ()
 import Debian.Relation (BinPkgName, Relation(..), Relations, checkVersionReq)
 import qualified Debian.Relation as D (BinPkgName(BinPkgName), Relation(..), Relations, VersionReq(EEQ, GRE, LTE, SGR, SLT))
 import Debian.Version (DebianVersion, parseDebianVersion)
+#if MIN_VERSION_Cabal(1,21,0)
 import Distribution.Compiler (CompilerFlavor(GHC, GHCJS))
+#else
+import Distribution.Compiler (CompilerFlavor(GHC))
+#endif
 import Distribution.Package (Dependency(..), PackageIdentifier(..), PackageName(PackageName))
 import Distribution.PackageDescription (PackageDescription)
 import Distribution.PackageDescription as Cabal (allBuildInfo, BuildInfo(..), BuildInfo(buildTools, extraLibs, pkgconfigDepends), Executable(..))
@@ -88,7 +92,9 @@ debianBuildDeps pkgDesc =
                        anyrel "cdbs"] ++
                       (case cfl of
                         GHC -> [anyrel "ghc"] ++ if prof then [anyrel "ghc-prof"] else []
+#if MIN_VERSION_Cabal(1,21,0)
                         GHCJS -> [anyrel "ghcjs"]
+#endif
                         x -> error ("Unsupported compiler flavor: " ++ show x)) ++
                       bDeps ++
                       cDeps
