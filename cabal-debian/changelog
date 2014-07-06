@@ -4,6 +4,12 @@ haskell-cabal-debian (4.14) unstable; urgency=low
 
  -- David Fox <dsf@seereason.com>  Sat, 05 Jul 2014 20:27:21 -0700
 
+haskell-cabal-debian (4.14) unstable; urgency=low
+
+  * Map package name Cabal to debian package name cabal.
+
+ -- David Fox <dsf@seereason.com>  Sat, 05 Jul 2014 20:27:21 -0700
+
 haskell-cabal-debian (4.13) unstable; urgency=low
 
   * Add a flag for ghcjs support.
