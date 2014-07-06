@@ -19,6 +19,7 @@ debianDefaultAtoms :: Monad m => DebT m ()
 debianDefaultAtoms =
     do T.epochMap ++= (PackageName "HaXml", 1)
        T.epochMap ++= (PackageName "HTTP", 1)
+       mapCabal (PackageName "Cabal") (DebBase "cabal")
        mapCabal (PackageName "parsec") (DebBase "parsec3")
        splitCabal (PackageName "parsec") (DebBase "parsec2") (Version [3] [])
        mapCabal (PackageName "QuickCheck") (DebBase "quickcheck2")

@@ -68,11 +68,12 @@ builtIn' splits hc root = do
       -- first five characters of the checksum.
       -- parsePID "libghc-unix-dev-2.7.0.1-2a456" -> Just (PackageIdentifier "unix" (Version [2,7,0,1] []))
       parsePackageID :: String -> Maybe PackageIdentifier
-      parsePackageID s = case s =~ ("lib" ++ hcname ++ "-(.*)-dev-([0-9.]*)-.....$") :: (String, String, String, [String]) of
-                     (_, _, _, [base, vs]) -> case listToMaybe (map fst $ filter ((== "") . snd) $ readP_to_S parseVersion $ vs) of
-                                                Just v -> Just (cabalFromDebian' splits (DebBase base) v)
-                                                Nothing -> Nothing
-                     _ -> Nothing
+      parsePackageID s =
+          case s =~ ("lib" ++ hcname ++ "-(.*)-dev-([0-9.]*)-.....$") :: (String, String, String, [String]) of
+            (_, _, _, [base, vs]) -> case listToMaybe (map fst $ filter ((== "") . snd) $ readP_to_S parseVersion $ vs) of
+                                       Just v -> Just (cabalFromDebian' splits (DebBase base) v)
+                                       Nothing -> Nothing
+            _ -> Nothing
 
 aptCacheShowPkg :: FilePath -> String -> Either SomeException String
 aptCacheShowPkg =
