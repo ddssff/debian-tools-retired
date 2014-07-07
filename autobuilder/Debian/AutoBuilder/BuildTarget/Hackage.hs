@@ -12,7 +12,7 @@ import Control.Monad (when)
 import Control.Monad.Catch (catch)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
-import Data.List (isPrefixOf, tails)
+import Data.List (isPrefixOf, tails, intercalate)
 import Data.Maybe (fromMaybe)
 import Data.Version (Version, showVersion, parseVersion)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
