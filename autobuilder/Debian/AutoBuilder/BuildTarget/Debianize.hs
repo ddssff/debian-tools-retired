@@ -127,6 +127,7 @@ applyPackageFlag (P.AptPin _) = return ()
 applyPackageFlag (P.CabalPin _) = return ()
 applyPackageFlag (P.DarcsTag _) = return ()
 applyPackageFlag (P.GitBranch _) = return ()
+applyPackageFlag P.KeepRCS = return ()
 
 asCabalFlags :: P.PackageFlag -> [String]
 asCabalFlags (P.Maintainer s) = ["--maintainer", s]
@@ -151,6 +152,7 @@ asCabalFlags (P.CabalPin _) = []
 asCabalFlags (P.ModifyAtoms _) = []
 asCabalFlags (P.DarcsTag _) = []
 asCabalFlags (P.GitBranch _) = []
+asCabalFlags P.KeepRCS = []
 
 -- | Apply a set of package flags to a cabal-debian configuration record.
 {-
