@@ -1,3 +1,11 @@
+haskell-cabal-debian (4.14) unstable; urgency=low
+
+  * Move the code to map the cabal package named "Cabal" to the debian
+    package named "libghc-cabal-*" from the seereason defaults to the
+    debian defaults.
+
+ -- David Fox <dsf@seereason.com>  Mon, 07 Jul 2014 08:35:39 -0700
+
 haskell-cabal-debian (4.13) unstable; urgency=low
 
   * Add a flag for ghcjs support.
