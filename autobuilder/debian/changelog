@@ -1,3 +1,11 @@
+autobuilder (6.66) unstable; urgency=low
+
+  * Add a KeepRCS Package flag to prevent removal of the RCS control
+    information in the source target.  The ghcjs target can't run without
+    it.
+
+ -- David Fox <dsf@seereason.com>  Mon, 07 Jul 2014 12:55:02 -0700
+
 autobuilder (6.65.2) unstable; urgency=low
 
   * Fix the generation of git arguments when the GitBranch flag is used.

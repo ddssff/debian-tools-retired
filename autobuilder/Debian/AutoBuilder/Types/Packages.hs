@@ -34,6 +34,8 @@ module Debian.AutoBuilder.Types.Packages
     , uri
     , cd
     , findSource
+    , testPackageFlag
+    , keepRCS
     ) where
 
 import Debug.Trace as D
@@ -41,6 +43,8 @@ import Debug.Trace as D
 import Control.Exception (SomeException, try)
 import Data.ByteString (ByteString)
 import Data.Char (toLower)
+import Data.List (nub, sort)
+import Data.Maybe (catMaybes)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.Set (Set, empty, union)
 import Data.String (IsString(fromString))
@@ -207,6 +211,9 @@ data PackageFlag
     -- ^ When doing a darcs get pass this string to darcs via the --tag flag.
     | GitBranch String
     -- ^ When doing a 'git clone' pass this string to darcs via the --branch flag.
+    | KeepRCS
+    -- ^ Don't clean out the subdirectory containing the revision control info,
+    -- i.e. _darcs or .git or whatever.
     deriving (Show)
 
 relaxInfo :: [PackageFlag] -> [String]
@@ -333,3 +340,14 @@ findSource (Patch (Apt _dist _name) _) copyDir =
                [] -> error "findSource: Internal error"
                _ -> error $ "Multiple debian source trees in " ++ copyDir ++ ": " ++ show (map fst ts))
 findSource _ copyDir = return copyDir
+
+testPackageFlag :: (Eq a, Ord a, Show a) => (PackageFlag -> Maybe a) -> Packages -> [a]
+testPackageFlag p package@(Package {}) = nub (sort (catMaybes (map p (flags package))))
+testPackageFlag _ _ = []
+
+keepRCS :: Packages -> Bool
+keepRCS package@(Package {}) =
+    case testPackageFlag (\ x -> case x of KeepRCS -> Just (); _ -> Nothing) package of
+      [] -> False
+      _ -> True
+keepRCS _ = False

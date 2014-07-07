@@ -32,9 +32,11 @@ prepare cache package version =
                           , T.mVersion = Nothing
                           , T.origTarball = Nothing
                           , T.cleanTarget =
-                              \ path -> 
-                                  let cmd = "find '" ++ path ++ "' -name '.arch-ids' -o -name '{arch}' -prune | xargs rm -rf" in
-                                  timeTask (runProc (shell cmd))
+                              \ path ->
+                                  case P.keepRCS package of
+                                    False -> let cmd = "find '" ++ path ++ "' -name '.arch-ids' -o -name '{arch}' -prune | xargs rm -rf" in
+                                             timeTask (runProc (shell cmd))
+                                    True -> return ([], 0)
                           , T.buildWrapper = id
                           }
     where

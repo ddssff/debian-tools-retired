@@ -3,11 +3,9 @@ module Debian.AutoBuilder.BuildTarget.Apt where
 
 import Control.Monad (when)
 import Control.Monad.Trans (MonadIO(liftIO))
-import Data.List (nub, sort)
-import Data.Maybe (catMaybes)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(allSources, params))
 import Debian.AutoBuilder.Types.Download (Download(..))
-import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag(AptPin), Packages(flags, spec))
+import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag(AptPin), Packages(spec), testPackageFlag)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(flushSource, ifSourcesChanged))
 import Debian.Relation (SrcPkgName)
 import Debian.Release (ReleaseName(ReleaseName, relName))
@@ -41,9 +39,7 @@ prepare cache target dist package =
     where
       distro = maybe (error $ "Invalid dist: " ++ relName dist') id (findRelease (P.allSources cache) dist')
       dist' = ReleaseName dist
-      version' = case (nub (sort (catMaybes (map (\ flag -> case flag of
-                                                              P.AptPin s -> Just (parseDebianVersion s)
-                                                              _ -> Nothing) (P.flags target))))) of
+      version' = case P.testPackageFlag (\ x -> case x of P.AptPin s -> Just (parseDebianVersion s); _ -> Nothing) target of
                    [] -> Nothing
                    [v] -> Just v
                    vs -> error ("Conflicting pin versions for apt-get: " ++ show (map prettyDebianVersion vs))

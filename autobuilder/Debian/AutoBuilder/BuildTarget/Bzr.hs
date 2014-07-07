@@ -38,8 +38,10 @@ prepare cache package version =
                , origTarball = Nothing
                , cleanTarget = \ top ->
                    do qPutStrLn ("Clean Bazaar target in " ++ top)
-                      let cmd = "find '" ++ top ++ "' -name '.bzr' -prune | xargs rm -rf"
-                      timeTask (runProc (shell cmd))
+                      case P.keepRCS package of
+                        False -> let cmd = "find '" ++ top ++ "' -name '.bzr' -prune | xargs rm -rf" in
+                                 timeTask (runProc (shell cmd))
+                        True -> return ([], 0)
                , buildWrapper = id }
     where
         -- Tries to update a pre-existant bazaar source tree

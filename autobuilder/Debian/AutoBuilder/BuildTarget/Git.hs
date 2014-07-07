@@ -6,8 +6,6 @@ import Control.Monad
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
-import Data.List (nub, sort)
-import Data.Maybe (catMaybes)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -56,8 +54,9 @@ prepare cache package theUri mCommit =
                           , T.mVersion = Nothing
                           , T.origTarball = Nothing
                           , T.cleanTarget =
-                              \ top -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in
-                                       timeTask (runProc (shell cmd))
+                              \ top -> case P.keepRCS package  of
+                                         False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (runProc (shell cmd))
+                                         True -> return ([], 0)
                           , T.buildWrapper = id
                           }
     where
@@ -100,12 +99,10 @@ prepare cache package theUri mCommit =
       -- Maybe we should include the "git:" in the string we checksum?  -- DSF
       -- Need more info to answer that, but addition of git makes it more likely. -- CB
       uriAndBranch = uriToString id theUri' "" ++ maybe "" (\ branch -> "=" ++ branch) theBranch
-      theBranch = case nub (sort (catMaybes (map (\ flag -> case flag of
-                                                             P.GitBranch s -> Just s
-                                                             _ -> Nothing) (P.flags package)))) of
-                 [] -> Nothing
-                 [x] -> Just x
-                 xs -> error ("Conflicting branches for git clone of " ++ theUri ++ ": " ++ show xs)
+      theBranch = case P.testPackageFlag (\ x -> case x of P.GitBranch s -> Just s; _ -> Nothing) package of
+                    [] -> Nothing
+                    [x] -> Just x
+                    xs -> error ("Conflicting branches for git clone of " ++ theUri ++ ": " ++ show xs)
       theUri' = mustParseURI theUri
 
 renderForGit :: URI -> String

@@ -12,8 +12,8 @@ import Control.Monad (when)
 import Control.Monad.Catch (catch)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
-import Data.List (isPrefixOf, intercalate, nub, sort, tails)
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.List (isPrefixOf, tails)
+import Data.Maybe (fromMaybe)
 import Data.Version (Version, showVersion, parseVersion)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -54,9 +54,7 @@ prepare cache package name =
                            , T.cleanTarget = \ _ -> return ([], 0)
                            , T.buildWrapper = id }
     where
-      versionString = case nub (sort (catMaybes (map (\ flag -> case flag of
-                                                                  P.CabalPin s -> Just s
-                                                                  _ -> Nothing) (P.flags package)))) of
+      versionString = case P.testPackageFlag (\ x -> case x of P.CabalPin s -> Just s; _ -> Nothing) package of
                         [] -> Nothing
                         [v] -> Just v
                         vs -> error ("Conflicting cabal version numbers passed to Debianize: [" ++ intercalate ", " vs ++ "]")

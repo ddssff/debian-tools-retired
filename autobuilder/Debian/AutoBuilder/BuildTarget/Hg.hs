@@ -33,9 +33,10 @@ prepare cache package archive =
                           , T.mVersion = Nothing
                           , T.origTarball = Nothing
                           , T.cleanTarget =
-                              \ path -> 
-                                  let cmd = "rm -rf " ++ path ++ "/.hg" in
-                                  timeTask (runProc (shell cmd))
+                              \ path -> case P.keepRCS package of
+                                          False -> let cmd = "rm -rf " ++ path ++ "/.hg" in
+                                                   timeTask (runProc (shell cmd))
+                                          _ -> return ([], 0)
                           , T.buildWrapper = id
                           }
     where

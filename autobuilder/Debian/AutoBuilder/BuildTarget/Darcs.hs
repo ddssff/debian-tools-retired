@@ -8,8 +8,6 @@ import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
-import Data.List (nub, sort)
-import Data.Maybe (catMaybes)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -54,8 +52,10 @@ prepare cache package theUri =
                           , T.mVersion = Nothing
                           , T.origTarball = Nothing
                           , T.cleanTarget =
-                              \ top -> let cmd = "find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf" in
-                                       timeTask (runProc (shell cmd))
+                              \ top -> case P.keepRCS package of
+                                         False -> let cmd = "find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf" in
+                                                  timeTask (runProc (shell cmd))
+                                         True -> return ([], 0)
                           , T.buildWrapper = id
                           }
     where
@@ -91,9 +91,7 @@ prepare cache package theUri =
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndTag))
       uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag
-      theTag = case nub (sort (catMaybes (map (\ flag -> case flag of
-                                                           P.DarcsTag s -> Just s
-                                                           _ -> Nothing) (P.flags package)))) of
+      theTag = case P.testPackageFlag (\ x -> case x of P.DarcsTag s -> Just s; _ -> Nothing) package of
                  [] -> Nothing
                  [x] -> Just x
                  xs -> error ("Conflicting tags for darcs get of " ++ theUri ++ ": " ++ show xs)
