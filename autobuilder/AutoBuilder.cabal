@@ -31,15 +31,18 @@ flag local-cabal-debian
   Manual: True
 
 Library
-  if flag (local-debian-repo)
-    if flag (local-cabal-debian)
-      Hs-Source-Dirs: ., ../cabal-debian/src, ../debian-repo
-      Build-Depends: Diff, set-extra, hsemail, memoize, syb
-    else
-      Hs-Source-Dirs: ., ../debian-repo
-      Build-Depends: deepseq, data-lens-template, cabal-debian >= 4.12
+  Hs-Source-Dirs: .
+  if flag (local-debian-repo) || flag (local-cabal-debian)
+    Hs-Source-Dirs: ../debian-repo
   else
     Build-Depends: debian-repo >= 5.59
+
+  if flag (local-cabal-debian)
+    Hs-Source-Dirs: ../cabal-debian/src
+    Build-Depends: Diff, set-extra, hsemail, memoize, syb
+  else
+    Hs-Source-Dirs: ../debian-repo
+    Build-Depends: cabal-debian >= 4.12, deepseq, data-lens-template
 
   Build-Depends:
         applicative-extras >= 0.1.8
