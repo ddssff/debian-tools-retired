@@ -6,6 +6,7 @@ import Control.Monad
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
+import Data.Maybe (mapMaybe)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -39,8 +40,8 @@ darcsRev tree m =
 showCmd (RawCommand cmd args) = showCommandForUser cmd args
 showCmd (ShellCommand cmd) = cmd
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> Maybe String -> m T.Download
-prepare cache package theUri mCommit =
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> [P.GitSpec] -> m T.Download
+prepare cache package theUri gitspecs =
     sub "git" >>= \ base ->
     sub ("git" </> sum) >>= \ dir -> liftIO $
     do
@@ -85,8 +86,11 @@ prepare cache package theUri mCommit =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _ <- runProc (proc "git" (["clone", renderForGit theUri'] ++ maybe [] (\ branch -> ["--branch", branch]) theBranch ++ [dir]))
-             _ <- maybe (return []) (\ commit -> runProc ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir})) mCommit
+             _ <- runProc (proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (P.Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir]))
+             _ <- case mapMaybe (\ x -> case x of (P.Commit s) -> Just s; _ -> Nothing) gitspecs of
+                    [] -> return []
+                    [commit] -> runProc ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir})
+                    commits -> error $ "Git target specifies multiple commits: " ++ show commits
              findSourceTree dir
 
       -- CB  git reset --hard    will remove all edits back to the most recent commit

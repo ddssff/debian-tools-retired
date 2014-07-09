@@ -1,3 +1,10 @@
+autobuilder (6.67) unstable; urgency=low
+
+  * Replace the GitBranch constructor of PackageFlag with a
+    [GitSpec] field added to the Git target type.
+
+ -- David Fox <dsf@seereason.com>  Wed, 09 Jul 2014 13:20:05 -0700
+
 autobuilder (6.66) unstable; urgency=low
 
   * Add a KeepRCS Package flag to prevent removal of the RCS control

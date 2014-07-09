@@ -8,6 +8,7 @@ module Debian.AutoBuilder.Types.Packages
     , filterPackages
     , packageCount
     , RetrieveMethod(..)
+    , GitSpec(..)
     , PackageFlag(..)
     , relaxInfo
     , hackage
@@ -127,7 +128,7 @@ data RetrieveMethod
     | DebDir RetrieveMethod RetrieveMethod   -- ^ Combine the upstream download with a download for a debian directory
     | Debianize RetrieveMethod               -- ^ Retrieve a cabal package from Hackage and use cabal-debian to debianize it
     | Dir FilePath                           -- ^ Retrieve the source code from a directory on a local machine
-    | Git String (Maybe String)              -- ^ Download from a Git repository, optional commit hash
+    | Git String [GitSpec]                   -- ^ Download from a Git repository, optional commit hashes and/or branch names
     | Hackage String                         -- ^ Download a cabal package from hackage
     | Hg String                              -- ^ Download from a Mercurial repository
     | Patch RetrieveMethod ByteString        -- ^ Apply the patch given in the string text to the target
@@ -138,6 +139,11 @@ data RetrieveMethod
     | Tla String                             -- ^ Download from a TLA repository
     | Twice RetrieveMethod                   -- ^ Perform the build twice (should be a package flag)
     | Uri String String                      -- ^ Download a tarball from the URI.  The checksum is used to implement caching.
+    deriving (Read, Show, Eq)
+
+data GitSpec
+    = Branch String
+    | Commit String
     deriving (Read, Show, Eq)
 
 -- | Flags that are applicable to any debianized package, which means
@@ -287,8 +293,8 @@ debdir p debian = p {spec = DebDir (spec p) debian}
 dir :: String -> FilePath -> Packages
 dir name path = method name (Dir path)
 
-git :: String -> String -> Maybe String -> Packages
-git name path commit = method name (Git path commit)
+git :: String -> String -> [GitSpec] -> Packages
+git name path gitspecs = method name (Git path gitspecs)
 
 hackage :: String -> Packages
 hackage s =
