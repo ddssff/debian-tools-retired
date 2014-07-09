@@ -123,10 +123,15 @@ Executable autobuilder-tests
   Main-Is: Test/Test.hs
   ghc-options: -O2 -threaded -Wall
   Build-Depends: HUnit
-  Build-Depends: debian >= 3.81, cabal-debian >= 4.12
+  Build-Depends: debian >= 3.81
 
-  if flag (local-debian-repo)
+  if flag (local-debian-repo) || flag (local-cabal-debian)
     Hs-Source-Dirs: ., ../debian-repo
     Build-Depends: deepseq, data-lens-template
   else
     Build-Depends: debian-repo >= 5.59
+
+  if flag (local-cabal-debian)
+    Hs-Source-Dirs: ., ../cabal-debian/src
+  else
+    Build-Depends: cabal-debian >= 4.12
